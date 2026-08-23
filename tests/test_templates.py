@@ -128,6 +128,11 @@ class TestIndex:
         html = self.render([self.linha(dims={1: 10})])
         assert "#c23c34;background:#fbeceb" not in html
 
+    def test_oferece_filtro_de_possiveis_duplicidades(self, ctx):
+        html = self.render([self.linha()])
+        assert 'value="duplicidade"' in html
+        assert "Possíveis duplicidades" in html
+
     def test_sem_permissao_de_editar_trava_os_campos(self, ctx):
         html = self.render([self.linha()], pode_editar=False, pode_conferir=False)
         assert html.count("disabled") >= 3

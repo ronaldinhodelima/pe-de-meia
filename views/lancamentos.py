@@ -58,6 +58,8 @@ def _valor_manual(valor, direcao):
 def index():
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
     status = request.args.get("status", "todas")
+    if status not in ("todas", "pendente", "conferida", "duplicidade"):
+        status = "todas"
     origem_sel = request.args.getlist("origem")
 
     conn = get_conn()
@@ -110,6 +112,12 @@ def index():
         where.append("t.conferida = true")
     elif status == "pendente":
         where.append("t.conferida = false")
+    elif status == "duplicidade":
+        if ids_suspeitos:
+            where.append("t.transacao_id IN %s")
+            params.append(tuple(ids_suspeitos))
+        else:
+            where.append("false")
 
     cur.execute(
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "

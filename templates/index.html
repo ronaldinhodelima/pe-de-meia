@@ -18,6 +18,7 @@
       <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
       <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
+      <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
     </select>
   </div>
   {# HTML montado por chip_filter_html(), que ja escapa o que vem do banco #}
@@ -68,10 +69,12 @@
   {# o Pluggy ja mandou o mesmo debito duas vezes; sem aviso vira despesa dobrada #}
   <div class="aviso-erro" style="margin-bottom:12px">
     <strong>{{ grupos_suspeitos }}</strong>
-    {% if grupos_suspeitos == 1 %}lançamento aparece repetido{% else %}lançamentos aparecem repetidos{% endif %}
+    {% if grupos_suspeitos == 1 %}grupo de lançamentos parece repetido{% else %}grupos de lançamentos parecem repetidos{% endif %}
     neste mês — mesma conta, mesmo dia, mesmo valor e mesma descrição. Estão destacados na tabela.
     Confira no extrato: se o débito ocorreu uma vez só, abra o lançamento e marque
     <strong>“Marcar como duplicada”</strong> — assim ele sai dos totais.
+    <button type="button" onclick="document.getElementById('statusInput').value='duplicidade';aplicarFiltros()"
+            style="margin-left:8px">Mostrar apenas suspeitas</button>
   </div>
 {% endif %}
 
