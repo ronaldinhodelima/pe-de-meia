@@ -13,7 +13,6 @@ from core import (
     JOIN_NATUREZA,
     MESES_ABREV,
     NATUREZA_SQL,
-    REALIZADO_SQL,
     VAL_DESPESA,
     _montar_filtro_relatorio,
     aplicar_regras,
@@ -62,10 +61,7 @@ def dre():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    base = (
-        f"FROM cartao.transacao t {JOIN_NATUREZA} "
-        f"WHERE COALESCE(t.duplicada, false) = false AND {REALIZADO_SQL} "
-    )
+    base = f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE COALESCE(t.duplicada, false) = false "
 
     cur.execute(
         f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total {base} "
@@ -115,7 +111,7 @@ def dre():
             "LEFT JOIN cartao.transacao_dimensao td ON td.transacao_id = t.transacao_id::text AND td.dimensao_id = %s "
             "LEFT JOIN cartao.dimensao_valor dv ON dv.id = td.valor_id "
             f"WHERE to_char({DATA_LOCAL_SQL},'YYYY') = %s "
-            f"AND COALESCE(t.duplicada, false) = false AND {REALIZADO_SQL} "
+            "AND COALESCE(t.duplicada, false) = false "
             f"AND {NATUREZA_SQL} = 'despesa' AND t.categoria IS NOT NULL "
             "GROUP BY dv.nome ORDER BY total DESC;",
             (d["id"], ano),

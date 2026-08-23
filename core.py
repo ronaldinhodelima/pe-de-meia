@@ -225,7 +225,10 @@ SEED_NATUREZAS = {
     # pagamento da fatura do cartao de marco/2026 (bate com o valor da fatura)
     "Loans and financing": "transferencia",
 
-    # despesa confirmada pelo usuario na revisao da base de producao
+    # despesas confirmadas pelo usuario na revisao da base de producao
+    "Automotive": "despesa",
+    "Travel": "despesa",
+    "Wellness and fitness": "despesa",
     "Rent": "despesa",
 
     # poupanca de longo prazo - sai do resultado, entra no bloco de investimentos
@@ -303,14 +306,6 @@ NATUREZA_SQL = (
 # data civil de Sao Paulo. Sem esta conversao, uma compra perto da meia-noite
 # pode cair no dia/mes seguinte no DRE.
 DATA_LOCAL_SQL = "(t.data_transacao AT TIME ZONE 'America/Sao_Paulo')"
-
-
-# DRE realizado: somente o que o banco confirmou e cuja data local ja chegou.
-# Pendencias futuras continuam disponiveis em Lancamentos para planejamento.
-REALIZADO_SQL = (
-    "(t.status = 'POSTED' AND " + DATA_LOCAL_SQL
-    + "::date <= (now() AT TIME ZONE 'America/Sao_Paulo')::date)"
-)
 
 
 BANCOS_CONHECIDOS = (
@@ -999,6 +994,18 @@ def migrate():
                     (categoria, natureza),
                 )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (7);")
+            conn.commit()
+
+        if versao_atual < 8:
+            # Completa as naturezas confirmadas na revisao, preservando qualquer
+            # escolha que ja tenha sido feita manualmente no cadastro.
+            for categoria, natureza in SEED_NATUREZAS.items():
+                cur.execute(
+                    "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES (%s,%s) "
+                    "ON CONFLICT (categoria) DO NOTHING;",
+                    (categoria, natureza),
+                )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (8);")
             conn.commit()
 
         cur.close()
