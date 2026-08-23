@@ -354,6 +354,12 @@ def test_aviso_de_duplicadas_usa_a_mesma_normalizacao_da_validacao():
     assert "por_nome.setdefault(c[\"nome\"]" not in codigo
 
 
+def test_status_duplicada_filtra_somente_itens_ja_marcados():
+    codigo = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert 'status == "duplicada"' in codigo
+    assert 'where.append("COALESCE(t.duplicada, false) = true")' in codigo
+
+
 def test_ocultar_coluna_vence_a_regra_defensiva_do_cabecalho():
     """O CSS tem 'table.ajustavel th[data-col] { display: table-cell !important }'
     - defesa contra classes de celula (.cel-origem usa flex) vazarem para o <th>.

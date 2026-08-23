@@ -19,6 +19,7 @@
       <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
       <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
+      <option value="duplicada" {{ 'selected' if status == 'duplicada' }}>Duplicados</option>
     </select>
   </div>
   {# HTML montado por chip_filter_html(), que ja escapa o que vem do banco #}

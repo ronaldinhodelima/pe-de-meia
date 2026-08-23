@@ -60,7 +60,7 @@ def _valor_manual(valor, direcao):
 def index():
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
     status = request.args.get("status", "todas")
-    if status not in ("todas", "pendente", "conferida", "duplicidade"):
+    if status not in ("todas", "pendente", "conferida", "duplicidade", "duplicada"):
         status = "todas"
     origem_sel = request.args.getlist("origem")
 
@@ -118,6 +118,8 @@ def index():
             params.append(tuple(ids_suspeitos))
         else:
             where.append("false")
+    elif status == "duplicada":
+        where.append("COALESCE(t.duplicada, false) = true")
 
     cur.execute(
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "

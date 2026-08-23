@@ -134,6 +134,11 @@ class TestIndex:
         assert "Possíveis duplicidades" in html
         assert "Mostrar apenas suspeitas" not in html
 
+    def test_oferece_filtro_de_lancamentos_ja_marcados_como_duplicados(self, ctx):
+        html = self.render([self.linha()], status="duplicada")
+        assert 'value="duplicada" selected' in html
+        assert ">Duplicados</option>" in html
+
     def test_sem_permissao_de_editar_trava_os_campos(self, ctx):
         html = self.render([self.linha()], pode_editar=False, pode_conferir=False)
         assert html.count("disabled") >= 3
