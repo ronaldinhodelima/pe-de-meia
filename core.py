@@ -957,6 +957,10 @@ def migrate():
 def aplicar_regras(cur):
     """Aplica regras de classificacao automatica a lancamentos pendentes ainda nao tocados por nenhuma regra.
     So mexe em transacoes com conferida=false, nunca sobrescreve algo que o usuario ja confirmou."""
+    # Uma regra antiga pode apontar para uma dimensao/valor removido. Isolamos a
+    # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
+    # consultas da pagina que chamou esta funcao.
+    cur.execute("SAVEPOINT aplicar_regras")
     try:
         cur.execute(
             "WITH match AS ("
@@ -978,7 +982,10 @@ def aplicar_regras(cur):
             "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
         )
     except Exception as e:
+        cur.execute("ROLLBACK TO SAVEPOINT aplicar_regras")
         print("Aviso: falha ao aplicar regras:", e)
+    finally:
+        cur.execute("RELEASE SAVEPOINT aplicar_regras")
 
 
 DUPLICADA_OBS_PADRAO = "Duplicada - mesma compra ja lancada em outra linha (registro repetido pelo Pluggy)"

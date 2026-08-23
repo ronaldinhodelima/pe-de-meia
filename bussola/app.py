@@ -296,7 +296,6 @@ def upsert_transaction(cur, tx):
         ON CONFLICT (transacao_id) DO UPDATE SET
             status = EXCLUDED.status,
             valor_brl = EXCLUDED.valor_brl,
-            categoria = EXCLUDED.categoria,
             atualizado_em = EXCLUDED.atualizado_em,
             sincronizado_em = now()
         RETURNING (xmax = 0) AS inserted;

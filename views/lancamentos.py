@@ -471,18 +471,52 @@ def detalhes_transacao(transacao_id):
 @requer("lancamentos_editar")
 def update_transacao(transacao_id):
     data = request.get_json(force=True)
-    if "conferida" in data and not pode("lancamentos_conferir"):
-        return jsonify({"ok": False, "erro": "Sem permissão para conferir lançamentos."}), 403
     conn = get_conn()
     cur = conn.cursor()
 
+    cur.execute("SELECT conferida FROM cartao.transacao WHERE transacao_id = %s;", (transacao_id,))
+    transacao = cur.fetchone()
+    if not transacao:
+        cur.close()
+        conn.close()
+        return jsonify({"ok": False, "erro": "Lançamento não encontrado."}), 404
+
+    if "conferida" in data and not pode("lancamentos_conferir"):
+        if bool(data.get("conferida")) != bool(transacao[0]):
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "erro": "Sem permissão para conferir lançamentos."}), 403
+        # A tela envia o estado atual junto com as demais edicoes. Sem permissao
+        # para conferir, ele pode continuar no payload, mas nunca gera UPDATE.
+        data.pop("conferida", None)
+
     dimensoes_enviadas = data.get("dimensoes") or {}
+    dimensoes_validadas = []
     for dim_id_str, valor_id in dimensoes_enviadas.items():
         try:
             dim_id = int(dim_id_str)
+            valor_id_int = int(valor_id) if valor_id not in (None, "") else None
         except (TypeError, ValueError):
-            continue
-        valor_id_int = int(valor_id) if valor_id not in (None, "") else None
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "erro": "Dimensão ou valor inválido."}), 400
+
+        if valor_id_int is None:
+            cur.execute("SELECT 1 FROM cartao.dimensao WHERE id = %s;", (dim_id,))
+        else:
+            cur.execute(
+                "SELECT 1 FROM cartao.dimensao_valor WHERE id = %s AND dimensao_id = %s;",
+                (valor_id_int, dim_id),
+            )
+        if not cur.fetchone():
+            conn.rollback()
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "erro": "O valor não pertence à dimensão informada."}), 400
+        dimensoes_validadas.append((dim_id, valor_id_int))
+
+    for dim_id, valor_id_int in dimensoes_validadas:
         cur.execute(
             "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) VALUES (%s,%s,%s) "
             "ON CONFLICT (transacao_id, dimensao_id) DO UPDATE SET valor_id = EXCLUDED.valor_id;",
@@ -512,8 +546,8 @@ def update_transacao(transacao_id):
     if "conferida" in data:
         sets += [
             "conferida = %s",
-            "conferida_por = CASE WHEN %s THEN %s ELSE conferida_por END",
-            "conferida_em = CASE WHEN %s THEN now() ELSE conferida_em END",
+            "conferida_por = CASE WHEN %s THEN %s ELSE NULL END",
+            "conferida_em = CASE WHEN %s THEN now() ELSE NULL END",
         ]
         valores += [conferida_final, conferida_final, session.get("user"), conferida_final]
     if "duplicada" in data:

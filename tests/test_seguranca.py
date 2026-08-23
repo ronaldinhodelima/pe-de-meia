@@ -17,7 +17,25 @@ def test_post_sem_origem_e_bloqueado_fora_de_testes():
 
 
 def test_editar_nao_da_permissao_de_conferir(monkeypatch):
+    class Cursor:
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return (False,)
+
+        def close(self):
+            pass
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            pass
+
     monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(lancamentos, "get_conn", lambda: Conn())
     cliente = app.app.test_client()
     with cliente.session_transaction() as sessao:
         sessao["user"] = "operador"
@@ -29,6 +47,84 @@ def test_editar_nao_da_permissao_de_conferir(monkeypatch):
     )
     assert resposta.status_code == 403
     assert "Sem permissão" in resposta.get_json()["erro"]
+
+
+def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
+    class Cursor:
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return (False,)
+
+        def fetchall(self):
+            return []
+
+        def close(self):
+            pass
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(lancamentos, "get_conn", lambda: Conn())
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "operador"
+        sessao["permissoes"] = ["lancamentos_editar"]
+
+    resposta = cliente.post(
+        "/api/transacao/existente",
+        json={"categoria": "Groceries", "conferida": False},
+        headers={"Origin": "http://localhost"},
+    )
+    assert resposta.status_code == 200
+    assert resposta.get_json()["ok"] is True
+
+
+def test_valor_de_outra_dimensao_e_rejeitado(monkeypatch):
+    class Cursor:
+        respostas = iter([(False,), None])
+
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return next(self.respostas)
+
+        def close(self):
+            pass
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(lancamentos, "get_conn", lambda: Conn())
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "operador"
+        sessao["permissoes"] = ["lancamentos_editar", "lancamentos_conferir"]
+
+    resposta = cliente.post(
+        "/api/transacao/existente", json={"dimensoes": {"1": "999"}},
+        headers={"Origin": "http://localhost"},
+    )
+    assert resposta.status_code == 400
+    assert "não pertence" in resposta.get_json()["erro"]
 
 
 def test_login_bloqueia_depois_de_cinco_falhas(monkeypatch):

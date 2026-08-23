@@ -31,6 +31,26 @@ from core import (
 bp = Blueprint("relatorios", __name__)
 
 
+def _montar_historico_investimentos(historico):
+    """Transforma posicoes mensais ascendentes em linhas recentes primeiro.
+
+    A variacao pertence ao mes mais novo: agosto mostra agosto menos julho.
+    """
+    linhas = []
+    saldo_anterior = None
+    for h in historico:
+        saldo = float(h["saldo"] or 0)
+        mes = h["mes"]
+        linhas.append({
+            "rotulo": f"{MESES_ABREV[int(mes[5:7]) - 1]}/{mes[2:4]}",
+            "aplicado": float(h["aplicado"] or 0),
+            "saldo": saldo,
+            "variacao": None if saldo_anterior is None else saldo - saldo_anterior,
+        })
+        saldo_anterior = saldo
+    return list(reversed(linhas))
+
+
 @bp.route("/dre")
 @requer("relatorios")
 def dre():
@@ -441,14 +461,17 @@ def investimentos_view():
 
     historico = []
     if posicoes is not None:
-        # rendimento de cada mes = variacao do saldo total, descontando aportes e resgates
+        # Usa a ultima posicao de CADA investimento em cada mes. Usar uma unica
+        # data maxima do mes omitiria produtos que nao tivessem retrato naquele
+        # mesmo dia e reduziria o patrimonio exibido.
         cur.execute(
-            "SELECT to_char(data, 'YYYY-MM') AS mes, MAX(data) AS ultima, "
-            "SUM(saldo) AS saldo, SUM(valor_aplicado) AS aplicado "
-            "FROM cartao.investimento_saldo "
-            "WHERE data = (SELECT MAX(d2.data) FROM cartao.investimento_saldo d2 "
-            "              WHERE to_char(d2.data,'YYYY-MM') = to_char(cartao.investimento_saldo.data,'YYYY-MM')) "
-            "GROUP BY 1 ORDER BY 1;"
+            "SELECT mes, MAX(data) AS ultima, SUM(saldo) AS saldo, SUM(valor_aplicado) AS aplicado "
+            "FROM ("
+            "  SELECT DISTINCT ON (investimento_id, to_char(data, 'YYYY-MM')) "
+            "    investimento_id, to_char(data, 'YYYY-MM') AS mes, data, saldo, valor_aplicado "
+            "  FROM cartao.investimento_saldo "
+            "  ORDER BY investimento_id, to_char(data, 'YYYY-MM'), data DESC"
+            ") ultimas GROUP BY mes ORDER BY mes;"
         )
         historico = cur.fetchall()
 
@@ -493,20 +516,7 @@ def investimentos_view():
     bruto_total = sum(a["bruto"] for a in ativos)
     rendimento_bruto = bruto_total - aplicado_total
 
-    # historico do mais recente para o mais antigo; a variacao de cada mes e a
-    # diferenca para o mes seguinte (o de cima na tabela)
-    hist = []
-    anterior = None
-    for h in reversed(historico):
-        saldo = float(h["saldo"] or 0)
-        mes = h["mes"]
-        hist.append({
-            "rotulo": f"{MESES_ABREV[int(mes[5:7]) - 1]}/{mes[2:4]}",
-            "aplicado": float(h["aplicado"] or 0),
-            "saldo": saldo,
-            "variacao": None if anterior is None else anterior - saldo,
-        })
-        anterior = saldo
+    hist = _montar_historico_investimentos(historico)
 
     return render_template(
         "investimentos.html",
