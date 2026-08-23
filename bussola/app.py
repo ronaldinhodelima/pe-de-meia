@@ -26,6 +26,9 @@ def security_headers(response):
 
 STATE = {"migration": "pending", "error": None}
 SYNC_STATE = {"last_run": None, "status": "never_run", "detail": None}
+# O agendador e o botao "Atualizar agora" compartilham o mesmo processo. Sem
+# esta trava, ambos poderiam importar o mesmo extrato ao mesmo tempo.
+SYNC_LOCK = threading.Lock()
 
 PLUGGY_CLIENT_ID = os.environ.get("PLUGGY_CLIENT_ID")
 PLUGGY_CLIENT_SECRET = os.environ.get("PLUGGY_CLIENT_SECRET")
@@ -405,7 +408,7 @@ def upsert_investimento(cur, item_id, inv):
     )
 
 
-def run_sync():
+def _run_sync_unlocked():
     if not (PLUGGY_CLIENT_ID and PLUGGY_CLIENT_SECRET):
         SYNC_STATE.update(
             {
@@ -540,6 +543,20 @@ def run_sync():
             }
         )
     return SYNC_STATE
+
+
+def run_sync():
+    """Executa no maximo uma sincronizacao por processo."""
+    if not SYNC_LOCK.acquire(blocking=False):
+        return {
+            "status": "busy",
+            "last_run": SYNC_STATE.get("last_run"),
+            "detail": "Sincronizacao ja esta em andamento",
+        }
+    try:
+        return _run_sync_unlocked()
+    finally:
+        SYNC_LOCK.release()
 
 
 def scheduler_loop():
