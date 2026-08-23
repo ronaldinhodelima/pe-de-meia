@@ -19,11 +19,11 @@ PLUGGY_CLIENT_ID = os.environ.get("PLUGGY_CLIENT_ID")
 PLUGGY_CLIENT_SECRET = os.environ.get("PLUGGY_CLIENT_SECRET")
 PLUGGY_ITEM_ID = os.environ.get("PLUGGY_ITEM_ID")
 SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", str(24 * 60 * 60)))
-# Enquanto essa env nao for configurada no Coolify, /sync fica aberto (comportamento
-# atual). Depois de configurada (aqui e no app principal, com o MESMO valor), o
-# endpoint passa a exigir o header X-Sync-Secret - evita que qualquer um que descubra
-# a URL interna do worker fique disparando sync a vontade.
+# Obrigatoria nos dois servicos, com o mesmo valor. O worker recusa iniciar sem
+# ela para nunca expor /sync por erro de configuracao.
 SYNC_SECRET = os.environ.get("SYNC_SECRET")
+if not SYNC_SECRET:
+    raise RuntimeError("SYNC_SECRET e obrigatoria; o worker nao pode iniciar sem autenticacao")
 
 SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS cartao;
@@ -535,9 +535,8 @@ def scheduler_loop():
 
 
 def autorizado():
-    """A chave e a mesma do /sync. Enquanto SYNC_SECRET nao estiver configurada,
-    nada e exigido (comportamento antigo, pra nao travar quem ainda nao configurou)."""
-    return not SYNC_SECRET or request.headers.get("X-Sync-Secret") == SYNC_SECRET
+    """A chave e a mesma configurada no aplicativo principal."""
+    return request.headers.get("X-Sync-Secret") == SYNC_SECRET
 
 
 @app.route("/health")

@@ -1,6 +1,8 @@
 import os
 import sys
 
+os.environ.setdefault("SECRET_KEY", "chave-exclusiva-dos-testes")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # app.py conecta no Postgres em varios pontos no import (migrate(),

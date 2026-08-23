@@ -91,12 +91,42 @@ def pode(permissao):
     return permissao in (session.get("permissoes") or [])
 
 
+def validar_sessao_atual():
+    """Confirma que o usuario segue ativo e recarrega suas permissoes."""
+    usuario = session.get("user")
+    if not usuario:
+        return False
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(
+            "SELECT nome, perfil, permissoes, ativo FROM cartao.usuario WHERE usuario = %s;",
+            (usuario,),
+        )
+        conta = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not conta or not conta["ativo"]:
+            session.clear()
+            return False
+        session["nome"] = conta["nome"] or usuario
+        session["perfil"] = conta["perfil"]
+        session["permissoes"] = list(conta["permissoes"] or [])
+        return True
+    except Exception as e:
+        print("Aviso: falha ao validar sessao:", e)
+        session.clear()
+        return False
+
+
 def requer(permissao):
     """Bloqueia a rota para quem nao tem a permissao."""
     def decorador(view):
         @functools.wraps(view)
         def wrapped(*args, **kwargs):
-            if not session.get("user"):
+            if not validar_sessao_atual():
+                if request.path.startswith("/api/"):
+                    return jsonify({"ok": False, "erro": "Sessão inválida ou expirada."}), 401
                 return redirect("/login")
             if not pode(permissao):
                 titulo, _ = PERMISSOES.get(permissao, (permissao, ""))
@@ -637,7 +667,9 @@ def get_conn():
 def login_required(view):
     @functools.wraps(view)
     def wrapped(*args, **kwargs):
-        if not session.get("user"):
+        if not validar_sessao_atual():
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "erro": "Sessão inválida ou expirada."}), 401
             return redirect("/login")
         return view(*args, **kwargs)
     return wrapped

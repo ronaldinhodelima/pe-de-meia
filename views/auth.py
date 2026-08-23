@@ -1,4 +1,7 @@
 """Login e logout."""
+import threading
+import time
+
 import psycopg2
 import psycopg2.extras
 from flask import Blueprint, request, redirect, session, render_template
@@ -12,6 +15,34 @@ from core import (
 
 bp = Blueprint("auth", __name__)
 
+_JANELA_LOGIN = 15 * 60
+_MAX_FALHAS_LOGIN = 5
+_falhas_login = {}
+_falhas_lock = threading.Lock()
+
+
+def _chave_tentativa(usuario):
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "desconhecido").split(",")[0].strip()
+    return ip, usuario.lower()
+
+
+def _tentativas_recentes(chave):
+    agora = time.monotonic()
+    with _falhas_lock:
+        recentes = [t for t in _falhas_login.get(chave, []) if agora - t < _JANELA_LOGIN]
+        _falhas_login[chave] = recentes
+        return recentes
+
+
+def _registrar_falha(chave):
+    with _falhas_lock:
+        _falhas_login.setdefault(chave, []).append(time.monotonic())
+
+
+def _limpar_falhas(chave):
+    with _falhas_lock:
+        _falhas_login.pop(chave, None)
+
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -19,6 +50,12 @@ def login():
     if request.method == "POST":
         u = (request.form.get("usuario", "") or "").strip()
         p = request.form.get("senha", "")
+        chave_tentativa = _chave_tentativa(u)
+        if len(_tentativas_recentes(chave_tentativa)) >= _MAX_FALHAS_LOGIN:
+            return render_template(
+                "login.html", titulo="Entrar",
+                erro="Muitas tentativas. Aguarde 15 minutos e tente novamente.",
+            ), 429
         conta = None
         try:
             conn = get_conn()
@@ -37,6 +74,7 @@ def login():
                 session["nome"] = conta["nome"] or conta["usuario"]
                 session["perfil"] = conta["perfil"]
                 session["permissoes"] = list(conta["permissoes"] or [])
+                _limpar_falhas(chave_tentativa)
                 cur.close()
                 conn.close()
                 return redirect("/")
@@ -51,10 +89,13 @@ def login():
             session["nome"] = u
             session["perfil"] = "admin"
             session["permissoes"] = permissoes_do_perfil("admin")
+            _limpar_falhas(chave_tentativa)
             return redirect("/")
 
-        error = "Usuário ou senha inválidos." if not (conta and not conta["ativo"]) \
-            else "Este acesso está desativado. Fale com um administrador."
+        _registrar_falha(chave_tentativa)
+        # A mesma mensagem para usuario inexistente, senha errada ou conta inativa
+        # evita confirmar a um atacante quais logins existem.
+        error = "Usuário ou senha inválidos."
     return render_template("login.html", titulo="Entrar", erro=error)
 
 

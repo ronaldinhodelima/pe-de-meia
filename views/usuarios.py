@@ -97,7 +97,8 @@ def usuarios_view():
             conn.commit()
         except Exception as e:
             conn.rollback()
-            erro = str(e)
+            print("Aviso: falha ao gerenciar usuario:", e)
+            erro = "Não foi possível concluir a alteração. Tente novamente."
 
     cur.execute(
         "SELECT usuario, nome, perfil, permissoes, ativo, criado_em, ultimo_acesso "

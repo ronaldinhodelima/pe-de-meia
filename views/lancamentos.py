@@ -360,7 +360,8 @@ def lancamento_manual():
         conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "erro": str(e)}), 400
+        print("Aviso: falha ao criar lançamento manual:", e)
+        return jsonify({"ok": False, "erro": "Não foi possível salvar o lançamento."}), 400
 
 
 @bp.route("/api/lancamento-manual/<transacao_id>", methods=["DELETE"])
@@ -395,7 +396,8 @@ def excluir_lancamento_manual(transacao_id):
         conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "erro": str(e)}), 400
+        print("Aviso: falha ao excluir lançamento manual:", e)
+        return jsonify({"ok": False, "erro": "Não foi possível excluir o lançamento."}), 400
 
 
 @bp.route("/api/transacao/<transacao_id>")
@@ -469,6 +471,8 @@ def detalhes_transacao(transacao_id):
 @requer("lancamentos_editar")
 def update_transacao(transacao_id):
     data = request.get_json(force=True)
+    if "conferida" in data and not pode("lancamentos_conferir"):
+        return jsonify({"ok": False, "erro": "Sem permissão para conferir lançamentos."}), 403
     conn = get_conn()
     cur = conn.cursor()
 
