@@ -271,6 +271,33 @@ CATEGORIAS_NEUTRAS_PADRAO = {
 }
 
 
+# Vinculos aprovados pelo usuario na revisao da base de producao. O subgrupo e
+# identificado pelo nome porque os ids variam entre instalacoes.
+CENTROS_CONFIRMADOS = {
+    "Water": "Casa",
+    "Housing": "Casa",
+    "Electricity": "Casa",
+    "Urban land and building tax": "Casa",
+    "Rent": "Casa",
+    "Internet": "Casa",
+    "Sports goods": "Atividades Físicas",
+    "Wellness and fitness": "Atividades Físicas",
+    "Wellness": "Atividades Físicas",
+    "Sports practice": "Atividades Físicas",
+    "Optometry": "Saúde",
+    "Education": "Educação",
+    "Bicycle": "Manutenção",
+    "Automotive": "Manutenção",
+    "Vehicle ownership taxes and fees": "Manutenção",
+    "Transportation": "Manutenção",
+    "Public transportation": "Uber Taxi",
+    "Travel": "Viagem",
+    "Food and drinks": "Restaurantes",
+    "Taxes": "Taxas Financeiras",
+    "Entrepreneurial activities": "BRDrive",
+}
+
+
 CONTA_MANUAL_ID = "00000000-0000-0000-0000-000000000002"
 
 
@@ -1006,6 +1033,27 @@ def migrate():
                     (categoria, natureza),
                 )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (8);")
+            conn.commit()
+
+        if versao_atual < 9:
+            # Preenche apenas categorias ainda sem centro. Um vinculo manual ja
+            # existente tem prioridade e nunca e movido por esta migracao.
+            for categoria, subgrupo_nome in CENTROS_CONFIRMADOS.items():
+                cur.execute(
+                    "SELECT id FROM cartao.subgrupo_custo WHERE nome = %s ORDER BY id LIMIT 1;",
+                    (subgrupo_nome,),
+                )
+                subgrupo = cur.fetchone()
+                if not subgrupo:
+                    print("Aviso: subgrupo nao encontrado para", categoria, subgrupo_nome)
+                    continue
+                cur.execute(
+                    "INSERT INTO cartao.categoria_subgrupo (categoria, subgrupo_id) VALUES (%s,%s) "
+                    "ON CONFLICT (categoria) DO UPDATE SET subgrupo_id = EXCLUDED.subgrupo_id "
+                    "WHERE cartao.categoria_subgrupo.subgrupo_id IS NULL;",
+                    (categoria, subgrupo[0]),
+                )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (9);")
             conn.commit()
 
         cur.close()

@@ -106,6 +106,16 @@ class TestRegraDeOuro:
         assert "receita" not in core.NATUREZAS_NEUTRAS
 
 
+class TestCentrosConfirmados:
+    def test_todas_as_vinte_e_uma_categorias_foram_registradas(self):
+        assert len(core.CENTROS_CONFIRMADOS) == 21
+
+    def test_vinculos_aprovados_mais_ambiguos(self):
+        assert core.CENTROS_CONFIRMADOS["Taxes"] == "Taxas Financeiras"
+        assert core.CENTROS_CONFIRMADOS["Entrepreneurial activities"] == "BRDrive"
+        assert core.CENTROS_CONFIRMADOS["Sports goods"] == "Atividades Físicas"
+
+
 class TestNaturezaEfetiva:
     """Cobre a prioridade natureza-do-lancamento > natureza-da-categoria > padrao,
     e a resolucao de 'fluxo' pela direcao do dinheiro (espelho do NATUREZA_SQL)."""
