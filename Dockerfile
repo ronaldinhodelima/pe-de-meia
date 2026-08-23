@@ -1,8 +1,13 @@
 FROM python:3.11-slim
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt \
+    && groupadd --gid 10001 pedemeia \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin pedemeia
 COPY app.py /app/app.py
 # core.py tem as constantes e os helpers; views/ tem as rotas em blueprints.
 # Sem estas duas linhas o container nem sobe (ImportError logo no boot).
@@ -14,7 +19,7 @@ COPY static/ /app/static/
 # templates/ tem as telas em Jinja. Sem esta linha, toda rota que usa
 # render_template() estoura TemplateNotFound (500).
 COPY templates/ /app/templates/
-RUN pip install --no-cache-dir flask psycopg2-binary gunicorn
+USER 10001:10001
 EXPOSE 8000
 # gunicorn no lugar do servidor embutido do Flask, que atende uma requisicao por
 # vez e avisa no proprio log que nao e para producao.

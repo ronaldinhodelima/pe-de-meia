@@ -25,6 +25,16 @@ def test_os_dois_servicos_usam_servidor_de_producao():
     assert 'CMD ["python","app.py"]' not in sync
 
 
+def test_containers_rodam_sem_usuario_root_e_dependencias_estao_fixadas():
+    for pasta in (RAIZ, RAIZ / "bussola"):
+        docker = (pasta / "Dockerfile").read_text(encoding="utf-8")
+        requisitos = (pasta / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        assert "USER 10001:10001" in docker
+        assert "-r /app/requirements.txt" in docker
+        assert requisitos
+        assert all("==" in linha for linha in requisitos if linha.strip() and not linha.startswith("#"))
+
+
 def nomes_definidos(arvore):
     achados = set(dir(builtins)) | INJETADOS
     for n in ast.walk(arvore):
