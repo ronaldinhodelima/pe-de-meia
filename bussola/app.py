@@ -12,6 +12,18 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
+
+@app.after_request
+def security_headers(response):
+    """O worker e publico, mas so deve servir JSON e nunca ser enquadrado."""
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 STATE = {"migration": "pending", "error": None}
 SYNC_STATE = {"last_run": None, "status": "never_run", "detail": None}
 

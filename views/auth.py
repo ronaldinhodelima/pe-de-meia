@@ -17,12 +17,16 @@ bp = Blueprint("auth", __name__)
 
 _JANELA_LOGIN = 15 * 60
 _MAX_FALHAS_LOGIN = 5
+_MAX_FALHAS_IP = 20
 _falhas_login = {}
 _falhas_lock = threading.Lock()
 
 
 def _chave_tentativa(usuario):
-    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "desconhecido").split(",")[0].strip()
+    # ProxyFix, configurado no app, ja extrai o IP do ultimo proxy confiavel.
+    # Ler o primeiro X-Forwarded-For diretamente permitia forjar um IP novo a
+    # cada tentativa quando o proxy preservava o cabecalho recebido do cliente.
+    ip = request.remote_addr or "desconhecido"
     return ip, usuario.lower()
 
 
@@ -51,7 +55,9 @@ def login():
         u = (request.form.get("usuario", "") or "").strip()
         p = request.form.get("senha", "")
         chave_tentativa = _chave_tentativa(u)
-        if len(_tentativas_recentes(chave_tentativa)) >= _MAX_FALHAS_LOGIN:
+        chave_ip = (chave_tentativa[0], "*")
+        if (len(_tentativas_recentes(chave_tentativa)) >= _MAX_FALHAS_LOGIN or
+                len(_tentativas_recentes(chave_ip)) >= _MAX_FALHAS_IP):
             return render_template(
                 "login.html", titulo="Entrar",
                 erro="Muitas tentativas. Aguarde 15 minutos e tente novamente.",
@@ -70,6 +76,8 @@ def login():
                 cur.execute("UPDATE cartao.usuario SET ultimo_acesso = now() WHERE usuario = %s;",
                             (conta["usuario"],))
                 conn.commit()
+                session.clear()
+                session.permanent = True
                 session["user"] = conta["usuario"]
                 session["nome"] = conta["nome"] or conta["usuario"]
                 session["perfil"] = conta["perfil"]
@@ -85,6 +93,8 @@ def login():
 
         # rede de seguranca: se a tabela ainda nao existe (primeiro boot), aceita a env
         if conta is None and u in USERS and USERS[u] == p:
+            session.clear()
+            session.permanent = True
             session["user"] = u
             session["nome"] = u
             session["perfil"] = "admin"
@@ -93,6 +103,7 @@ def login():
             return redirect("/")
 
         _registrar_falha(chave_tentativa)
+        _registrar_falha(chave_ip)
         # A mesma mensagem para usuario inexistente, senha errada ou conta inativa
         # evita confirmar a um atacante quais logins existem.
         error = "Usuário ou senha inválidos."
