@@ -97,6 +97,9 @@ def validar_sessao_atual():
     usuario = session.get("user")
     if not usuario:
         return False
+    # Atualiza tambem cookies criados antes da politica de expiracao. Como
+    # SESSION_REFRESH_EACH_REQUEST esta ativo, cada uso valido renova as 24h.
+    session.permanent = True
     try:
         conn = get_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

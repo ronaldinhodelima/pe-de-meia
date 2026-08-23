@@ -23,6 +23,9 @@ def test_sessao_expira_em_24_horas_e_cookie_e_protegido():
     assert app.app.config["SESSION_COOKIE_SECURE"] is True
     assert app.app.config["SESSION_COOKIE_HTTPONLY"] is True
     assert app.app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+    texto = (pathlib.Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("def validar_sessao_atual():", 1)[1].split("def requer", 1)[0]
+    assert "session.permanent = True" in trecho
 
 
 def test_respostas_recebem_cabecalhos_de_seguranca():
