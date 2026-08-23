@@ -68,6 +68,9 @@ class TestRegraDeOuro:
         assert core.SEED_NATUREZAS["Credit card fees"] == "despesa"
         assert core.SEED_NATUREZAS["Tax on financial operations"] == "despesa"
 
+    def test_aluguel_pago_confirmado_na_revisao_e_despesa(self):
+        assert core.SEED_NATUREZAS["Rent"] == "despesa"
+
     def test_receitas_sao_receita(self):
         for categoria in ("Income", "Salary", "Government aid", "Interest income", "Dividends"):
             assert core.SEED_NATUREZAS[categoria] == "receita"
@@ -136,3 +139,15 @@ class TestValDespesaSinal:
     def test_val_despesa_inverte_sinal_fora_do_credito(self):
         assert "CREDIT" in core.VAL_DESPESA
         assert "ELSE -COALESCE" in core.VAL_DESPESA
+
+
+class TestDreRealizado:
+    def test_exige_status_confirmado(self):
+        assert "t.status = 'POSTED'" in core.REALIZADO_SQL
+
+    def test_exclui_datas_futuras_no_fuso_financeiro(self):
+        assert "America/Sao_Paulo" in core.REALIZADO_SQL
+        assert "<= " in core.REALIZADO_SQL
+
+    def test_competencia_usa_data_local(self):
+        assert "AT TIME ZONE 'America/Sao_Paulo'" in core.DATA_LOCAL_SQL

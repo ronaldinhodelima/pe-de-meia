@@ -9,9 +9,11 @@ from core import (
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT_DB,
+    DATA_LOCAL_SQL,
     JOIN_NATUREZA,
     MESES_ABREV,
     NATUREZA_SQL,
+    REALIZADO_SQL,
     VAL_DESPESA,
     _montar_filtro_relatorio,
     aplicar_regras,
@@ -60,11 +62,14 @@ def dre():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    base = f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE COALESCE(t.duplicada, false) = false "
+    base = (
+        f"FROM cartao.transacao t {JOIN_NATUREZA} "
+        f"WHERE COALESCE(t.duplicada, false) = false AND {REALIZADO_SQL} "
+    )
 
     cur.execute(
         f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total {base} "
-        f"AND to_char(t.data_transacao,'YYYY') = %s AND {NATUREZA_SQL} = 'despesa' "
+        f"AND to_char({DATA_LOCAL_SQL},'YYYY') = %s AND {NATUREZA_SQL} = 'despesa' "
         "AND t.categoria IS NOT NULL GROUP BY t.categoria;",
         (ano,),
     )
@@ -72,8 +77,8 @@ def dre():
 
     # ---- DRE propriamente dito: receitas, despesas e resultado de cada mes do ano ----
     cur.execute(
-        f"SELECT to_char(t.data_transacao,'YYYY-MM') AS mes, {NATUREZA_SQL} AS natureza, "
-        f"SUM({VAL_DESPESA}) AS total {base} AND to_char(t.data_transacao,'YYYY') = %s "
+        f"SELECT to_char({DATA_LOCAL_SQL},'YYYY-MM') AS mes, {NATUREZA_SQL} AS natureza, "
+        f"SUM({VAL_DESPESA}) AS total {base} AND to_char({DATA_LOCAL_SQL},'YYYY') = %s "
         f"GROUP BY 1, 2 ORDER BY 1;",
         (ano,),
     )
@@ -109,7 +114,8 @@ def dre():
             f"FROM cartao.transacao t {JOIN_NATUREZA} "
             "LEFT JOIN cartao.transacao_dimensao td ON td.transacao_id = t.transacao_id::text AND td.dimensao_id = %s "
             "LEFT JOIN cartao.dimensao_valor dv ON dv.id = td.valor_id "
-            "WHERE to_char(t.data_transacao,'YYYY') = %s AND COALESCE(t.duplicada, false) = false "
+            f"WHERE to_char({DATA_LOCAL_SQL},'YYYY') = %s "
+            f"AND COALESCE(t.duplicada, false) = false AND {REALIZADO_SQL} "
             f"AND {NATUREZA_SQL} = 'despesa' AND t.categoria IS NOT NULL "
             "GROUP BY dv.nome ORDER BY total DESC;",
             (d["id"], ano),
