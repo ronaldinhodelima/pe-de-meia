@@ -132,6 +132,7 @@ class TestIndex:
         html = self.render([self.linha()])
         assert 'value="duplicidade"' in html
         assert "Possíveis duplicidades" in html
+        assert "Mostrar apenas suspeitas" not in html
 
     def test_sem_permissao_de_editar_trava_os_campos(self, ctx):
         html = self.render([self.linha()], pode_editar=False, pode_conferir=False)

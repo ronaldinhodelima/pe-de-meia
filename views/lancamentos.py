@@ -94,9 +94,7 @@ def index():
         (mes,),
     )
     ids_suspeitos = set()
-    grupos_suspeitos = 0
     for r in cur.fetchall():
-        grupos_suspeitos += 1
         ids_suspeitos.update(r["ids"] or [])
 
     cur.execute("SELECT DISTINCT categoria FROM cartao.transacao WHERE categoria IS NOT NULL;")
@@ -348,7 +346,6 @@ def index():
         resultado_mes=receita_mes - gasto_real,
         conf=resumo["conferidas"] or 0,
         total=resumo["total"] or 0,
-        grupos_suspeitos=grupos_suspeitos,
         detalhes_json=json_script(detalhes_js),
         config_json=json_script({"duplicada_obs": DUPLICADA_OBS_PADRAO}),
     )
