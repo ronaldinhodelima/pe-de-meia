@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 COPY app.py /app/app.py
 # core.py tem as constantes e os helpers; views/ tem as rotas em blueprints.
 # Sem estas duas linhas o container nem sobe (ImportError logo no boot).
