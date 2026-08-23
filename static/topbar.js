@@ -68,10 +68,19 @@ function syncEhSucesso(status) {
   const s = String(status).toLowerCase();
   return s === 'ok' || s === 'success' || s === 'sucesso';
 }
+function syncEhAviso(status) {
+  return String(status || '').toLowerCase() === 'warning';
+}
+function syncClasse(status) {
+  if (syncEhSucesso(status)) return 'ok';
+  if (syncEhAviso(status)) return 'aviso';
+  return status ? 'erro' : '';
+}
 function syncFormatarTexto(d) {
-  if (!d.executado_em) return 'Sem sincronização registrada';
+  if (!d.executado_em) return d.status ? 'Falha na sincronização' : 'Sem sincronização registrada';
   let txt = 'Atualizado em ' + d.executado_em;
-  if (d.status && !syncEhSucesso(d.status)) txt += ' (erro)';
+  if (syncEhAviso(d.status)) txt += ' (atenção)';
+  else if (d.status && !syncEhSucesso(d.status)) txt += ' (erro)';
   return txt;
 }
 async function syncCarregarStatus() {
@@ -82,7 +91,7 @@ async function syncCarregarStatus() {
     const d = await r.json();
     document.getElementById('syncTexto').textContent = syncFormatarTexto(d);
     const dot = document.getElementById('syncDot');
-    dot.className = 'sync-dot ' + (syncEhSucesso(d.status) ? 'ok' : (d.status ? 'erro' : ''));
+    dot.className = 'sync-dot ' + syncClasse(d.status);
   } catch (e) {
     document.getElementById('syncTexto').textContent = 'Status indisponível';
   }
@@ -98,7 +107,7 @@ async function dispararSync() {
     const r = await fetch('/api/sync-agora', { method: 'POST' });
     const d = await r.json();
     document.getElementById('syncTexto').textContent = syncFormatarTexto(d);
-    dot.className = 'sync-dot ' + (syncEhSucesso(d.status) ? 'ok' : 'erro');
+    dot.className = 'sync-dot ' + syncClasse(d.status);
   } catch (e) {
     document.getElementById('syncTexto').textContent = 'Falha ao atualizar';
     dot.className = 'sync-dot erro';

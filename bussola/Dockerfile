@@ -14,4 +14,7 @@ USER 10001:10001
 EXPOSE 8000
 # Um unico processo garante que exista apenas um agendador. As threads deixam o
 # healthcheck responder mesmo enquanto uma sincronizacao longa esta em curso.
-CMD ["gunicorn", "-w", "1", "--threads", "4", "--timeout", "180", "-b", "0.0.0.0:8000", "wsgi:app"]
+# A imagem roda sem privilegios e /app nao e gravavel. O Gunicorn 26 tenta
+# criar ali um socket de controle por padrao e gera "Permission denied"; o app
+# nao usa essa interface, entao a desativamos explicitamente.
+CMD ["gunicorn", "--no-control-socket", "-w", "1", "--threads", "4", "--timeout", "180", "-b", "0.0.0.0:8000", "wsgi:app"]

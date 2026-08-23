@@ -211,12 +211,27 @@ def fetch_all_transactions(api_key, account_id):
     mais recentes. Tratamos os dois formatos por seguranca.
     """
     results = []
+    ids_vistos = set()
     params = {"accountId": account_id}
     paginas = 0
+    paginas_vistas = set()
     while paginas < 500:
+        # Se o provedor repetir o mesmo cursor, nao devemos baixar a mesma
+        # pagina ate atingir o limite de 500. Alem do tempo desperdicado, isso
+        # poderia fazer o botao manual expirar mesmo sem dados novos.
+        chave_pagina = tuple(sorted((str(k), str(v)) for k, v in params.items()))
+        if chave_pagina in paginas_vistas:
+            break
+        paginas_vistas.add(chave_pagina)
         data = pluggy_get("/v2/transactions", api_key, params)
         page_results = data.get("results", [])
-        results.extend(page_results)
+        for tx in page_results:
+            tx_id = tx.get("id")
+            if tx_id and tx_id in ids_vistos:
+                continue
+            if tx_id:
+                ids_vistos.add(tx_id)
+            results.append(tx)
         paginas += 1
         if not page_results:
             break
@@ -408,6 +423,15 @@ def upsert_investimento(cur, item_id, inv):
     )
 
 
+def _classificar_resultado_sync(itens_ok, falhas):
+    """Status persistido e status da API para sucesso total, parcial ou falha."""
+    if not itens_ok:
+        return "ERROR", "error"
+    if falhas:
+        return "WARNING", "warning"
+    return "SUCCESS", "ok"
+
+
 def _run_sync_unlocked():
     if not (PLUGGY_CLIENT_ID and PLUGGY_CLIENT_SECRET):
         SYNC_STATE.update(
@@ -424,6 +448,7 @@ def _run_sync_unlocked():
     investimentos = 0
     conexoes = []
     itens_ok = []          # so as conexoes que realmente gravaram dados
+    falhas = []
     erro = None
     try:
         api_key = pluggy_auth()
@@ -435,71 +460,86 @@ def _run_sync_unlocked():
             raise RuntimeError("Nenhuma conexao Pluggy configurada (env PLUGGY_ITEM_ID vazia)")
 
         for item_id in item_ids:
-            # uma conexao com problema (ex: autorizacao expirada no banco) nao pode
-            # derrubar a sincronizacao das outras
+            # Uma conexao com problema (ex: autorizacao expirada no banco) nao
+            # pode derrubar a sincronizacao das outras. O try cobre o fluxo
+            # inteiro da conexao, nao apenas a consulta inicial do item.
             try:
                 item = pluggy_get(f"/items/{item_id}", api_key)
-            except Exception as e:
-                conexoes.append({"item": item_id, "status": "erro", "detalhe": str(e)[:120]})
-                continue
+                nome_conexao = (item.get("connector") or {}).get("name") or item_id
+                exec_status = item.get("executionStatus")
+                erro_item = (item.get("error") or {}).get("message")
 
-            nome_conexao = (item.get("connector") or {}).get("name") or item_id
-            exec_status = item.get("executionStatus")
-            erro_item = (item.get("error") or {}).get("message")
+                accounts = pluggy_get("/accounts", api_key, {"itemId": item_id}).get("results", [])
+                contas = [a for a in accounts if a.get("type") in ("CREDIT", "BANK")]
 
-            accounts = pluggy_get("/accounts", api_key, {"itemId": item_id}).get("results", [])
-            contas = [a for a in accounts if a.get("type") in ("CREDIT", "BANK")]
+                if not contas:
+                    # Conexao criada mas nunca concluida
+                    # (USER_INPUT_TIMEOUT, LOGIN_ERROR...).
+                    detalhe = erro_item or "nenhuma conta - refaca a conexao no Pluggy"
+                    conexoes.append({
+                        "item": item_id, "conexao": nome_conexao, "status": item.get("status"),
+                        "execucao": exec_status, "contas": 0, "detalhe": detalhe,
+                    })
+                    falhas.append(f"{nome_conexao}: {detalhe}")
+                    continue
 
-            if not contas:
-                # conexao criada mas nunca concluida (USER_INPUT_TIMEOUT, LOGIN_ERROR...)
+                upsert_item(cur, item)
+                for acc in contas:
+                    upsert_account(cur, item["id"], acc)
+                conn.commit()
+
+                novas_item = atualizadas_item = 0
+                for acc in contas:
+                    novas_conta = atualizadas_conta = 0
+                    for tx in fetch_all_transactions(api_key, acc["id"]):
+                        if upsert_transaction(cur, tx):
+                            novas_conta += 1
+                        else:
+                            atualizadas_conta += 1
+                    conn.commit()
+                    novas_item += novas_conta
+                    atualizadas_item += atualizadas_conta
+                    novas += novas_conta
+                    atualizadas += atualizadas_conta
+
+                # investimentos da conexao (renda fixa, previdencia, fundos...)
+                inv_item = 0
+                try:
+                    for inv in pluggy_get("/investments", api_key, {"itemId": item_id}).get("results", []):
+                        upsert_investimento(cur, item["id"], inv)
+                        inv_item += 1
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    detalhe_inv = f"investimentos: {str(e)[:120]}"
+                    falhas.append(f"{nome_conexao}: {detalhe_inv}")
+                    print(f"Aviso: falha ao sincronizar investimentos de {item_id}: {e}")
+                investimentos += inv_item
+
                 conexoes.append({
-                    "item": item_id, "conexao": nome_conexao, "status": item.get("status"),
-                    "execucao": exec_status, "contas": 0,
-                    "detalhe": erro_item or "nenhuma conta - refaca a conexao no Pluggy",
+                    "conexao": nome_conexao, "status": item.get("status"), "contas": len(contas),
+                    "transacoes_novas": novas_item, "investimentos": inv_item,
                 })
+                itens_ok.append(item["id"])
+            except Exception as e:
+                conn.rollback()
+                detalhe = str(e)[:120]
+                conexoes.append({"item": item_id, "status": "erro", "detalhe": detalhe})
+                falhas.append(f"{item_id}: {detalhe}")
                 continue
 
-            upsert_item(cur, item)
-            for acc in contas:
-                upsert_account(cur, item["id"], acc)
-            conn.commit()
-
-            novas_item = atualizadas_item = 0
-            for acc in contas:
-                for tx in fetch_all_transactions(api_key, acc["id"]):
-                    if upsert_transaction(cur, tx):
-                        novas_item += 1
-                    else:
-                        atualizadas_item += 1
-                conn.commit()
-            novas += novas_item
-            atualizadas += atualizadas_item
-
-            # investimentos da conexao (renda fixa, previdencia, fundos...)
-            inv_item = 0
-            try:
-                for inv in pluggy_get("/investments", api_key, {"itemId": item_id}).get("results", []):
-                    upsert_investimento(cur, item["id"], inv)
-                    inv_item += 1
-                conn.commit()
-            except Exception as e:
-                print(f"Aviso: falha ao sincronizar investimentos de {item_id}: {e}")
-            investimentos += inv_item
-
-            conexoes.append({
-                "conexao": nome_conexao, "status": item.get("status"), "contas": len(contas),
-                "transacoes_novas": novas_item, "investimentos": inv_item,
-            })
-            itens_ok.append(item["id"])
-
-        # o log referencia pluggy_item, entao so registra com uma conexao que gravou dados
-        if itens_ok:
+        # Sucesso parcial precisa ficar visivel. Antes, se uma de tres conexoes
+        # falhasse, o log dizia SUCCESS desde que qualquer outra tivesse dado
+        # certo; se todas falhassem, nem um novo log era gravado.
+        status_log, status_estado = _classificar_resultado_sync(itens_ok, falhas)
+        mensagem_falhas = "; ".join(falhas)[:2000] if falhas else None
+        if itens_ok or falhas:
             cur.execute(
                 """
                 INSERT INTO cartao.sync_log (item_id, status, transacoes_novas, transacoes_atualizadas, mensagem_erro)
                 VALUES (%s,%s,%s,%s,%s);
                 """,
-                (itens_ok[0], "SUCCESS", novas, atualizadas, None),
+                (itens_ok[0] if itens_ok else None, status_log, novas, atualizadas, mensagem_falhas),
             )
             conn.commit()
         cur.close()
@@ -507,7 +547,7 @@ def _run_sync_unlocked():
 
         SYNC_STATE.update(
             {
-                "status": "ok",
+                "status": status_estado,
                 "last_run": datetime.now(timezone.utc).isoformat(),
                 "detail": {
                     "transacoes_novas": novas,
@@ -595,6 +635,10 @@ def sync_now():
     if not autorizado():
         return jsonify({"ok": False, "erro": "nao autorizado"}), 401
     result = run_sync()
+    if result.get("status") == "busy":
+        return jsonify(result), 409
+    if result.get("status") == "error":
+        return jsonify(result), 502
     return jsonify(result)
 
 

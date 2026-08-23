@@ -41,4 +41,4 @@ EXPOSE 8000
 # de quem atendeu o POST, e o outro seguia servindo o nome antigo por tempo
 # indeterminado. Threads compartilham a memoria, entao a atualizacao vale para
 # todas as requisicoes, e ainda assim atende mais de uma por vez.
-CMD ["gunicorn", "--preload", "-w", "1", "--threads", "4", "--timeout", "120", "-b", "0.0.0.0:8000", "app:app"]
+CMD ["gunicorn", "--no-control-socket", "--preload", "-w", "1", "--threads", "4", "--timeout", "120", "-b", "0.0.0.0:8000", "app:app"]

@@ -344,6 +344,7 @@
   .sync-widget { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-faint); }
   .sync-widget .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0; }
   .sync-widget .sync-dot.ok { background: var(--good); }
+  .sync-widget .sync-dot.aviso { background: #d69a2d; }
   .sync-widget .sync-dot.erro { background: var(--bad); }
   .sync-widget .sync-dot.rodando { background: #d69a2d; animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
