@@ -17,6 +17,14 @@ MODULOS = [RAIZ / "app.py", RAIZ / "core.py", *sorted((RAIZ / "views").glob("*.p
 INJETADOS = {"__file__", "__name__", "__doc__", "__package__"}
 
 
+def test_os_dois_servicos_usam_servidor_de_producao():
+    principal = (RAIZ / "Dockerfile").read_text(encoding="utf-8")
+    sync = (RAIZ / "bussola" / "Dockerfile").read_text(encoding="utf-8")
+    assert 'CMD ["gunicorn"' in principal
+    assert 'CMD ["gunicorn"' in sync
+    assert 'CMD ["python","app.py"]' not in sync
+
+
 def nomes_definidos(arvore):
     achados = set(dir(builtins)) | INJETADOS
     for n in ast.walk(arvore):
