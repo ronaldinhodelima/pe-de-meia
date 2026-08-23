@@ -296,6 +296,10 @@ def upsert_transaction(cur, tx):
         ON CONFLICT (transacao_id) DO UPDATE SET
             status = EXCLUDED.status,
             valor_brl = EXCLUDED.valor_brl,
+            -- O Pluggy pode corrigir o fuso/horario mantendo o mesmo id. Sem
+            -- atualizar a data, o sistema preservava para sempre o horario
+            -- antigo. IDs diferentes continuam separados para revisao humana.
+            data_transacao = EXCLUDED.data_transacao,
             atualizado_em = EXCLUDED.atualizado_em,
             sincronizado_em = now()
         RETURNING (xmax = 0) AS inserted;

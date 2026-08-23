@@ -13,7 +13,8 @@ import unicodedata
 import uuid
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import psycopg2
 import psycopg2.extras
@@ -333,6 +334,22 @@ NATUREZA_SQL = (
 # data civil de Sao Paulo. Sem esta conversao, uma compra perto da meia-noite
 # pode cair no dia/mes seguinte no DRE.
 DATA_LOCAL_SQL = "(t.data_transacao AT TIME ZONE 'America/Sao_Paulo')"
+FUSO_LOCAL = ZoneInfo("America/Sao_Paulo")
+
+
+def data_hora_local(valor):
+    """Converte um instante do banco para o horario civil de Sao Paulo.
+
+    O PostgreSQL devolve TIMESTAMPTZ com fuso. Evitamos subtrair tres horas na
+    mao porque isso perde a informacao de fuso e falha para datas historicas em
+    que a regra de horario local era diferente. Valores ingenuos sao tratados
+    como UTC, que e o fuso usado pelos containers e pelo banco.
+    """
+    if valor is None:
+        return None
+    if valor.tzinfo is None:
+        valor = valor.replace(tzinfo=timezone.utc)
+    return valor.astimezone(FUSO_LOCAL)
 
 
 BANCOS_CONHECIDOS = (
@@ -667,7 +684,7 @@ def get_ultima_sincronizacao():
         conn.close()
         if not row:
             return {"executado_em": None, "status": None}
-        executado_local = row["executado_em"] - timedelta(hours=3) if row["executado_em"] else None
+        executado_local = data_hora_local(row["executado_em"])
         return {
             "executado_em": executado_local.strftime("%d/%m/%Y %H:%M") if executado_local else None,
             "status": row["status"],
@@ -1388,7 +1405,7 @@ def levantar_pendencias(cur):
         "natureza_manual": len(manuais),
         "manuais": [{
             "id": str(m["transacao_id"]),
-            "data": (m["data_transacao"] - timedelta(hours=3)).strftime("%d/%m/%Y") if m["data_transacao"] else "-",
+            "data": data_hora_local(m["data_transacao"]).strftime("%d/%m/%Y") if m["data_transacao"] else "-",
             "descricao": m["descricao"] or "-",
             "categoria": m["categoria"],
             "categoria_nome": cat_pt_puro(m["categoria"]),

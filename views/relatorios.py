@@ -1,5 +1,5 @@
 """Relatorios, DRE e investimentos."""
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import psycopg2
 import psycopg2.extras
@@ -22,6 +22,7 @@ from core import (
     cat_pt_puro,
     chave_alfa,
     chip_filter_html,
+    data_hora_local,
     get_conn,
     levantar_pendencias,
     pode,
@@ -431,7 +432,7 @@ def relatorios_lancamentos():
     for r in rows:
         selo, curto, completo = origem_de(r)
         lancamentos.append({
-            "data": (r["data_transacao"] - timedelta(hours=3)).strftime("%d/%m/%Y"),
+            "data": data_hora_local(r["data_transacao"]).strftime("%d/%m/%Y"),
             "descricao": r["descricao"],
             "origem_selo": selo,
             "origem": curto,
@@ -556,7 +557,7 @@ def api_categoria_lancamentos():
         {
             # o id vai junto para o modal poder abrir os detalhes do lancamento
             "transacao_id": str(r["transacao_id"]),
-            "data": (r["data_transacao"] - timedelta(hours=3)).strftime("%d/%m/%Y") if r["data_transacao"] else "-",
+            "data": data_hora_local(r["data_transacao"]).strftime("%d/%m/%Y") if r["data_transacao"] else "-",
             "descricao": r["descricao"] or "-",
             "valor": float(r["valor"]) if r["valor"] is not None else 0,
         }

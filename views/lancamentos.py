@@ -1,6 +1,6 @@
 """Tela de Lancamentos e a API que ela usa."""
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
@@ -12,6 +12,7 @@ from core import (
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT_DB,
     CONTA_MANUAL_ID,
+    DATA_LOCAL_SQL,
     DUPLICADA_OBS_PADRAO,
     JOIN_NATUREZA,
     NATUREZAS,
@@ -24,6 +25,7 @@ from core import (
     cat_pt_puro,
     chave_alfa,
     chip_filter_html,
+    data_hora_local,
     esc,
     get_conn,
     json_script,
@@ -74,8 +76,8 @@ def index():
     # origem aqui de proposito: se entrasse, marcar uma origem zeraria a contagem
     # das outras e o numero deixaria de servir para comparar.
     cur.execute(
-        "SELECT account_id, COUNT(*) AS n FROM cartao.transacao "
-        "WHERE to_char(data_transacao, 'YYYY-MM') = %s GROUP BY account_id;",
+        f"SELECT account_id, COUNT(*) AS n FROM cartao.transacao t "
+        f"WHERE to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s GROUP BY account_id;",
         (mes,),
     )
     qtd_por_origem = {str(r["account_id"]): r["n"] for r in cur.fetchall()}
@@ -86,9 +88,9 @@ def index():
     # duplicada fica de fora - a decisao ja foi tomada.
     cur.execute(
         "SELECT array_agg(t.transacao_id::text) AS ids FROM cartao.transacao t "
-        "WHERE to_char(t.data_transacao, 'YYYY-MM') = %s "
+        f"WHERE to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s "
         "AND COALESCE(t.duplicada, false) = false "
-        "GROUP BY t.account_id, t.data_transacao::date, "
+        f"GROUP BY t.account_id, ({DATA_LOCAL_SQL})::date, "
         "COALESCE(t.valor_brl, t.valor_original), t.descricao "
         "HAVING COUNT(*) > 1;",
         (mes,),
@@ -101,7 +103,7 @@ def index():
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt(c)))
 
-    where = ["to_char(t.data_transacao, 'YYYY-MM') = %s"]
+    where = [f"to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s"]
     params = [mes]
     if origem_sel:
         where.append("t.account_id IN %s")
@@ -130,7 +132,7 @@ def index():
     rows = cur.fetchall()
 
     # resumo do mes (nao filtrado por status, sempre do mes inteiro; duplicadas nao contam)
-    where_resumo = ["to_char(t.data_transacao,'YYYY-MM') = %s", "COALESCE(t.duplicada, false) = false"]
+    where_resumo = [f"to_char({DATA_LOCAL_SQL},'YYYY-MM') = %s", "COALESCE(t.duplicada, false) = false"]
     params_resumo = [mes]
     if origem_sel:
         where_resumo.append("t.account_id IN %s")
@@ -146,7 +148,7 @@ def index():
     )
     resumo = cur.fetchone()
 
-    where_cat = ["to_char(t.data_transacao,'YYYY-MM') = %s", f"{NATUREZA_SQL} = 'despesa'",
+    where_cat = [f"to_char({DATA_LOCAL_SQL},'YYYY-MM') = %s", f"{NATUREZA_SQL} = 'despesa'",
                  "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
     params_cat = [mes]
     if origem_sel:
@@ -242,7 +244,7 @@ def index():
     linhas_tabela = []
     detalhes_js = {}
     for r in rows:
-        data_local = r["data_transacao"] - timedelta(hours=3)
+        data_local = data_hora_local(r["data_transacao"])
         data_fmt_full = data_local.strftime("%d/%m/%Y %H:%M")
         rid = r["transacao_id"]
         desc = r["descricao"] or ""
@@ -464,7 +466,7 @@ def detalhes_transacao(transacao_id):
     else:
         origem = conta["label"]
 
-    local = r["data_transacao"] - timedelta(hours=3) if r["data_transacao"] else None
+    local = data_hora_local(r["data_transacao"])
     return jsonify({
         "ok": True,
         "transacao_id": str(r["transacao_id"]),

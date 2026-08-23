@@ -1,7 +1,9 @@
 """Regressoes de integridade para classificacoes e historico patrimonial."""
 from pathlib import Path
+from datetime import datetime, timezone
 from decimal import Decimal
 
+from core import data_hora_local
 from views.relatorios import _montar_historico_investimentos
 from views.lancamentos import _valor_manual
 
@@ -10,6 +12,18 @@ def test_sync_nao_sobrescreve_categoria_revisada_pelo_usuario():
     texto = (Path(__file__).parent.parent / "bussola" / "app.py").read_text(encoding="utf-8")
     trecho_update = texto.split("ON CONFLICT (transacao_id) DO UPDATE SET", 1)[1].split("RETURNING", 1)[0]
     assert "categoria = EXCLUDED.categoria" not in trecho_update
+
+
+def test_sync_aceita_correcao_de_horario_do_pluggy_no_mesmo_id():
+    texto = (Path(__file__).parent.parent / "bussola" / "app.py").read_text(encoding="utf-8")
+    trecho_update = texto.split("ON CONFLICT (transacao_id) DO UPDATE SET", 1)[1].split("RETURNING", 1)[0]
+    assert "data_transacao = EXCLUDED.data_transacao" in trecho_update
+
+
+def test_horario_03_utc_da_conta_corrente_aparece_como_meia_noite_local():
+    valor = datetime(2026, 8, 19, 3, 0, tzinfo=timezone.utc)
+    local = data_hora_local(valor)
+    assert local.strftime("%Y-%m-%d %H:%M %z") == "2026-08-19 00:00 -0300"
 
 
 def test_variacao_do_investimento_fica_no_mes_mais_novo():
