@@ -1292,11 +1292,14 @@ def _montar_filtro_relatorio(dimensoes):
         where.append("t.account_id IN %s")
         params.append(tuple(origens_sel))
     if data_ini:
-        where.append("t.data_transacao >= %s")
+        # O banco guarda instantes em UTC, mas a competencia financeira e o
+        # dia civil de Sao Paulo (a mesma regra usada na DRE e nos lancamentos).
+        where.append(DATA_LOCAL_SQL + " >= %s::date")
         params.append(data_ini)
     if data_fim:
-        where.append("t.data_transacao <= %s")
-        params.append(data_fim + " 23:59:59")
+        # Limite superior exclusivo inclui tambem fracoes do ultimo segundo.
+        where.append(DATA_LOCAL_SQL + " < (%s::date + interval '1 day')")
+        params.append(data_fim)
     for dim_id, vals in dim_sel.items():
         where.append(
             "EXISTS (SELECT 1 FROM cartao.transacao_dimensao td WHERE td.transacao_id = t.transacao_id::text "
@@ -1314,10 +1317,10 @@ def _montar_filtro_relatorio(dimensoes):
     elif agrupar == "origem":
         group_expr = "t.account_id::text"
     elif agrupar == "mes":
-        group_expr = "to_char(t.data_transacao, 'YYYY-MM')"
+        group_expr = f"to_char({DATA_LOCAL_SQL}, 'YYYY-MM')"
     elif agrupar == "ano":
         # comparacao ano a ano: "quanto de troca de oleo a Tracker custou em cada ano"
-        group_expr = "to_char(t.data_transacao, 'YYYY')"
+        group_expr = f"to_char({DATA_LOCAL_SQL}, 'YYYY')"
     elif agrupar.startswith("dim_") and agrupar.split("_", 1)[1].isdigit():
         # o int() ja impede injecao, mas sozinho ele estoura ValueError (500) em
         # "agrupar=dim_abc", que qualquer um alcanca editando a URL. Com o isdigit
