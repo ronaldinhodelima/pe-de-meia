@@ -948,6 +948,30 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (5);")
             conn.commit()
 
+        if versao_atual < 6:
+            # Leva para bancos antigos as naturezas que foram acrescentadas ao
+            # codigo depois da primeira migracao. Nunca sobrescreve uma decisao
+            # feita pelo usuario.
+            for categoria, natureza in SEED_NATUREZAS.items():
+                cur.execute(
+                    "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES (%s,%s) "
+                    "ON CONFLICT (categoria) DO NOTHING;",
+                    (categoria, natureza),
+                )
+
+            # Lancamentos manuais antigos gravavam entrada e saida positivas.
+            # Contas bancarias usam credito positivo e debito negativo; corrige
+            # apenas a conta sintetica Manual e somente linhas com sinal errado.
+            cur.execute(
+                "UPDATE cartao.transacao SET valor_original = -ABS(valor_original), "
+                "valor_brl = -ABS(valor_brl), atualizado_em = now() "
+                "WHERE account_id = %s AND tipo = 'DEBIT' "
+                "AND (valor_original > 0 OR valor_brl > 0);",
+                (CONTA_MANUAL_ID,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (6);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

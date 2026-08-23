@@ -1,6 +1,7 @@
 """Tela de Lancamentos e a API que ela usa."""
 import uuid
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
 import psycopg2.extras
@@ -32,6 +33,24 @@ from core import (
 )
 
 bp = Blueprint("lancamentos", __name__)
+
+
+def _valor_manual(valor, direcao):
+    """Normaliza dinheiro manual seguindo o sinal usado pelo Pluggy em contas.
+
+    Entrada fica positiva; saida, negativa. O DRE inverte esse sinal para obter
+    VAL_DESPESA (positivo quando dinheiro sai).
+    """
+    if direcao not in ("entrada", "saida"):
+        raise ValueError("direcao invalida")
+    try:
+        numero = Decimal(str(valor or "0").strip().replace(",", "."))
+    except InvalidOperation as exc:
+        raise ValueError("valor invalido") from exc
+    if not numero.is_finite() or numero <= 0:
+        raise ValueError("valor invalido")
+    numero = numero.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return numero if direcao == "entrada" else -numero
 
 
 @bp.route("/")
@@ -335,9 +354,9 @@ def lancamento_manual():
         data_str = (data.get("data") or "").strip()
         descricao = (data.get("descricao") or "").strip()
         direcao = data.get("direcao")
-        valor = float(str(data.get("valor") or "0").replace(",", "."))
+        valor = _valor_manual(data.get("valor"), direcao)
         categoria = data.get("categoria") or None
-        if not data_str or not descricao or valor <= 0 or direcao not in ("entrada", "saida"):
+        if not data_str or not descricao:
             return jsonify({"ok": False, "erro": "Preencha data, descrição e um valor válido."}), 400
 
         tipo = "CREDIT" if direcao == "entrada" else "DEBIT"
