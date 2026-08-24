@@ -92,6 +92,12 @@ def test_migracao_cria_dimensao_antes_de_tentar_renomear():
     assert criar < renomear
 
 
+def test_esquema_base_contem_campos_de_revisao_do_lancamento():
+    schema = (RAIZ / "bussola" / "app.py").read_text(encoding="utf-8").split("SCHEMA_SQL =", 1)[1]
+    for campo in ("conferida", "observacao", "conferida_por", "conferida_em"):
+        assert campo in schema.split('"""', 2)[1]
+
+
 def test_views_nao_importam_umas_das_outras():
     for caminho in (RAIZ / "views").glob("*.py"):
         arvore = ast.parse(caminho.read_text(encoding="utf-8"))

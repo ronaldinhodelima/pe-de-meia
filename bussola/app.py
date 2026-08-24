@@ -88,6 +88,10 @@ CREATE TABLE IF NOT EXISTS cartao.transacao (
     mcc                        INTEGER,
     parcela_atual               INTEGER,
     parcela_total                INTEGER,
+    conferida                    BOOLEAN NOT NULL DEFAULT false,
+    observacao                   TEXT,
+    conferida_por                TEXT,
+    conferida_em                 TIMESTAMPTZ,
     criado_em                     TIMESTAMPTZ,
     atualizado_em                  TIMESTAMPTZ,
     sincronizado_em                TIMESTAMPTZ DEFAULT now()
