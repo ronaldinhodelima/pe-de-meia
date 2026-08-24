@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg2
 import psycopg2.extras
-from flask import request, redirect, session, jsonify, render_template, has_request_context
+from flask import request, redirect, session, jsonify, render_template, has_request_context, g
 
 
 logger = logging.getLogger(__name__)
@@ -787,6 +787,25 @@ def sanitizar_dados_auditoria(valor, chave=""):
     if isinstance(valor, (list, tuple, set)):
         return [sanitizar_dados_auditoria(v, chave) for v in list(valor)[:50]]
     return sanitizar_dados_auditoria(str(valor), chave)
+
+
+def registrar_mudanca_auditoria(campo, antes, depois):
+    """Acrescenta um antes/depois ao evento HTTP atual, somente quando mudou."""
+    if not has_request_context() or antes == depois:
+        return False
+    alteracoes = getattr(g, "audit_alteracoes", None)
+    if alteracoes is None:
+        alteracoes = {}
+        g.audit_alteracoes = alteracoes
+    alteracoes[str(campo)[:100]] = {"antes": antes, "depois": depois}
+    return True
+
+
+def marcar_falha_auditoria():
+    """Marca uma resposta HTTP 200 com erro de formulario como falha de auditoria."""
+    if has_request_context():
+        g.audit_sucesso = False
+        g.audit_alteracoes = {}
 
 
 def registrar_auditoria(

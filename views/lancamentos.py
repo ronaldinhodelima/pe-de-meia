@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, session, jsonify, render_template, g
+from flask import Blueprint, request, session, jsonify, render_template
 
 from core import (
     CATEGORIAS_EXTRA,
@@ -33,6 +33,7 @@ from core import (
     json_script,
     pode,
     registrar_auditoria,
+    registrar_mudanca_auditoria,
     requer,
     topbar_html,
 )
@@ -676,36 +677,27 @@ def update_transacao(transacao_id):
         else (None if "conferida" in data else transacao[1])
     )
     duplicada_final = bool(data.get("duplicada")) if "duplicada" in data else bool(transacao[2])
-    alteracoes = {}
-
-    def registrar_mudanca(campo, antes, depois):
-        if antes != depois:
-            alteracoes[campo] = {"antes": antes, "depois": depois}
-
     if "conferida" in data:
-        registrar_mudanca("Conferida", bool(transacao[0]), conferida_final)
+        registrar_mudanca_auditoria("Conferida", bool(transacao[0]), conferida_final)
     if "duplicada" in data:
-        registrar_mudanca("Duplicada", bool(transacao[2]), duplicada_final)
+        registrar_mudanca_auditoria("Duplicada", bool(transacao[2]), duplicada_final)
     if "observacao" in data:
-        registrar_mudanca("Observação", transacao[4], data.get("observacao"))
+        registrar_mudanca_auditoria("Observação", transacao[4], data.get("observacao"))
     if "categoria" in data:
         categoria_nova = data.get("categoria") or None
-        registrar_mudanca(
+        registrar_mudanca_auditoria(
             "Categoria",
             {"chave": transacao[3], "nome": cat_pt_puro(transacao[3])} if transacao[3] else None,
             {"chave": categoria_nova, "nome": cat_pt_puro(categoria_nova)} if categoria_nova else None,
         )
     if "natureza" in data:
-        registrar_mudanca("Natureza", transacao[5], natureza)
+        registrar_mudanca_auditoria("Natureza", transacao[5], natureza)
     for _dim_id, valor_id, nome_dimensao, valor_id_antigo, valor_antigo, valor_novo in dimensoes_validadas:
-        registrar_mudanca(
+        registrar_mudanca_auditoria(
             nome_dimensao,
             {"id": valor_id_antigo, "nome": valor_antigo} if valor_id_antigo else None,
             {"id": valor_id, "nome": valor_novo} if valor_id else None,
         )
-    if alteracoes:
-        g.audit_alteracoes = alteracoes
-
     return jsonify({
         "ok": True,
         "bloqueada": bloqueada,

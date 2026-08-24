@@ -125,7 +125,7 @@ def _auditar_requisicao(response):
         usuario = (request.form.get("usuario") or "").strip() or None
     inicio = getattr(g, "audit_inicio", None)
     duracao_ms = round((time.monotonic() - inicio) * 1000, 1) if inicio else None
-    sucesso = response.status_code < 400
+    sucesso = response.status_code < 400 and getattr(g, "audit_sucesso", True)
     # Login invalido devolve a mesma tela (HTTP 200), mas deve aparecer como
     # falha no historico. A sessao so contem usuario quando a autenticacao passou.
     if endpoint == "auth.login":

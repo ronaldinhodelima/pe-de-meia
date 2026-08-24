@@ -26,7 +26,9 @@ from core import (
     esc,
     get_conn,
     levantar_pendencias,
+    marcar_falha_auditoria,
     recarregar_categorias_db,
+    registrar_mudanca_auditoria,
     pode,
     requer,
     selo_banco_html,
@@ -52,10 +54,15 @@ def dimensoes_view():
             else:
                 try:
                     cur.execute(
-                        "INSERT INTO cartao.dimensao (nome, obrigatoria, ordem) VALUES (%s,%s,%s);",
+                        "INSERT INTO cartao.dimensao (nome, obrigatoria, ordem) VALUES (%s,%s,%s) RETURNING id;",
                         (nome, request.form.get("obrigatoria") == "on", 99),
                     )
+                    nova_id = cur.fetchone()["id"]
                     conn.commit()
+                    registrar_mudanca_auditoria("Dimensão", None, {
+                        "id": nova_id, "nome": nome,
+                        "obrigatoria": request.form.get("obrigatoria") == "on",
+                    })
                 except psycopg2.errors.UniqueViolation:
                     conn.rollback()
                     erro = f"Já existe uma dimensão chamada '{nome}'."
@@ -66,25 +73,50 @@ def dimensoes_view():
             else:
                 try:
                     cur.execute(
+                        "SELECT id, nome, obrigatoria FROM cartao.dimensao WHERE id=%s;",
+                        (request.form.get("dimensao_id"),),
+                    )
+                    anterior = cur.fetchone()
+                    obrigatoria = request.form.get("obrigatoria") == "on"
+                    cur.execute(
                         "UPDATE cartao.dimensao SET nome=%s, obrigatoria=%s WHERE id=%s;",
-                        (nome, request.form.get("obrigatoria") == "on", request.form.get("dimensao_id")),
+                        (nome, obrigatoria, request.form.get("dimensao_id")),
                     )
                     conn.commit()
+                    if anterior and cur.rowcount:
+                        registrar_mudanca_auditoria("Nome da dimensão", anterior["nome"], nome)
+                        registrar_mudanca_auditoria("Dimensão obrigatória", bool(anterior["obrigatoria"]), obrigatoria)
                 except psycopg2.errors.UniqueViolation:
                     conn.rollback()
                     erro = f"Já existe uma dimensão chamada '{nome}'."
         elif acao == "excluir_dimensao":
+            cur.execute(
+                "SELECT id, nome, obrigatoria FROM cartao.dimensao WHERE id=%s;",
+                (request.form.get("dimensao_id"),),
+            )
+            anterior = cur.fetchone()
             cur.execute("DELETE FROM cartao.dimensao WHERE id=%s;", (request.form.get("dimensao_id"),))
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Dimensão", {
+                    "id": anterior["id"], "nome": anterior["nome"],
+                    "obrigatoria": bool(anterior["obrigatoria"]),
+                }, None)
         elif acao == "criar_valor":
             nome = (request.form.get("nome") or "").strip()
             if nome:
                 try:
                     cur.execute(
-                        "INSERT INTO cartao.dimensao_valor (dimensao_id, nome) VALUES (%s,%s);",
+                        "INSERT INTO cartao.dimensao_valor (dimensao_id, nome) VALUES (%s,%s) RETURNING id;",
                         (request.form.get("dimensao_id"), nome),
                     )
+                    novo_id = cur.fetchone()["id"]
                     conn.commit()
+                    registrar_mudanca_auditoria("Valor de dimensão", None, {
+                        "id": novo_id,
+                        "dimensao_id": request.form.get("dimensao_id"),
+                        "nome": nome,
+                    })
                 except psycopg2.errors.UniqueViolation:
                     conn.rollback()
                     erro = f"Já existe o valor '{nome}' nessa dimensão."
@@ -92,22 +124,55 @@ def dimensoes_view():
             def to_num(v):
                 v = (v or "").strip().replace(",", ".")
                 return float(v) if v else None
+            valor_id = request.form.get("valor_id")
+            cur.execute(
+                "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone "
+                "FROM cartao.dimensao_valor WHERE id=%s;",
+                (valor_id,),
+            )
+            anterior = cur.fetchone()
+            nome_novo = (request.form.get("nome") or "").strip()
+            teto_mensal_novo = to_num(request.form.get("teto_mensal"))
+            teto_anual_novo = to_num(request.form.get("teto_anual"))
+            icone_novo = ((request.form.get("icone") or "").strip() or None)
             cur.execute(
                 "UPDATE cartao.dimensao_valor SET nome=%s, teto_mensal=%s, teto_anual=%s, "
                 "icone=%s WHERE id=%s;",
                 (
-                    (request.form.get("nome") or "").strip(),
-                    to_num(request.form.get("teto_mensal")),
-                    to_num(request.form.get("teto_anual")),
+                    nome_novo,
+                    teto_mensal_novo,
+                    teto_anual_novo,
                     # varchar(8): cabe um emoji (que pode ter varios code points)
-                    ((request.form.get("icone") or "").strip() or None),
-                    request.form.get("valor_id"),
+                    icone_novo,
+                    valor_id,
                 ),
             )
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Nome do valor", anterior["nome"], nome_novo)
+                registrar_mudanca_auditoria("Teto mensal", float(anterior["teto_mensal"]) if anterior["teto_mensal"] is not None else None, teto_mensal_novo)
+                registrar_mudanca_auditoria("Teto anual", float(anterior["teto_anual"]) if anterior["teto_anual"] is not None else None, teto_anual_novo)
+                registrar_mudanca_auditoria("Ícone", anterior["icone"], icone_novo)
         elif acao == "excluir_valor":
-            cur.execute("DELETE FROM cartao.dimensao_valor WHERE id=%s;", (request.form.get("valor_id"),))
+            valor_id = request.form.get("valor_id")
+            cur.execute(
+                "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone "
+                "FROM cartao.dimensao_valor WHERE id=%s;",
+                (valor_id,),
+            )
+            anterior = cur.fetchone()
+            cur.execute("DELETE FROM cartao.dimensao_valor WHERE id=%s;", (valor_id,))
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Valor de dimensão", {
+                    "id": anterior["id"], "dimensao_id": anterior["dimensao_id"],
+                    "nome": anterior["nome"],
+                    "teto_mensal": float(anterior["teto_mensal"]) if anterior["teto_mensal"] is not None else None,
+                    "teto_anual": float(anterior["teto_anual"]) if anterior["teto_anual"] is not None else None,
+                    "icone": anterior["icone"],
+                }, None)
+        if erro:
+            marcar_falha_auditoria()
 
     cur.execute("SELECT id, nome, obrigatoria, ordem FROM cartao.dimensao ORDER BY ordem, nome;")
     dims = cur.fetchall()
@@ -159,6 +224,32 @@ def regras_view():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     erro = None
+
+    def estado_regra(regra_id):
+        cur.execute(
+            "SELECT id, padrao, categoria FROM cartao.regra_classificacao WHERE id=%s;",
+            (regra_id,),
+        )
+        regra = cur.fetchone()
+        if not regra:
+            return None
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.regra_dimensao_valor "
+            "WHERE regra_id=%s ORDER BY dimensao_id;",
+            (regra_id,),
+        )
+        return {
+            "id": regra["id"],
+            "padrao": regra["padrao"],
+            "categoria": {
+                "chave": regra["categoria"],
+                "nome": cat_pt_puro(regra["categoria"]),
+            } if regra["categoria"] else None,
+            "dimensoes": {
+                str(r["dimensao_id"]): r["valor_id"] for r in cur.fetchall()
+            },
+        }
+
     if request.method == "POST":
         acao = request.form.get("acao")
         if acao == "criar_regra":
@@ -187,14 +278,19 @@ def regras_view():
                             (regra_id, dim_id, valor),
                         )
                 conn.commit()
+                registrar_mudanca_auditoria("Regra automática", None, estado_regra(regra_id))
         elif acao == "excluir_regra":
+            regra_id = request.form.get("regra_id")
+            anterior = estado_regra(regra_id)
             cur.execute(
                 "UPDATE cartao.transacao SET regra_aplicada_id = NULL "
                 "WHERE regra_aplicada_id = %s;",
-                (request.form.get("regra_id"),),
+                (regra_id,),
             )
-            cur.execute("DELETE FROM cartao.regra_classificacao WHERE id=%s;", (request.form.get("regra_id"),))
+            cur.execute("DELETE FROM cartao.regra_classificacao WHERE id=%s;", (regra_id,))
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Regra automática", anterior, None)
         elif acao == "reaplicar_regra":
             # libera as transacoes pendentes que essa regra ja tinha marcado, para reclassificar no proximo acesso
             cur.execute(
@@ -202,9 +298,15 @@ def regras_view():
                 "WHERE regra_aplicada_id = %s AND conferida = false;",
                 (request.form.get("regra_id"),),
             )
+            liberados = cur.rowcount
             conn.commit()
+            if liberados:
+                registrar_mudanca_auditoria(
+                    "Lançamentos liberados para reaplicar regra", 0, liberados,
+                )
         elif acao == "editar_regra":
             regra_id = request.form.get("regra_id")
+            anterior = estado_regra(regra_id)
             padrao = (request.form.get("padrao") or "").strip()
             categoria = request.form.get("categoria")
             if not padrao:
@@ -229,6 +331,11 @@ def regras_view():
                     (regra_id,),
                 )
                 conn.commit()
+                registrar_mudanca_auditoria(
+                    "Regra automática", anterior, estado_regra(regra_id),
+                )
+        if erro:
+            marcar_falha_auditoria()
 
     aplicar_regras(cur)
     conn.commit()
@@ -312,48 +419,90 @@ def grupos_view():
         if acao == "criar_grupo":
             nome = request.form.get("nome", "").strip()
             try:
-                cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s);", (nome,))
+                cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (nome,))
+                grupo_id = cur.fetchone()["id"]
                 conn.commit()
+                registrar_mudanca_auditoria(
+                    "Centro de custo", None, {"id": grupo_id, "nome": nome},
+                )
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
                 erro = f"Já existe um centro de custo chamado '{nome}'."
         elif acao == "editar_grupo":
             try:
+                grupo_id = request.form.get("grupo_id")
+                nome_novo = request.form.get("nome", "").strip()
+                cur.execute("SELECT nome FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
+                anterior = cur.fetchone()
                 cur.execute(
                     "UPDATE cartao.grupo_custo SET nome=%s WHERE id=%s;",
-                    (request.form.get("nome", "").strip(), request.form.get("grupo_id")),
+                    (nome_novo, grupo_id),
                 )
                 conn.commit()
+                if anterior and cur.rowcount:
+                    registrar_mudanca_auditoria(
+                        "Nome do centro de custo", anterior["nome"], nome_novo,
+                    )
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
                 erro = "Já existe um centro de custo com esse nome."
         elif acao == "excluir_grupo":
-            cur.execute("DELETE FROM cartao.grupo_custo WHERE id=%s;", (request.form.get("grupo_id"),))
+            grupo_id = request.form.get("grupo_id")
+            cur.execute("SELECT id, nome FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
+            anterior = cur.fetchone()
+            cur.execute("DELETE FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Centro de custo", dict(anterior), None)
         elif acao == "criar_subgrupo":
             nome = request.form.get("nome", "").strip()
             try:
                 cur.execute(
-                    "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,%s);",
+                    "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,%s) RETURNING id;",
                     (request.form.get("grupo_id"), nome),
                 )
+                subgrupo_id = cur.fetchone()["id"]
                 conn.commit()
+                registrar_mudanca_auditoria("Subgrupo de custo", None, {
+                    "id": subgrupo_id,
+                    "grupo_id": request.form.get("grupo_id"),
+                    "nome": nome,
+                })
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
                 erro = f"Já existe um subgrupo chamado '{nome}' nesse centro de custo."
         elif acao == "editar_subgrupo":
             try:
+                subgrupo_id = request.form.get("subgrupo_id")
+                nome_novo = request.form.get("nome", "").strip()
+                cur.execute(
+                    "SELECT id, grupo_id, nome FROM cartao.subgrupo_custo WHERE id=%s;",
+                    (subgrupo_id,),
+                )
+                anterior = cur.fetchone()
                 cur.execute(
                     "UPDATE cartao.subgrupo_custo SET nome=%s WHERE id=%s;",
-                    (request.form.get("nome", "").strip(), request.form.get("subgrupo_id")),
+                    (nome_novo, subgrupo_id),
                 )
                 conn.commit()
+                if anterior and cur.rowcount:
+                    registrar_mudanca_auditoria(
+                        "Nome do subgrupo", anterior["nome"], nome_novo,
+                    )
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
                 erro = "Já existe um subgrupo com esse nome nesse centro de custo."
         elif acao == "excluir_subgrupo":
-            cur.execute("DELETE FROM cartao.subgrupo_custo WHERE id=%s;", (request.form.get("subgrupo_id"),))
+            subgrupo_id = request.form.get("subgrupo_id")
+            cur.execute(
+                "SELECT id, grupo_id, nome FROM cartao.subgrupo_custo WHERE id=%s;",
+                (subgrupo_id,),
+            )
+            anterior = cur.fetchone()
+            cur.execute("DELETE FROM cartao.subgrupo_custo WHERE id=%s;", (subgrupo_id,))
             conn.commit()
+            if anterior and cur.rowcount:
+                registrar_mudanca_auditoria("Subgrupo de custo", dict(anterior), None)
         elif acao == "mapear_categoria":
             subgrupo_id = request.form.get("subgrupo_id") or None
             categoria = request.form.get("categoria")
@@ -374,6 +523,17 @@ def grupos_view():
                 (categoria, subgrupo_id),
             )
             conn.commit()
+            cur.execute(
+                "SELECT s.nome AS subgrupo, g.nome AS grupo FROM cartao.subgrupo_custo s "
+                "JOIN cartao.grupo_custo g ON g.id = s.grupo_id WHERE s.id = %s;",
+                (subgrupo_id,),
+            )
+            depois = cur.fetchone()
+            registrar_mudanca_auditoria(
+                f"Centro de custo de {cat_pt_puro(categoria)}",
+                dict(antes) if antes else None,
+                dict(depois) if depois else None,
+            )
             if antes:
                 aviso = (
                     f'"{cat_pt_puro(categoria)}" foi movida de '
@@ -382,6 +542,8 @@ def grupos_view():
                 )
             else:
                 aviso = f'"{cat_pt_puro(categoria)}" vinculada.'
+        if erro:
+            marcar_falha_auditoria()
 
     cur.execute("SELECT id, nome FROM cartao.grupo_custo;")
     grupos_db = sorted(cur.fetchall(), key=lambda g: chave_alfa(g["nome"]))
@@ -455,12 +617,23 @@ def contas_view():
                 prefixo = (request.form.get("prefixo") or "").strip()
                 if not (final4.isdigit() and len(final4) == 4):
                     erro = "Os 4 últimos dígitos devem ser exatamente 4 números."
-                elif not prefixo:
+                else:
+                    cur.execute(
+                        "SELECT prefixo FROM cartao.cartao_nome WHERE final4 = %s;",
+                        (final4,),
+                    )
+                    cartao_anterior = cur.fetchone()
+                if not erro and not prefixo:
                     # nome em branco = remover o apelido, volta a aparecer como "final NNNN"
                     cur.execute("DELETE FROM cartao.cartao_nome WHERE final4 = %s;", (final4,))
                     conn.commit()
+                    registrar_mudanca_auditoria(
+                        f"Apelido do cartão final {final4}",
+                        cartao_anterior["prefixo"] if cartao_anterior else None,
+                        None,
+                    )
                     aviso = f"Nome do cartão final {final4} removido."
-                else:
+                elif not erro:
                     cur.execute(
                         "SELECT final4 FROM cartao.cartao_nome WHERE lower(prefixo) = lower(%s) "
                         "AND final4 <> %s;",
@@ -481,10 +654,20 @@ def contas_view():
                             (final4, prefixo),
                         )
                         conn.commit()
+                        registrar_mudanca_auditoria(
+                            f"Apelido do cartão final {final4}",
+                            cartao_anterior["prefixo"] if cartao_anterior else None,
+                            prefixo,
+                        )
                         aviso = f'Cartão final {final4} salvo como "{prefixo}".'
             else:
                 item_id = request.form.get("item_id")
                 titular = (request.form.get("titular") or "").strip()
+                cur.execute(
+                    "SELECT titular FROM cartao.item_titular WHERE item_id = %s;",
+                    (item_id,),
+                )
+                titular_anterior = cur.fetchone()
                 if not titular:
                     cur.execute("DELETE FROM cartao.item_titular WHERE item_id = %s;", (item_id,))
                     aviso = "Titular removido dessa conexão."
@@ -496,9 +679,16 @@ def contas_view():
                     )
                     aviso = f'Titular salvo: "{titular}".'
                 conn.commit()
+                registrar_mudanca_auditoria(
+                    "Titular da conexão",
+                    titular_anterior["titular"] if titular_anterior else None,
+                    titular or None,
+                )
         except Exception as e:
             conn.rollback()
             erro = str(e)
+        if erro:
+            marcar_falha_auditoria()
 
     cur.execute(
         "SELECT c.item_id, c.account_id, c.tipo, c.nome, c.numero_final, "
@@ -733,11 +923,21 @@ def categorias_view():
                 natureza = request.form.get("natureza")
                 if categoria and natureza in NATUREZAS:
                     cur.execute(
+                        "SELECT natureza FROM cartao.categoria_natureza WHERE categoria = %s;",
+                        (categoria,),
+                    )
+                    anterior = cur.fetchone()
+                    cur.execute(
                         "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES (%s,%s) "
                         "ON CONFLICT (categoria) DO UPDATE SET natureza = EXCLUDED.natureza;",
                         (categoria, natureza),
                     )
                     conn.commit()
+                    registrar_mudanca_auditoria(
+                        f"Natureza de {cat_pt_puro(categoria)}",
+                        anterior["natureza"] if anterior else None,
+                        natureza,
+                    )
 
             elif acao == "criar":
                 nome = (request.form.get("nome") or "").strip()
@@ -753,6 +953,9 @@ def categorias_view():
                     )
                     cur.execute("DELETE FROM cartao.categoria_oculta WHERE categoria = %s;", (nome,))
                     conn.commit()
+                    registrar_mudanca_auditoria("Categoria", None, {
+                        "chave": nome, "nome": nome,
+                    })
                     aviso = f'Categoria "{nome}" criada.'
 
             elif acao == "renomear":
@@ -770,12 +973,16 @@ def categorias_view():
                         '"Mover lançamentos" e depois remova a que ficar vazia.'
                     )
                 else:
+                    nome_anterior = cat_pt_puro(categoria)
                     cur.execute(
                         "INSERT INTO cartao.categoria (categoria, nome_pt) VALUES (%s,%s) "
                         "ON CONFLICT (categoria) DO UPDATE SET nome_pt = EXCLUDED.nome_pt;",
                         (categoria, novo_nome),
                     )
                     conn.commit()
+                    registrar_mudanca_auditoria(
+                        "Nome da categoria", nome_anterior, novo_nome,
+                    )
                     aviso = f'Categoria renomeada para "{novo_nome}".'
 
             elif acao == "mover":
@@ -793,6 +1000,12 @@ def categorias_view():
                     )
                     qtd = cur.rowcount
                     conn.commit()
+                    if qtd:
+                        registrar_mudanca_auditoria(
+                            "Lançamentos por categoria",
+                            {"categoria": cat_pt_puro(origem), "quantidade": qtd},
+                            {"categoria": cat_pt_puro(destino), "quantidade": qtd},
+                        )
                     aviso = f'{qtd} lançamento(s) movido(s) de "{cat_pt_puro(origem)}" para "{cat_pt_puro(destino)}".'
 
             elif acao == "excluir":
@@ -801,11 +1014,15 @@ def categorias_view():
                 if qtd > 0:
                     erro = f'Não é possível remover: existem {qtd} lançamento(s) nessa categoria. Mova-os primeiro.'
                 else:
+                    nome_anterior = cat_pt_puro(categoria)
                     cur.execute("DELETE FROM cartao.categoria WHERE categoria = %s;", (categoria,))
                     cur.execute("DELETE FROM cartao.categoria_natureza WHERE categoria = %s;", (categoria,))
                     cur.execute("DELETE FROM cartao.categoria_subgrupo WHERE categoria = %s;", (categoria,))
                     cur.execute("INSERT INTO cartao.categoria_oculta (categoria) VALUES (%s) ON CONFLICT DO NOTHING;", (categoria,))
                     conn.commit()
+                    registrar_mudanca_auditoria("Categoria", {
+                        "chave": categoria, "nome": nome_anterior,
+                    }, None)
                     aviso = f'Categoria "{cat_pt_puro(categoria)}" removida.'
         except psycopg2.errors.UniqueViolation:
             # rede de baixo: a validacao da tela ja barra nome repetido, mas se
@@ -816,6 +1033,8 @@ def categorias_view():
         except Exception as e:
             conn.rollback()
             erro = str(e)
+        if erro:
+            marcar_falha_auditoria()
         recarregar_categorias_db()
 
     cur.execute(

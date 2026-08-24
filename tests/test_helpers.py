@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import app  # noqa: F401
 import core
+from flask import g
 
 
 class TestCatPt:
@@ -183,6 +184,18 @@ def test_auditoria_oculta_credenciais_e_limita_texto():
     assert dados["nova_senha"] == "[PROTEGIDO]"
     assert dados["api_token"] == "[PROTEGIDO]"
     assert len(dados["observacao"]) == 501
+
+
+def test_auditoria_acumula_somente_mudancas_reais_e_pode_marcar_falha():
+    with app.app.test_request_context("/teste", method="POST"):
+        assert core.registrar_mudanca_auditoria("Nome", "Antes", "Antes") is False
+        assert core.registrar_mudanca_auditoria("Nome", "Antes", "Depois") is True
+        assert g.audit_alteracoes == {
+            "Nome": {"antes": "Antes", "depois": "Depois"},
+        }
+        core.marcar_falha_auditoria()
+        assert g.audit_sucesso is False
+        assert g.audit_alteracoes == {}
 
 
 def test_auditoria_fecha_conexao_quando_o_banco_falha(monkeypatch):

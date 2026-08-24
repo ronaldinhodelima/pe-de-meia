@@ -8,7 +8,9 @@ from core import (
     PERMISSOES,
     get_conn,
     hash_senha,
+    marcar_falha_auditoria,
     permissoes_do_perfil,
+    registrar_mudanca_auditoria,
     requer,
     topbar_html,
 )
@@ -37,6 +39,13 @@ def usuarios_view():
         cur.execute("LOCK TABLE cartao.usuario IN SHARE ROW EXCLUSIVE MODE;")
         acao = request.form.get("acao")
         alvo = (request.form.get("usuario") or "").strip()
+        estado_anterior = None
+        if alvo:
+            cur.execute(
+                "SELECT usuario, nome, perfil, permissoes, ativo FROM cartao.usuario WHERE usuario = %s;",
+                (alvo,),
+            )
+            estado_anterior = cur.fetchone()
         try:
             if acao == "criar":
                 login = (request.form.get("novo_usuario") or "").strip().lower()
@@ -53,7 +62,16 @@ def usuarios_view():
                         (login, (request.form.get("novo_nome") or login.capitalize()).strip(),
                          hash_senha(senha), perfil, permissoes_do_perfil(perfil)),
                     )
-                    aviso = f'Usuário "{login}" criado.' if cur.fetchone() else "Já existe um usuário com esse login."
+                    criado = cur.fetchone()
+                    aviso = f'Usuário "{login}" criado.' if criado else "Já existe um usuário com esse login."
+                    if criado:
+                        registrar_mudanca_auditoria("Usuário", None, {
+                            "login": login,
+                            "nome": (request.form.get("novo_nome") or login.capitalize()).strip(),
+                            "perfil": perfil,
+                            "permissoes": permissoes_do_perfil(perfil),
+                            "ativo": True,
+                        })
 
             elif acao == "permissoes":
                 perfil = request.form.get("perfil") or "leitura"
@@ -68,6 +86,10 @@ def usuarios_view():
                         "UPDATE cartao.usuario SET perfil = %s, permissoes = %s, nome = %s WHERE usuario = %s;",
                         (perfil, marcadas, (request.form.get("nome") or "").strip() or alvo, alvo),
                     )
+                    if estado_anterior and cur.rowcount:
+                        registrar_mudanca_auditoria("Nome", estado_anterior["nome"], (request.form.get("nome") or "").strip() or alvo)
+                        registrar_mudanca_auditoria("Perfil", estado_anterior["perfil"], perfil)
+                        registrar_mudanca_auditoria("Permissões", sorted(estado_anterior["permissoes"] or []), sorted(marcadas))
                     aviso = f'Permissões de "{alvo}" atualizadas.'
 
             elif acao == "senha":
@@ -77,6 +99,8 @@ def usuarios_view():
                 else:
                     cur.execute("UPDATE cartao.usuario SET senha_hash = %s WHERE usuario = %s;",
                                 (hash_senha(nova), alvo))
+                    if cur.rowcount:
+                        registrar_mudanca_auditoria("Senha", "mantida em segredo", "alterada")
                     aviso = f'Senha de "{alvo}" alterada.'
 
             elif acao == "ativar":
@@ -87,6 +111,8 @@ def usuarios_view():
                     erro = "É preciso manter ao menos um administrador ativo."
                 else:
                     cur.execute("UPDATE cartao.usuario SET ativo = %s WHERE usuario = %s;", (ativo, alvo))
+                    if estado_anterior and cur.rowcount:
+                        registrar_mudanca_auditoria("Acesso ativo", bool(estado_anterior["ativo"]), ativo)
                     aviso = f'Acesso de "{alvo}" ' + ("reativado." if ativo else "desativado.")
 
             elif acao == "excluir":
@@ -96,12 +122,22 @@ def usuarios_view():
                     erro = "É preciso manter ao menos um administrador."
                 else:
                     cur.execute("DELETE FROM cartao.usuario WHERE usuario = %s;", (alvo,))
+                    if estado_anterior and cur.rowcount:
+                        registrar_mudanca_auditoria("Usuário", {
+                            "login": estado_anterior["usuario"],
+                            "nome": estado_anterior["nome"],
+                            "perfil": estado_anterior["perfil"],
+                            "permissoes": list(estado_anterior["permissoes"] or []),
+                            "ativo": bool(estado_anterior["ativo"]),
+                        }, None)
                     aviso = f'Usuário "{alvo}" excluído.'
             conn.commit()
         except Exception as e:
             conn.rollback()
             print("Aviso: falha ao gerenciar usuario:", e)
             erro = "Não foi possível concluir a alteração. Tente novamente."
+        if erro:
+            marcar_falha_auditoria()
 
     cur.execute(
         "SELECT usuario, nome, perfil, permissoes, ativo, criado_em, ultimo_acesso "
