@@ -277,6 +277,10 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert "data-rateio-total" in template
     assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
     assert template.index('id="modalDup"') < template.index('id="modalRateioBox"')
+    assert 'class="rateio-salvar-inline"' in template and '>✓</button>' in template
+    assert "rateio-parte-titulo" in js
+    assert "el.textContent = fecha ? ''" in js
+    assert "linha.classList.toggle('rateio-invalido', !estado.valido)" in js
 
 
 def test_migracoes_sao_sequenciais_e_registradas_uma_vez():

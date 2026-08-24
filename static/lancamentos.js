@@ -391,14 +391,22 @@ function atualizarFechamentoRateio() {
   const el = document.getElementById('rateioFechamento');
   if (!el) return;
   const fecha = Math.round(soma * 100) === Math.round(total * 100);
-  el.textContent = 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
+  el.textContent = fecha ? '' : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
   el.classList.toggle('invalido', !fecha);
+  const box = document.getElementById('modalRateioBox');
+  if (box) box.classList.toggle('rateio-invalido', !fecha);
+  document.querySelectorAll('#modalRateioPartes .rateio-valor').forEach(input => {
+    input.classList.toggle('invalido', !fecha);
+  });
+  const salvar = document.getElementById('salvarRateioModalBtn');
+  if (salvar) salvar.disabled = !fecha;
 }
 
 function renderizarRateioModal() {
   const box = document.getElementById('modalRateioBox');
   const d = detalheAtualModal();
   if (!box || !idAtualModal) return;
+  box.classList.remove('rateio-invalido');
   const existentes = d._rateios || [];
   if (rateioRascunhoModal === null && existentes.length) {
     rateioRascunhoModal = existentes.map(p => ({
@@ -417,15 +425,15 @@ function renderizarRateioModal() {
     let dimsHtml = '';
     Object.entries(window.configLancamentos.dimensoes || {}).forEach(([dimId, valores]) => {
       const nome = (window.configLancamentos.dimensoes_nomes || {})[dimId] || 'Dimensão';
-      dimsHtml += '<label>' + escHtml(nome) + '</label><select class="rateio-dim" data-dim="' + escHtml(dimId) + '">' +
-        opcoesRateio(valores, (p.dims || {})[dimId], '(nao definido)') + '</select>';
+      dimsHtml += '<div class="row"><span>' + escHtml(nome) + '</span><span><select class="rateio-dim" data-dim="' + escHtml(dimId) + '">' +
+        opcoesRateio(valores, (p.dims || {})[dimId], '(nao definido)') + '</select></span></div>';
     });
     partesHtml += '<div class="modal-rateio-parte" data-indice="' + indice + '">' +
-      '<label>Parte ' + (indice + 1) + '</label><strong>' + (rateioRascunhoModal.length > 2 ? '<button type="button" class="ver-btn" onclick="removerParteRateio(' + indice + ')">Remover</button>' : '') + '</strong>' +
-      '<label>Valor (R$)</label><input class="rateio-valor" type="number" min="0.01" step="0.01" value="' + Number(p.valor || 0).toFixed(2) + '" oninput="atualizarFechamentoRateio()">' +
-      '<label>Categoria</label><select class="rateio-categoria">' + opcoesRateio(categorias, p.categoria, '(sem categoria)') + '</select>' +
+      '<div class="rateio-parte-titulo"><span>Parte ' + (indice + 1) + '</span><strong>' + (rateioRascunhoModal.length > 2 ? '<button type="button" class="ver-btn" onclick="removerParteRateio(' + indice + ')">Remover</button>' : '') + '</strong></div>' +
+      '<div class="row"><span>Valor (R$)</span><span><input class="rateio-valor" type="number" min="0.01" step="0.01" value="' + Number(p.valor || 0).toFixed(2) + '" oninput="atualizarFechamentoRateio()"></span></div>' +
+      '<div class="row"><span>Categoria</span><span><select class="rateio-categoria">' + opcoesRateio(categorias, p.categoria, '(sem categoria)') + '</select></span></div>' +
       dimsHtml +
-      '<label>Observação</label><input class="rateio-observacao" maxlength="500" value="' + escHtml(p.observacao || '') + '">' +
+      '<div class="row"><span>Observação</span><span><input class="rateio-observacao" maxlength="500" value="' + escHtml(p.observacao || '') + '"></span></div>' +
       '</div>';
   });
   box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong><span id="rateioFechamento" class="rateio-fechamento"></span></div>' +
@@ -433,7 +441,7 @@ function renderizarRateioModal() {
     '<div id="rateioStatus" class="rateio-fechamento"></div>' +
     '<div class="modal-rateio-acoes"><button type="button" class="ver-btn" onclick="adicionarParteRateio()">+ Parte</button>' +
     (existentes.length ? '<button type="button" class="ver-btn" onclick="excluirRateioModal()">Desfazer rateio</button>' : '') +
-    '<button type="button" class="ver-btn" onclick="salvarRateioModal()">Salvar rateio</button></div>';
+    '<button type="button" class="ver-btn" id="salvarRateioModalBtn" onclick="salvarRateioModal()">Salvar rateio</button></div>';
   atualizarFechamentoRateio();
 }
 
@@ -643,13 +651,14 @@ function atualizarValidacaoRateioInline(id, alterado) {
   if (resumo) {
     const soma = estado.somaCentavos / 100;
     const total = estado.totalCentavos / 100;
-    resumo.textContent = estado.valido
-      ? 'Rateio fechado'
-      : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
+    resumo.textContent = estado.valido ? '' : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
     resumo.classList.toggle('invalido', !estado.valido);
   }
   linhasRateioInline(id).forEach(linha => {
     if (alterado) linha.classList.add('rateio-alterado');
+    linha.classList.toggle('rateio-invalido', !estado.valido);
+    const valor = linha.querySelector('.rateio-valor-inline');
+    if (valor) valor.classList.toggle('invalido', !estado.valido);
     const botao = linha.querySelector('.rateio-salvar-inline');
     if (botao) botao.disabled = !window.configLancamentos.pode_editar || !estado.valido;
   });
@@ -666,7 +675,7 @@ function salvarRateioInline(id) {
   const linhas = linhasRateioInline(id);
   linhas.forEach(linha => {
     const botao = linha.querySelector('.rateio-salvar-inline');
-    if (botao) { botao.disabled = true; botao.textContent = '...'; }
+    if (botao) { botao.disabled = true; botao.textContent = '…'; }
   });
   fetch('/api/transacao/' + encodeURIComponent(id) + '/rateios', {
     method: 'POST',
@@ -679,7 +688,7 @@ function salvarRateioInline(id) {
   }).catch(e => {
     linhas.forEach(linha => {
       const botao = linha.querySelector('.rateio-salvar-inline');
-      if (botao) { botao.disabled = false; botao.textContent = 'Salvar'; }
+      if (botao) { botao.disabled = false; botao.textContent = '✓'; }
     });
     alert(e.message || 'Não foi possível salvar o rateio.');
   });
