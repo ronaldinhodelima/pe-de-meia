@@ -8,10 +8,26 @@ from views.relatorios import _montar_historico_investimentos
 from views.lancamentos import _valor_manual
 
 
-def test_sync_nao_sobrescreve_categoria_revisada_pelo_usuario():
+def test_sync_nao_sobrescreve_nenhum_ajuste_manual_do_usuario():
     texto = (Path(__file__).parent.parent / "bussola" / "app.py").read_text(encoding="utf-8")
     trecho_update = texto.split("ON CONFLICT (transacao_id) DO UPDATE SET", 1)[1].split("RETURNING", 1)[0]
-    assert "categoria = EXCLUDED.categoria" not in trecho_update
+    campos_manuais = (
+        "categoria",
+        "categoria_id",
+        "observacao",
+        "conferida",
+        "conferida_por",
+        "conferida_em",
+        "duplicada",
+        "natureza",
+        "regra_aplicada_id",
+    )
+    for campo in campos_manuais:
+        assert f"{campo} =" not in trecho_update
+
+    # Projeto, Portfolio e Responsavel sao dimensoes. O worker do Pluggy nao
+    # escreve na tabela que guarda essas escolhas manuais.
+    assert "transacao_dimensao" not in texto
 
 
 def test_sync_aceita_correcao_de_horario_do_pluggy_no_mesmo_id():

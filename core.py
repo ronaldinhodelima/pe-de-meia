@@ -1298,11 +1298,12 @@ def topbar_html(titulo, ativo=None):
           {f'''<div class="dropdown">
             <button type="button" class="dropbtn" onclick="menuToggle(event, this)">Relatórios ▾</button>
             <div class="dropdown-content">
-              <a href="/relatorios" class="{cls('relatorios')}">Relatórios</a>
-              <a href="/dre" class="{cls('dre')}">DRE / Centro de Custos</a>
-              <a href="/investimentos" class="{cls('investimentos')}">Investimentos</a>
+              {f'<a href="/relatorios" class="{cls("relatorios")}">Relatórios</a>' if pode("relatorios") else ""}
+              {f'<a href="/dre" class="{cls("dre")}">DRE / Centro de Custos</a>' if pode("relatorios") else ""}
+              {f'<a href="/investimentos" class="{cls("investimentos")}">Investimentos</a>' if pode("relatorios") else ""}
+              {f'<a href="/logs" class="{cls("logs")}">Logs</a>' if pode("usuarios") else ""}
             </div>
-          </div>''' if pode("relatorios") else ""}
+          </div>''' if (pode("relatorios") or pode("usuarios")) else ""}
           {f'''<div class="dropdown">
             <button type="button" class="dropbtn" onclick="menuToggle(event, this)">Configurações ▾</button>
             <div class="dropdown-content">
@@ -1313,7 +1314,6 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/regras" class="{cls("regras")}">Regras automáticas</a>' if pode("cadastros") else ""}
               {f'<a href="/contas" class="{cls("contas")}">Configurações de Contas / Cartão</a>' if pode("cadastros") else ""}
               {f'<a href="/usuarios" class="{cls("usuarios")}">Usuários e permissões</a>' if pode("usuarios") else ""}
-              {f'<a href="/logs" class="{cls("logs")}">Logs</a>' if pode("usuarios") else ""}
             </div>
           </div>''' if (pode("cadastros") or pode("usuarios")) else ""}
           {'''<div class="sync-widget">

@@ -341,6 +341,10 @@ def upsert_transaction(cur, tx):
             numero_cartao_final, mcc, criado_em, atualizado_em, sincronizado_em
         ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
         ON CONFLICT (transacao_id) DO UPDATE SET
+            -- Somente dados bancarios mutaveis voltam do Pluggy. Categoria e
+            -- todos os ajustes feitos no sistema ficam preservados; dimensoes
+            -- como projeto, portfolio e responsavel vivem em outra tabela, que
+            -- este worker nao altera.
             status = EXCLUDED.status,
             valor_brl = EXCLUDED.valor_brl,
             -- O Pluggy pode corrigir o fuso/horario mantendo o mesmo id. Sem
