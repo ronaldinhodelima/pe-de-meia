@@ -6,6 +6,7 @@ from decimal import Decimal
 from core import data_hora_local
 from views.relatorios import _montar_historico_investimentos
 from views.lancamentos import _valor_manual
+from views.cadastros import _filtro_valor, _condicao_valor_sql
 
 
 def test_sync_nao_sobrescreve_nenhum_ajuste_manual_do_usuario():
@@ -41,6 +42,17 @@ def test_regra_automatica_nao_sobrescreve_categoria_manual():
     trecho = texto.split("def aplicar_regras", 1)[1].split("DUPLICADA_OBS_PADRAO", 1)[0]
 
     assert "COALESCE(t.categoria_manual, false) = false" in trecho
+    assert "ABS(COALESCE(t.valor_brl,t.valor_original))" in trecho
+
+
+def test_regra_por_valor_aceita_formato_brasileiro_e_valor_negativo_e_comparado_em_modulo():
+    operador, limite, erro = _filtro_valor({"valor_operador": "lt", "valor_limite": "1.234,56"})
+    assert (operador, limite, erro) == ("lt", Decimal("1234.56"), None)
+    assert _condicao_valor_sql(operador) == " AND ABS(COALESCE(t.valor_brl,t.valor_original)) < %s"
+
+
+def test_regra_sem_operador_e_limite_significa_qualquer_valor():
+    assert _filtro_valor({}) == (None, None, None)
 
 
 def test_edicao_humana_marca_categoria_como_manual():

@@ -28,6 +28,8 @@ function hidratarSelect(sel) {
       ((window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [])
         .map(v => ({valor: String(v.id), rotulo: String(v.rotulo)}))
     );
+    const nomeDimensao = (window.configLancamentos.dimensoes_cadastro_rapido || {})[sel.dataset.dim];
+    if (nomeDimensao) opcoes.push({valor: '__novo__', rotulo: '+ Cadastrar novo ' + nomeDimensao + '...'});
   } else {
     return;
   }
@@ -51,8 +53,41 @@ document.addEventListener('focusin', function (e) {
 document.addEventListener('pointerdown', function (e) {
   if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, .modal-dim-select')) {
     hidratarSelect(e.target);
+    e.target.dataset.valorAnterior = e.target.value;
   }
 });
+
+function cadastrarNovoValorDimensao(sel) {
+  const nomeDimensao = (window.configLancamentos.dimensoes_cadastro_rapido || {})[sel.dataset.dim] || 'item';
+  const nome = prompt('Nome do novo ' + nomeDimensao + ':');
+  if (!nome || !nome.trim()) {
+    sel.value = sel.dataset.valorAnterior || '';
+    return Promise.resolve(false);
+  }
+  return fetch('/api/dimensao/' + encodeURIComponent(sel.dataset.dim) + '/valor', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({nome: nome.trim()})
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) throw new Error(d.erro || 'Não foi possível cadastrar.');
+    const lista = (window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [];
+    if (!lista.some(v => String(v.id) === String(d.id))) lista.push({id: d.id, rotulo: d.nome});
+    document.querySelectorAll('.dim-select[data-dim="' + sel.dataset.dim + '"]').forEach(outro => {
+      const valor = outro === sel ? String(d.id) : outro.value;
+      delete outro.dataset.hidratado;
+      hidratarSelect(outro);
+      outro.value = valor;
+    });
+    if (sel.matches('.modal-dim-select')) salvarDimensaoModal(sel);
+    else {
+      const id = idDaLinha(sel);
+      if (id) salvar(id, sel);
+    }
+    return true;
+  }).catch(e => {
+    sel.value = sel.dataset.valorAnterior || '';
+    alert(e.message || 'Não foi possível cadastrar.');
+    return false;
+  });
+}
 
 // ---- chip filter (origem): filtra sem fechar o painel ----
 function cfToggle(btn) {
@@ -68,7 +103,7 @@ function cfToggle(btn) {
   }
 }
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.chipfilter') && !e.target.closest('.chip-tag')) {
+  if (!e.target.closest('.chipfilter') && !e.target.closest('.chip-tag') && !e.target.closest('.menu-colunas')) {
     document.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
   }
 });
@@ -169,12 +204,17 @@ function mudarMes(delta) {
   if (partes.length !== 2 || !partes[0] || !partes[1]) return;
   const d = new Date(partes[0], partes[1] - 1 + delta, 1);
   campo.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  aplicarFiltros();
+  aplicarFiltros(true);
 }
-function aplicarFiltros() {
+function aplicarFiltros(recarregarPagina) {
   atualizarChipLabels();
   const params = coletarQuery();
   const novaUrl = '/?' + params.toString();
+  if (recarregarPagina) {
+    guardarPosicaoAtual();
+    window.location.assign(novaUrl);
+    return;
+  }
   if (novaUrl !== window.location.pathname + window.location.search) {
     history.pushState({pedemeia: true}, '', novaUrl);
   }
@@ -356,6 +396,10 @@ function salvarCategoriaModal() {
   setTimeout(() => window.location.reload(), 600);
 }
 function salvarDimensaoModal(selModal) {
+  if (selModal.value === '__novo__') {
+    cadastrarNovoValorDimensao(selModal);
+    return;
+  }
   if (!idAtualModal) return;
   const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
   if (!tr) return;
@@ -420,6 +464,12 @@ function idDaLinha(el) {
 }
 
 document.addEventListener('click', function (e) {
+  const regra = e.target.closest('.regra-btn');
+  if (regra) {
+    const id = idDaLinha(regra);
+    if (id) window.location.assign('/regras?transacao=' + encodeURIComponent(id));
+    return;
+  }
   const tr = e.target.closest('#tabela-lancamentos tbody tr[data-id]');
   if (!tr) return;
   if (['SELECT', 'INPUT', 'OPTION', 'BUTTON'].includes(e.target.tagName)) return;
@@ -429,6 +479,10 @@ document.addEventListener('click', function (e) {
 document.addEventListener('change', function (e) {
   const el = e.target;
   if (!el.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, #tabela-lancamentos .conf-check')) return;
+  if (el.matches('.dim-select') && el.value === '__novo__') {
+    cadastrarNovoValorDimensao(el);
+    return;
+  }
   const id = idDaLinha(el);
   if (!id) return;
   // Tirar um OK e uma acao sensivel. Desfaz o clique imediatamente e abre os

@@ -458,3 +458,45 @@ Rodar localmente:
 pip install pytest flask psycopg2-binary
 pytest tests/ -v
 ```
+
+## Decisões consolidadas da revisão de agosto/2026
+
+Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em mudanças futuras:
+
+- **OK é uma assinatura humana.** Sincronização, regra automática, edição de categoria,
+  dimensão ou observação nunca pode marcar nem desmarcar `conferida`. Para retirar um OK ou
+  marcar duplicidade, a tela exige confirmação explícita. Lançamentos conferidos aparecem em
+  cinza-claro, não em verde.
+- **Pluggy é a origem bancária, não a dona da classificação.** A sincronização pode atualizar
+  apenas os campos bancários mutáveis. Nunca pode sobrescrever categoria ajustada manualmente,
+  Responsável, Projeto, Portfólio, observação, OK ou a marcação de duplicidade.
+- **Não eliminar movimentos repetidos vindos do Pluggy.** IDs distintos recebidos da operadora
+  devem ser importados, pois podem representar cobrança realmente duplicada. A duplicidade é
+  decidida pelo usuário e a marcação apenas exclui a linha dos totais.
+- **DRE considera todos os lançamentos do período.** Foi desfeita a tentativa de limitar o DRE
+  a `POSTED` até a data atual. A natureza contábil continua vindo da categoria, salvo o legado
+  de natureza específica do lançamento.
+- **Sessão:** duração de 24 horas, cookie `Secure`, `HttpOnly` e `SameSite=Lax`. Por decisão do
+  usuário, os acessos administrativos de emergência continuam no ambiente e a senha mínima
+  permanece com seis caracteres.
+- **Auditoria:** Logs fica dentro de Relatórios. Registrar acessos, alterações com antes/depois,
+  sincronizações e falhas, sem gravar senhas, chaves ou outros segredos.
+- **E-mail operacional:** `ronaldo@brdrive.net`; envio de teste confirmado pelo usuário.
+- **Backup:** cópia no próprio servidor é aceita, com retenção configurada. Não é necessário
+  executar teste de restauração agora; não confundir isso com garantia de recuperação externa.
+- **Navegação:** alterações de tela/filtro/URL devem criar histórico real, para o botão Voltar
+  retornar ao estado anterior dentro do sistema. Troca de mês em Lançamentos faz recarga completa.
+
+### Regras automáticas
+
+- Podem filtrar por trecho da descrição e, opcionalmente, por valor absoluto (`<`, `<=`, `>`,
+  `>=` ou `=`). A prévia mostra quais lançamentos pendentes e ainda não ajustados manualmente
+  receberão a nova regra.
+- Nunca se aplicam a lançamento conferido nem a categoria escolhida manualmente.
+- Regra aprovada para descrições contendo `GuilhermeDaSilva`:
+  - valor menor que R$ 120,00: categoria **Água**, Responsável **Família**, Projeto **Casa**,
+    Portfólio **Moradia**;
+  - valor maior que R$ 120,00: categoria **Gás**, com as mesmas dimensões;
+  - R$ 120,00 exatos ficam sem classificação automática até nova decisão.
+- A antiga categoria **Água / Gás** passa a se chamar apenas **Gás**; Água é uma categoria
+  própria. Ambas são despesas do centro de custo Moradia & Utilidades / Casa.

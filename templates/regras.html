@@ -24,9 +24,27 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro filtro_valor(operador='', limite='') %}
+  <div>
+    <label style="font-size:12px;color:#888;display:block">Condição do valor (opcional)</label>
+    <div style="display:flex;gap:5px">
+      <select name="valor_operador" class="regra-preview-campo" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+        <option value="">Qualquer valor</option>
+        {% for chave, dados in (operadores_valor|default({})).items() %}
+          <option value="{{ chave }}" {{ 'selected' if chave == operador }}>{{ dados[0] }}</option>
+        {% endfor %}
+      </select>
+      <input name="valor_limite" class="regra-preview-campo" type="number" min="0" step="0.01"
+             value="{{ limite if limite is not none }}" placeholder="R$ 0,00"
+             style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:110px">
+    </div>
+  </div>
+{% endmacro %}
+
 {% block conteudo %}
+{% set novo = prefill|default({'padrao':'','valor_operador':'','valor_limite':'','categoria':'','dimensoes':{}}, true) %}
 <div style="font-size:13px;color:#666;margin-bottom:16px">
-  Quando a descricao de um lancamento <strong>pendente</strong> (nao conferido) contiver o texto cadastrado aqui,
+  Quando a descrição de um lançamento <strong>pendente</strong> (não conferido) contiver o texto cadastrado aqui,
   o app preenche sozinho a categoria e as dimensoes escolhidas, na proxima vez que voce abrir a tela principal.
   Nunca mexe em lancamentos que voce ja marcou como conferidos.
   Total de lancamentos ja classificados por regras: <strong>{{ total_aplicadas }}</strong>.
@@ -34,28 +52,30 @@
 
 <div class="cat-breakdown">
   <h3>Nova regra</h3>
-  <form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+  <form method="post" id="novaRegraForm" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <input type="hidden" name="acao" value="criar_regra">
     <div>
       <label style="font-size:12px;color:#888;display:block">Texto na descricao</label>
-      <input name="padrao" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
+      <input name="padrao" class="regra-preview-campo" value="{{ novo.padrao }}" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
     </div>
+    {{ filtro_valor(novo.valor_operador, novo.valor_limite) }}
     <div>
       <label style="font-size:12px;color:#888;display:block">Categoria</label>
-      {{ sel_categoria() }}
+      {{ sel_categoria(novo.categoria) }}
     </div>
-    {{ sel_dimensoes() }}
+    {{ sel_dimensoes(novo.dimensoes) }}
     <button type="submit" style="background:#1d2b3a;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer">Criar regra</button>
   </form>
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
+  <div id="regraPreview" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#f7f8fa"></div>
 </div>
 
 <table>
-  <thead><tr><th>Texto procurado</th><th>Categoria</th><th>Dimensoes</th><th></th></tr></thead>
+  <thead><tr><th>Texto procurado</th><th>Valor</th><th>Categoria</th><th>Dimensões</th><th></th></tr></thead>
   <tbody>
     {% for r in regras %}
       {% if r.id == editar_id %}
-        <tr><td colspan="4">
+        <tr><td colspan="5">
           <form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;padding:8px 0">
             <input type="hidden" name="acao" value="editar_regra">
             <input type="hidden" name="regra_id" value="{{ r.id }}">
@@ -63,6 +83,7 @@
               <label style="font-size:12px;color:#888;display:block">Texto na descricao</label>
               <input name="padrao" value="{{ r.padrao }}" style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
             </div>
+            {{ filtro_valor(r.valor_operador|default(''), r.valor_limite|default('')) }}
             <div>
               <label style="font-size:12px;color:#888;display:block">Categoria</label>
               {{ sel_categoria(r.categoria) }}
@@ -75,6 +96,7 @@
       {% else %}
         <tr>
           <td><strong>"{{ r.padrao }}"</strong></td>
+          <td>{{ r.valor_condicao|default('qualquer valor') }}</td>
           <td>{{ r.categoria_nome }}</td>
           <td>{{ r.dims_txt }}</td>
           <td style="white-space:nowrap">
@@ -93,8 +115,47 @@
         </tr>
       {% endif %}
     {% else %}
-      <tr><td colspan="4" style="text-align:center;color:#888;padding:16px">Nenhuma regra cadastrada ainda.</td></tr>
+      <tr><td colspan="5" style="text-align:center;color:#888;padding:16px">Nenhuma regra cadastrada ainda.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+
+<script>
+(function () {
+  const form = document.getElementById('novaRegraForm');
+  const painel = document.getElementById('regraPreview');
+  if (!form || !painel) return;
+  let timer;
+  function atualizar() {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      const padrao = form.elements.padrao.value.trim();
+      if (!padrao) { painel.style.display = 'none'; return; }
+      const q = new URLSearchParams({
+        padrao: padrao,
+        valor_operador: form.elements.valor_operador.value,
+        valor_limite: form.elements.valor_limite.value
+      });
+      fetch('/api/regras/preview?' + q.toString()).then(r => r.json()).then(d => {
+        painel.style.display = 'block';
+        if (!d.ok) { painel.textContent = d.erro || 'Não foi possível calcular a prévia.'; return; }
+        let html = '<strong>' + d.total + ' lançamento' + (d.total === 1 ? '' : 's') +
+          ' pendente' + (d.total === 1 ? '' : 's') + ' pode' + (d.total === 1 ? '' : 'm') + ' receber esta regra.</strong>';
+        if (d.lancamentos.length) {
+          html += '<div style="margin-top:8px;display:grid;gap:4px">' + d.lancamentos.map(x =>
+            '<div>' + escHtml(x.data) + ' · ' + escHtml(x.descricao) + ' · R$ ' +
+            Number(x.valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div>'
+          ).join('') + '</div>';
+        }
+        painel.innerHTML = html;
+      }).catch(() => { painel.style.display = 'none'; });
+    }, 250);
+  }
+  form.querySelectorAll('.regra-preview-campo').forEach(el => {
+    el.addEventListener('input', atualizar);
+    el.addEventListener('change', atualizar);
+  });
+  if (form.elements.padrao.value) atualizar();
+})();
+</script>
 {% endblock %}

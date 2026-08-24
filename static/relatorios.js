@@ -15,7 +15,7 @@ function cfToggle(btn) {
   }
 }
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.chipfilter')) {
+  if (!e.target.closest('.chipfilter') && !e.target.closest('.menu-colunas')) {
     document.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
   }
 });

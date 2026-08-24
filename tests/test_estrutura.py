@@ -132,6 +132,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/sync-status", "/api/sync-agora", "/api/transacao/<transacao_id>",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
         "/api/categoria-lancamentos",
+        "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/dimensoes", "/regras", "/contas", "/pendencias",

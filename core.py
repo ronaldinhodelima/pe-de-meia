@@ -187,7 +187,8 @@ CATEGORIA_PT = {
     "Transfer - Internal": "Transferência Interna",
     "Tax on financial operations": "IOF",
     "Tolls and in vehicle payment": "Pedágio",
-    "Agua / Gas": "Água / Gás",
+    "Agua": "Água",
+    "Agua / Gas": "Gás",
     "Natacao": "Natação",
     "Academia": "Academia",
     "Viagem": "Viagem",
@@ -198,7 +199,7 @@ CATEGORIAS_NAO_GASTO = ("Credit card payment", "Transfer - Internal")
 
 
 CATEGORIAS_EXTRA = (
-    "BRDrive", "Agua / Gas", "Natacao", "Academia", "Viagem",
+    "BRDrive", "Agua", "Agua / Gas", "Natacao", "Academia", "Viagem",
     "Imóveis / Terrenos", "Veículos / Bens",
 )
 
@@ -1277,6 +1278,106 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (12);")
             conn.commit()
 
+        if versao_atual < 13:
+            # Regras podem distinguir a mesma descrição pelo valor absoluto do
+            # lançamento (conta corrente costuma guardar débitos negativos).
+            cur.execute(
+                "ALTER TABLE cartao.regra_classificacao "
+                "ADD COLUMN IF NOT EXISTS valor_operador varchar(4);"
+            )
+            cur.execute(
+                "ALTER TABLE cartao.regra_classificacao "
+                "ADD COLUMN IF NOT EXISTS valor_limite numeric(14,2);"
+            )
+
+            # Decisão de classificação: GuilhermeDaSilva abaixo de R$ 120 é
+            # Água; acima de R$ 120 é Gás. R$ 120 exatos ficam sem regra até uma
+            # decisão explícita. Nada aqui altera o OK/conferida.
+            cur.execute(
+                "INSERT INTO cartao.categoria (categoria, nome_pt) VALUES "
+                "('Agua', 'Água'), ('Agua / Gas', 'Gás') "
+                "ON CONFLICT (categoria) DO UPDATE SET nome_pt = EXCLUDED.nome_pt;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES "
+                "('Agua', 'despesa'), ('Agua / Gas', 'despesa') "
+                "ON CONFLICT (categoria) DO NOTHING;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.categoria_subgrupo (categoria, subgrupo_id) "
+                "SELECT c.categoria, s.id FROM (VALUES ('Agua'), ('Agua / Gas')) c(categoria) "
+                "JOIN cartao.subgrupo_custo s ON lower(s.nome) = lower('Casa') "
+                "JOIN cartao.grupo_custo g ON g.id = s.grupo_id "
+                "WHERE lower(g.nome) = lower('Moradia & Utilidades') "
+                "ON CONFLICT (categoria) DO UPDATE SET subgrupo_id = EXCLUDED.subgrupo_id;"
+            )
+            for operador, limite, categoria in (("lt", 120, "Agua"), ("gt", 120, "Agua / Gas")):
+                cur.execute(
+                    "INSERT INTO cartao.regra_classificacao "
+                    "(padrao, categoria, valor_operador, valor_limite, ordem) "
+                    "SELECT 'GuilhermeDaSilva', %s, %s, %s, 100 "
+                    "WHERE NOT EXISTS (SELECT 1 FROM cartao.regra_classificacao "
+                    "WHERE lower(padrao)=lower('GuilhermeDaSilva') "
+                    "AND valor_operador=%s AND valor_limite=%s) RETURNING id;",
+                    (categoria, operador, limite, operador, limite),
+                )
+                nova_regra = cur.fetchone()
+                if nova_regra:
+                    for dim_nome, valor_nome in (
+                        ("Responsável", "Família"), ("Projeto", "Casa"), ("Portfólio", "Moradia")
+                    ):
+                        cur.execute(
+                            "INSERT INTO cartao.regra_dimensao_valor (regra_id, dimensao_id, valor_id) "
+                            "SELECT %s, d.id, dv.id FROM cartao.dimensao d "
+                            "JOIN cartao.dimensao_valor dv ON dv.dimensao_id=d.id "
+                            "WHERE lower(d.nome)=lower(%s) AND lower(dv.nome)=lower(%s) "
+                            "ON CONFLICT (regra_id, dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                            (nova_regra[0], dim_nome, valor_nome),
+                        )
+            for dim_nome, valor_nome in (
+                ("Responsável", "Família"), ("Projeto", "Casa"), ("Portfólio", "Moradia")
+            ):
+                cur.execute(
+                    "INSERT INTO cartao.dimensao_valor (dimensao_id,nome) "
+                    "SELECT id,%s FROM cartao.dimensao WHERE lower(nome)=lower(%s) "
+                    "ON CONFLICT (dimensao_id,nome) DO NOTHING;",
+                    (valor_nome, dim_nome),
+                )
+            cur.execute(
+                "UPDATE cartao.transacao t SET "
+                "categoria=CASE WHEN ABS(COALESCE(t.valor_brl,t.valor_original)) < 120 "
+                "THEN 'Agua' ELSE 'Agua / Gas' END, categoria_manual=false, "
+                "regra_aplicada_id=(SELECT r.id FROM cartao.regra_classificacao r "
+                " WHERE lower(r.padrao)=lower('GuilhermeDaSilva') "
+                " AND ((r.valor_operador='lt' AND ABS(COALESCE(t.valor_brl,t.valor_original)) < r.valor_limite) "
+                "   OR (r.valor_operador='gt' AND ABS(COALESCE(t.valor_brl,t.valor_original)) > r.valor_limite)) "
+                " ORDER BY r.ordem,r.id LIMIT 1) "
+                "WHERE t.descricao ILIKE '%GuilhermeDaSilva%' "
+                "AND ABS(COALESCE(t.valor_brl,t.valor_original)) <> 120;"
+            )
+            guilherme_ajustados = max(cur.rowcount, 0)
+            for dim_nome, valor_nome in (
+                ("Responsável", "Família"), ("Projeto", "Casa"), ("Portfólio", "Moradia")
+            ):
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT t.transacao_id::text,d.id,dv.id FROM cartao.transacao t "
+                    "JOIN cartao.dimensao d ON lower(d.nome)=lower(%s) "
+                    "JOIN cartao.dimensao_valor dv ON dv.dimensao_id=d.id AND lower(dv.nome)=lower(%s) "
+                    "WHERE t.descricao ILIKE '%%GuilhermeDaSilva%%' "
+                    "AND ABS(COALESCE(t.valor_brl,t.valor_original)) <> 120 "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (dim_nome, valor_nome),
+                )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Classificação GuilhermeDaSilva',"
+                "jsonb_build_object('lancamentos_ajustados',%s,'ok_preservado',true));",
+                (guilherme_ajustados,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (13);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1297,6 +1398,14 @@ def aplicar_regras(cur):
             "  SELECT DISTINCT ON (t.transacao_id) t.transacao_id, r.id AS regra_id, r.categoria "
             "  FROM cartao.transacao t "
             "  JOIN cartao.regra_classificacao r ON t.descricao ILIKE '%%' || r.padrao || '%%' "
+            "   AND (r.valor_operador IS NULL OR r.valor_limite IS NULL OR "
+            "     CASE r.valor_operador "
+            "       WHEN 'lt' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) < r.valor_limite "
+            "       WHEN 'lte' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) <= r.valor_limite "
+            "       WHEN 'gt' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) > r.valor_limite "
+            "       WHEN 'gte' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) >= r.valor_limite "
+            "       WHEN 'eq' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) = r.valor_limite "
+            "       ELSE false END) "
             "  WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
             "    AND COALESCE(t.categoria_manual, false) = false "
             "  ORDER BY t.transacao_id, r.ordem, r.id"
@@ -1330,7 +1439,7 @@ DUPLICADA_OBS_PADRAO = "Duplicada - mesma compra ja lancada em outra linha (regi
 
 SEED_GRUPOS = [
     ("Moradia & Utilidades", None, None, [
-        ("Casa", None, None, ["Houseware", "Agua / Gas", "Telecommunications"]),
+        ("Casa", None, None, ["Houseware", "Agua", "Agua / Gas", "Telecommunications"]),
     ]),
     ("Alimentação", None, None, [
         ("Mercado", None, None, ["Groceries"]),

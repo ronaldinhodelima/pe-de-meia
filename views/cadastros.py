@@ -1,9 +1,10 @@
 """Categorias, centro de custos, dimensoes, regras, contas e pendencias."""
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, render_template
+from flask import Blueprint, request, render_template, jsonify
 
 from core import (
     CATEGORIAS_EXTRA,
@@ -36,6 +37,43 @@ from core import (
 )
 
 bp = Blueprint("cadastros", __name__)
+
+
+OPERADORES_VALOR = {
+    "lt": ("menor que", "<"),
+    "lte": ("menor ou igual a", "<="),
+    "gt": ("maior que", ">"),
+    "gte": ("maior ou igual a", ">="),
+    "eq": ("igual a", "="),
+}
+
+
+def _filtro_valor(form):
+    operador = (form.get("valor_operador") or "").strip()
+    texto = (form.get("valor_limite") or "").strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    if not operador and not texto:
+        return None, None, None
+    if operador not in OPERADORES_VALOR or not texto:
+        return None, None, "Escolha a comparação e informe o valor da regra."
+    try:
+        limite = Decimal(texto).quantize(Decimal("0.01"))
+    except InvalidOperation:
+        return None, None, "Informe um valor válido."
+    if limite < 0:
+        return None, None, "O valor da regra deve ser positivo."
+    return operador, limite, None
+
+
+def _condicao_valor_sql(operador):
+    simbolo = OPERADORES_VALOR.get(operador, (None, None))[1]
+    return f" AND ABS(COALESCE(t.valor_brl,t.valor_original)) {simbolo} %s" if simbolo else ""
+
+
+def _valor_pt(valor):
+    texto = f"{valor:,.2f}"
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 @bp.route("/dimensoes", methods=["GET", "POST"])
@@ -227,7 +265,8 @@ def regras_view():
 
     def estado_regra(regra_id):
         cur.execute(
-            "SELECT id, padrao, categoria FROM cartao.regra_classificacao WHERE id=%s;",
+            "SELECT id, padrao, categoria, valor_operador, valor_limite "
+            "FROM cartao.regra_classificacao WHERE id=%s;",
             (regra_id,),
         )
         regra = cur.fetchone()
@@ -241,6 +280,8 @@ def regras_view():
         return {
             "id": regra["id"],
             "padrao": regra["padrao"],
+            "valor_operador": regra["valor_operador"],
+            "valor_limite": float(regra["valor_limite"]) if regra["valor_limite"] is not None else None,
             "categoria": {
                 "chave": regra["categoria"],
                 "nome": cat_pt_puro(regra["categoria"]),
@@ -255,19 +296,25 @@ def regras_view():
         if acao == "criar_regra":
             padrao = (request.form.get("padrao") or "").strip()
             categoria = request.form.get("categoria") or ""
-            cur.execute("SELECT id FROM cartao.regra_classificacao WHERE lower(padrao) = lower(%s);", (padrao,))
+            valor_operador, valor_limite, erro_valor = _filtro_valor(request.form)
+            cur.execute(
+                "SELECT id FROM cartao.regra_classificacao WHERE lower(padrao) = lower(%s) "
+                "AND valor_operador IS NOT DISTINCT FROM %s "
+                "AND valor_limite IS NOT DISTINCT FROM %s;",
+                (padrao, valor_operador, valor_limite),
+            )
             repetida = cur.fetchone() if padrao else None
             if not padrao:
                 erro = "Informe o texto/padrao a procurar na descricao."
+            elif erro_valor:
+                erro = erro_valor
             elif repetida:
-                # duas regras com o mesmo texto: a segunda nunca decide nada,
-                # so confunde quem tenta entender por que um lancamento foi parar
-                # numa categoria
-                erro = f'Já existe uma regra para o texto "{padrao}".'
+                erro = "Já existe uma regra com o mesmo texto e a mesma condição de valor."
             else:
                 cur.execute(
-                    "INSERT INTO cartao.regra_classificacao (padrao, categoria) VALUES (%s,%s) RETURNING id;",
-                    (padrao, categoria),
+                    "INSERT INTO cartao.regra_classificacao "
+                    "(padrao, categoria, valor_operador, valor_limite) VALUES (%s,%s,%s,%s) RETURNING id;",
+                    (padrao, categoria, valor_operador, valor_limite),
                 )
                 regra_id = cur.fetchone()["id"]
                 for chave, valor in request.form.items():
@@ -309,13 +356,29 @@ def regras_view():
             anterior = estado_regra(regra_id)
             padrao = (request.form.get("padrao") or "").strip()
             categoria = request.form.get("categoria")
+            valor_operador, valor_limite, erro_valor = _filtro_valor(request.form)
             if not padrao:
                 erro = "Informe o texto a ser procurado na descricao."
+            elif erro_valor:
+                erro = erro_valor
             else:
                 cur.execute(
-                    "UPDATE cartao.regra_classificacao SET padrao = %s, categoria = %s WHERE id = %s;",
-                    (padrao, categoria, regra_id),
+                    "SELECT id FROM cartao.regra_classificacao WHERE id <> %s "
+                    "AND lower(padrao)=lower(%s) "
+                    "AND valor_operador IS NOT DISTINCT FROM %s "
+                    "AND valor_limite IS NOT DISTINCT FROM %s;",
+                    (regra_id, padrao, valor_operador, valor_limite),
                 )
+                if cur.fetchone():
+                    erro = "Já existe uma regra com o mesmo texto e a mesma condição de valor."
+                    conn.rollback()
+                else:
+                    cur.execute(
+                        "UPDATE cartao.regra_classificacao SET padrao=%s, categoria=%s, "
+                        "valor_operador=%s, valor_limite=%s WHERE id=%s;",
+                        (padrao, categoria, valor_operador, valor_limite, regra_id),
+                    )
+            if not erro:
                 cur.execute("DELETE FROM cartao.regra_dimensao_valor WHERE regra_id = %s;", (regra_id,))
                 for chave, valor in request.form.items():
                     if chave.startswith("dim_") and valor:
@@ -340,7 +403,10 @@ def regras_view():
     aplicar_regras(cur)
     conn.commit()
 
-    cur.execute("SELECT id, padrao, categoria, ordem FROM cartao.regra_classificacao ORDER BY ordem, id;")
+    cur.execute(
+        "SELECT id, padrao, categoria, ordem, valor_operador, valor_limite "
+        "FROM cartao.regra_classificacao ORDER BY ordem, id;"
+    )
     regras_db = cur.fetchall()
     cur.execute("SELECT regra_id, dimensao_id, valor_id FROM cartao.regra_dimensao_valor;")
     dim_por_regra = {}
@@ -356,6 +422,27 @@ def regras_view():
 
     cur.execute("SELECT COUNT(*) AS n FROM cartao.transacao WHERE regra_aplicada_id IS NOT NULL;")
     total_aplicadas = cur.fetchone()["n"]
+
+    prefill = {"padrao": "", "valor_operador": "", "valor_limite": "", "dimensoes": {}, "categoria": ""}
+    transacao_prefill = (request.args.get("transacao") or "").strip()
+    if transacao_prefill:
+        cur.execute(
+            "SELECT descricao, ABS(COALESCE(valor_brl,valor_original)) AS valor, categoria "
+            "FROM cartao.transacao WHERE transacao_id::text=%s;",
+            (transacao_prefill,),
+        )
+        tx = cur.fetchone()
+        if tx:
+            prefill.update({
+                "padrao": tx["descricao"] or "",
+                "valor_limite": f'{tx["valor"]:.2f}' if tx["valor"] is not None else "",
+                "categoria": tx["categoria"] or "",
+            })
+            cur.execute(
+                "SELECT dimensao_id, valor_id FROM cartao.transacao_dimensao WHERE transacao_id=%s;",
+                (transacao_prefill,),
+            )
+            prefill["dimensoes"] = {r["dimensao_id"]: r["valor_id"] for r in cur.fetchall()}
 
     todas_categorias = sorted(
         (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
@@ -389,6 +476,12 @@ def regras_view():
             "padrao": r["padrao"],
             "categoria": r["categoria"],
             "categoria_nome": cat_pt_puro(r["categoria"]),
+            "valor_operador": r["valor_operador"] or "",
+            "valor_limite": float(r["valor_limite"]) if r["valor_limite"] is not None else None,
+            "valor_condicao": (
+                f'{OPERADORES_VALOR[r["valor_operador"]][0]} R$ {_valor_pt(r["valor_limite"])}'
+                if r["valor_operador"] in OPERADORES_VALOR and r["valor_limite"] is not None else "qualquer valor"
+            ),
             "dims_txt": ", ".join(dims_txt) or "-",
             "dims_selecionadas": selecionadas,
         })
@@ -404,7 +497,47 @@ def regras_view():
         valores_por_dim=valores_por_dim,
         total_aplicadas=total_aplicadas,
         editar_id=editar_id,
+        prefill=prefill,
+        operadores_valor=OPERADORES_VALOR,
     )
+
+
+@bp.route("/api/regras/preview")
+@requer("cadastros")
+def regra_preview():
+    padrao = (request.args.get("padrao") or "").strip()
+    operador, limite, erro = _filtro_valor(request.args)
+    if not padrao:
+        return jsonify({"ok": True, "total": 0, "lancamentos": []})
+    if erro:
+        return jsonify({"ok": False, "erro": erro}), 400
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    condicao = _condicao_valor_sql(operador)
+    params = [f"%{padrao}%"] + ([limite] if operador else [])
+    cur.execute(
+        "SELECT COUNT(*) AS total FROM cartao.transacao t "
+        "WHERE t.descricao ILIKE %s AND t.regra_aplicada_id IS NULL "
+        "AND t.conferida=false AND COALESCE(t.categoria_manual,false)=false" + condicao,
+        params,
+    )
+    total = cur.fetchone()["total"]
+    cur.execute(
+        "SELECT to_char(t.data_transacao AT TIME ZONE 'America/Sao_Paulo','DD/MM/YYYY') AS data, "
+        "t.descricao, ABS(COALESCE(t.valor_brl,t.valor_original)) AS valor "
+        "FROM cartao.transacao t WHERE t.descricao ILIKE %s "
+        "AND t.regra_aplicada_id IS NULL AND t.conferida=false "
+        "AND COALESCE(t.categoria_manual,false)=false" + condicao +
+        " ORDER BY t.data_transacao DESC LIMIT 10;",
+        params,
+    )
+    lancamentos = [
+        {"data": r["data"], "descricao": r["descricao"], "valor": float(r["valor"] or 0)}
+        for r in cur.fetchall()
+    ]
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True, "total": total, "lancamentos": lancamentos})
 
 
 @bp.route("/grupos", methods=["GET", "POST"])

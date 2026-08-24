@@ -322,6 +322,10 @@ def index():
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
     config_lancamentos = {
         "duplicada_obs": DUPLICADA_OBS_PADRAO,
+        "dimensoes_cadastro_rapido": {
+            str(d["id"]): d["nome"] for d in dimensoes
+            if chave_alfa(d["nome"]) in {"projeto", "portfolio"}
+        },
         "categorias": categorias_template,
         "dimensoes": {
             str(d["id"]): [
@@ -346,6 +350,7 @@ def index():
         pode_editar=pode_editar,
         pode_conferir=pode_conferir,
         pode_manual=pode_manual,
+        pode_regras=pode("cadastros"),
         categorias=categorias_template,
         dimensoes=dimensoes,
         valores_por_dim=valores_por_dim,
@@ -506,6 +511,47 @@ def detalhes_transacao(transacao_id):
         "observacao": r["observacao"] or "-",
         "natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
     })
+
+
+@bp.route("/api/dimensao/<int:dimensao_id>/valor", methods=["POST"])
+@requer("lancamentos_editar")
+def criar_valor_dimensao_rapido(dimensao_id):
+    """Cria Projeto/Portfólio sem sair da classificação do lançamento."""
+    data = request.get_json(force=True)
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"ok": False, "erro": "Informe o nome do novo item."}), 400
+    if len(nome) > 120:
+        return jsonify({"ok": False, "erro": "Use um nome com até 120 caracteres."}), 400
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT id, nome FROM cartao.dimensao WHERE id=%s;", (dimensao_id,))
+    dimensao = cur.fetchone()
+    if not dimensao or chave_alfa(dimensao["nome"]) not in {"projeto", "portfolio"}:
+        cur.close()
+        conn.close()
+        return jsonify({"ok": False, "erro": "Cadastro rápido disponível apenas para Projeto e Portfólio."}), 400
+    cur.execute(
+        "SELECT id, nome FROM cartao.dimensao_valor "
+        "WHERE dimensao_id=%s AND lower(nome)=lower(%s);",
+        (dimensao_id, nome),
+    )
+    valor = cur.fetchone()
+    criado = False
+    if not valor:
+        cur.execute(
+            "INSERT INTO cartao.dimensao_valor (dimensao_id,nome) VALUES (%s,%s) RETURNING id,nome;",
+            (dimensao_id, nome),
+        )
+        valor = cur.fetchone()
+        conn.commit()
+        criado = True
+        registrar_mudanca_auditoria("Valor de dimensão", None, {
+            "id": valor["id"], "dimensao_id": dimensao_id, "dimensao": dimensao["nome"], "nome": valor["nome"],
+        })
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True, "id": valor["id"], "nome": valor["nome"], "criado": criado})
 
 
 @bp.route("/api/transacao/<transacao_id>", methods=["POST"])

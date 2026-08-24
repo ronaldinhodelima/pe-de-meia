@@ -7,7 +7,7 @@
     <div style="display:flex;align-items:center;gap:4px">
       <button type="button" onclick="mudarMes(-1)" title="Mês anterior"
               style="padding:6px 12px;font-size:15px;line-height:1">‹</button>
-      <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltros()">
+      <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltros(true)">
       <button type="button" onclick="mudarMes(1)" title="Próximo mês"
               style="padding:6px 12px;font-size:15px;line-height:1">›</button>
     </div>
@@ -68,7 +68,7 @@
 
 <table class="compacta ajustavel" id="tabela-lancamentos" data-tabela="lancamentos">
   <thead><tr>
-    <th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th><th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
+    <th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra">Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
   </tr></thead>
   <tbody>
     {% for r in linhas %}
@@ -94,12 +94,13 @@
         {% endfor %}
         <td class="valor cel-valor" data-col="valor" style="{{ r.cor_valor }}" data-sort="{{ r.valor_sort }}">{{ r.valor_fmt }}</td>
         <td class="cel-obs" data-col="obs"><input class="obs-input" type="text" value="{{ r.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar }}></td>
+        {% if pode_regras %}<td class="cel-regra" data-col="regra"><button type="button" class="regra-btn ver-btn" title="Criar regra automática a partir deste lançamento">+ Regra</button></td>{% endif %}
         <td class="cel-check" data-col="check"><input class="conf-check" type="checkbox" {{ 'checked' if r.conferida }} {{ 'disabled' if not pode_conferir }}>
           <input class="dup-check" type="checkbox" {{ 'checked' if r.duplicada }} hidden></td>
         <td class="cel-status" data-col="status"><span class="status" id="status-{{ r.id }}">ok</span></td>
       </tr>
     {% else %}
-      <tr><td colspan="{{ 8 + dimensoes|length }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
+      <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
     {% endfor %}
   </tbody>
 </table>
