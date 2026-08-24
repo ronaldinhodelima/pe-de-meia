@@ -212,6 +212,19 @@ class TestIndex:
         html = self.render([self.linha()])
         assert 'value="fluxo"' not in html
 
+    def test_modal_ordena_campos_e_oferece_confirmacoes_sensiveis(self, ctx):
+        html = self.render([self.linha(conferida=True)])
+        ids = [
+            'id="modalCategoria"', 'id="modalDimensoes"', 'id="modalObservacao"',
+            'id="modalConferida"', 'id="modalConferidaPor"', 'id="modalDup"',
+        ]
+        posicoes = [html.index(item) for item in ids]
+        assert posicoes == sorted(posicoes)
+        assert '<option value="nao">Não</option>' in html
+        assert 'id="modalConfirmacao"' in html
+        assert "cancelarConfirmacaoModal()" in html
+        assert "confirmarAcaoModal()" in html
+
     def test_opcoes_da_tabela_sao_carregadas_sob_demanda(self, ctx):
         categorias = [
             {"chave": "Fuel", "nome": "Combustível"},

@@ -252,12 +252,17 @@
   /* ---------- modal ---------- */
   .modal-bg { display: none; position: fixed; inset: 0; background: rgba(15,15,15,.5); align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
   .modal-bg.show { display: flex; }
-  .modal { background: var(--surface); border-radius: 14px; padding: 26px; width: 420px; max-width: 92vw; box-shadow: var(--shadow-2); border: 1px solid var(--line); }
+  .modal { background: var(--surface); border-radius: 14px; padding: 26px; width: 420px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: var(--shadow-2); border: 1px solid var(--line); }
   .modal h3 { margin-top: 0; font-size: 16px; letter-spacing: -0.01em; }
   .modal .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
   .modal .row span:first-child { color: var(--ink-faint); }
   .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: 20px; line-height: 1; transition: color .15s; }
   .modal .close:hover { color: var(--ink); }
+  .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid #efb3ae; border-radius: var(--radius-sm); background: var(--bad-soft); }
+  .modal-confirmacao[hidden] { display: none; }
+  .modal-confirmacao strong { display: block; color: var(--bad); font-size: 13.5px; }
+  .modal-confirmacao p { margin: 7px 0 11px; color: var(--ink-soft); font-size: 12.5px; line-height: 1.4; white-space: pre-line; }
+  .modal-confirmacao-acoes { display: flex; justify-content: flex-end; gap: 8px; }
 
   /* possivel duplicidade: mesma conta, dia, valor e descricao. Marca discreta na
      borda esquerda - nao pode competir com a linha 'duplicada' ja confirmada,

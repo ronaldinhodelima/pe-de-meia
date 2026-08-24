@@ -47,7 +47,7 @@ def test_editar_nao_da_permissao_de_conferir(monkeypatch):
             pass
 
         def fetchone(self):
-            return (False,)
+            return (False, None, False)
 
         def close(self):
             pass
@@ -80,7 +80,7 @@ def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
             pass
 
         def fetchone(self):
-            return (False,)
+            return (False, None, False)
 
         def fetchall(self):
             return []
@@ -116,7 +116,7 @@ def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
 
 def test_valor_de_outra_dimensao_e_rejeitado(monkeypatch):
     class Cursor:
-        respostas = iter([(False,), None])
+        respostas = iter([(False, None, False), None])
 
         def execute(self, *args, **kwargs):
             pass

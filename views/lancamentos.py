@@ -306,6 +306,8 @@ def index():
             "conferida": "Sim" if r["conferida"] else "Não",
             "conferida_por": r["conferida_por"] or "-",
             "observacao": r["observacao"] or "-",
+            "_conferida": bool(r["conferida"]),
+            "_duplicada": bool(r["duplicada"]),
             "_manual": bool(eh_manual),
             "_natureza": r["natureza"] or "",
             "_natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
@@ -515,7 +517,8 @@ def update_transacao(transacao_id):
     # Serializa edições do mesmo lançamento. Combinado com payloads parciais da
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
-        "SELECT conferida FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
+        "SELECT conferida, conferida_por, COALESCE(duplicada, false) "
+        "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
     transacao = cur.fetchone()
@@ -532,6 +535,34 @@ def update_transacao(transacao_id):
         # A tela envia o estado atual junto com as demais edicoes. Sem permissao
         # para conferir, ele pode continuar no payload, mas nunca gera UPDATE.
         data.pop("conferida", None)
+
+    if (
+        "conferida" in data
+        and bool(transacao[0])
+        and not bool(data.get("conferida"))
+        and data.get("confirmar_desmarcacao") is not True
+    ):
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({
+            "ok": False,
+            "erro": "Confirme a desmarcação do OK nos detalhes do lançamento.",
+        }), 409
+
+    if (
+        "duplicada" in data
+        and not bool(transacao[2])
+        and bool(data.get("duplicada"))
+        and data.get("confirmar_duplicada") is not True
+    ):
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({
+            "ok": False,
+            "erro": "Confirme a marcação como duplicada nos detalhes do lançamento.",
+        }), 409
 
     dimensoes_enviadas = data.get("dimensoes") or {}
     dimensoes_validadas = []
@@ -574,17 +605,20 @@ def update_transacao(transacao_id):
         (transacao_id,),
     )
     faltando = [r[0] for r in cur.fetchall()]
-    bloqueada = bool(faltando) and bool(data.get("conferida", False))
-    conferida_final = data.get("conferida", False) and not bloqueada
+    conferida_atual = bool(transacao[0])
+    alterando_conferencia = "conferida" in data
+    conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
+    # Campos obrigatorios bloqueiam somente uma NOVA marcacao de OK. Uma edicao
+    # de categoria/dimensao/observacao jamais pode desmarcar um OK ja existente.
+    bloqueada = bool(faltando) and alterando_conferencia and conferida_solicitada
+    conferida_final = conferida_solicitada and not bloqueada if alterando_conferencia else conferida_atual
 
     # natureza especifica deste lancamento ("" = volta a seguir a natureza da categoria)
     natureza = data.get("natureza")
     natureza = natureza if natureza in NATUREZAS else None
 
-    # So altera o que veio no payload. A tela de Lancamentos manda o lancamento
-    # inteiro a cada edicao, mas o modal de /categorias manda so a categoria - com
-    # UPDATE fixo de todas as colunas, isso apagaria conferida, duplicada e a
-    # observacao de quem so queria trocar a categoria.
+    # So altera o que veio no payload. Categoria, dimensao e observacao nunca
+    # podem apagar o OK, a duplicidade ou outro ajuste feito anteriormente.
     sets, valores = [], []
     if "conferida" in data:
         sets += [
@@ -617,4 +651,18 @@ def update_transacao(transacao_id):
     conn.commit()
     cur.close()
     conn.close()
-    return jsonify({"ok": True, "bloqueada": bloqueada, "faltando": faltando})
+    conferida_por = (
+        session.get("user") if "conferida" in data and conferida_final
+        else (None if "conferida" in data else transacao[1])
+    )
+    duplicada_final = bool(data.get("duplicada")) if "duplicada" in data else bool(transacao[2])
+    return jsonify({
+        "ok": True,
+        "bloqueada": bloqueada,
+        "faltando": faltando,
+        # A tela sincroniza estes dois estados depois de QUALQUER edicao. Assim
+        # nunca mostra OK/duplicidade diferentes do que esta salvo no banco.
+        "conferida": conferida_final,
+        "conferida_por": conferida_por,
+        "duplicada": duplicada_final,
+    })

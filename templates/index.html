@@ -111,9 +111,8 @@
     <span class="close" onclick="fecharModal()">&times;</span>
     <h3>Detalhes do lançamento</h3>
     <div id="modalBody"></div>
-    {# Categoria fica na mesma linha dos demais campos, como um campo a mais da
-       lista - o modal ja e longo. A natureza por lancamento saiu daqui: o caminho
-       normal e definir a natureza na categoria, em /categorias. #}
+    {# Depois de Parcela, os campos seguem a mesma ordem da tabela de conferencia:
+       Categoria, dimensoes, Observacao e OK. #}
     <div class="row">
       <span>Categoria</span>
       <span><select id="modalCategoria" onchange="salvarCategoriaModal()"
@@ -122,12 +121,37 @@
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
       </select></span>
     </div>
+    <div id="modalDimensoes"></div>
+    <div class="row">
+      <span>Observação</span>
+      <span id="modalObservacao">-</span>
+    </div>
+    <div class="row">
+      <span>Conferida</span>
+      <span><select id="modalConferida" onchange="alterarConferidaModal()"
+                    {{ 'disabled' if not pode_conferir }} style="padding:5px 7px;min-width:86px">
+        <option value="sim">Sim</option>
+        <option value="nao">Não</option>
+      </select></span>
+    </div>
+    <div class="row">
+      <span>Conferida por</span>
+      <span id="modalConferidaPor">-</span>
+    </div>
     <div class="row">
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--ink)">
         <input type="checkbox" id="modalDup" onchange="toggleDuplicadaModal()"
                style="width:15px;height:15px;accent-color:var(--accent)">
         Marcar como duplicada
       </label>
+    </div>
+    <div id="modalConfirmacao" class="modal-confirmacao" hidden>
+      <strong id="modalConfirmacaoTitulo"></strong>
+      <p id="modalConfirmacaoResumo"></p>
+      <div class="modal-confirmacao-acoes">
+        <button type="button" class="ver-btn" onclick="cancelarConfirmacaoModal()">Cancelar</button>
+        <button type="button" class="btn-perigo" id="modalConfirmarBtn" onclick="confirmarAcaoModal()">Confirmar</button>
+      </div>
     </div>
     <div id="modalAcoes" style="margin-top:14px;display:none">
       <button type="button" class="btn-perigo" onclick="excluirManual()" {{ 'disabled' if not pode_manual }}>Excluir lançamento</button>

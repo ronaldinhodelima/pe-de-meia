@@ -209,42 +209,119 @@ function aplicarFiltros() {
 
 window.detalhes = lerJson('script[data-detalhes]', {});
 let idAtualModal = null;
+let acaoConfirmacaoModal = null;
+
+function detalheAtualModal() {
+  return idAtualModal ? (window.detalhes[idAtualModal] || {}) : {};
+}
+
+function sincronizarControlesModal() {
+  const d = detalheAtualModal();
+  const conf = document.getElementById('modalConferida');
+  const dup = document.getElementById('modalDup');
+  if (conf) conf.value = d._conferida ? 'sim' : 'nao';
+  if (dup) dup.checked = !!d._duplicada;
+  document.getElementById('modalConferidaPor').textContent = d.conferida_por || '-';
+  document.getElementById('modalObservacao').textContent = d.observacao || '-';
+}
 
 function verDetalhes(id) {
   const d = window.detalhes[id];
   if (!d) return;
   idAtualModal = id;
-  // 'categoria' fora da lista: virou o seletor em linha, logo abaixo do corpo
+  // Cabecalho tecnico ate Parcela. Depois dele o template segue exatamente a
+  // ordem da conferencia: Categoria, dimensoes, Observacao e OK.
   const labels = {
     data: 'Data', descricao: 'Descrição', valor: 'Valor (R$)',
     valor_original: 'Valor original', status: 'Status', tipo: 'Tipo', origem: 'Origem',
-    parcela: 'Parcela', conferida: 'Conferida', conferida_por: 'Conferida por', observacao: 'Observação'
+    parcela: 'Parcela'
   };
-  // campos que tem tratamento proprio fora desta lista e nao podem ser repetidos
-  // aqui: 'categoria' virou o seletor logo abaixo do corpo do modal
-  const tratadosAparte = ['categoria'];
   let html = '';
   for (const k in labels) {
     html += '<div class="row"><span>' + labels[k] + '</span><span>' + escHtml(d[k]) + '</span></div>';
   }
-  // o resto sao as dimensoes (Responsável, Projeto, ...), que o servidor manda
-  // com o nome da dimensao como chave
+  let htmlDimensoes = '';
+  const tratadosAparte = ['categoria', 'conferida', 'conferida_por', 'observacao'];
   for (const k in d) {
     if (!(k in labels) && k.charAt(0) !== '_' && tratadosAparte.indexOf(k) === -1) {
-      html += '<div class="row"><span>' + escHtml(k) + '</span><span>' + escHtml(d[k]) + '</span></div>';
+      htmlDimensoes += '<div class="row"><span>' + escHtml(k) + '</span><span>' + escHtml(d[k]) + '</span></div>';
     }
   }
   document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('modalDimensoes').innerHTML = htmlDimensoes;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
-  // reflete o estado atual de "duplicada" da linha correspondente
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');
-  const dupAtual = trAtual ? trAtual.querySelector('.dup-check') : null;
-  document.getElementById('modalDup').checked = dupAtual ? dupAtual.checked : false;
   // espelha a categoria da linha; mudar aqui muda la e salva
   const selCat = document.getElementById('modalCategoria');
   const catLinha = trAtual ? trAtual.querySelector('.cat-select') : null;
   if (selCat && catLinha) selCat.value = catLinha.value;
+  cancelarConfirmacaoModal();
+  sincronizarControlesModal();
   document.getElementById('modalBg').classList.add('show');
+}
+
+function abrirConfirmacaoModal(acao) {
+  const d = detalheAtualModal();
+  acaoConfirmacaoModal = acao;
+  const painel = document.getElementById('modalConfirmacao');
+  const titulo = document.getElementById('modalConfirmacaoTitulo');
+  const resumo = document.getElementById('modalConfirmacaoResumo');
+  const botao = document.getElementById('modalConfirmarBtn');
+  if (acao === 'desconferir') {
+    titulo.textContent = 'Confirmar desmarcação do OK?';
+    botao.textContent = 'Sim, desmarcar OK';
+  } else {
+    titulo.textContent = 'Confirmar lançamento como duplicado?';
+    botao.textContent = 'Sim, marcar duplicada';
+  }
+  resumo.textContent = [d.data || '-', d.descricao || '-', d.valor || '-'].join('\n');
+  painel.hidden = false;
+}
+
+function cancelarConfirmacaoModal() {
+  acaoConfirmacaoModal = null;
+  const painel = document.getElementById('modalConfirmacao');
+  if (painel) painel.hidden = true;
+  if (idAtualModal) sincronizarControlesModal();
+}
+
+function confirmarAcaoModal() {
+  if (!idAtualModal || !acaoConfirmacaoModal) return;
+  const acao = acaoConfirmacaoModal;
+  const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+  if (!tr) return;
+  document.getElementById('modalConfirmacao').hidden = true;
+  acaoConfirmacaoModal = null;
+  if (acao === 'desconferir') {
+    const confCheck = tr.querySelector('.conf-check');
+    confCheck.checked = false;
+    salvar(idAtualModal, confCheck, {confirmarDesmarcacao: true}).then(sincronizarControlesModal);
+  } else if (acao === 'duplicar') {
+    const dupCheck = tr.querySelector('.dup-check');
+    const obsInput = tr.querySelector('.obs-input');
+    dupCheck.checked = true;
+    if (!obsInput.value.trim()) obsInput.value = DUPLICADA_OBS_PADRAO;
+    salvar(idAtualModal, dupCheck, {confirmarDuplicada: true}).then(sincronizarControlesModal);
+  }
+}
+
+function alterarConferidaModal() {
+  if (!idAtualModal) return;
+  const d = detalheAtualModal();
+  const destino = document.getElementById('modalConferida').value === 'sim';
+  if (d._conferida && !destino) {
+    document.getElementById('modalConferida').value = 'sim';
+    abrirConfirmacaoModal('desconferir');
+    return;
+  }
+  if (!d._conferida && destino) {
+    const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+    const confCheck = tr && tr.querySelector('.conf-check');
+    if (confCheck) {
+      confCheck.checked = true;
+      salvar(idAtualModal, confCheck).then(sincronizarControlesModal);
+    }
+  }
 }
 
 function salvarCategoriaModal() {
@@ -262,23 +339,26 @@ function salvarCategoriaModal() {
 function toggleDuplicadaModal() {
   if (!idAtualModal) return;
   const marcado = document.getElementById('modalDup').checked;
+  const d = detalheAtualModal();
+  if (!d._duplicada && marcado) {
+    document.getElementById('modalDup').checked = false;
+    abrirConfirmacaoModal('duplicar');
+    return;
+  }
   const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
   if (!tr) return;
   const dupCheck = tr.querySelector('.dup-check');
   dupCheck.checked = marcado;
-  const obsInput = tr.querySelector('.obs-input');
-  if (marcado && !obsInput.value.trim()) {
-    obsInput.value = DUPLICADA_OBS_PADRAO;
-  }
-  salvar(idAtualModal, dupCheck);
+  salvar(idAtualModal, dupCheck).then(sincronizarControlesModal);
 }
 function fecharModal() {
   document.getElementById('modalBg').classList.remove('show');
   idAtualModal = null;
+  acaoConfirmacaoModal = null;
 }
 // o ESC e tratado no tabelas.js, que so tira a classe .show - aqui a tela limpa
 // o proprio estado
-window.aoFecharModal = function () { idAtualModal = null; };
+window.aoFecharModal = function () { idAtualModal = null; acaoConfirmacaoModal = null; };
 function excluirManual() {
   if (!idAtualModal) return;
   const d = window.detalhes[idAtualModal] || {};
@@ -314,7 +394,17 @@ document.addEventListener('change', function (e) {
   const el = e.target;
   if (!el.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, #tabela-lancamentos .conf-check')) return;
   const id = idDaLinha(el);
-  if (id) salvar(id, el);
+  if (!id) return;
+  // Tirar um OK e uma acao sensivel. Desfaz o clique imediatamente e abre os
+  // detalhes completos para o usuario confirmar conscientemente.
+  const d = window.detalhes[id] || {};
+  if (el.matches('.conf-check') && d._conferida && !el.checked) {
+    el.checked = true;
+    verDetalhes(id);
+    abrirConfirmacaoModal('desconferir');
+    return;
+  }
+  salvar(id, el);
 });
 
 // blur nao borbulha; focusout sim
@@ -325,7 +415,8 @@ document.addEventListener('focusout', function (e) {
 });
 const DUPLICADA_OBS_PADRAO = window.configLancamentos.duplicada_obs || '';
 const filaSalvar = {};
-function salvar(id, el) {
+function salvar(id, el, opcoes) {
+  opcoes = opcoes || {};
   const tr = el.closest('tr');
   // Envia somente o campo alterado. Se outra aba mudou observação/projeto/OK,
   // uma categoria antiga desta tela não volta por engano e não apaga aquilo.
@@ -339,6 +430,8 @@ function salvar(id, el) {
     // Ao marcar duplicidade o modal pode ter preenchido a observação padrão.
     payload.observacao = tr.querySelector('.obs-input').value;
   } else return;
+  if (opcoes.confirmarDesmarcacao) payload.confirmar_desmarcacao = true;
+  if (opcoes.confirmarDuplicada) payload.confirmar_duplicada = true;
   const anterior = filaSalvar[id] || Promise.resolve();
   // Uma falha anterior não pode bloquear para sempre os próximos salvamentos.
   const atual = anterior.catch(() => {}).then(() => fetch('/api/transacao/' + id, {
@@ -348,12 +441,29 @@ function salvar(id, el) {
   })).then(r => r.json()).then(d => {
     if (!d.ok) throw new Error(d.erro || 'Falha ao salvar');
     {
-      if ('conferida' in payload) {
-        const confFinal = payload.conferida && !d.bloqueada;
+      // O servidor devolve o estado REAL em toda edicao, inclusive categoria,
+      // dimensao e observacao. A tela nunca infere nem altera o OK por acidente.
+      if ('conferida' in d) {
+        const confFinal = !!d.conferida;
         tr.querySelector('.conf-check').checked = confFinal;
         tr.classList.toggle('conferida', confFinal);
+        const detalhe = window.detalhes[id];
+        if (detalhe) {
+          detalhe._conferida = confFinal;
+          detalhe.conferida = confFinal ? 'Sim' : 'Não';
+          detalhe.conferida_por = d.conferida_por || '-';
+        }
       }
-      if ('duplicada' in payload) tr.classList.toggle('duplicada', payload.duplicada);
+      if ('duplicada' in d) {
+        const dupFinal = !!d.duplicada;
+        tr.querySelector('.dup-check').checked = dupFinal;
+        tr.classList.toggle('duplicada', dupFinal);
+        const detalhe = window.detalhes[id];
+        if (detalhe) detalhe._duplicada = dupFinal;
+      }
+      if ('observacao' in payload && window.detalhes[id]) {
+        window.detalhes[id].observacao = payload.observacao || '-';
+      }
       tr.querySelectorAll('.dim-select').forEach(sel => {
         sel.style.borderColor = '';
         sel.style.background = '';
@@ -371,16 +481,26 @@ function salvar(id, el) {
         s.classList.add('show');
         setTimeout(() => s.classList.remove('show'), 1500);
       }
+      return true;
     }
   }).catch(() => {
+    const detalhe = window.detalhes[id] || {};
+    const conf = tr.querySelector('.conf-check');
+    const dup = tr.querySelector('.dup-check');
+    if (conf) conf.checked = !!detalhe._conferida;
+    if (dup) dup.checked = !!detalhe._duplicada;
+    tr.classList.toggle('conferida', !!detalhe._conferida);
+    tr.classList.toggle('duplicada', !!detalhe._duplicada);
     const s = document.getElementById('status-' + id);
     if (s) {
       s.textContent = 'erro ao salvar';
       s.classList.add('show');
       setTimeout(() => { s.classList.remove('show'); s.textContent = 'ok'; }, 3500);
     }
+    return false;
   });
   filaSalvar[id] = atual;
+  return atual;
 }
 function toggleFormManual() {
   const f = document.getElementById('formManual');

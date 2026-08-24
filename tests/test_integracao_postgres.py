@@ -124,8 +124,72 @@ def test_fluxo_manual_completo_no_postgres_real(sistema_real):
         (transacao_id,),
     )
     assert cur.fetchone() == ("Travel", True, "ajuste preservado", True, "integracao")
+
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={"conferida": False},
+    )
+    assert resposta.status_code == 409
+    assert "Confirme" in resposta.get_json()["erro"]
+
+    # Simula um OK antigo anterior a uma dimensao obrigatoria. Mesmo faltando o
+    # vinculo, editar outro campo nao pode apagar a assinatura humana.
+    cur.execute(
+        "DELETE FROM cartao.transacao_dimensao WHERE transacao_id=%s AND dimensao_id=%s;",
+        (transacao_id, dimensao_id),
+    )
+    conn.commit()
     cur.close()
     conn.close()
+
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={"observacao": "OK antigo preservado"},
+    )
+    assert resposta.status_code == 200
+    assert resposta.get_json()["conferida"] is True
+
+    # Editar classificacao depois do OK nao pode desmarcar a conferencia. A
+    # resposta tambem devolve o estado real para a tela se sincronizar com o DB.
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={
+            "categoria": "Fuel", "observacao": "ajuste posterior ao OK",
+            "dimensoes": {str(dimensao_id): valor_id},
+        },
+    )
+    assert resposta.status_code == 200
+    assert resposta.get_json()["conferida"] is True
+    assert resposta.get_json()["conferida_por"] == "integracao"
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT categoria, observacao, conferida, conferida_por "
+        "FROM cartao.transacao WHERE transacao_id=%s;",
+        (transacao_id,),
+    )
+    assert cur.fetchone() == ("Fuel", "ajuste posterior ao OK", True, "integracao")
+    cur.close()
+    conn.close()
+
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={"conferida": False, "confirmar_desmarcacao": True},
+    )
+    assert resposta.status_code == 200
+    assert resposta.get_json()["conferida"] is False
+
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={"duplicada": True},
+    )
+    assert resposta.status_code == 409
+    resposta = cliente.post(
+        f"/api/transacao/{transacao_id}",
+        json={"duplicada": True, "confirmar_duplicada": True},
+    )
+    assert resposta.status_code == 200
+    assert resposta.get_json()["duplicada"] is True
 
     resposta = cliente.delete(f"/api/lancamento-manual/{transacao_id}")
     assert resposta.status_code == 200
