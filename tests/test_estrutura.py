@@ -114,7 +114,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/dimensoes", "/regras", "/contas", "/pendencias",
-        "/usuarios",
+        "/usuarios", "/logs",
     }
     assert rotas == esperadas
 

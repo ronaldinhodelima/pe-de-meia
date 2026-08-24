@@ -151,3 +151,17 @@ class TestAvisoPendencias:
         html = core.aviso_pendencias_html(pend)
         assert "sem natureza definida" in html
         assert "sem centro de custo" in html
+
+def test_auditoria_oculta_credenciais_e_limita_texto():
+    dados = core.sanitizar_dados_auditoria({
+        "usuario": "ronaldo",
+        "senha": "segredo-real",
+        "nova_senha": "outra-senha",
+        "api_token": "token-real",
+        "observacao": "x" * 700,
+    })
+    assert dados["usuario"] == "ronaldo"
+    assert dados["senha"] == "[PROTEGIDO]"
+    assert dados["nova_senha"] == "[PROTEGIDO]"
+    assert dados["api_token"] == "[PROTEGIDO]"
+    assert len(dados["observacao"]) == 501

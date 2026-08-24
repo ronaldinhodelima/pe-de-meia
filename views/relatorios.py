@@ -26,6 +26,7 @@ from core import (
     get_conn,
     levantar_pendencias,
     pode,
+    registrar_auditoria,
     requer,
     topbar_html,
 )
@@ -208,8 +209,15 @@ def relatorios():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    aplicar_regras(cur)
+    regras_resultado = aplicar_regras(cur)
     conn.commit()
+    if regras_resultado["lancamentos"] or regras_resultado["dimensoes"] or regras_resultado["erro"]:
+        registrar_auditoria(
+            "regra_automatica",
+            "classificacao",
+            sucesso=not bool(regras_resultado["erro"]),
+            detalhes=regras_resultado,
+        )
 
     cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
     dimensoes = cur.fetchall()

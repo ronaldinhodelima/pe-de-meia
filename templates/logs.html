@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block conteudo %}
+<div class="cat-breakdown">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div>
+      <h3 style="margin:0">Histórico de auditoria</h3>
+      <div style="color:var(--ink-faint);font-size:12px;margin-top:3px">
+        Acessos, autenticações, alterações, exclusões e sincronizações. Senhas e chaves nunca são armazenadas.
+      </div>
+    </div>
+    <strong style="margin-left:auto">{{ total }} evento{{ '' if total == 1 else 's' }}</strong>
+  </div>
+
+  <form method="get" style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+    <label style="font-size:12px">Ação<br>
+      <select name="acao" style="min-width:165px">
+        <option value="">Todas</option>
+        {% for item in acoes %}<option value="{{ item.valor }}" {{ 'selected' if filtros.acao == item.valor }}>{{ item.rotulo }}</option>{% endfor %}
+      </select>
+    </label>
+    <label style="font-size:12px">Usuário<br>
+      <select name="usuario" style="min-width:140px">
+        <option value="">Todos</option>
+        {% for item in usuarios %}<option value="{{ item }}" {{ 'selected' if filtros.usuario == item }}>{{ item }}</option>{% endfor %}
+      </select>
+    </label>
+    <label style="font-size:12px">Resultado<br>
+      <select name="resultado">
+        <option value="">Todos</option>
+        <option value="sucesso" {{ 'selected' if filtros.resultado == 'sucesso' }}>Sucesso</option>
+        <option value="falha" {{ 'selected' if filtros.resultado == 'falha' }}>Falha</option>
+      </select>
+    </label>
+    <label style="font-size:12px">De<br><input type="date" name="data_ini" value="{{ filtros.data_ini }}"></label>
+    <label style="font-size:12px">Até<br><input type="date" name="data_fim" value="{{ filtros.data_fim }}"></label>
+    <label style="font-size:12px;flex:1;min-width:190px">Busca<br>
+      <input name="busca" value="{{ filtros.busca }}" placeholder="rota, recurso ou conteúdo" style="width:100%">
+    </label>
+    <button type="submit">Filtrar</button>
+    <a href="/logs" class="ver-btn" style="text-decoration:none">Limpar</a>
+  </form>
+</div>
+
+<div class="cat-breakdown" style="padding:0;overflow:hidden">
+  <div class="tabela-scroll">
+    <table class="compacta" style="min-width:1050px">
+      <thead><tr>
+        <th>Data e hora</th><th>Usuário</th><th>Ação</th><th>Recurso</th>
+        <th>Método</th><th>Resultado</th><th>Origem</th><th>Detalhes</th>
+      </tr></thead>
+      <tbody>
+      {% for e in eventos %}
+        <tr>
+          <td style="white-space:nowrap">{{ e.quando }}</td>
+          <td>{{ e.usuario_rotulo }}</td>
+          <td><strong>{{ e.acao_rotulo }}</strong></td>
+          <td title="{{ e.rota or '' }}">{{ e.recurso }}{% if e.recurso_id %}<br><small>{{ e.recurso_id }}</small>{% endif %}</td>
+          <td>{{ e.metodo or '-' }}</td>
+          <td>
+            {% if e.sucesso %}<span class="tag-ativo">sucesso{% if e.status_http %} · {{ e.status_http }}{% endif %}</span>
+            {% else %}<span class="tag-inativo">falha{% if e.status_http %} · {{ e.status_http }}{% endif %}</span>{% endif %}
+          </td>
+          <td title="{{ e.user_agent or '' }}">{{ e.ip_origem or '-' }}</td>
+          <td>
+            <details><summary style="cursor:pointer">Ver</summary><pre style="white-space:pre-wrap;max-width:420px;font-size:11px">{{ e.detalhes_json }}</pre></details>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" style="padding:22px;text-align:center;color:var(--ink-faint)">Nenhum evento encontrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if total_paginas > 1 %}
+<div style="display:flex;justify-content:center;gap:12px;align-items:center;margin-top:14px">
+  {% if url_anterior %}<a href="{{ url_anterior }}">← Anterior</a>{% endif %}
+  <span>Página {{ pagina }} de {{ total_paginas }}</span>
+  {% if url_proxima %}<a href="{{ url_proxima }}">Próxima →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -30,6 +30,7 @@ from core import (
     get_conn,
     json_script,
     pode,
+    registrar_auditoria,
     requer,
     topbar_html,
 )
@@ -67,8 +68,15 @@ def index():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    aplicar_regras(cur)
+    regras_resultado = aplicar_regras(cur)
     conn.commit()
+    if regras_resultado["lancamentos"] or regras_resultado["dimensoes"] or regras_resultado["erro"]:
+        registrar_auditoria(
+            "regra_automatica",
+            "classificacao",
+            sucesso=not bool(regras_resultado["erro"]),
+            detalhes=regras_resultado,
+        )
 
     contas_by_id, origem_opcoes = carregar_origens(cur)
 

@@ -3,14 +3,21 @@
 Quem faz o trabalho e core.py (constantes e helpers) e views/*.py (as rotas).
 """
 import os
+import time
 from datetime import timedelta
 from urllib.parse import urlsplit
 
-from flask import Flask, current_app, jsonify, request
+from flask import Flask, current_app, jsonify, request, session, g
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from core import _fmt_moeda, _barra_html, rotulo_valor_dimensao
-from views import auth, sistema, lancamentos, relatorios, cadastros, usuarios
+from core import (
+    _fmt_moeda,
+    _barra_html,
+    registrar_auditoria,
+    rotulo_valor_dimensao,
+    sanitizar_dados_auditoria,
+)
+from views import auth, sistema, lancamentos, relatorios, cadastros, usuarios, logs
 
 app = Flask(__name__)
 
@@ -30,6 +37,13 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
     SESSION_REFRESH_EACH_REQUEST=True,
 )
+
+
+@app.before_request
+def _iniciar_auditoria_requisicao():
+    # Guarda o usuario antes da rota: /logout limpa a sessao antes do after_request.
+    g.audit_inicio = time.monotonic()
+    g.audit_usuario = session.get("user")
 
 
 @app.before_request
@@ -67,6 +81,71 @@ def _cabecalhos_de_seguranca(response):
     return response
 
 
+@app.after_request
+def _auditar_requisicao(response):
+    """Registra acessos e mutacoes relevantes sem guardar credenciais."""
+    caminho = request.path or "/"
+    if (
+        caminho == "/health"
+        or caminho == "/favicon.ico"
+        or caminho.startswith("/static/")
+        or caminho == "/api/sync-status"
+        or (caminho == "/login" and request.method == "GET")
+        or current_app.testing
+    ):
+        return response
+
+    endpoint = request.endpoint or "rota_desconhecida"
+    operacao = None
+    if request.form:
+        operacao = request.form.get("acao")
+        entrada = request.form.to_dict(flat=False)
+    else:
+        entrada = request.get_json(silent=True)
+    if entrada is None and request.args:
+        entrada = request.args.to_dict(flat=False)
+
+    if endpoint == "auth.login":
+        acao = "autenticacao"
+    elif endpoint == "auth.logout":
+        acao = "saida"
+    elif endpoint == "sistema.api_sync_agora":
+        acao = "sincronizacao_solicitada"
+    elif request.method == "DELETE" or str(operacao or "").lower() in {"excluir", "remover"}:
+        acao = "exclusao"
+    elif request.method in {"POST", "PUT", "PATCH"}:
+        acao = "alteracao"
+    else:
+        acao = "acesso"
+
+    view_args = request.view_args or {}
+    recurso_id = next(iter(view_args.values()), None)
+    usuario = getattr(g, "audit_usuario", None) or session.get("user")
+    if endpoint == "auth.login" and not usuario:
+        usuario = (request.form.get("usuario") or "").strip() or None
+    inicio = getattr(g, "audit_inicio", None)
+    duracao_ms = round((time.monotonic() - inicio) * 1000, 1) if inicio else None
+    sucesso = response.status_code < 400
+    # Login invalido devolve a mesma tela (HTTP 200), mas deve aparecer como
+    # falha no historico. A sessao so contem usuario quando a autenticacao passou.
+    if endpoint == "auth.login":
+        sucesso = bool(session.get("user")) and sucesso
+    registrar_auditoria(
+        acao,
+        endpoint,
+        usuario=usuario,
+        recurso_id=recurso_id,
+        status_http=response.status_code,
+        sucesso=sucesso,
+        detalhes={
+            "operacao": operacao,
+            "entrada": sanitizar_dados_auditoria(entrada or {}),
+            "duracao_ms": duracao_ms,
+        },
+    )
+    return response
+
+
 # ---- filtros e globais usados pelos templates ----
 @app.template_filter("moeda")
 def _filtro_moeda(v):
@@ -89,7 +168,7 @@ def _globais_template():
 
 
 # a ordem nao importa: nenhum blueprint disputa o mesmo caminho
-for modulo in (auth, sistema, lancamentos, relatorios, cadastros, usuarios):
+for modulo in (auth, sistema, lancamentos, relatorios, cadastros, usuarios, logs):
     app.register_blueprint(modulo.bp)
 
 

@@ -107,6 +107,23 @@ CREATE TABLE IF NOT EXISTS cartao.sync_log (
     mensagem_erro    TEXT
 );
 
+CREATE TABLE IF NOT EXISTS cartao.audit_log (
+    id              BIGSERIAL PRIMARY KEY,
+    ocorrido_em     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    usuario         TEXT,
+    acao            TEXT NOT NULL,
+    recurso         TEXT NOT NULL,
+    recurso_id      TEXT,
+    metodo          VARCHAR(10),
+    rota            TEXT,
+    status_http     INTEGER,
+    sucesso         BOOLEAN NOT NULL DEFAULT true,
+    ip_origem       TEXT,
+    user_agent      TEXT,
+    detalhes        JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_ocorrido ON cartao.audit_log (ocorrido_em DESC);
+
 -- Posicao atual de cada investimento (renda fixa, previdencia, fundos...).
 -- O saldo e patrimonio, nao entra no DRE; o que entra no resultado e o rendimento.
 CREATE TABLE IF NOT EXISTS cartao.investimento (
@@ -432,7 +449,30 @@ def _classificar_resultado_sync(itens_ok, falhas):
     return "SUCCESS", "ok"
 
 
-def _run_sync_unlocked():
+def registrar_auditoria_sync(cur, origem, status_log, novas, atualizadas, investimentos, conexoes, falhas):
+    """Uma linha por execucao; nao cria milhares de logs para itens sem mudanca."""
+    cur.execute(
+        "INSERT INTO cartao.audit_log (usuario, acao, recurso, sucesso, detalhes) "
+        "VALUES (%s,%s,%s,%s,%s);",
+        (
+            "sistema",
+            "sincronizacao",
+            "pluggy",
+            status_log == "SUCCESS",
+            psycopg2.extras.Json({
+                "origem": origem,
+                "status": status_log,
+                "transacoes_novas": novas,
+                "transacoes_processadas": atualizadas,
+                "investimentos": investimentos,
+                "conexoes": conexoes,
+                "falhas": falhas,
+            }),
+        ),
+    )
+
+
+def _run_sync_unlocked(origem="manual"):
     if not (PLUGGY_CLIENT_ID and PLUGGY_CLIENT_SECRET):
         SYNC_STATE.update(
             {
@@ -541,6 +581,9 @@ def _run_sync_unlocked():
                 """,
                 (itens_ok[0] if itens_ok else None, status_log, novas, atualizadas, mensagem_falhas),
             )
+            registrar_auditoria_sync(
+                cur, origem, status_log, novas, atualizadas, investimentos, conexoes, falhas
+            )
             conn.commit()
         cur.close()
         conn.close()
@@ -554,6 +597,7 @@ def _run_sync_unlocked():
                     "transacoes_atualizadas": atualizadas,
                     "investimentos": investimentos,
                     "conexoes": conexoes,
+                    "origem": origem,
                 },
             }
         )
@@ -568,6 +612,9 @@ def _run_sync_unlocked():
                 VALUES (%s,%s,%s,%s,%s);
                 """,
                 (itens_ok[0] if itens_ok else None, "ERROR", novas, atualizadas, erro),
+            )
+            registrar_auditoria_sync(
+                cur, origem, "ERROR", novas, atualizadas, investimentos, conexoes, [erro]
             )
             conn.commit()
             cur.close()
@@ -585,7 +632,7 @@ def _run_sync_unlocked():
     return SYNC_STATE
 
 
-def run_sync():
+def run_sync(origem="manual"):
     """Executa no maximo uma sincronizacao por processo."""
     if not SYNC_LOCK.acquire(blocking=False):
         return {
@@ -594,7 +641,7 @@ def run_sync():
             "detail": "Sincronizacao ja esta em andamento",
         }
     try:
-        return _run_sync_unlocked()
+        return _run_sync_unlocked(origem)
     finally:
         SYNC_LOCK.release()
 
@@ -602,7 +649,7 @@ def run_sync():
 def scheduler_loop():
     # roda uma sincronização assim que sobe, depois a cada SYNC_INTERVAL_SECONDS
     while True:
-        run_sync()
+        run_sync("agendada")
         time.sleep(SYNC_INTERVAL_SECONDS)
 
 
@@ -634,7 +681,7 @@ def root():
 def sync_now():
     if not autorizado():
         return jsonify({"ok": False, "erro": "nao autorizado"}), 401
-    result = run_sync()
+    result = run_sync("manual")
     if result.get("status") == "busy":
         return jsonify(result), 409
     if result.get("status") == "error":

@@ -42,6 +42,32 @@ class TestInvestimentos:
         assert "&lt;img" in html
 
 
+class TestLogs:
+    def test_detalhes_e_campos_sao_escapados(self, ctx):
+        evento = {
+            "quando": "23/08/2026 20:00:00",
+            "usuario_rotulo": "<script>usuario</script>",
+            "acao_rotulo": "Alteração",
+            "recurso": "usuarios.view",
+            "recurso_id": None,
+            "rota": "/usuarios",
+            "metodo": "POST",
+            "sucesso": True,
+            "status_http": 200,
+            "ip_origem": "127.0.0.1",
+            "user_agent": "teste",
+            "detalhes_json": '<img src=x onerror="alert(1)">',
+        }
+        html = render_template(
+            "logs.html", titulo="Logs", topbar="", eventos=[evento],
+            acoes=[], usuarios=[], filtros={"acao": "", "usuario": "", "resultado": "", "busca": "", "data_ini": "", "data_fim": ""},
+            total=1, pagina=1, total_paginas=1, url_anterior=None, url_proxima=None,
+        )
+        assert "<script>usuario</script>" not in html
+        assert "<img src=x" not in html
+        assert "&lt;img" in html
+
+
 class TestRegras:
     BASE = dict(
         titulo="Regras", topbar="", erro=None, categorias=[{"chave": "Fuel", "nome": "Combustível"}],

@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg2
 import psycopg2.extras
-from flask import request, redirect, session, jsonify, render_template
+from flask import request, redirect, session, jsonify, render_template, has_request_context
 
 
 # URL do servico bussola-financeira-app que faz a sincronizacao com o Pluggy.
@@ -723,6 +723,81 @@ def get_conn():
     )
 
 
+_CAMPOS_SIGILOSOS_AUDITORIA = (
+    "senha", "password", "secret", "token", "authorization", "cookie", "api_key", "apikey",
+)
+
+
+def sanitizar_dados_auditoria(valor, chave=""):
+    """Converte dados de requisicao em JSON seguro, sem credenciais ou volumes enormes."""
+    chave_lower = str(chave or "").lower()
+    if any(marcador in chave_lower for marcador in _CAMPOS_SIGILOSOS_AUDITORIA):
+        return "[PROTEGIDO]"
+    if valor is None or isinstance(valor, (bool, int, float)):
+        return valor
+    if isinstance(valor, str):
+        return valor[:500] + ("…" if len(valor) > 500 else "")
+    if isinstance(valor, dict):
+        return {
+            str(k)[:100]: sanitizar_dados_auditoria(v, k)
+            for k, v in list(valor.items())[:50]
+        }
+    if isinstance(valor, (list, tuple, set)):
+        return [sanitizar_dados_auditoria(v, chave) for v in list(valor)[:50]]
+    return sanitizar_dados_auditoria(str(valor), chave)
+
+
+def registrar_auditoria(
+    acao,
+    recurso,
+    *,
+    usuario=None,
+    recurso_id=None,
+    metodo=None,
+    rota=None,
+    status_http=None,
+    sucesso=True,
+    ip_origem=None,
+    user_agent=None,
+    detalhes=None,
+):
+    """Acrescenta um evento ao historico sem jamais quebrar a operacao original."""
+    try:
+        if has_request_context():
+            usuario = usuario or session.get("user")
+            metodo = metodo or request.method
+            rota = rota or request.path
+            ip_origem = ip_origem or request.remote_addr
+            user_agent = user_agent or request.headers.get("User-Agent")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO cartao.audit_log ("
+            "usuario, acao, recurso, recurso_id, metodo, rota, status_http, sucesso, "
+            "ip_origem, user_agent, detalhes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);",
+            (
+                usuario,
+                str(acao or "evento")[:60],
+                str(recurso or "sistema")[:160],
+                str(recurso_id)[:160] if recurso_id is not None else None,
+                str(metodo)[:10] if metodo else None,
+                str(rota)[:300] if rota else None,
+                status_http,
+                bool(sucesso),
+                str(ip_origem)[:80] if ip_origem else None,
+                str(user_agent)[:500] if user_agent else None,
+                psycopg2.extras.Json(sanitizar_dados_auditoria(detalhes or {})),
+            ),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Aviso: falha ao registrar auditoria:", e)
+        return False
+
+
 def login_required(view):
     @functools.wraps(view)
     def wrapped(*args, **kwargs):
@@ -1076,6 +1151,32 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (9);")
             conn.commit()
 
+        if versao_atual < 10:
+            # Historico separado dos dados financeiros. Nao ha FK para usuario:
+            # excluir uma conta nunca pode apagar o rastro de auditoria dela.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.audit_log ("
+                "id bigserial PRIMARY KEY, "
+                "ocorrido_em timestamptz NOT NULL DEFAULT now(), "
+                "usuario text, acao text NOT NULL, recurso text NOT NULL, recurso_id text, "
+                "metodo varchar(10), rota text, status_http integer, sucesso boolean NOT NULL DEFAULT true, "
+                "ip_origem text, user_agent text, detalhes jsonb NOT NULL DEFAULT '{}'::jsonb);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_log_ocorrido "
+                "ON cartao.audit_log (ocorrido_em DESC);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_log_usuario "
+                "ON cartao.audit_log (usuario, ocorrido_em DESC);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_log_acao "
+                "ON cartao.audit_log (acao, ocorrido_em DESC);"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (10);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1088,6 +1189,7 @@ def aplicar_regras(cur):
     # Uma regra antiga pode apontar para uma dimensao/valor removido. Isolamos a
     # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
     # consultas da pagina que chamou esta funcao.
+    resultado = {"lancamentos": 0, "dimensoes": 0, "erro": None}
     cur.execute("SAVEPOINT aplicar_regras")
     try:
         cur.execute(
@@ -1101,6 +1203,7 @@ def aplicar_regras(cur):
             "UPDATE cartao.transacao t SET categoria = m.categoria, regra_aplicada_id = m.regra_id "
             "FROM match m WHERE t.transacao_id = m.transacao_id::uuid;"
         )
+        resultado["lancamentos"] = max(cur.rowcount, 0)
         cur.execute(
             "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
             "SELECT t.transacao_id::text, rdv.dimensao_id, rdv.valor_id "
@@ -1109,11 +1212,16 @@ def aplicar_regras(cur):
             "WHERE t.regra_aplicada_id IS NOT NULL "
             "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
         )
+        resultado["dimensoes"] = max(cur.rowcount, 0)
     except Exception as e:
         cur.execute("ROLLBACK TO SAVEPOINT aplicar_regras")
+        resultado["lancamentos"] = 0
+        resultado["dimensoes"] = 0
+        resultado["erro"] = str(e)[:500]
         print("Aviso: falha ao aplicar regras:", e)
     finally:
         cur.execute("RELEASE SAVEPOINT aplicar_regras")
+    return resultado
 
 
 DUPLICADA_OBS_PADRAO = "Duplicada - mesma compra ja lancada em outra linha (registro repetido pelo Pluggy)"
@@ -1205,6 +1313,7 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/regras" class="{cls("regras")}">Regras automáticas</a>' if pode("cadastros") else ""}
               {f'<a href="/contas" class="{cls("contas")}">Configurações de Contas / Cartão</a>' if pode("cadastros") else ""}
               {f'<a href="/usuarios" class="{cls("usuarios")}">Usuários e permissões</a>' if pode("usuarios") else ""}
+              {f'<a href="/logs" class="{cls("logs")}">Logs</a>' if pode("usuarios") else ""}
             </div>
           </div>''' if (pode("cadastros") or pode("usuarios")) else ""}
           {'''<div class="sync-widget">

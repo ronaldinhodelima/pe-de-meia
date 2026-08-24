@@ -32,7 +32,7 @@ def test_sync_simultaneo_e_recusado_sem_chamar_servicos_externos(monkeypatch):
 def test_trava_e_liberada_quando_sync_falha(monkeypatch):
     worker = carregar_worker(monkeypatch)
 
-    def falhar():
+    def falhar(*args):
         raise RuntimeError("falha simulada")
 
     monkeypatch.setattr(worker, "_run_sync_unlocked", falhar)
@@ -68,13 +68,13 @@ def test_endpoint_explica_sync_ocupado_ou_com_erro(monkeypatch):
     cliente = worker.app.test_client()
     cabecalho = {"X-Sync-Secret": "segredo-exclusivo-dos-testes"}
 
-    monkeypatch.setattr(worker, "run_sync", lambda: {"status": "busy"})
+    monkeypatch.setattr(worker, "run_sync", lambda *args: {"status": "busy"})
     assert cliente.post("/sync", headers=cabecalho).status_code == 409
 
-    monkeypatch.setattr(worker, "run_sync", lambda: {"status": "error"})
+    monkeypatch.setattr(worker, "run_sync", lambda *args: {"status": "error"})
     assert cliente.post("/sync", headers=cabecalho).status_code == 502
 
-    monkeypatch.setattr(worker, "run_sync", lambda: {"status": "warning"})
+    monkeypatch.setattr(worker, "run_sync", lambda *args: {"status": "warning"})
     assert cliente.post("/sync", headers=cabecalho).status_code == 200
 
 
@@ -84,6 +84,37 @@ def test_resultado_parcial_nunca_e_registrado_como_sucesso(monkeypatch):
     assert worker._classificar_resultado_sync(["item-ok"], []) == ("SUCCESS", "ok")
     assert worker._classificar_resultado_sync(["item-ok"], ["item-2 falhou"]) == ("WARNING", "warning")
     assert worker._classificar_resultado_sync([], ["todos falharam"]) == ("ERROR", "error")
+
+
+def test_pluggy_importa_ids_distintos_sem_marcar_duplicidade(monkeypatch):
+    """Cobrancas parecidas do Pluggy continuam sendo registros independentes."""
+    worker = carregar_worker(monkeypatch)
+
+    class CursorFalso:
+        def __init__(self):
+            self.comandos = []
+
+        def execute(self, sql, params=None):
+            self.comandos.append((sql, params))
+
+        def fetchone(self):
+            return (True,)
+
+    cursor = CursorFalso()
+    base = {
+        "accountId": "conta-1",
+        "description": "COMPRA REPETIDA",
+        "amount": -50,
+        "date": "2026-08-01T00:00:00Z",
+    }
+    worker.upsert_transaction(cursor, {**base, "id": "pluggy-id-1"})
+    worker.upsert_transaction(cursor, {**base, "id": "pluggy-id-2"})
+
+    assert len(cursor.comandos) == 2
+    assert cursor.comandos[0][1][0] == "pluggy-id-1"
+    assert cursor.comandos[1][1][0] == "pluggy-id-2"
+    assert "ON CONFLICT (transacao_id)" in cursor.comandos[0][0]
+    assert "duplicada" not in cursor.comandos[0][0].lower()
 
 
 def test_falha_de_uma_conexao_nao_impede_as_demais_e_gera_aviso(monkeypatch):
@@ -144,6 +175,8 @@ def test_falha_de_uma_conexao_nao_impede_as_demais_e_gera_aviso(monkeypatch):
     assert resultado["status"] == "warning"
     assert len(resultado["detail"]["conexoes"]) == 2
     assert banco.rollbacks == 1
-    log_params = banco.cursor_falso.comandos[-1][1]
+    log_params = next(
+        params for sql, params in banco.cursor_falso.comandos if "INSERT INTO cartao.sync_log" in sql
+    )
     assert log_params[1] == "WARNING"
     assert "conexao expirada" in log_params[4]
