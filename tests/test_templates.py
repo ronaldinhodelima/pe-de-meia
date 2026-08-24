@@ -144,7 +144,8 @@ class TestIndex:
             id="tx1", classes="", data_dia="13/08/26", data_hora="00:00",
             data_full="13/08/2026 00:00", data_sort=1.0, descricao="COMPRA",
             origem_selo='<span class="selo">UN</span>', origem_texto="Unicred",
-            origem_completa="Unicred · CC", categoria="Fuel", dims={1: 10},
+            origem_completa="Unicred · CC", categoria="Fuel", categoria_nome="Combustível",
+            dims={1: 10}, dims_rotulos={1: "Ronaldo"},
             valor_fmt="- R$ 10.00", valor_sort=-10.0, cor_valor="", observacao="",
             conferida=False, duplicada=False,
         )
@@ -210,6 +211,31 @@ class TestIndex:
         # 'fluxo' e o padrao (direcao decide), nao faz sentido escolher na mao
         html = self.render([self.linha()])
         assert 'value="fluxo"' not in html
+
+    def test_opcoes_da_tabela_sao_carregadas_sob_demanda(self, ctx):
+        categorias = [
+            {"chave": "Fuel", "nome": "Combustível"},
+            {"chave": "Groceries", "nome": "Mercado"},
+            {"chave": "Travel", "nome": "Viagem"},
+        ]
+        html = self.render(
+            [self.linha(), self.linha(id="tx2")],
+            categorias=categorias,
+        )
+        # Cada linha traz somente a selecao atual. A lista completa existe uma
+        # unica vez no modal/configuracao, e o JS a coloca na linha ao clicar.
+        tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
+        assert tabela.count('data-lazy-options="categoria"') == 2
+        assert tabela.count('value="Fuel"') == 2
+        assert 'value="Groceries"' not in tabela
+        assert 'value="Travel"' not in tabela
+
+    def test_sem_categoria_aparece_sem_escolher_opcao_errada(self, ctx):
+        html = self.render([
+            self.linha(categoria=None, categoria_nome="(sem categoria)")
+        ])
+        tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
+        assert '<option value="" selected>(sem categoria)</option>' in tabela
 
 
 class TestRelatorios:

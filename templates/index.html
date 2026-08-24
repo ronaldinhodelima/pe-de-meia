@@ -79,22 +79,16 @@
            pelo usuario, entao vai escapado #}
         <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}">{{ r.origem_selo|safe }}<span>{{ r.origem_texto }}</span></td>
         <td class="cel-dim" data-col="categoria">
-          <select class="cat-select" {{ 'disabled' if not pode_editar }}>
-            {% for c in categorias %}
-              <option value="{{ c.chave }}" {{ 'selected' if c.chave == r.categoria }}>{{ c.nome }}</option>
-            {% endfor %}
+          <select class="cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar }}>
+            <option value="{{ r.categoria or '' }}" selected>{{ r.categoria_nome }}</option>
           </select>
         </td>
         {% for d in dimensoes %}
           <td class="cel-dim" data-col="dim_{{ d.id }}">
-            <select class="dim-select" data-dim="{{ d.id }}"
+            <select class="dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao"
                     {% if d.obrigatoria and not r.dims.get(d.id) %}style="border-color:#c23c34;background:#fbeceb"{% endif %}
                     {{ 'disabled' if not pode_editar }}>
-              <option value="">(nao definido)</option>
-              {% for v in valores_por_dim.get(d.id, []) %}
-                {# emoji e texto puro, entao cabe dentro de <option> #}
-                <option value="{{ v.id }}" {{ 'selected' if v.id == r.dims.get(d.id) }}>{{ rotulo_dim(v) }}</option>
-              {% endfor %}
+              <option value="{{ r.dims.get(d.id) or '' }}" selected>{{ r.dims_rotulos.get(d.id) }}</option>
             </select>
           </td>
         {% endfor %}
@@ -124,6 +118,7 @@
       <span>Categoria</span>
       <span><select id="modalCategoria" onchange="salvarCategoriaModal()"
                     {{ 'disabled' if not pode_editar }} style="padding:5px 7px;max-width:230px">
+        <option value="">(sem categoria)</option>
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
       </select></span>
     </div>

@@ -203,32 +203,6 @@ def index():
     cur.close()
     conn.close()
 
-    def nome_cartao_curto(final4):
-        if not final4:
-            return "-"
-        prefixo = nomes_cartao.get(final4)
-        return prefixo if prefixo else f"final {final4}"
-
-    def origem_curta(account_id, final4=None):
-        """Selo do banco + texto curto. No cartao, o apelido cadastrado
-        (ex: 'Andrea físico') diz mais que 'Cartão Unicred'."""
-        c = contas_by_id.get(str(account_id))
-        if not c:
-            return "-"
-        if c["tipo"] == "CREDIT" and final4 and nomes_cartao.get(final4):
-            texto = nomes_cartao[final4]
-        else:
-            texto = c["label_curto"]
-        return f'{c["selo"]}<span>{texto}</span>'
-
-    def origem_completa(account_id, final4=None):
-        c = contas_by_id.get(str(account_id))
-        if not c:
-            return "-"
-        if c["tipo"] == "CREDIT" and final4:
-            return f'{c["label"]} - {nome_cartao_curto(final4)}'
-        return c["label"]
-
     # a tela nao deve oferecer acao que a API vai recusar
     pode_editar = pode("lancamentos_editar")
     pode_conferir = pode("lancamentos_conferir")
@@ -260,6 +234,10 @@ def index():
 
     linhas_tabela = []
     detalhes_js = {}
+    nomes_por_dim = {
+        d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
+        for d in dimensoes
+    }
     for r in rows:
         data_local = data_hora_local(r["data_transacao"])
         data_fmt_full = data_local.strftime("%d/%m/%Y %H:%M")
@@ -300,7 +278,12 @@ def index():
             "origem_texto": origem_texto,
             "origem_completa": origem_full,
             "categoria": r["categoria"],
+            "categoria_nome": cat_pt_puro(r["categoria"]) if r["categoria"] else "(sem categoria)",
             "dims": dims_sel,
+            "dims_rotulos": {
+                d["id"]: nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
+                for d in dimensoes
+            },
             "valor_fmt": valor_fmt,
             "valor_sort": valor_sort,
             "cor_valor": cor_valor,
@@ -310,10 +293,6 @@ def index():
             "suspeita_duplicidade": str(rid) in ids_suspeitos,
         })
 
-        nomes_por_dim = {
-            d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
-            for d in dimensoes
-        }
         detalhes = {
             "data": data_fmt_full,
             "descricao": desc,
@@ -337,6 +316,18 @@ def index():
 
     gasto_real = resumo["gasto_real"] or 0
     receita_mes = resumo["receita_mes"] or 0
+    categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
+    config_lancamentos = {
+        "duplicada_obs": DUPLICADA_OBS_PADRAO,
+        "categorias": categorias_template,
+        "dimensoes": {
+            str(d["id"]): [
+                {"id": v["id"], "rotulo": rotulo_valor_dimensao(v)}
+                for v in valores_por_dim.get(d["id"], [])
+            ]
+            for d in dimensoes
+        },
+    }
 
     return render_template(
         "index.html",
@@ -352,7 +343,7 @@ def index():
         pode_editar=pode_editar,
         pode_conferir=pode_conferir,
         pode_manual=pode_manual,
-        categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
+        categorias=categorias_template,
         dimensoes=dimensoes,
         valores_por_dim=valores_por_dim,
         naturezas=NATUREZAS,
@@ -366,7 +357,7 @@ def index():
         conf=resumo["conferidas"] or 0,
         total=resumo["total"] or 0,
         detalhes_json=json_script(detalhes_js),
-        config_json=json_script({"duplicada_obs": DUPLICADA_OBS_PADRAO}),
+        config_json=json_script(config_lancamentos),
     )
 
 
@@ -612,7 +603,7 @@ def update_transacao(transacao_id):
         # Uma escolha humana, mesmo antes de marcar OK, não pode ser desfeita
         # por uma regra automática criada posteriormente.
         sets.extend(["categoria = %s", "categoria_manual = true", "regra_aplicada_id = NULL"])
-        valores.append(data.get("categoria"))
+        valores.append(data.get("categoria") or None)
     if "natureza" in data:
         sets.append("natureza = %s")
         valores.append(natureza)

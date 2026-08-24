@@ -10,6 +10,50 @@ function lerJson(seletor, padrao) {
   try { return JSON.parse(el.textContent); } catch (e) { return padrao; }
 }
 
+window.configLancamentos = lerJson('script[data-config]', {});
+
+// Cada linha nasce apenas com a opcao selecionada. As listas completas ficam
+// uma unica vez no JSON da pagina e entram no select quando ele recebe foco.
+// Em um mes com 122 linhas e 3 dimensoes, isso evita centenas de listas iguais.
+function hidratarSelect(sel) {
+  if (!sel || sel.dataset.hidratado === '1' || sel.disabled) return;
+  const atual = sel.value;
+  let opcoes;
+  if (sel.matches('.cat-select')) {
+    opcoes = [{valor: '', rotulo: '(sem categoria)'}].concat(
+      (window.configLancamentos.categorias || []).map(c => ({valor: String(c.chave), rotulo: String(c.nome)}))
+    );
+  } else if (sel.matches('.dim-select')) {
+    opcoes = [{valor: '', rotulo: '(nao definido)'}].concat(
+      ((window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [])
+        .map(v => ({valor: String(v.id), rotulo: String(v.rotulo)}))
+    );
+  } else {
+    return;
+  }
+  const fragmento = document.createDocumentFragment();
+  opcoes.forEach(item => {
+    const opcao = document.createElement('option');
+    opcao.value = item.valor;
+    opcao.textContent = item.rotulo;
+    fragmento.appendChild(opcao);
+  });
+  sel.replaceChildren(fragmento);
+  sel.value = atual;
+  sel.dataset.hidratado = '1';
+}
+
+document.addEventListener('focusin', function (e) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select')) {
+    hidratarSelect(e.target);
+  }
+});
+document.addEventListener('pointerdown', function (e) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select')) {
+    hidratarSelect(e.target);
+  }
+});
+
 // ---- chip filter (origem): filtra sem fechar o painel ----
 function cfToggle(btn) {
   const panel = btn.nextElementSibling;
@@ -156,6 +200,10 @@ function aplicarFiltros() {
       if (scriptNovo) {
         try { window.detalhes = JSON.parse(scriptNovo.textContent); } catch (e) {}
       }
+      const configNova = doc.querySelector('script[data-config]');
+      if (configNova) {
+        try { window.configLancamentos = JSON.parse(configNova.textContent); } catch (e) {}
+      }
     });
 }
 
@@ -204,6 +252,7 @@ function salvarCategoriaModal() {
   const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
   if (!tr) return;
   const selLinha = tr.querySelector('.cat-select');
+  hidratarSelect(selLinha);
   selLinha.value = document.getElementById('modalCategoria').value;
   salvar(idAtualModal, selLinha);
   // a categoria carrega a natureza contabil, entao os totais do mes mudam
@@ -274,7 +323,7 @@ document.addEventListener('focusout', function (e) {
   const id = idDaLinha(e.target);
   if (id) salvar(id, e.target);
 });
-const DUPLICADA_OBS_PADRAO = lerJson('script[data-config]', {}).duplicada_obs || '';
+const DUPLICADA_OBS_PADRAO = window.configLancamentos.duplicada_obs || '';
 const filaSalvar = {};
 function salvar(id, el) {
   const tr = el.closest('tr');
