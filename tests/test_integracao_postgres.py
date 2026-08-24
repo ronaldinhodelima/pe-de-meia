@@ -242,6 +242,23 @@ def test_edicoes_simultaneas_nao_apagam_campos_uma_da_outra(sistema_real):
     conn.close()
 
 
+def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
+    _worker, _core, webapp = sistema_real
+    cliente = webapp.app.test_client()
+    _login(cliente)
+    rotas = (
+        "/", "/relatorios", "/dre", "/investimentos", "/logs", "/pendencias",
+        "/categorias", "/grupos", "/dimensoes", "/contas", "/regras", "/usuarios",
+    )
+
+    for rota in rotas:
+        resposta = cliente.get(rota)
+        assert resposta.status_code == 200, rota
+        html = resposta.get_data(as_text=True)
+        assert "Internal Server Error" not in html, rota
+        assert "Pé de Meia" in html, rota
+
+
 def test_tela_suporta_dez_vezes_o_volume_atual(sistema_real):
     _worker, core, webapp = sistema_real
     quantidade = 1200
