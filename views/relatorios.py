@@ -10,6 +10,8 @@ from core import (
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT_DB,
     DATA_LOCAL_SQL,
+    FINANCEIRO_DIM_TABELA,
+    FINANCEIRO_TABELA,
     JOIN_NATUREZA,
     MESES_ABREV,
     NATUREZA_SQL,
@@ -68,7 +70,7 @@ def dre():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    base = f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE COALESCE(t.duplicada, false) = false "
+    base = f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE COALESCE(t.duplicada, false) = false "
 
     cur.execute(
         f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total {base} "
@@ -114,8 +116,8 @@ def dre():
         cur.execute(
             "SELECT COALESCE(dv.nome, '(nao definido)') AS nome, "
             f"SUM({VAL_DESPESA}) AS total "
-            f"FROM cartao.transacao t {JOIN_NATUREZA} "
-            "LEFT JOIN cartao.transacao_dimensao td ON td.transacao_id = t.transacao_id::text AND td.dimensao_id = %s "
+            f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+            f"LEFT JOIN {FINANCEIRO_DIM_TABELA} td ON td.linha_id = t.linha_id AND td.dimensao_id = %s "
             "LEFT JOIN cartao.dimensao_valor dv ON dv.id = td.valor_id "
             "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
             "AND COALESCE(t.duplicada, false) = false "
@@ -234,7 +236,7 @@ def relatorios():
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome ORDER BY prefixo;")
     cartoes_cadastrados = cur.fetchall()
 
-    cur.execute("SELECT DISTINCT categoria FROM cartao.transacao WHERE categoria IS NOT NULL;")
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     todas_categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt_puro(c)))
 
@@ -305,7 +307,7 @@ def relatorios_dados():
     ordem = f"{cfg['group_expr']} ASC" if cfg["agrupar"] in ("mes", "ano") else "total DESC"
     cur.execute(
         f"SELECT {cfg['group_expr']} AS grupo, COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total "
-        f"FROM cartao.transacao t {cfg['join_natureza']} {cfg['join_extra']} "
+        f"FROM {cfg['tabela']} t {cfg['join_natureza']} {cfg['join_extra']} "
         f"WHERE {cfg['where_sql']} GROUP BY {cfg['group_expr']} ORDER BY {ordem};",
         cfg["params"],
     )
@@ -313,7 +315,7 @@ def relatorios_dados():
 
     cur.execute(
         f"SELECT COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total "
-        f"FROM cartao.transacao t {cfg['join_natureza']} WHERE {cfg['where_sql']};",
+        f"FROM {cfg['tabela']} t {cfg['join_natureza']} WHERE {cfg['where_sql']};",
         cfg["params"],
     )
     totalizador = cur.fetchone()
@@ -404,7 +406,7 @@ def relatorios_lancamentos():
 
     cur.execute(
         f"SELECT t.data_transacao, t.descricao, t.categoria, {cfg['soma_expr']} AS valor, "
-        f"t.numero_cartao_final, t.account_id FROM cartao.transacao t {cfg['join_natureza']} {cfg['join_extra']} "
+        f"t.numero_cartao_final, t.account_id FROM {cfg['tabela']} t {cfg['join_natureza']} {cfg['join_extra']} "
         f"WHERE {where_sql} ORDER BY t.data_transacao DESC LIMIT 300;",
         params,
     )
@@ -560,7 +562,7 @@ def api_categoria_lancamentos():
     cur.execute(
         "SELECT t.transacao_id, t.data_transacao, t.descricao, "
         "COALESCE(t.valor_brl, t.valor_original) AS valor "
-        "FROM cartao.transacao t WHERE t.categoria = %s ORDER BY t.data_transacao DESC LIMIT 300;",
+        f"FROM {FINANCEIRO_TABELA} t WHERE t.categoria = %s ORDER BY t.data_transacao DESC LIMIT 300;",
         (categoria,),
     )
     rows = cur.fetchall()

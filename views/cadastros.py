@@ -12,6 +12,7 @@ from core import (
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT,
     CATEGORIA_PT_DB,
+    FINANCEIRO_TABELA,
     JOIN_NATUREZA,
     NATUREZAS,
     NATUREZAS_NEUTRAS,
@@ -1067,7 +1068,7 @@ def categorias_view():
     aviso = erro = None
 
     def contar_uso(categoria):
-        cur.execute("SELECT COUNT(*) AS n FROM cartao.transacao WHERE categoria = %s;", (categoria,))
+        cur.execute(f"SELECT COUNT(*) AS n FROM {FINANCEIRO_TABELA} WHERE categoria = %s;", (categoria,))
         return cur.fetchone()["n"]
 
     if request.method == "POST":
@@ -1154,6 +1155,12 @@ def categorias_view():
                         (destino, origem),
                     )
                     qtd = cur.rowcount
+                    cur.execute(
+                        "UPDATE cartao.transacao_rateio SET categoria=%s, atualizado_em=now() "
+                        "WHERE categoria=%s;",
+                        (destino, origem),
+                    )
+                    qtd += cur.rowcount
                     conn.commit()
                     if qtd:
                         registrar_mudanca_auditoria(
@@ -1194,7 +1201,7 @@ def categorias_view():
 
     cur.execute(
         f"SELECT t.categoria, COUNT(*) AS qtd, SUM({VAL_DESPESA}) AS total "
-        f"FROM cartao.transacao t JOIN cartao.conta c ON c.account_id = t.account_id "
+        f"FROM {FINANCEIRO_TABELA} t JOIN cartao.conta c ON c.account_id = t.account_id "
         "WHERE t.categoria IS NOT NULL "
         "GROUP BY t.categoria;"
     )

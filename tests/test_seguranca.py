@@ -86,9 +86,11 @@ def test_editar_nao_da_permissao_de_conferir(monkeypatch):
 def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
     class Cursor:
         def execute(self, *args, **kwargs):
-            pass
+            self.sql = args[0] if args else ""
 
         def fetchone(self):
+            if "COUNT(*), COALESCE(SUM(valor_brl),0)" in getattr(self, "sql", ""):
+                return (0, 0, 0)
             return (False, None, False, "Groceries", None, None)
 
         def fetchall(self):

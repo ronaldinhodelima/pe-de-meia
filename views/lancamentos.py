@@ -10,10 +10,13 @@ from flask import Blueprint, request, session, jsonify, render_template
 from core import (
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
+    CATEGORIA_PT,
     CATEGORIA_PT_DB,
     CONTA_MANUAL_ID,
     DATA_LOCAL_SQL,
     DUPLICADA_OBS_PADRAO,
+    FINANCEIRO_DIM_TABELA,
+    FINANCEIRO_TABELA,
     JOIN_NATUREZA,
     NATUREZAS,
     NATUREZA_SQL,
@@ -57,6 +60,67 @@ def _valor_manual(valor, direcao):
         raise ValueError("valor invalido")
     numero = numero.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return numero if direcao == "entrada" else -numero
+
+
+def _normalizar_rateios(valor_pai, partes):
+    """Valida um rateio completo e devolve valores com o sinal do lancamento."""
+    try:
+        total_pai = Decimal(str(valor_pai)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError("Valor original inválido.") from exc
+    if len(partes or []) < 2:
+        raise ValueError("O rateio precisa ter pelo menos duas partes.")
+    if len(partes) > 20:
+        raise ValueError("Use no máximo 20 partes por lançamento.")
+    sinal = Decimal("-1") if total_pai < 0 else Decimal("1")
+    normalizadas = []
+    soma = Decimal("0.00")
+    for indice, parte in enumerate(partes):
+        try:
+            valor = Decimal(str(parte.get("valor") or "0").replace(",", "."))
+        except (InvalidOperation, AttributeError) as exc:
+            raise ValueError(f"Valor inválido na parte {indice + 1}.") from exc
+        if not valor.is_finite() or valor <= 0:
+            raise ValueError(f"Informe um valor positivo na parte {indice + 1}.")
+        valor = valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        categoria = (parte.get("categoria") or "").strip()
+        if not categoria:
+            raise ValueError(f"Escolha a categoria da parte {indice + 1}.")
+        soma += valor
+        normalizadas.append({
+            "ordem": indice,
+            "valor_brl": valor * sinal,
+            "categoria": categoria,
+            "observacao": (parte.get("observacao") or "").strip()[:500],
+            "dimensoes": parte.get("dimensoes") or {},
+        })
+    esperado = abs(total_pai)
+    if soma != esperado:
+        diferenca = esperado - soma
+        raise ValueError(
+            f"O rateio soma R$ {soma:.2f}, mas o lançamento é R$ {esperado:.2f}. "
+            f"Diferença: R$ {diferenca:.2f}."
+        )
+    return normalizadas
+
+
+def _estado_rateios(cur, transacao_id):
+    cur.execute(
+        "SELECT r.id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
+        "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
+        "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
+        "WHERE r.transacao_id=%s ORDER BY r.ordem, r.id, rd.dimensao_id;",
+        (transacao_id,),
+    )
+    partes = {}
+    for row in cur.fetchall():
+        item = partes.setdefault(row[0], {
+            "id": row[0], "ordem": row[1], "valor": float(abs(row[2])),
+            "categoria": row[3], "observacao": row[4] or "", "dimensoes": {},
+        })
+        if row[5] is not None:
+            item["dimensoes"][str(row[5])] = row[6]
+    return list(partes.values())
 
 
 @bp.route("/")
@@ -115,7 +179,7 @@ def index():
     for r in cur.fetchall():
         ids_suspeitos.update(r["ids"] or [])
 
-    cur.execute("SELECT DISTINCT categoria FROM cartao.transacao WHERE categoria IS NOT NULL;")
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt(c)))
 
@@ -158,13 +222,18 @@ def index():
     # gasto real = so o que tem natureza de despesa (fatura, transferencia,
     # investimento e compra de bem nao sao gasto - ver NATUREZAS)
     cur.execute(
-        "SELECT COUNT(*) total, SUM(CASE WHEN t.conferida THEN 1 ELSE 0 END) conferidas, "
-        f"SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
-        f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
-        f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
+        "SELECT COUNT(*) total, SUM(CASE WHEN t.conferida THEN 1 ELSE 0 END) conferidas "
+        "FROM cartao.transacao t WHERE " + " AND ".join(where_resumo) + ";",
         params_resumo,
     )
-    resumo = cur.fetchone()
+    resumo = dict(cur.fetchone())
+    cur.execute(
+        f"SELECT SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
+        f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
+        params_resumo,
+    )
+    resumo.update(dict(cur.fetchone()))
 
     where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
                  "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
@@ -174,7 +243,7 @@ def index():
         params_cat.append(tuple(origem_sel))
     cur.execute(
         f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
-        f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where_cat) +
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_cat) +
         " GROUP BY t.categoria ORDER BY total DESC LIMIT 8;",
         params_cat,
     )
@@ -200,6 +269,27 @@ def index():
         )
         for m in cur.fetchall():
             mapa_dim_transacao[(str(m["transacao_id"]), m["dimensao_id"])] = m["valor_id"]
+
+    rateios_por_transacao = {}
+    if ids_visiveis:
+        cur.execute(
+            "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
+            "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
+            "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
+            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
+            (tuple(ids_visiveis),),
+        )
+        rateios_por_id = {}
+        for rr in cur.fetchall():
+            item = rateios_por_id.setdefault(rr["id"], {
+                "id": rr["id"], "transacao_id": str(rr["transacao_id"]),
+                "ordem": rr["ordem"], "valor_brl": rr["valor_brl"],
+                "categoria": rr["categoria"], "observacao": rr["observacao"] or "", "dims": {},
+            })
+            if rr["dimensao_id"] is not None:
+                item["dims"][rr["dimensao_id"]] = rr["valor_id"]
+        for item in rateios_por_id.values():
+            rateios_por_transacao.setdefault(item["transacao_id"], []).append(item)
 
     cur.close()
     conn.close()
@@ -261,6 +351,31 @@ def index():
             valor_sort = r["valor"]
 
         dims_sel = {d["id"]: mapa_dim_transacao.get((str(rid), d["id"])) for d in dimensoes}
+        rateios_ui = []
+        for parte in rateios_por_transacao.get(str(rid), []):
+            dims_parte = {d["id"]: parte["dims"].get(d["id"]) for d in dimensoes}
+            valor_parte = parte["valor_brl"]
+            if eh_nao_credito:
+                sinal_parte = "-" if valor_parte < 0 else "+"
+                cor_parte = "color:#c23c34" if valor_parte < 0 else "color:#1f8a53"
+                valor_parte_fmt = f'{sinal_parte} R$ {abs(valor_parte):,.2f}'
+            else:
+                cor_parte = ""
+                valor_parte_fmt = f'R$ {abs(valor_parte):,.2f}'
+            rateios_ui.append({
+                "id": parte["id"],
+                "valor": float(abs(valor_parte)),
+                "valor_fmt": valor_parte_fmt,
+                "cor_valor": cor_parte,
+                "categoria": parte["categoria"],
+                "categoria_nome": cat_pt_puro(parte["categoria"]),
+                "observacao": parte["observacao"],
+                "dims": dims_parte,
+                "dims_rotulos": {
+                    d["id"]: nomes_por_dim[d["id"]].get(dims_parte[d["id"]], "(nao definido)")
+                    for d in dimensoes
+                },
+            })
         selo, origem_texto = origem_partes(r["account_id"], r["numero_cartao_final"])
         origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
 
@@ -292,6 +407,7 @@ def index():
             "conferida": r["conferida"],
             "duplicada": r["duplicada"],
             "suspeita_duplicidade": str(rid) in ids_suspeitos,
+            "rateios": rateios_ui,
         })
 
         detalhes = {
@@ -312,6 +428,8 @@ def index():
             "_manual": bool(eh_manual),
             "_natureza": r["natureza"] or "",
             "_natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
+            "_valor_rateio": float(abs(r["valor"] or 0)),
+            "_rateios": rateios_ui,
         }
         for d in dimensoes:
             detalhes[d["nome"]] = nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
@@ -321,6 +439,7 @@ def index():
     receita_mes = resumo["receita_mes"] or 0
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
     config_lancamentos = {
+        "pode_editar": pode_editar,
         "duplicada_obs": DUPLICADA_OBS_PADRAO,
         "dimensoes_cadastro_rapido": {
             str(d["id"]): d["nome"] for d in dimensoes
@@ -334,6 +453,7 @@ def index():
             ]
             for d in dimensoes
         },
+        "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
     }
 
     return render_template(
@@ -554,6 +674,92 @@ def criar_valor_dimensao_rapido(dimensao_id):
     return jsonify({"ok": True, "id": valor["id"], "nome": valor["nome"], "criado": criado})
 
 
+@bp.route("/api/transacao/<transacao_id>/rateios", methods=["POST", "DELETE"])
+@requer("lancamentos_editar")
+def rateios_transacao(transacao_id):
+    """Cria, substitui ou remove o rateio interno de um lancamento bancario."""
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT COALESCE(valor_brl,valor_original), conferida FROM cartao.transacao "
+            "WHERE transacao_id=%s FOR UPDATE;",
+            (transacao_id,),
+        )
+        transacao = cur.fetchone()
+        if not transacao:
+            return jsonify({"ok": False, "erro": "Lançamento não encontrado."}), 404
+        if transacao[1]:
+            return jsonify({
+                "ok": False,
+                "erro": "Desmarque o OK antes de alterar ou remover o rateio.",
+            }), 409
+        antes = _estado_rateios(cur, transacao_id)
+        if request.method == "DELETE":
+            cur.execute("DELETE FROM cartao.transacao_rateio WHERE transacao_id=%s;", (transacao_id,))
+            conn.commit()
+            registrar_mudanca_auditoria("Rateio", antes, None)
+            return jsonify({"ok": True, "rateios": []})
+
+        data = request.get_json(force=True)
+        try:
+            partes = _normalizar_rateios(transacao[0], data.get("partes") or [])
+        except ValueError as exc:
+            return jsonify({"ok": False, "erro": str(exc)}), 400
+
+        categorias_validas = (
+            set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB) | set(CATEGORIA_PT)
+        ) - CATEGORIAS_OCULTAS
+        for parte in partes:
+            if parte["categoria"] not in categorias_validas:
+                return jsonify({"ok": False, "erro": "Categoria inválida no rateio."}), 400
+            dimensoes_ok = {}
+            for dim_id_raw, valor_id_raw in parte["dimensoes"].items():
+                try:
+                    dim_id = int(dim_id_raw)
+                    valor_id = int(valor_id_raw) if valor_id_raw not in (None, "") else None
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "erro": "Dimensão inválida no rateio."}), 400
+                if valor_id is not None:
+                    cur.execute(
+                        "SELECT 1 FROM cartao.dimensao_valor WHERE id=%s AND dimensao_id=%s;",
+                        (valor_id, dim_id),
+                    )
+                    if not cur.fetchone():
+                        return jsonify({"ok": False, "erro": "Valor de dimensão inválido no rateio."}), 400
+                dimensoes_ok[dim_id] = valor_id
+            parte["dimensoes"] = dimensoes_ok
+
+        cur.execute("DELETE FROM cartao.transacao_rateio WHERE transacao_id=%s;", (transacao_id,))
+        for parte in partes:
+            cur.execute(
+                "INSERT INTO cartao.transacao_rateio "
+                "(transacao_id,ordem,valor_brl,categoria,observacao) "
+                "VALUES (%s,%s,%s,%s,%s) RETURNING id;",
+                (transacao_id, parte["ordem"], parte["valor_brl"],
+                 parte["categoria"], parte["observacao"]),
+            )
+            rateio_id = cur.fetchone()[0]
+            for dim_id, valor_id in parte["dimensoes"].items():
+                if valor_id is not None:
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_rateio_dimensao "
+                        "(rateio_id,dimensao_id,valor_id) VALUES (%s,%s,%s);",
+                        (rateio_id, dim_id, valor_id),
+                    )
+        conn.commit()
+        depois = _estado_rateios(cur, transacao_id)
+        registrar_mudanca_auditoria("Rateio", antes or None, depois)
+        return jsonify({"ok": True, "rateios": depois})
+    except Exception as exc:
+        conn.rollback()
+        print("Aviso: falha ao salvar rateio:", exc)
+        return jsonify({"ok": False, "erro": "Não foi possível salvar o rateio."}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/api/transacao/<transacao_id>", methods=["POST"])
 @requer("lancamentos_editar")
 def update_transacao(transacao_id):
@@ -565,7 +771,7 @@ def update_transacao(transacao_id):
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
         "SELECT conferida, conferida_por, COALESCE(duplicada, false), "
-        "categoria, observacao, natureza "
+        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original) "
         "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
@@ -664,20 +870,42 @@ def update_transacao(transacao_id):
             (transacao_id, dim_id, valor_id_int),
         )
 
-    # trava: nao permite confirmar (conferida=true) sem preencher as dimensoes obrigatorias
+    # Trava de confirmacao: lancamento simples valida suas dimensoes; lancamento
+    # rateado valida cada parte e tambem exige que a soma feche com o banco.
     cur.execute(
-        "SELECT d.id FROM cartao.dimensao d "
-        "LEFT JOIN cartao.transacao_dimensao td ON td.dimensao_id = d.id AND td.transacao_id = %s "
-        "WHERE d.obrigatoria = true AND (td.valor_id IS NULL);",
+        "SELECT COUNT(*), COALESCE(SUM(valor_brl),0), "
+        "COUNT(*) FILTER (WHERE categoria IS NULL OR categoria='') "
+        "FROM cartao.transacao_rateio WHERE transacao_id=%s;",
         (transacao_id,),
     )
-    faltando = [r[0] for r in cur.fetchall()]
+    qtd_rateios, soma_rateios, rateios_sem_categoria = cur.fetchone()
+    rateio_invalido = False
+    if qtd_rateios:
+        cur.execute(
+            "SELECT r.id, d.id FROM cartao.transacao_rateio r CROSS JOIN cartao.dimensao d "
+            "LEFT JOIN cartao.transacao_rateio_dimensao rd "
+            "ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
+            "WHERE r.transacao_id=%s AND d.obrigatoria=true AND rd.valor_id IS NULL;",
+            (transacao_id,),
+        )
+        faltando = sorted({r[1] for r in cur.fetchall()})
+        esperado = Decimal(str(transacao[6] or 0)).quantize(Decimal("0.01"))
+        soma_rateios = Decimal(str(soma_rateios or 0)).quantize(Decimal("0.01"))
+        rateio_invalido = qtd_rateios < 2 or soma_rateios != esperado or bool(rateios_sem_categoria)
+    else:
+        cur.execute(
+            "SELECT d.id FROM cartao.dimensao d "
+            "LEFT JOIN cartao.transacao_dimensao td ON td.dimensao_id = d.id AND td.transacao_id = %s "
+            "WHERE d.obrigatoria = true AND (td.valor_id IS NULL);",
+            (transacao_id,),
+        )
+        faltando = [r[0] for r in cur.fetchall()]
     conferida_atual = bool(transacao[0])
     alterando_conferencia = "conferida" in data
     conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
     # Campos obrigatorios bloqueiam somente uma NOVA marcacao de OK. Uma edicao
     # de categoria/dimensao/observacao jamais pode desmarcar um OK ja existente.
-    bloqueada = bool(faltando) and alterando_conferencia and conferida_solicitada
+    bloqueada = bool(faltando or rateio_invalido) and alterando_conferencia and conferida_solicitada
     conferida_final = conferida_solicitada and not bloqueada if alterando_conferencia else conferida_atual
 
     # natureza especifica deste lancamento ("" = volta a seguir a natureza da categoria)
@@ -748,6 +976,7 @@ def update_transacao(transacao_id):
         "ok": True,
         "bloqueada": bloqueada,
         "faltando": faltando,
+        "rateio_invalido": rateio_invalido,
         # A tela sincroniza estes dois estados depois de QUALQUER edicao. Assim
         # nunca mostra OK/duplicidade diferentes do que esta salvo no banco.
         "conferida": conferida_final,

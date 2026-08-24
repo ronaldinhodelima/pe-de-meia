@@ -130,6 +130,7 @@ def test_todas_as_rotas_continuam_registradas():
     esperadas = {
         "/", "/login", "/logout", "/health", "/favicon.ico",
         "/api/sync-status", "/api/sync-agora", "/api/transacao/<transacao_id>",
+        "/api/transacao/<transacao_id>/rateios",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
         "/api/categoria-lancamentos",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",

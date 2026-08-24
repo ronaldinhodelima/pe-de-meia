@@ -322,6 +322,14 @@ JOIN_NATUREZA = (
 )
 
 
+# Fonte financeira usada por DRE e relatorios. Quando um lancamento possui
+# rateio, a view devolve as partes no lugar da linha original; sem rateio, ela
+# devolve o proprio lancamento. Assim o total bancario nunca e contado duas
+# vezes e cada parte pode ter categoria e dimensoes independentes.
+FINANCEIRO_TABELA = "cartao.lancamento_financeiro"
+FINANCEIRO_DIM_TABELA = "cartao.lancamento_financeiro_dimensao"
+
+
 VAL_DESPESA = (
     "(CASE WHEN c.tipo = 'CREDIT' THEN COALESCE(t.valor_brl, t.valor_original) "
     "ELSE -COALESCE(t.valor_brl, t.valor_original) END)"
@@ -1053,6 +1061,49 @@ def migrate():
                 "valor_id integer REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL, "
                 "PRIMARY KEY (transacao_id, dimensao_id));"
             )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.transacao_rateio ("
+                "id bigserial PRIMARY KEY, "
+                "transacao_id uuid NOT NULL REFERENCES cartao.transacao(transacao_id) ON DELETE CASCADE, "
+                "ordem integer NOT NULL DEFAULT 0, valor_brl numeric(14,2) NOT NULL, "
+                "categoria text NOT NULL, observacao text, "
+                "criado_em timestamptz NOT NULL DEFAULT now(), atualizado_em timestamptz NOT NULL DEFAULT now(), "
+                "UNIQUE(transacao_id, ordem), CHECK (valor_brl <> 0));"
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.transacao_rateio_dimensao ("
+                "rateio_id bigint NOT NULL REFERENCES cartao.transacao_rateio(id) ON DELETE CASCADE, "
+                "dimensao_id integer NOT NULL REFERENCES cartao.dimensao(id) ON DELETE CASCADE, "
+                "valor_id integer REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL, "
+                "PRIMARY KEY (rateio_id, dimensao_id));"
+            )
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS "
+                "SELECT t.transacao_id::text AS linha_id, NULL::bigint AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+                "t.valor_brl, t.valor_original, t.moeda_original, t.status, t.tipo, "
+                "t.numero_cartao_final, t.conferida, COALESCE(t.duplicada,false) AS duplicada, "
+                "t.natureza, t.observacao "
+                "FROM cartao.transacao t WHERE NOT EXISTS ("
+                "SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id=t.transacao_id) "
+                "UNION ALL "
+                "SELECT t.transacao_id::text || ':' || r.id::text AS linha_id, r.id AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, r.categoria, "
+                "r.valor_brl, r.valor_brl AS valor_original, 'BRL'::text AS moeda_original, "
+                "t.status, t.tipo, t.numero_cartao_final, t.conferida, "
+                "COALESCE(t.duplicada,false) AS duplicada, NULL::text AS natureza, r.observacao "
+                "FROM cartao.transacao t JOIN cartao.transacao_rateio r ON r.transacao_id=t.transacao_id;"
+            )
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro_dimensao AS "
+                "SELECT td.transacao_id AS linha_id, td.dimensao_id, td.valor_id "
+                "FROM cartao.transacao_dimensao td "
+                "WHERE NOT EXISTS (SELECT 1 FROM cartao.transacao_rateio r "
+                "WHERE r.transacao_id::text=td.transacao_id) "
+                "UNION ALL "
+                "SELECT r.transacao_id::text || ':' || r.id::text AS linha_id, rd.dimensao_id, rd.valor_id "
+                "FROM cartao.transacao_rateio r JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id;"
+            )
             # Bancos antigos podem ter o nome anterior. Em banco novo, esta
             # tabela acabou de ser criada; por isso a renomeacao precisa ficar
             # depois do CREATE, e nao no inicio da migracao.
@@ -1686,7 +1737,7 @@ def _montar_filtro_relatorio(dimensoes):
         params.append(fim_local + timedelta(days=1))
     for dim_id, vals in dim_sel.items():
         where.append(
-            "EXISTS (SELECT 1 FROM cartao.transacao_dimensao td WHERE td.transacao_id = t.transacao_id::text "
+            f"EXISTS (SELECT 1 FROM {FINANCEIRO_DIM_TABELA} td WHERE td.linha_id = t.linha_id "
             "AND td.dimensao_id = %s AND td.valor_id IN %s)"
         )
         params.append(dim_id)
@@ -1711,7 +1762,7 @@ def _montar_filtro_relatorio(dimensoes):
         # na condicao, entrada invalida cai no else e vira o agrupamento padrao.
         dim_id_grp = int(agrupar.split("_", 1)[1])
         join_extra = (
-            f"LEFT JOIN cartao.transacao_dimensao tdg ON tdg.transacao_id = t.transacao_id::text "
+            f"LEFT JOIN {FINANCEIRO_DIM_TABELA} tdg ON tdg.linha_id = t.linha_id "
             f"AND tdg.dimensao_id = {dim_id_grp} LEFT JOIN cartao.dimensao_valor dvg ON dvg.id = tdg.valor_id"
         )
         group_expr = "COALESCE(dvg.nome, '(nao definido)')"
@@ -1736,6 +1787,7 @@ def _montar_filtro_relatorio(dimensoes):
         "params": params,
         "join_extra": join_extra,
         "join_natureza": JOIN_NATUREZA,
+        "tabela": FINANCEIRO_TABELA,
         "group_expr": group_expr,
         "soma_expr": soma_expr,
     }
@@ -1770,7 +1822,7 @@ def levantar_pendencias(cur):
     sem_categoria_db = cur.fetchall()
 
     cur.execute(
-        "SELECT DISTINCT t.categoria FROM cartao.transacao t "
+        f"SELECT DISTINCT t.categoria FROM {FINANCEIRO_TABELA} t "
         "LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
         "WHERE t.categoria IS NOT NULL AND n.categoria IS NULL;"
     )
@@ -1780,7 +1832,7 @@ def levantar_pendencias(cur):
     )
 
     cur.execute(
-        "SELECT DISTINCT t.categoria FROM cartao.transacao t "
+        f"SELECT DISTINCT t.categoria FROM {FINANCEIRO_TABELA} t "
         "JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
         "LEFT JOIN cartao.categoria_subgrupo cs ON cs.categoria = t.categoria "
         "WHERE n.natureza = 'despesa' AND cs.subgrupo_id IS NULL;"

@@ -74,7 +74,10 @@
     {% for r in linhas %}
       <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}">
         <td class="cel-data" data-col="data" data-tip="{{ r.data_full }}" data-sort="{{ r.data_sort }}">{{ r.data_dia }}<br>{{ r.data_hora }}</td>
-        <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">{{ r.descricao }}</td>
+        <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
+          {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          {{ r.descricao }}
+        </td>
         {# o selo e HTML gerado pelo app; o texto vem do apelido do cartao, digitado
            pelo usuario, entao vai escapado #}
         <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}">{{ r.origem_selo|safe }}<span>{{ r.origem_texto }}</span></td>
@@ -99,6 +102,20 @@
           <input class="dup-check" type="checkbox" {{ 'checked' if r.duplicada }} hidden></td>
         <td class="cel-status" data-col="status"><span class="status" id="status-{{ r.id }}">ok</span></td>
       </tr>
+      {% for parte in r.rateios %}
+      <tr class="rateio-row" data-rateio-parent="{{ r.id }}" hidden>
+        <td class="cel-data" data-col="data"></td>
+        <td class="cel-desc" data-col="desc"><span class="rateio-seta">↳</span> Parte {{ loop.index }}</td>
+        <td class="cel-origem" data-col="origem">Rateio interno</td>
+        <td class="cel-dim" data-col="categoria">{{ parte.categoria_nome }}</td>
+        {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}">{{ parte.dims_rotulos.get(d.id) }}</td>{% endfor %}
+        <td class="valor cel-valor" data-col="valor" style="{{ parte.cor_valor }}">{{ parte.valor_fmt }}</td>
+        <td class="cel-obs" data-col="obs">{{ parte.observacao or '-' }}</td>
+        {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
+        <td class="cel-check" data-col="check"></td>
+        <td class="cel-status" data-col="status"></td>
+      </tr>
+      {% endfor %}
     {% else %}
       <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
     {% endfor %}
@@ -112,6 +129,7 @@
     <span class="close" onclick="fecharModal()">&times;</span>
     <h3>Detalhes do lançamento</h3>
     <div id="modalBody"></div>
+    <div id="modalRateioBox" class="modal-rateio"></div>
     {# Depois de Parcela, os campos seguem a mesma ordem da tabela de conferencia:
        Categoria, dimensoes, Observacao e OK. #}
     <div class="row">

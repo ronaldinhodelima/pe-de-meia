@@ -260,6 +260,7 @@ window.addEventListener('popstate', function () {
 window.detalhes = lerJson('script[data-detalhes]', {});
 let idAtualModal = null;
 let acaoConfirmacaoModal = null;
+let rateioRascunhoModal = null;
 
 function detalheAtualModal() {
   return idAtualModal ? (window.detalhes[idAtualModal] || {}) : {};
@@ -306,6 +307,8 @@ function verDetalhes(id) {
   const selCat = document.getElementById('modalCategoria');
   const catLinha = trAtual ? trAtual.querySelector('.cat-select') : null;
   if (selCat && catLinha) selCat.value = catLinha.value;
+  const emRateio = !!(d._rateios && d._rateios.length);
+  if (selCat) selCat.disabled = !window.configLancamentos.pode_editar || emRateio;
   document.querySelectorAll('.modal-dim-select').forEach(selModal => {
     const selLinha = trAtual && trAtual.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
     const opcao = document.createElement('option');
@@ -315,10 +318,136 @@ function verDetalhes(id) {
     selModal.replaceChildren(opcao);
     selModal.value = opcao.value;
     delete selModal.dataset.hidratado;
+    selModal.disabled = !window.configLancamentos.pode_editar || emRateio;
   });
   cancelarConfirmacaoModal();
   sincronizarControlesModal();
+  rateioRascunhoModal = null;
+  renderizarRateioModal();
   document.getElementById('modalBg').classList.add('show');
+}
+
+function opcoesRateio(lista, atual, vazio) {
+  let html = vazio ? '<option value="">' + escHtml(vazio) + '</option>' : '';
+  (lista || []).forEach(item => {
+    const valor = String(item.valor !== undefined ? item.valor : item.id);
+    const rotulo = item.rotulo !== undefined ? item.rotulo : item.nome;
+    html += '<option value="' + escHtml(valor) + '"' + (String(atual || '') === valor ? ' selected' : '') + '>' + escHtml(rotulo) + '</option>';
+  });
+  return html;
+}
+
+function iniciarRateioModal() {
+  const d = detalheAtualModal();
+  const total = Math.round(Number(d._valor_rateio || 0) * 100);
+  const primeira = Math.floor(total / 2);
+  const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+  const categoria = tr && tr.querySelector('.cat-select') ? tr.querySelector('.cat-select').value : '';
+  const dimensoes = {};
+  if (tr) tr.querySelectorAll('.dim-select').forEach(s => { dimensoes[s.dataset.dim] = s.value || ''; });
+  rateioRascunhoModal = [
+    {valor: primeira / 100, categoria: categoria, observacao: '', dims: {...dimensoes}},
+    {valor: (total - primeira) / 100, categoria: categoria, observacao: '', dims: {...dimensoes}},
+  ];
+  renderizarRateioModal();
+}
+
+function adicionarParteRateio() {
+  rateioRascunhoModal.push({valor: 0, categoria: '', observacao: '', dims: {}});
+  renderizarRateioModal();
+}
+
+function removerParteRateio(indice) {
+  if (rateioRascunhoModal.length <= 2) return;
+  rateioRascunhoModal.splice(indice, 1);
+  renderizarRateioModal();
+}
+
+function lerRateioModal() {
+  return Array.from(document.querySelectorAll('#modalRateioPartes .modal-rateio-parte')).map(parte => {
+    const dimensoes = {};
+    parte.querySelectorAll('.rateio-dim').forEach(s => { dimensoes[s.dataset.dim] = s.value || null; });
+    return {
+      valor: parte.querySelector('.rateio-valor').value,
+      categoria: parte.querySelector('.rateio-categoria').value,
+      observacao: parte.querySelector('.rateio-observacao').value,
+      dimensoes: dimensoes,
+    };
+  });
+}
+
+function atualizarFechamentoRateio() {
+  const d = detalheAtualModal();
+  const total = Number(d._valor_rateio || 0);
+  const soma = Array.from(document.querySelectorAll('.rateio-valor')).reduce((n, i) => n + Number(i.value || 0), 0);
+  const el = document.getElementById('rateioFechamento');
+  if (!el) return;
+  const fecha = Math.round(soma * 100) === Math.round(total * 100);
+  el.textContent = 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
+  el.classList.toggle('invalido', !fecha);
+}
+
+function renderizarRateioModal() {
+  const box = document.getElementById('modalRateioBox');
+  const d = detalheAtualModal();
+  if (!box || !idAtualModal) return;
+  const existentes = d._rateios || [];
+  if (rateioRascunhoModal === null && existentes.length) {
+    rateioRascunhoModal = existentes.map(p => ({
+      valor: p.valor, categoria: p.categoria, observacao: p.observacao || '', dims: {...(p.dims || {})},
+    }));
+  }
+  if (rateioRascunhoModal === null) {
+    box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong>' +
+      '<button type="button" class="ver-btn" onclick="iniciarRateioModal()">Dividir em 2 partes</button></div>' +
+      '<div class="rateio-fechamento">Use quando um único débito pertence a mais de uma classificação.</div>';
+    return;
+  }
+  const categorias = (window.configLancamentos.categorias || []).map(c => ({valor:c.chave,rotulo:c.nome}));
+  let partesHtml = '';
+  rateioRascunhoModal.forEach((p, indice) => {
+    let dimsHtml = '';
+    Object.entries(window.configLancamentos.dimensoes || {}).forEach(([dimId, valores]) => {
+      const nome = (window.configLancamentos.dimensoes_nomes || {})[dimId] || 'Dimensão';
+      dimsHtml += '<label>' + escHtml(nome) + '</label><select class="rateio-dim" data-dim="' + escHtml(dimId) + '">' +
+        opcoesRateio(valores, (p.dims || {})[dimId], '(nao definido)') + '</select>';
+    });
+    partesHtml += '<div class="modal-rateio-parte" data-indice="' + indice + '">' +
+      '<label>Parte ' + (indice + 1) + '</label><strong>' + (rateioRascunhoModal.length > 2 ? '<button type="button" class="ver-btn" onclick="removerParteRateio(' + indice + ')">Remover</button>' : '') + '</strong>' +
+      '<label>Valor (R$)</label><input class="rateio-valor" type="number" min="0.01" step="0.01" value="' + Number(p.valor || 0).toFixed(2) + '" oninput="atualizarFechamentoRateio()">' +
+      '<label>Categoria</label><select class="rateio-categoria">' + opcoesRateio(categorias, p.categoria, '(sem categoria)') + '</select>' +
+      dimsHtml +
+      '<label>Observação</label><input class="rateio-observacao" maxlength="500" value="' + escHtml(p.observacao || '') + '">' +
+      '</div>';
+  });
+  box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong><span id="rateioFechamento" class="rateio-fechamento"></span></div>' +
+    '<div id="modalRateioPartes">' + partesHtml + '</div>' +
+    '<div id="rateioStatus" class="rateio-fechamento"></div>' +
+    '<div class="modal-rateio-acoes"><button type="button" class="ver-btn" onclick="adicionarParteRateio()">+ Parte</button>' +
+    (existentes.length ? '<button type="button" class="ver-btn" onclick="excluirRateioModal()">Desfazer rateio</button>' : '') +
+    '<button type="button" class="ver-btn" onclick="salvarRateioModal()">Salvar rateio</button></div>';
+  atualizarFechamentoRateio();
+}
+
+function salvarRateioModal() {
+  if (!idAtualModal) return;
+  const status = document.getElementById('rateioStatus');
+  status.textContent = 'Salvando...';
+  fetch('/api/transacao/' + encodeURIComponent(idAtualModal) + '/rateios', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({partes:lerRateioModal()})
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar.');
+    guardarPosicaoAtual(); window.location.reload();
+  }).catch(e => { status.textContent = e.message || 'Não foi possível salvar.'; });
+}
+
+function excluirRateioModal() {
+  if (!idAtualModal || !confirm('Desfazer o rateio e voltar ao lançamento simples?')) return;
+  fetch('/api/transacao/' + encodeURIComponent(idAtualModal) + '/rateios', {method:'DELETE'})
+    .then(r => r.json()).then(res => {
+      if (!res.ok) throw new Error(res.erro || 'Não foi possível desfazer.');
+      guardarPosicaoAtual(); window.location.reload();
+    }).catch(e => alert(e.message || 'Não foi possível desfazer.'));
 }
 
 function abrirConfirmacaoModal(acao) {
@@ -435,6 +564,7 @@ function fecharModal() {
   document.getElementById('modalBg').classList.remove('show');
   idAtualModal = null;
   acaoConfirmacaoModal = null;
+  rateioRascunhoModal = null;
 }
 // o ESC e tratado no tabelas.js, que so tira a classe .show - aqui a tela limpa
 // o proprio estado
@@ -464,6 +594,15 @@ function idDaLinha(el) {
 }
 
 document.addEventListener('click', function (e) {
+  const rateio = e.target.closest('.rateio-toggle');
+  if (rateio) {
+    const id = rateio.dataset.rateioId;
+    const abrir = rateio.getAttribute('aria-expanded') !== 'true';
+    document.querySelectorAll('tr[data-rateio-parent="' + id + '"]').forEach(linha => { linha.hidden = !abrir; });
+    rateio.textContent = abrir ? '−' : '+';
+    rateio.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    return;
+  }
   const regra = e.target.closest('.regra-btn');
   if (regra) {
     const id = idDaLinha(regra);
@@ -563,7 +702,9 @@ function salvar(id, el, opcoes) {
           const sel = tr.querySelector('.dim-select[data-dim="' + dimId + '"]');
           if (sel) { sel.style.borderColor = '#c23c34'; sel.style.background = '#fbeceb'; }
         });
-        alert('Nao foi possivel confirmar: preencha os campos obrigatorios destacados em vermelho.');
+        alert(d.rateio_invalido
+          ? 'Não foi possível confirmar: revise o rateio e faça as partes fecharem exatamente com o valor do lançamento.'
+          : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
       const s = document.getElementById('status-' + id);
       if (s) {

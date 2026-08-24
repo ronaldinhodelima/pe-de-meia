@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from core import data_hora_local
 from views.relatorios import _montar_historico_investimentos
-from views.lancamentos import _valor_manual
+from views.lancamentos import _valor_manual, _normalizar_rateios
 from views.cadastros import _filtro_valor, _condicao_valor_sql, _categorias_para_regras
 
 
@@ -101,3 +101,33 @@ def test_valor_manual_respeita_sinal_de_conta_bancaria():
 
 def test_valor_manual_arredonda_centavos_sem_float():
     assert _valor_manual("10.005", "entrada") == Decimal("10.01")
+
+
+def test_rateio_fecha_exatamente_e_preserva_sinal_do_lancamento():
+    partes = _normalizar_rateios(-705.28, [
+        {"valor": "505,46", "categoria": "Insurance", "dimensoes": {"1": "1"}},
+        {"valor": "199.82", "categoria": "Insurance", "dimensoes": {"1": "2"}},
+    ])
+    assert [p["valor_brl"] for p in partes] == [Decimal("-505.46"), Decimal("-199.82")]
+    assert sum(p["valor_brl"] for p in partes) == Decimal("-705.28")
+
+
+def test_rateio_recusa_total_diferente_do_banco():
+    try:
+        _normalizar_rateios(-705.28, [
+            {"valor": "500", "categoria": "Insurance"},
+            {"valor": "200", "categoria": "Insurance"},
+        ])
+    except ValueError as exc:
+        assert "Diferença" in str(exc)
+    else:
+        raise AssertionError("rateio que nao fecha foi aceito")
+
+
+def test_relatorios_usam_partes_no_lugar_do_lancamento_pai():
+    raiz = Path(__file__).parent.parent
+    core = (raiz / "core.py").read_text(encoding="utf-8")
+    relatorios = (raiz / "views" / "relatorios.py").read_text(encoding="utf-8")
+    assert "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS" in core
+    assert 'base = f"FROM {FINANCEIRO_TABELA} t' in relatorios
+    assert "FROM {cfg['tabela']} t" in relatorios
