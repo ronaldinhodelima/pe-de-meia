@@ -1177,6 +1177,21 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (10);")
             conn.commit()
 
+        if versao_atual < 11:
+            # A escolha humana de categoria tem prioridade sobre regras criadas
+            # depois. Lançamentos já conferidos também ficam explicitamente
+            # protegidos; os demais continuam elegíveis às regras existentes.
+            cur.execute(
+                "ALTER TABLE cartao.transacao ADD COLUMN IF NOT EXISTS "
+                "categoria_manual boolean NOT NULL DEFAULT false;"
+            )
+            cur.execute(
+                "UPDATE cartao.transacao SET categoria_manual = true "
+                "WHERE conferida = true;"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (11);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1185,7 +1200,7 @@ def migrate():
 
 def aplicar_regras(cur):
     """Aplica regras de classificacao automatica a lancamentos pendentes ainda nao tocados por nenhuma regra.
-    So mexe em transacoes com conferida=false, nunca sobrescreve algo que o usuario ja confirmou."""
+    Nunca sobrescreve categoria escolhida pelo usuario nem transacao confirmada."""
     # Uma regra antiga pode apontar para uma dimensao/valor removido. Isolamos a
     # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
     # consultas da pagina que chamou esta funcao.
@@ -1198,6 +1213,7 @@ def aplicar_regras(cur):
             "  FROM cartao.transacao t "
             "  JOIN cartao.regra_classificacao r ON t.descricao ILIKE '%%' || r.padrao || '%%' "
             "  WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
+            "    AND COALESCE(t.categoria_manual, false) = false "
             "  ORDER BY t.transacao_id, r.ordem, r.id"
             ") "
             "UPDATE cartao.transacao t SET categoria = m.categoria, regra_aplicada_id = m.regra_id "

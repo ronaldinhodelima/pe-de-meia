@@ -36,6 +36,23 @@ def test_sync_aceita_correcao_de_horario_do_pluggy_no_mesmo_id():
     assert "data_transacao = EXCLUDED.data_transacao" in trecho_update
 
 
+def test_regra_automatica_nao_sobrescreve_categoria_manual():
+    texto = (Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("def aplicar_regras", 1)[1].split("DUPLICADA_OBS_PADRAO", 1)[0]
+
+    assert "COALESCE(t.categoria_manual, false) = false" in trecho
+
+
+def test_edicao_humana_marca_categoria_como_manual():
+    raiz = Path(__file__).parent.parent
+    lancamentos = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    cadastros = (raiz / "views" / "cadastros.py").read_text(encoding="utf-8")
+
+    assert '"categoria_manual = true"' in lancamentos
+    assert '"regra_aplicada_id = NULL"' in lancamentos
+    assert "categoria_manual = true" in cadastros
+
+
 def test_horario_03_utc_da_conta_corrente_aparece_como_meia_noite_local():
     valor = datetime(2026, 8, 19, 3, 0, tzinfo=timezone.utc)
     local = data_hora_local(valor)

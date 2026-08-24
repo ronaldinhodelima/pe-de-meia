@@ -740,7 +740,8 @@ def categorias_view():
                     erro = "Escolha categorias diferentes para mover."
                 else:
                     cur.execute(
-                        "UPDATE cartao.transacao SET categoria = %s WHERE categoria = %s;",
+                        "UPDATE cartao.transacao SET categoria = %s, categoria_manual = true, "
+                        "regra_aplicada_id = NULL WHERE categoria = %s;",
                         (destino, origem),
                     )
                     qtd = cur.rowcount

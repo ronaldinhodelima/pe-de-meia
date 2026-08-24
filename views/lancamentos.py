@@ -384,11 +384,12 @@ def lancamento_manual():
         cur.execute(
             "INSERT INTO cartao.transacao ("
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
-            "valor_brl, data_transacao, categoria, status, tipo, criado_em, atualizado_em, sincronizado_em"
-            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,'POSTED',%s, now(), now(), now());",
+            "valor_brl, data_transacao, categoria, categoria_manual, status, tipo, "
+            "criado_em, atualizado_em, sincronizado_em"
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s, now(), now(), now());",
             (
                 str(uuid.uuid4()), CONTA_MANUAL_ID, descricao, descricao,
-                valor, valor, data_transacao, categoria, tipo,
+                valor, valor, data_transacao, categoria, bool(categoria), tipo,
             ),
         )
         conn.commit()
@@ -593,7 +594,9 @@ def update_transacao(transacao_id):
         sets.append("observacao = %s")
         valores.append(data.get("observacao"))
     if "categoria" in data:
-        sets.append("categoria = %s")
+        # Uma escolha humana, mesmo antes de marcar OK, não pode ser desfeita
+        # por uma regra automática criada posteriormente.
+        sets.extend(["categoria = %s", "categoria_manual = true", "regra_aplicada_id = NULL"])
         valores.append(data.get("categoria"))
     if "natureza" in data:
         sets.append("natureza = %s")
