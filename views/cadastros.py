@@ -405,7 +405,7 @@ def regras_view():
 
     cur.execute(
         "SELECT id, padrao, categoria, ordem, valor_operador, valor_limite "
-        "FROM cartao.regra_classificacao ORDER BY ordem, id;"
+        "FROM cartao.regra_classificacao WHERE COALESCE(ativa,true)=true ORDER BY ordem, id;"
     )
     regras_db = cur.fetchall()
     cur.execute("SELECT regra_id, dimensao_id, valor_id FROM cartao.regra_dimensao_valor;")

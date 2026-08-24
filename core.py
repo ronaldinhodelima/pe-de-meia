@@ -1379,9 +1379,13 @@ def migrate():
             conn.commit()
 
         if versao_atual < 14:
-            # Substitui a regra antiga, sem filtro de valor, pelas duas regras
-            # aprovadas. Sem isso ela (ID menor) ganharia a prioridade e todo
-            # GuilhermeDaSilva futuro iria para a mesma categoria.
+            # Desativa (sem apagar) a regra antiga, sem filtro de valor. Sem
+            # isso ela (ID menor) ganharia a prioridade e todo GuilhermeDaSilva
+            # futuro iria para a mesma categoria. O registro fica recuperável.
+            cur.execute(
+                "ALTER TABLE cartao.regra_classificacao "
+                "ADD COLUMN IF NOT EXISTS ativa boolean NOT NULL DEFAULT true;"
+            )
             cur.execute(
                 "SELECT id FROM cartao.regra_classificacao "
                 "WHERE lower(padrao)=lower('GuilhermeDaSilva') "
@@ -1390,12 +1394,7 @@ def migrate():
             regras_antigas = [r[0] for r in cur.fetchall()]
             if regras_antigas:
                 cur.execute(
-                    "UPDATE cartao.transacao SET regra_aplicada_id=NULL "
-                    "WHERE regra_aplicada_id=ANY(%s);",
-                    (regras_antigas,),
-                )
-                cur.execute(
-                    "DELETE FROM cartao.regra_classificacao WHERE id=ANY(%s);",
+                    "UPDATE cartao.regra_classificacao SET ativa=false WHERE id=ANY(%s);",
                     (regras_antigas,),
                 )
 
@@ -1430,7 +1429,7 @@ def migrate():
             cur.execute(
                 "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
                 "VALUES ('sistema','migracao','Regras GuilhermeDaSilva',"
-                "jsonb_build_object('regras_antigas_removidas',%s,'regras_por_valor',%s));",
+                "jsonb_build_object('regras_antigas_desativadas',%s,'regras_por_valor',%s));",
                 (len(regras_antigas), len(regras_novas)),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (14);")
@@ -1455,7 +1454,8 @@ def aplicar_regras(cur):
             "WITH match AS ("
             "  SELECT DISTINCT ON (t.transacao_id) t.transacao_id, r.id AS regra_id, r.categoria "
             "  FROM cartao.transacao t "
-            "  JOIN cartao.regra_classificacao r ON t.descricao ILIKE '%%' || r.padrao || '%%' "
+            "  JOIN cartao.regra_classificacao r ON COALESCE(r.ativa,true)=true "
+            "   AND t.descricao ILIKE '%%' || r.padrao || '%%' "
             "   AND (r.valor_operador IS NULL OR r.valor_limite IS NULL OR "
             "     CASE r.valor_operador "
             "       WHEN 'lt' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) < r.valor_limite "
