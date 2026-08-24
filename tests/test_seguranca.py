@@ -208,3 +208,48 @@ def test_falha_ao_disparar_sync_retorna_apenas_erro_generico(monkeypatch):
     resposta = cliente.post("/api/sync-agora", headers={"Origin": "http://localhost"})
     assert resposta.status_code == 502
     assert resposta.get_json() == {"executado_em": None, "status": "erro"}
+
+
+def test_falha_ao_criar_lancamento_manual_libera_o_banco(monkeypatch):
+    class CursorFalho:
+        fechado = False
+
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("falha simulada")
+
+        def close(self):
+            self.fechado = True
+
+    class ConexaoFalha:
+        fechado = False
+        rollback_chamado = False
+
+        def __init__(self):
+            self.cursor_criado = CursorFalho()
+
+        def cursor(self):
+            return self.cursor_criado
+
+        def rollback(self):
+            self.rollback_chamado = True
+
+        def close(self):
+            self.fechado = True
+
+    conexao = ConexaoFalha()
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(lancamentos, "get_conn", lambda: conexao)
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "operador"
+        sessao["permissoes"] = ["lancamentos_manual"]
+
+    resposta = cliente.post(
+        "/api/lancamento-manual",
+        json={"data": "2026-08-23", "descricao": "Teste", "direcao": "saida", "valor": "10"},
+        headers={"Origin": "http://localhost"},
+    )
+    assert resposta.status_code == 400
+    assert conexao.rollback_chamado is True
+    assert conexao.cursor_criado.fechado is True
+    assert conexao.fechado is True

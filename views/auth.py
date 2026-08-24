@@ -8,6 +8,7 @@ from flask import Blueprint, request, redirect, session, render_template
 
 from core import (
     USERS,
+    fechar_recursos_banco,
     get_conn,
     permissoes_do_perfil,
     senha_confere,
@@ -63,6 +64,8 @@ def login():
                 erro="Muitas tentativas. Aguarde 15 minutos e tente novamente.",
             ), 429
         conta = None
+        conn = cur = None
+        transacao_encerrada = False
         try:
             conn = get_conn()
             cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -76,6 +79,7 @@ def login():
                 cur.execute("UPDATE cartao.usuario SET ultimo_acesso = now() WHERE usuario = %s;",
                             (conta["usuario"],))
                 conn.commit()
+                transacao_encerrada = True
                 session.clear()
                 session.permanent = True
                 session["user"] = conta["usuario"]
@@ -83,13 +87,11 @@ def login():
                 session["perfil"] = conta["perfil"]
                 session["permissoes"] = list(conta["permissoes"] or [])
                 _limpar_falhas(chave_tentativa)
-                cur.close()
-                conn.close()
                 return redirect("/")
-            cur.close()
-            conn.close()
         except Exception as e:
             print("Aviso: falha ao autenticar pelo banco:", e)
+        finally:
+            fechar_recursos_banco(conn, cur, rollback=not transacao_encerrada)
 
         # rede de seguranca: se a tabela ainda nao existe (primeiro boot), aceita a env
         if conta is None and u in USERS and USERS[u] == p:

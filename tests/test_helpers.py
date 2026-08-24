@@ -177,3 +177,38 @@ def test_auditoria_oculta_credenciais_e_limita_texto():
     assert dados["nova_senha"] == "[PROTEGIDO]"
     assert dados["api_token"] == "[PROTEGIDO]"
     assert len(dados["observacao"]) == 501
+
+
+def test_auditoria_fecha_conexao_quando_o_banco_falha(monkeypatch):
+    class CursorFalho:
+        fechado = False
+
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("banco indisponivel")
+
+        def close(self):
+            self.fechado = True
+
+    class ConexaoFalha:
+        fechado = False
+        rollback_chamado = False
+
+        def __init__(self):
+            self.cursor_criado = CursorFalho()
+
+        def cursor(self):
+            return self.cursor_criado
+
+        def rollback(self):
+            self.rollback_chamado = True
+
+        def close(self):
+            self.fechado = True
+
+    conexao = ConexaoFalha()
+    monkeypatch.setattr(core, "get_conn", lambda: conexao)
+
+    assert core.registrar_auditoria("teste", "falha") is False
+    assert conexao.rollback_chamado is True
+    assert conexao.cursor_criado.fechado is True
+    assert conexao.fechado is True

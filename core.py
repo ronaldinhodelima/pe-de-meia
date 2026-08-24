@@ -730,6 +730,25 @@ def get_conn():
     )
 
 
+def fechar_recursos_banco(conn=None, cur=None, *, rollback=False):
+    """Libera cursor e conexao mesmo quando o Postgres falha no meio da operacao."""
+    if rollback and conn is not None:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    if cur is not None:
+        try:
+            cur.close()
+        except Exception:
+            pass
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 _CAMPOS_SIGILOSOS_AUDITORIA = (
     "senha", "password", "secret", "token", "authorization", "cookie", "api_key", "apikey",
 )
@@ -769,6 +788,8 @@ def registrar_auditoria(
     detalhes=None,
 ):
     """Acrescenta um evento ao historico sem jamais quebrar a operacao original."""
+    conn = cur = None
+    gravado = False
     try:
         if has_request_context():
             usuario = usuario or session.get("user")
@@ -797,12 +818,13 @@ def registrar_auditoria(
             ),
         )
         conn.commit()
-        cur.close()
-        conn.close()
+        gravado = True
         return True
     except Exception as e:
         print("Aviso: falha ao registrar auditoria:", e)
         return False
+    finally:
+        fechar_recursos_banco(conn, cur, rollback=not gravado)
 
 
 def login_required(view):

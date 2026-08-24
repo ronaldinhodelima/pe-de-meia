@@ -27,6 +27,7 @@ from core import (
     chip_filter_html,
     data_hora_local,
     esc,
+    fechar_recursos_banco,
     get_conn,
     json_script,
     pode,
@@ -367,6 +368,8 @@ def index():
 @requer("lancamentos_manual")
 def lancamento_manual():
     data = request.get_json(force=True)
+    conn = cur = None
+    transacao_encerrada = False
     try:
         data_str = (data.get("data") or "").strip()
         descricao = (data.get("descricao") or "").strip()
@@ -393,12 +396,13 @@ def lancamento_manual():
             ),
         )
         conn.commit()
-        cur.close()
-        conn.close()
+        transacao_encerrada = True
         return jsonify({"ok": True})
     except Exception as e:
         print("Aviso: falha ao criar lançamento manual:", e)
         return jsonify({"ok": False, "erro": "Não foi possível salvar o lançamento."}), 400
+    finally:
+        fechar_recursos_banco(conn, cur, rollback=not transacao_encerrada)
 
 
 @bp.route("/api/lancamento-manual/<transacao_id>", methods=["DELETE"])
@@ -406,6 +410,8 @@ def lancamento_manual():
 def excluir_lancamento_manual(transacao_id):
     """Exclui um lancamento criado manualmente ou importado de arquivo. Transacoes vindas do
     Pluggy nunca sao apagadas (elas voltariam na proxima sincronizacao)."""
+    conn = cur = None
+    transacao_encerrada = False
     try:
         conn = get_conn()
         cur = conn.cursor()
@@ -416,12 +422,8 @@ def excluir_lancamento_manual(transacao_id):
         )
         row = cur.fetchone()
         if not row:
-            cur.close()
-            conn.close()
             return jsonify({"ok": False, "erro": "Lançamento não encontrado."}), 404
         if str(row[0]) != CONTA_MANUAL_ID and not row[1]:
-            cur.close()
-            conn.close()
             return jsonify({
                 "ok": False,
                 "erro": "Só é possível excluir lançamentos manuais ou importados de arquivo. Este veio da sincronização com o banco e voltaria na próxima atualização — marque como duplicada se quiser ignorá-lo.",
@@ -430,12 +432,13 @@ def excluir_lancamento_manual(transacao_id):
         cur.execute("DELETE FROM cartao.transacao_dimensao WHERE transacao_id = %s;", (str(transacao_id),))
         cur.execute("DELETE FROM cartao.transacao WHERE transacao_id = %s;", (transacao_id,))
         conn.commit()
-        cur.close()
-        conn.close()
+        transacao_encerrada = True
         return jsonify({"ok": True})
     except Exception as e:
         print("Aviso: falha ao excluir lançamento manual:", e)
         return jsonify({"ok": False, "erro": "Não foi possível excluir o lançamento."}), 400
+    finally:
+        fechar_recursos_banco(conn, cur, rollback=not transacao_encerrada)
 
 
 @bp.route("/api/transacao/<transacao_id>")
