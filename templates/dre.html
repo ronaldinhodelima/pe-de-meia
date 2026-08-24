@@ -23,14 +23,14 @@
 {% endif %}
 
 <div class="filters">
-  <div>
+  <form action="/dre" method="get">
     <label>Ano</label>
-    <select onchange="window.location='/dre?ano='+this.value">
+    <select name="ano" onchange="this.form.submit()">
       {% for a in anos %}
         <option value="{{ a }}" {{ 'selected' if a|string == ano }}>{{ a }}</option>
       {% endfor %}
     </select>
-  </div>
+  </form>
 </div>
 
 <div class="cards">

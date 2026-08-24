@@ -66,6 +66,12 @@ class TestDRE:
         html = render_template("dre.html", **{**self.BASE, "pendencias": None})
         assert "Revisar agora" not in html
 
+    def test_filtro_de_ano_envia_formulario_sem_montar_url_no_javascript(self, ctx):
+        html = render_template("dre.html", **{**self.BASE, "pendencias": None})
+        assert '<form action="/dre" method="get">' in html
+        assert 'name="ano"' in html
+        assert "window.location" not in html
+
 
 class TestLogs:
     def test_detalhes_e_campos_sao_escapados(self, ctx):
