@@ -23,6 +23,7 @@ from core import (
     chip_filter_html,
     data_hora_local,
     get_conn,
+    intervalo_ano_local,
     levantar_pendencias,
     pode,
     registrar_auditoria,
@@ -58,6 +59,11 @@ def _montar_historico_investimentos(historico):
 def dre():
     ano = request.args.get("ano") or str(datetime.now().year)
     hoje = datetime.now()
+    try:
+        inicio_ano, fim_ano = intervalo_ano_local(ano)
+    except ValueError:
+        ano = str(hoje.year)
+        inicio_ano, fim_ano = intervalo_ano_local(ano)
 
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -66,18 +72,18 @@ def dre():
 
     cur.execute(
         f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total {base} "
-        f"AND to_char({DATA_LOCAL_SQL},'YYYY') = %s AND {NATUREZA_SQL} = 'despesa' "
+        f"AND t.data_transacao >= %s AND t.data_transacao < %s AND {NATUREZA_SQL} = 'despesa' "
         "AND t.categoria IS NOT NULL GROUP BY t.categoria;",
-        (ano,),
+        (inicio_ano, fim_ano),
     )
     anual_por_cat = {r["categoria"]: float(r["total"]) for r in cur.fetchall()}
 
     # ---- DRE propriamente dito: receitas, despesas e resultado de cada mes do ano ----
     cur.execute(
         f"SELECT to_char({DATA_LOCAL_SQL},'YYYY-MM') AS mes, {NATUREZA_SQL} AS natureza, "
-        f"SUM({VAL_DESPESA}) AS total {base} AND to_char({DATA_LOCAL_SQL},'YYYY') = %s "
+        f"SUM({VAL_DESPESA}) AS total {base} AND t.data_transacao >= %s AND t.data_transacao < %s "
         f"GROUP BY 1, 2 ORDER BY 1;",
-        (ano,),
+        (inicio_ano, fim_ano),
     )
     meses_dre = {}
     for r in cur.fetchall():
@@ -111,11 +117,11 @@ def dre():
             f"FROM cartao.transacao t {JOIN_NATUREZA} "
             "LEFT JOIN cartao.transacao_dimensao td ON td.transacao_id = t.transacao_id::text AND td.dimensao_id = %s "
             "LEFT JOIN cartao.dimensao_valor dv ON dv.id = td.valor_id "
-            f"WHERE to_char({DATA_LOCAL_SQL},'YYYY') = %s "
+            "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
             "AND COALESCE(t.duplicada, false) = false "
             f"AND {NATUREZA_SQL} = 'despesa' AND t.categoria IS NOT NULL "
             "GROUP BY dv.nome ORDER BY total DESC;",
-            (d["id"], ano),
+            (d["id"], inicio_ano, fim_ano),
         )
         por_dimensao.append({"nome": d["nome"], "linhas": cur.fetchall()})
 

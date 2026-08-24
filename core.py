@@ -14,7 +14,7 @@ import unicodedata
 import uuid
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import psycopg2
@@ -342,6 +342,22 @@ NATUREZA_SQL = (
 # pode cair no dia/mes seguinte no DRE.
 DATA_LOCAL_SQL = "(t.data_transacao AT TIME ZONE 'America/Sao_Paulo')"
 FUSO_LOCAL = ZoneInfo("America/Sao_Paulo")
+
+
+def intervalo_mes_local(valor):
+    """Limites UTC de um mes civil de Sao Paulo, prontos para usar o indice de data."""
+    inicio = datetime.strptime(valor, "%Y-%m").replace(tzinfo=FUSO_LOCAL)
+    if inicio.month == 12:
+        fim = inicio.replace(year=inicio.year + 1, month=1)
+    else:
+        fim = inicio.replace(month=inicio.month + 1)
+    return inicio, fim
+
+
+def intervalo_ano_local(valor):
+    """Limites UTC de um ano civil de Sao Paulo, inclusive em anos com horario de verao."""
+    inicio = datetime.strptime(str(valor), "%Y").replace(tzinfo=FUSO_LOCAL)
+    return inicio, inicio.replace(year=inicio.year + 1)
 
 
 def data_hora_local(valor):
@@ -1467,13 +1483,15 @@ def _montar_filtro_relatorio(dimensoes):
         params.append(tuple(origens_sel))
     if data_ini:
         # O banco guarda instantes em UTC, mas a competencia financeira e o
-        # dia civil de Sao Paulo (a mesma regra usada na DRE e nos lancamentos).
-        where.append(DATA_LOCAL_SQL + " >= %s::date")
-        params.append(data_ini)
+        # dia civil de Sao Paulo. Converter o limite em Python deixa a coluna
+        # intacta na comparacao e permite usar idx_transacao_data.
+        where.append("t.data_transacao >= %s")
+        params.append(datetime.strptime(data_ini, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL))
     if data_fim:
         # Limite superior exclusivo inclui tambem fracoes do ultimo segundo.
-        where.append(DATA_LOCAL_SQL + " < (%s::date + interval '1 day')")
-        params.append(data_fim)
+        where.append("t.data_transacao < %s")
+        fim_local = datetime.strptime(data_fim, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL)
+        params.append(fim_local + timedelta(days=1))
     for dim_id, vals in dim_sel.items():
         where.append(
             "EXISTS (SELECT 1 FROM cartao.transacao_dimensao td WHERE td.transacao_id = t.transacao_id::text "

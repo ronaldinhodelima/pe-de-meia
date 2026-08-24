@@ -29,6 +29,7 @@ from core import (
     esc,
     fechar_recursos_banco,
     get_conn,
+    intervalo_mes_local,
     json_script,
     pode,
     registrar_auditoria,
@@ -61,6 +62,11 @@ def _valor_manual(valor, direcao):
 @requer("lancamentos_ver")
 def index():
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
+    try:
+        inicio_mes, fim_mes = intervalo_mes_local(mes)
+    except ValueError:
+        mes = datetime.now().strftime("%Y-%m")
+        inicio_mes, fim_mes = intervalo_mes_local(mes)
     status = request.args.get("status", "todas")
     if status not in ("todas", "pendente", "conferida", "duplicidade", "duplicada"):
         status = "todas"
@@ -86,8 +92,8 @@ def index():
     # das outras e o numero deixaria de servir para comparar.
     cur.execute(
         f"SELECT account_id, COUNT(*) AS n FROM cartao.transacao t "
-        f"WHERE to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s GROUP BY account_id;",
-        (mes,),
+        "WHERE t.data_transacao >= %s AND t.data_transacao < %s GROUP BY account_id;",
+        (inicio_mes, fim_mes),
     )
     qtd_por_origem = {str(r["account_id"]): r["n"] for r in cur.fetchall()}
 
@@ -97,12 +103,12 @@ def index():
     # duplicada fica de fora - a decisao ja foi tomada.
     cur.execute(
         "SELECT array_agg(t.transacao_id::text) AS ids FROM cartao.transacao t "
-        f"WHERE to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s "
+        "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
         "AND COALESCE(t.duplicada, false) = false "
         f"GROUP BY t.account_id, ({DATA_LOCAL_SQL})::date, "
         "COALESCE(t.valor_brl, t.valor_original), t.descricao "
         "HAVING COUNT(*) > 1;",
-        (mes,),
+        (inicio_mes, fim_mes),
     )
     ids_suspeitos = set()
     for r in cur.fetchall():
@@ -112,8 +118,8 @@ def index():
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt(c)))
 
-    where = [f"to_char({DATA_LOCAL_SQL}, 'YYYY-MM') = %s"]
-    params = [mes]
+    where = ["t.data_transacao >= %s", "t.data_transacao < %s"]
+    params = [inicio_mes, fim_mes]
     if origem_sel:
         where.append("t.account_id IN %s")
         params.append(tuple(origem_sel))
@@ -143,8 +149,8 @@ def index():
     rows = cur.fetchall()
 
     # resumo do mes (nao filtrado por status, sempre do mes inteiro; duplicadas nao contam)
-    where_resumo = [f"to_char({DATA_LOCAL_SQL},'YYYY-MM') = %s", "COALESCE(t.duplicada, false) = false"]
-    params_resumo = [mes]
+    where_resumo = ["t.data_transacao >= %s", "t.data_transacao < %s", "COALESCE(t.duplicada, false) = false"]
+    params_resumo = [inicio_mes, fim_mes]
     if origem_sel:
         where_resumo.append("t.account_id IN %s")
         params_resumo.append(tuple(origem_sel))
@@ -159,9 +165,9 @@ def index():
     )
     resumo = cur.fetchone()
 
-    where_cat = [f"to_char({DATA_LOCAL_SQL},'YYYY-MM') = %s", f"{NATUREZA_SQL} = 'despesa'",
+    where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
                  "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
-    params_cat = [mes]
+    params_cat = [inicio_mes, fim_mes]
     if origem_sel:
         where_cat.append("t.account_id IN %s")
         params_cat.append(tuple(origem_sel))

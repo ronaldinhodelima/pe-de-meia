@@ -160,3 +160,13 @@ class TestValDespesaSinal:
 class TestCompetenciaDoDre:
     def test_competencia_usa_data_local(self):
         assert "AT TIME ZONE 'America/Sao_Paulo'" in core.DATA_LOCAL_SQL
+
+    def test_intervalo_mensal_respeita_horario_de_verao_historico(self):
+        inicio, fim = core.intervalo_mes_local("2018-11")
+        assert inicio.isoformat() == "2018-11-01T00:00:00-03:00"
+        assert fim.isoformat() == "2018-12-01T00:00:00-02:00"
+
+    def test_intervalo_anual_preserva_o_ano_civil(self):
+        inicio, fim = core.intervalo_ano_local("2026")
+        assert inicio.isoformat() == "2026-01-01T00:00:00-03:00"
+        assert fim.isoformat() == "2027-01-01T00:00:00-03:00"

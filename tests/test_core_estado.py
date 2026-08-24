@@ -109,9 +109,10 @@ class TestFiltroRelatorio:
         cfg = self._cfg("/relatorios/dados?data_ini=2026-07-01&data_fim=2026-07-31")
         assert cfg["data_ini"] == "2026-07-01"
         assert cfg["data_fim"] == "2026-07-31"
-        assert "AT TIME ZONE 'America/Sao_Paulo') >= %s::date" in cfg["where_sql"]
-        assert "AT TIME ZONE 'America/Sao_Paulo') < (%s::date + interval '1 day')" in cfg["where_sql"]
-        assert cfg["params"] == ["2026-07-01", "2026-07-31"]
+        assert "t.data_transacao >= %s" in cfg["where_sql"]
+        assert "t.data_transacao < %s" in cfg["where_sql"]
+        assert cfg["params"][0].isoformat() == "2026-07-01T00:00:00-03:00"
+        assert cfg["params"][1].isoformat() == "2026-08-01T00:00:00-03:00"
 
     def test_agrupar_por_ano(self):
         # comparacao ano a ano ("quanto de troca de oleo a Tracker custou em cada
