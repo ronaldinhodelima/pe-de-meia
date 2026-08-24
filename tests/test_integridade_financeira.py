@@ -6,7 +6,7 @@ from decimal import Decimal
 from core import data_hora_local
 from views.relatorios import _montar_historico_investimentos
 from views.lancamentos import _valor_manual
-from views.cadastros import _filtro_valor, _condicao_valor_sql
+from views.cadastros import _filtro_valor, _condicao_valor_sql, _categorias_para_regras
 
 
 def test_sync_nao_sobrescreve_nenhum_ajuste_manual_do_usuario():
@@ -53,6 +53,12 @@ def test_regra_por_valor_aceita_formato_brasileiro_e_valor_negativo_e_comparado_
 
 def test_regra_sem_operador_e_limite_significa_qualquer_valor():
     assert _filtro_valor({}) == (None, None, None)
+
+
+def test_regra_permite_investimento_mas_nao_transferencia_neutra():
+    categorias = _categorias_para_regras()
+    assert "Pension" in categorias
+    assert "Credit card payment" not in categorias
 
 
 def test_edicao_humana_marca_categoria_como_manual():

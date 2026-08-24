@@ -17,6 +17,7 @@ from core import (
     NATUREZAS_NEUTRAS,
     NATUREZA_PADRAO,
     NATUREZA_SQL,
+    SEED_NATUREZAS,
     VAL_DESPESA,
     aplicar_regras,
     cat_pt,
@@ -69,6 +70,30 @@ def _filtro_valor(form):
 def _condicao_valor_sql(operador):
     simbolo = OPERADORES_VALOR.get(operador, (None, None))[1]
     return f" AND ABS(COALESCE(t.valor_brl,t.valor_original)) {simbolo} %s" if simbolo else ""
+
+
+def _categorias_para_regras():
+    """Lista categorias seguras para classificacao automatica.
+
+    Transferencias e aquisicoes de bens continuam fora para nao classificar
+    movimentacoes neutras por engano. Investimentos recorrentes, como
+    Previdencia, sao permitidos.
+    """
+    investimentos = {
+        categoria for categoria, natureza in SEED_NATUREZAS.items()
+        if natureza == "investimento"
+    }
+    neutras_bloqueadas = {
+        categoria
+        for categoria in CATEGORIAS_NEUTRAS_PADRAO
+        if SEED_NATUREZAS.get(categoria) != "investimento"
+    }
+    return sorted(
+        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB) | investimentos)
+        - neutras_bloqueadas
+        - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
 
 
 def _valor_pt(valor):
@@ -695,10 +720,7 @@ def grupos_view():
     for s in subgrupos_db:
         subgrupos_por_grupo.setdefault(s["grupo_id"], []).append(s)
 
-    todas_categorias = sorted(
-        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
-        key=lambda c: chave_alfa(cat_pt_puro(c)),
-    )
+    todas_categorias = _categorias_para_regras()
 
     # cada categoria vira {chave, nome, subgrupo_id} - o template filtra por
     # subgrupo_id pra montar os chips e o dropdown de vincular
