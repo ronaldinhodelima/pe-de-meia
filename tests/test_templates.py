@@ -222,6 +222,7 @@ class TestIndex:
         assert posicoes == sorted(posicoes)
         assert '<option value="nao">Não</option>' in html
         assert 'id="modalConfirmacao"' in html
+        assert 'modalConfirmacaoResumo' not in html
         assert "cancelarConfirmacaoModal(true)" in html
         assert "confirmarAcaoModal()" in html
 

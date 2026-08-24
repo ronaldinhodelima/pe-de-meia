@@ -261,8 +261,7 @@
   .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid #efb3ae; border-radius: var(--radius-sm); background: var(--bad-soft); }
   .modal-confirmacao[hidden] { display: none; }
   .modal-confirmacao strong { display: block; color: var(--bad); font-size: 13.5px; }
-  .modal-confirmacao p { margin: 7px 0 11px; color: var(--ink-soft); font-size: 12.5px; line-height: 1.4; white-space: pre-line; }
-  .modal-confirmacao-acoes { display: flex; justify-content: flex-end; gap: 8px; }
+  .modal-confirmacao-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 11px; }
 
   /* possivel duplicidade: mesma conta, dia, valor e descricao. Marca discreta na
      borda esquerda - nao pode competir com a linha 'duplicada' ja confirmada,

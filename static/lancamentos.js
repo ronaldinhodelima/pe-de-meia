@@ -261,11 +261,9 @@ function verDetalhes(id) {
 }
 
 function abrirConfirmacaoModal(acao) {
-  const d = detalheAtualModal();
   acaoConfirmacaoModal = acao;
   const painel = document.getElementById('modalConfirmacao');
   const titulo = document.getElementById('modalConfirmacaoTitulo');
-  const resumo = document.getElementById('modalConfirmacaoResumo');
   const botao = document.getElementById('modalConfirmarBtn');
   if (acao === 'desconferir') {
     titulo.textContent = 'Confirmar desmarcação do OK?';
@@ -274,7 +272,6 @@ function abrirConfirmacaoModal(acao) {
     titulo.textContent = 'Confirmar lançamento como duplicado?';
     botao.textContent = 'Sim, marcar duplicada';
   }
-  resumo.textContent = [d.data || '-', d.descricao || '-', d.valor || '-'].join('\n');
   painel.hidden = false;
 }
 

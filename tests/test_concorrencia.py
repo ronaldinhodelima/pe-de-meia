@@ -16,14 +16,12 @@ def test_tela_envia_apenas_o_campo_que_foi_alterado():
     assert "anterior.catch(() => {}).then" in trecho
 
 
-def test_ok_e_duplicidade_exigem_confirmacao_com_detalhes():
+def test_ok_e_duplicidade_exigem_confirmacao_sem_repetir_detalhes():
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
 
     assert "abrirConfirmacaoModal('desconferir')" in js
     assert "abrirConfirmacaoModal('duplicar')" in js
-    assert "d.data || '-'" in js
-    assert "d.descricao || '-'" in js
-    assert "d.valor || '-'" in js
+    assert "modalConfirmacaoResumo" not in js
     assert "el.checked = true" in js, "o clique de desmarcar deve ser desfeito ate confirmar"
     assert "if ('conferida' in d)" in js, "toda edicao deve sincronizar o OK retornado pelo banco"
     assert "payload.confirmar_desmarcacao = true" in js
