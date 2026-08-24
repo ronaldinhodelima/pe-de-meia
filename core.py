@@ -875,9 +875,6 @@ def migrate():
             # natureza definida no proprio lancamento, quando ele foge do padrao da categoria
             # (ex: um PIX de R$ 98 mil que foi a compra de um terreno, e nao consumo)
             cur.execute("ALTER TABLE cartao.transacao ADD COLUMN IF NOT EXISTS natureza text;")
-            # renomeia a dimensao antiga (nao roda de novo depois de renomeada)
-            cur.execute("UPDATE cartao.dimensao SET nome = 'Projeto' WHERE nome = 'Projeto / Evento';")
-
             # usuarios e permissoes. A senha fica em hash - nunca em texto puro.
             cur.execute(
                 "CREATE TABLE IF NOT EXISTS cartao.usuario ("
@@ -1036,6 +1033,10 @@ def migrate():
                 "valor_id integer REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL, "
                 "PRIMARY KEY (transacao_id, dimensao_id));"
             )
+            # Bancos antigos podem ter o nome anterior. Em banco novo, esta
+            # tabela acabou de ser criada; por isso a renomeacao precisa ficar
+            # depois do CREATE, e nao no inicio da migracao.
+            cur.execute("UPDATE cartao.dimensao SET nome = 'Projeto' WHERE nome = 'Projeto / Evento';")
             conn.commit()
 
             # conta sintetica para lancamentos manuais (dinheiro em especie), fora do Pluggy

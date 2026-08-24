@@ -84,6 +84,14 @@ def test_core_nao_importa_das_views_nem_do_app():
             raise AssertionError(f"core.py importa {modulo} - volta o import circular")
 
 
+def test_migracao_cria_dimensao_antes_de_tentar_renomear():
+    """Um PostgreSQL vazio nao possui cartao.dimensao antes da primeira migracao."""
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    criar = texto.index('CREATE TABLE IF NOT EXISTS cartao.dimensao (')
+    renomear = texto.index("UPDATE cartao.dimensao SET nome = 'Projeto'")
+    assert criar < renomear
+
+
 def test_views_nao_importam_umas_das_outras():
     for caminho in (RAIZ / "views").glob("*.py"):
         arvore = ast.parse(caminho.read_text(encoding="utf-8"))
