@@ -222,7 +222,7 @@ class TestIndex:
         assert posicoes == sorted(posicoes)
         assert '<option value="nao">Não</option>' in html
         assert 'id="modalConfirmacao"' in html
-        assert "cancelarConfirmacaoModal()" in html
+        assert "cancelarConfirmacaoModal(true)" in html
         assert "confirmarAcaoModal()" in html
 
     def test_opcoes_da_tabela_sao_carregadas_sob_demanda(self, ctx):

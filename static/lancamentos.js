@@ -278,11 +278,12 @@ function abrirConfirmacaoModal(acao) {
   painel.hidden = false;
 }
 
-function cancelarConfirmacaoModal() {
+function cancelarConfirmacaoModal(fecharJanela) {
   acaoConfirmacaoModal = null;
   const painel = document.getElementById('modalConfirmacao');
   if (painel) painel.hidden = true;
   if (idAtualModal) sincronizarControlesModal();
+  if (fecharJanela) fecharModal();
 }
 
 function confirmarAcaoModal() {

@@ -28,6 +28,7 @@ def test_ok_e_duplicidade_exigem_confirmacao_com_detalhes():
     assert "if ('conferida' in d)" in js, "toda edicao deve sincronizar o OK retornado pelo banco"
     assert "payload.confirmar_desmarcacao = true" in js
     assert "payload.confirmar_duplicada = true" in js
+    assert "if (fecharJanela) fecharModal();" in js
 
 
 def test_servidor_bloqueia_lancamento_durante_edicao_e_exclusao():
