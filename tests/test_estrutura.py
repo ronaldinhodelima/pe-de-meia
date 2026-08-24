@@ -128,7 +128,7 @@ def test_todas_as_rotas_continuam_registradas():
 
     rotas = {str(r) for r in app.app.url_map.iter_rules() if r.endpoint != "static"}
     esperadas = {
-        "/", "/login", "/logout", "/health",
+        "/", "/login", "/logout", "/health", "/favicon.ico",
         "/api/sync-status", "/api/sync-agora", "/api/transacao/<transacao_id>",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
         "/api/categoria-lancamentos",
@@ -189,6 +189,14 @@ def test_posicao_da_pagina_e_mantida_em_todas_as_telas():
     assert "function manterPosicaoAoSalvar" in tabelas
     assert "addEventListener('DOMContentLoaded', manterPosicaoAoSalvar)" in tabelas
     assert '<script src="/static/tabelas.js">' in (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+
+
+def test_filtros_criam_historico_e_botao_voltar_restaura_estado():
+    for arquivo in ("lancamentos.js", "relatorios.js"):
+        js = (RAIZ / "static" / arquivo).read_text(encoding="utf-8")
+        assert "history.pushState" in js
+        assert "history.replaceState" not in js
+        assert "addEventListener('popstate'" in js
 
 
 def test_todo_reload_por_js_guarda_a_posicao_antes():

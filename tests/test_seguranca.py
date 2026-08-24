@@ -41,6 +41,15 @@ def test_paginas_financeiras_nao_podem_ser_guardadas_em_cache():
     assert resposta.headers["Cache-Control"] == "no-store, private"
 
 
+def test_favicon_existe_no_endereco_padrao_e_tem_cache_versionado():
+    resposta = app.app.test_client().get("/favicon.ico")
+    assert resposta.status_code == 200
+    assert resposta.mimetype == "image/png"
+    base = (pathlib.Path(__file__).parent.parent / "templates" / "base.html").read_text(encoding="utf-8")
+    assert "/favicon.ico?v=" in base
+    assert "/static/favicon.png?v=" in base
+
+
 def test_editar_nao_da_permissao_de_conferir(monkeypatch):
     class Cursor:
         def execute(self, *args, **kwargs):

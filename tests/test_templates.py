@@ -218,7 +218,7 @@ class TestIndex:
         html = self.render([self.linha(conferida=True)])
         ids = [
             'id="modalCategoria"', 'id="modalDimensoes"', 'id="modalObservacao"',
-            'id="modalConferida"', 'id="modalConferidaPor"', 'id="modalDup"',
+            'id="modalConferidaPor"', 'id="modalConferida"', 'id="modalDup"',
         ]
         posicoes = [html.index(item) for item in ids]
         assert posicoes == sorted(posicoes)
@@ -236,7 +236,10 @@ class TestIndex:
         assert 'onchange="salvarDimensaoModal(this)"' in html
         assert 'onchange="salvarObservacaoModal()"' in html
         assert 'id="modalConferidaPor" hidden' in html
-        assert js.count('class="row row-pareada"') == 2
+        assert js.count('class="row row-pareada"') == 3
+        assert js.index('<small>Data</small>') < js.index('<small>Valor (R$)</small>')
+        assert js.index('<small>Valor original</small>') < js.index('<small>Parcela</small>')
+        assert html.index('id="modalConferidaPor"') < html.index('id="modalConferida"')
         assert "function salvarDimensaoModal" in js
         assert "function salvarObservacaoModal" in js
         assert "conferidaPor.hidden = !d._conferida" in js

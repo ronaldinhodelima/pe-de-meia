@@ -39,6 +39,12 @@ app.config.update(
 )
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Atende tambem o endereco padrao consultado diretamente pelos navegadores."""
+    return app.send_static_file("favicon.png")
+
+
 @app.before_request
 def _iniciar_auditoria_requisicao():
     # Guarda o usuario antes da rota: /logout limpa a sessao antes do after_request.

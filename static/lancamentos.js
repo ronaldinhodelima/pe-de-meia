@@ -174,8 +174,11 @@ function mudarMes(delta) {
 function aplicarFiltros() {
   atualizarChipLabels();
   const params = coletarQuery();
-  history.replaceState(null, '', '/?' + params.toString());
-  fetch('/?' + params.toString(), { headers: { 'X-Parcial': '1' } })
+  const novaUrl = '/?' + params.toString();
+  if (novaUrl !== window.location.pathname + window.location.search) {
+    history.pushState({pedemeia: true}, '', novaUrl);
+  }
+  fetch(novaUrl, { headers: { 'X-Parcial': '1' } })
     .then(r => r.text())
     .then(html => {
       const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -207,6 +210,13 @@ function aplicarFiltros() {
     });
 }
 
+// Cada filtro/mes vira uma etapa real do navegador. Ao voltar ou avancar,
+// recarrega o estado correspondente sem criar uma nova entrada no historico.
+window.addEventListener('popstate', function () {
+  guardarPosicaoAtual();
+  window.location.reload();
+});
+
 window.detalhes = lerJson('script[data-detalhes]', {});
 let idAtualModal = null;
 let acaoConfirmacaoModal = null;
@@ -235,18 +245,20 @@ function verDetalhes(id) {
   idAtualModal = id;
   // Valores e status ficam em pares para usar melhor o espaco do modal.
   const html =
-    '<div class="row"><span>Data</span><span>' + escHtml(d.data) + '</span></div>' +
+    '<div class="row row-pareada">' +
+      '<span class="modal-campo"><small>Data</small><strong>' + escHtml(d.data) + '</strong></span>' +
+      '<span class="modal-campo"><small>Valor (R$)</small><strong>' + escHtml(d.valor) + '</strong></span>' +
+    '</div>' +
     '<div class="row"><span>Descrição</span><span>' + escHtml(d.descricao) + '</span></div>' +
     '<div class="row row-pareada">' +
-      '<span class="modal-campo"><small>Valor (R$)</small><strong>' + escHtml(d.valor) + '</strong></span>' +
       '<span class="modal-campo"><small>Valor original</small><strong>' + escHtml(d.valor_original) + '</strong></span>' +
+      '<span class="modal-campo"><small>Parcela</small><strong>' + escHtml(d.parcela) + '</strong></span>' +
     '</div>' +
     '<div class="row row-pareada">' +
       '<span class="modal-campo"><small>Status</small><strong>' + escHtml(d.status) + '</strong></span>' +
       '<span class="modal-campo"><small>Tipo</small><strong>' + escHtml(d.tipo) + '</strong></span>' +
     '</div>' +
-    '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>' +
-    '<div class="row"><span>Parcela</span><span>' + escHtml(d.parcela) + '</span></div>';
+    '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>';
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');

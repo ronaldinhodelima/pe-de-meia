@@ -120,9 +120,16 @@ function coletarQuery() {
 function aplicarFiltros() {
   atualizarChipLabels();
   const params = coletarQuery();
-  history.replaceState(null, '', '/relatorios?' + params.toString());
+  const novaUrl = '/relatorios?' + params.toString();
+  if (novaUrl !== window.location.pathname + window.location.search) {
+    history.pushState({pedemeia: true}, '', novaUrl);
+  }
   carregarDados(params);
 }
+window.addEventListener('popstate', function () {
+  guardarPosicaoAtual();
+  window.location.reload();
+});
 function carregarDados(params) {
   fetch('/relatorios/dados?' + params.toString()).then(r => r.json()).then(renderResultado);
 }
