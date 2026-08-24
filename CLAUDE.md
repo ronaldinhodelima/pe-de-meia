@@ -120,6 +120,10 @@ Na prática:
 - `dimensao` / `dimensao_valor` / `transacao_dimensao` — dimensões livres (ex: Responsável:
   Ronaldo/Andrea/Amanda/Compartilhado, Projeto, etc.) além da categoria.
   `dimensao_valor` também guarda `teto_mensal` / `teto_anual` (teto de gasto por valor).
+- `transacao_rateio` / `transacao_rateio_dimensao` — partes internas de um lançamento bancário
+  que pertence a mais de uma classificação. O lançamento original do Pluggy é preservado;
+  as partes precisam fechar exatamente o seu valor e o substituem somente nos totais e
+  relatórios, por meio das views `lancamento_financeiro*`.
 - `schema_version` — controle de migração (ver `migrate()`). Cada bloco `if versao_atual < N`
   roda uma vez só; **não reescrever migração já aplicada** — criaria divergência de schema.
 
@@ -467,6 +471,11 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   dimensão ou observação nunca pode marcar nem desmarcar `conferida`. Para retirar um OK ou
   marcar duplicidade, a tela exige confirmação explícita. Lançamentos conferidos aparecem em
   cinza-claro, não em verde.
+- **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
+  classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
+  abaixo dele com botão `+`/`−`. As partes devem somar exatamente o total (inclusive o sinal),
+  substituem o pai no DRE/relatórios e não podem ser alteradas enquanto o pai estiver com OK.
+  O OK continua sendo marcado apenas pelo usuário depois de conferir todas as partes.
 - **Pluggy é a origem bancária, não a dona da classificação.** A sincronização pode atualizar
   apenas os campos bancários mutáveis. Nunca pode sobrescrever categoria ajustada manualmente,
   Responsável, Projeto, Portfólio, observação, OK ou a marcação de duplicidade.
