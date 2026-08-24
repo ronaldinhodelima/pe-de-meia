@@ -3,9 +3,13 @@ import importlib.util
 import os
 import pathlib
 import sys
+import threading
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import psycopg2
+import psycopg2.extras
 import pytest
 
 
@@ -191,5 +195,106 @@ def test_nova_sincronizacao_preserva_ajustes_humanos(sistema_real):
         "Travel", True, "nao sobrescrever", True, "PENDING", -55.0,
     )
     assert data_transacao.isoformat().startswith("2026-08-21T15:00:00")
+    cur.close()
+    conn.close()
+
+
+def test_edicoes_simultaneas_nao_apagam_campos_uma_da_outra(sistema_real):
+    _worker, core, webapp = sistema_real
+    transacao_id = str(uuid.uuid4())
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO cartao.transacao ("
+        "transacao_id, account_id, descricao, valor_original, valor_brl, data_transacao, "
+        "categoria, status, tipo, criado_em, atualizado_em, sincronizado_em"
+        ") VALUES (%s,%s,'CONCORRENCIA REAL',-10,-10,'2026-08-22T12:00:00Z',"
+        "'Groceries','POSTED','DEBIT',now(),now(),now());",
+        (transacao_id, core.CONTA_MANUAL_ID),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    barreira = threading.Barrier(2)
+
+    def editar(payload):
+        cliente = webapp.app.test_client()
+        _login(cliente)
+        barreira.wait(timeout=5)
+        resposta = cliente.post(f"/api/transacao/{transacao_id}", json=payload)
+        return resposta.status_code, resposta.get_json()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futuro_categoria = executor.submit(editar, {"categoria": "Travel"})
+        futuro_observacao = executor.submit(editar, {"observacao": "gravada em paralelo"})
+        resultados = [futuro_categoria.result(timeout=10), futuro_observacao.result(timeout=10)]
+
+    assert all(status == 200 and corpo["ok"] for status, corpo in resultados)
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT categoria, categoria_manual, observacao FROM cartao.transacao WHERE transacao_id=%s;",
+        (transacao_id,),
+    )
+    assert cur.fetchone() == ("Travel", True, "gravada em paralelo")
+    cur.close()
+    conn.close()
+
+
+def test_tela_suporta_dez_vezes_o_volume_atual(sistema_real):
+    _worker, core, webapp = sistema_real
+    quantidade = 1200
+    prefixo = f"CARGA {uuid.uuid4()}"
+    valores = []
+    for i in range(quantidade):
+        dia = i % 28 + 1
+        valores.append((
+            str(uuid.uuid4()), core.CONTA_MANUAL_ID, f"{prefixo} {i}", -10, -10,
+            f"2026-08-{dia:02d} 12:00:00-03:00", "Groceries", "POSTED", "DEBIT",
+        ))
+
+    conn = core.get_conn()
+    cur = conn.cursor()
+    psycopg2.extras.execute_values(
+        cur,
+        "INSERT INTO cartao.transacao ("
+        "transacao_id, account_id, descricao, valor_original, valor_brl, data_transacao, "
+        "categoria, status, tipo, criado_em, atualizado_em, sincronizado_em"
+        ") VALUES %s;",
+        valores,
+        template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),now(),now())",
+        page_size=500,
+    )
+    conn.commit()
+    cur.execute(
+        "SELECT COUNT(*) FROM cartao.transacao "
+        "WHERE data_transacao >= '2026-08-01T00:00:00-03:00' "
+        "AND data_transacao < '2026-09-01T00:00:00-03:00';"
+    )
+    total_mes = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
+    cliente = webapp.app.test_client()
+    _login(cliente)
+    inicio = time.perf_counter()
+    resposta = cliente.get("/?mes=2026-08")
+    duracao = time.perf_counter() - inicio
+    assert resposta.status_code == 200
+    assert duracao < 8.0, f"tela levou {duracao:.2f}s para {total_mes} lancamentos"
+
+    html = resposta.get_data(as_text=True)
+    tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
+    assert tabela.count('data-lazy-options="categoria"') == total_mes
+    # Uma opcao atual por caixa; as 84 categorias nao podem voltar a ser
+    # repetidas em cada linha, pois isso multiplicaria o HTML e o tempo do DOM.
+    dimensoes = tabela.count('data-lazy-options="dimensao"') // total_mes
+    assert tabela.count("<option") == total_mes * (1 + dimensoes)
+
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM cartao.transacao WHERE descricao LIKE %s;", (prefixo + "%",))
+    conn.commit()
     cur.close()
     conn.close()
