@@ -131,6 +131,11 @@
     timer = setTimeout(function () {
       const padrao = form.elements.padrao.value.trim();
       if (!padrao) { painel.style.display = 'none'; return; }
+      if (!form.elements.valor_operador.value && form.elements.valor_limite.value) {
+        painel.style.display = 'block';
+        painel.textContent = 'Escolha como o valor deve ser comparado para calcular a prévia.';
+        return;
+      }
       const q = new URLSearchParams({
         padrao: padrao,
         valor_operador: form.elements.valor_operador.value,

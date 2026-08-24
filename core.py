@@ -1378,6 +1378,64 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (13);")
             conn.commit()
 
+        if versao_atual < 14:
+            # Substitui a regra antiga, sem filtro de valor, pelas duas regras
+            # aprovadas. Sem isso ela (ID menor) ganharia a prioridade e todo
+            # GuilhermeDaSilva futuro iria para a mesma categoria.
+            cur.execute(
+                "SELECT id FROM cartao.regra_classificacao "
+                "WHERE lower(padrao)=lower('GuilhermeDaSilva') "
+                "AND valor_operador IS NULL AND valor_limite IS NULL;"
+            )
+            regras_antigas = [r[0] for r in cur.fetchall()]
+            if regras_antigas:
+                cur.execute(
+                    "UPDATE cartao.transacao SET regra_aplicada_id=NULL "
+                    "WHERE regra_aplicada_id=ANY(%s);",
+                    (regras_antigas,),
+                )
+                cur.execute(
+                    "DELETE FROM cartao.regra_classificacao WHERE id=ANY(%s);",
+                    (regras_antigas,),
+                )
+
+            # Os nomes podem estar com ou sem acento dependendo de quando a
+            # dimensão foi criada. Comparamos em Python pela mesma chave usada
+            # na interface e garantimos as três dimensões nas duas regras.
+            cur.execute(
+                "SELECT d.id AS dimensao_id,d.nome AS dimensao_nome,dv.id AS valor_id,dv.nome AS valor_nome "
+                "FROM cartao.dimensao d JOIN cartao.dimensao_valor dv ON dv.dimensao_id=d.id;"
+            )
+            valores_dimensao = cur.fetchall()
+            mapa_desejado = {"responsavel": "familia", "projeto": "casa", "portfolio": "moradia"}
+            selecionados = []
+            for dimensao_id, dimensao_nome, valor_id, valor_nome in valores_dimensao:
+                alvo = mapa_desejado.get(chave_alfa(dimensao_nome))
+                if alvo and chave_alfa(valor_nome) == alvo:
+                    selecionados.append((dimensao_id, valor_id))
+            cur.execute(
+                "SELECT id FROM cartao.regra_classificacao "
+                "WHERE lower(padrao)=lower('GuilhermeDaSilva') "
+                "AND valor_operador IN ('lt','gt') AND valor_limite=120;"
+            )
+            regras_novas = [r[0] for r in cur.fetchall()]
+            for regra_id in regras_novas:
+                for dimensao_id, valor_id in selecionados:
+                    cur.execute(
+                        "INSERT INTO cartao.regra_dimensao_valor (regra_id,dimensao_id,valor_id) "
+                        "VALUES (%s,%s,%s) ON CONFLICT (regra_id,dimensao_id) "
+                        "DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                        (regra_id, dimensao_id, valor_id),
+                    )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Regras GuilhermeDaSilva',"
+                "jsonb_build_object('regras_antigas_removidas',%s,'regras_por_valor',%s));",
+                (len(regras_antigas), len(regras_novas)),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (14);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
