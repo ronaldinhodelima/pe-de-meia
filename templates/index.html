@@ -108,13 +108,13 @@
         <td class="cel-data" data-col="data"></td>
         <td class="cel-desc" data-col="desc"><span class="rateio-seta">↳</span> Parte {{ loop.index }}</td>
         <td class="cel-origem" data-col="origem">Rateio interno</td>
-        <td class="cel-dim" data-col="categoria"><select class="rateio-cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.conferida }}><option value="{{ parte.categoria }}" selected>{{ parte.categoria_nome }}</option></select></td>
-        {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}"><select class="rateio-dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao" {{ 'disabled' if not pode_editar or r.conferida }}><option value="{{ parte.dims.get(d.id) or '' }}" selected>{{ parte.dims_rotulos.get(d.id) }}</option></select></td>{% endfor %}
-        <td class="valor cel-valor" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar or r.conferida }}></td>
-        <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar or r.conferida }}></td>
+        <td class="cel-dim" data-col="categoria"><select class="rateio-cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar }}><option value="{{ parte.categoria }}" selected>{{ parte.categoria_nome }}</option></select></td>
+        {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}"><select class="rateio-dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao" {{ 'disabled' if not pode_editar }}><option value="{{ parte.dims.get(d.id) or '' }}" selected>{{ parte.dims_rotulos.get(d.id) }}</option></select></td>{% endfor %}
+        <td class="valor cel-valor" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar }}></td>
+        <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar }}></td>
         {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
         <td class="cel-check" data-col="check"></td>
-        <td class="cel-status" data-col="status"><button type="button" class="rateio-salvar-inline ver-btn" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or r.conferida or not r.rateio_valido }}>Salvar</button></td>
+        <td class="cel-status" data-col="status"><button type="button" class="rateio-salvar-inline ver-btn" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or not r.rateio_valido }}>Salvar</button></td>
       </tr>
       {% endfor %}
     {% else %}

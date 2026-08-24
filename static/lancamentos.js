@@ -634,7 +634,6 @@ function atualizarValidacaoRateioInline(id, alterado) {
   const pai = document.querySelector('tr[data-id="' + id + '"]');
   if (!pai) return false;
   const estado = validarRateioInline(id);
-  const conferida = !!(window.detalhes[id] || {})._conferida;
   const conf = pai.querySelector('.conf-check');
   if (conf) {
     conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido;
@@ -652,7 +651,7 @@ function atualizarValidacaoRateioInline(id, alterado) {
   linhasRateioInline(id).forEach(linha => {
     if (alterado) linha.classList.add('rateio-alterado');
     const botao = linha.querySelector('.rateio-salvar-inline');
-    if (botao) botao.disabled = conferida || !window.configLancamentos.pode_editar || !estado.valido;
+    if (botao) botao.disabled = !window.configLancamentos.pode_editar || !estado.valido;
   });
   pai.dataset.rateioValido = estado.valido ? '1' : '0';
   if (window.detalhes[id]) window.detalhes[id]._rateio_valido = estado.valido;

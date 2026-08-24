@@ -35,6 +35,15 @@ def test_servidor_bloqueia_lancamento_durante_edicao_e_exclusao():
     assert texto.count("WHERE transacao_id = %s FOR UPDATE") >= 2
 
 
+def test_rateio_conferido_pode_ser_editado_sem_perder_ok_mas_nao_desfeito():
+    texto = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = texto.split("def rateios_transacao", 1)[1].split("def update_transacao", 1)[0]
+
+    assert 'if transacao[1] and request.method == "DELETE":' in trecho
+    assert 'SELECT id FROM cartao.dimensao WHERE obrigatoria=true' in trecho
+    assert "UPDATE cartao.transacao SET conferida" not in trecho
+
+
 def test_auditoria_de_lancamento_guarda_valores_anteriores_e_novos():
     app = (RAIZ / "app.py").read_text(encoding="utf-8")
     lancamentos = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")

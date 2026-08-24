@@ -709,10 +709,10 @@ def rateios_transacao(transacao_id):
         transacao = cur.fetchone()
         if not transacao:
             return jsonify({"ok": False, "erro": "Lançamento não encontrado."}), 404
-        if transacao[1]:
+        if transacao[1] and request.method == "DELETE":
             return jsonify({
                 "ok": False,
-                "erro": "Desmarque o OK antes de alterar ou remover o rateio.",
+                "erro": "Desmarque o OK antes de desfazer o rateio.",
             }), 409
         antes = _estado_rateios(cur, transacao_id)
         if request.method == "DELETE":
@@ -749,6 +749,22 @@ def rateios_transacao(transacao_id):
                         return jsonify({"ok": False, "erro": "Valor de dimensão inválido no rateio."}), 400
                 dimensoes_ok[dim_id] = valor_id
             parte["dimensoes"] = dimensoes_ok
+
+        # Editar uma classificação nunca desmarca o OK. Quando ele já existe,
+        # só aceitamos o novo conjunto se todas as dimensões obrigatórias
+        # continuarem preenchidas; a soma e as categorias já foram validadas
+        # acima. Assim não há estado confirmado parcialmente classificado.
+        if transacao[1]:
+            cur.execute("SELECT id FROM cartao.dimensao WHERE obrigatoria=true;")
+            obrigatorias = [row[0] for row in cur.fetchall()]
+            if any(
+                any(parte["dimensoes"].get(dim_id) is None for dim_id in obrigatorias)
+                for parte in partes
+            ):
+                return jsonify({
+                    "ok": False,
+                    "erro": "Preencha os campos obrigatórios de todas as partes.",
+                }), 400
 
         cur.execute("DELETE FROM cartao.transacao_rateio WHERE transacao_id=%s;", (transacao_id,))
         for parte in partes:

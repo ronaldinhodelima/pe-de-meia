@@ -474,7 +474,9 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
   classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
   abaixo dele com botão `+`/`−`. As partes devem somar exatamente o total (inclusive o sinal),
-  substituem o pai no DRE/relatórios e não podem ser alteradas enquanto o pai estiver com OK.
+  substituem o pai no DRE/relatórios. Podem ser alteradas com o pai em OK sem apagar essa
+  assinatura, mas o servidor só aceita o conjunto completo, fechado e com campos obrigatórios;
+  desfazer o rateio por inteiro exige retirar o OK antes.
   Valor, categoria, dimensões e observação são editados diretamente nas linhas das partes e
   salvos juntos; o OK do pai fica desabilitado enquanto a soma não fechar ou faltar campo
   obrigatório. O OK continua sendo marcado apenas pelo usuário depois de conferir tudo.
