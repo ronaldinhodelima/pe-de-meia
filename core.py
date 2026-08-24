@@ -1486,6 +1486,62 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (14);")
             conn.commit()
 
+        if versao_atual < 15:
+            # A estrutura de rateio precisa ser criada também nos bancos que já
+            # passaram pela instalação inicial. Mantemos o mesmo DDL no bloco 1
+            # para instalações novas e repetimos aqui de forma idempotente para
+            # atualizar a produção existente.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.transacao_rateio ("
+                "id bigserial PRIMARY KEY, "
+                "transacao_id uuid NOT NULL REFERENCES cartao.transacao(transacao_id) ON DELETE CASCADE, "
+                "ordem integer NOT NULL DEFAULT 0, valor_brl numeric(14,2) NOT NULL, "
+                "categoria text NOT NULL, observacao text, "
+                "criado_em timestamptz NOT NULL DEFAULT now(), atualizado_em timestamptz NOT NULL DEFAULT now(), "
+                "UNIQUE(transacao_id, ordem), CHECK (valor_brl <> 0));"
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.transacao_rateio_dimensao ("
+                "rateio_id bigint NOT NULL REFERENCES cartao.transacao_rateio(id) ON DELETE CASCADE, "
+                "dimensao_id integer NOT NULL REFERENCES cartao.dimensao(id) ON DELETE CASCADE, "
+                "valor_id integer REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL, "
+                "PRIMARY KEY (rateio_id, dimensao_id));"
+            )
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS "
+                "SELECT t.transacao_id::text AS linha_id, NULL::bigint AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+                "t.valor_brl, t.valor_original, t.moeda_original, t.status, t.tipo, "
+                "t.numero_cartao_final, t.conferida, COALESCE(t.duplicada,false) AS duplicada, "
+                "t.natureza, t.observacao "
+                "FROM cartao.transacao t WHERE NOT EXISTS ("
+                "SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id=t.transacao_id) "
+                "UNION ALL "
+                "SELECT t.transacao_id::text || ':' || r.id::text AS linha_id, r.id AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, r.categoria, "
+                "r.valor_brl, r.valor_brl AS valor_original, 'BRL'::text AS moeda_original, "
+                "t.status, t.tipo, t.numero_cartao_final, t.conferida, "
+                "COALESCE(t.duplicada,false) AS duplicada, NULL::text AS natureza, r.observacao "
+                "FROM cartao.transacao t JOIN cartao.transacao_rateio r ON r.transacao_id=t.transacao_id;"
+            )
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro_dimensao AS "
+                "SELECT td.transacao_id AS linha_id, td.dimensao_id, td.valor_id "
+                "FROM cartao.transacao_dimensao td "
+                "WHERE NOT EXISTS (SELECT 1 FROM cartao.transacao_rateio r "
+                "WHERE r.transacao_id::text=td.transacao_id) "
+                "UNION ALL "
+                "SELECT r.transacao_id::text || ':' || r.id::text AS linha_id, rd.dimensao_id, rd.valor_id "
+                "FROM cartao.transacao_rateio r JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Estrutura de rateio',"
+                "jsonb_build_object('versao',15));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (15);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
