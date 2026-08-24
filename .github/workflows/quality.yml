@@ -36,6 +36,56 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+
+  integracao-postgres:
+    name: Integracao com PostgreSQL temporario
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pedemeia_test
+          POSTGRES_PASSWORD: senha_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pedemeia_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: pedemeia_test
+      PGUSER: postgres
+      PGPASSWORD: senha_teste
+      SECRET_KEY: chave-descartavel-da-integracao
+      SYNC_SECRET: chave-descartavel-do-worker
+      RUN_POSTGRES_INTEGRATION: "1"
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v6
+
+      - name: Preparar Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            bussola/requirements.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r bussola/requirements.txt pytest
+
+      - name: Testar migracoes e operacoes completas
+        run: python -m pytest -q tests/test_integracao_postgres.py
+
             bussola/requirements.txt
 
       - name: Instalar dependencias
