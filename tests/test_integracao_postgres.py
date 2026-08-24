@@ -233,7 +233,10 @@ def test_nova_sincronizacao_preserva_ajustes_humanos(sistema_real):
 
     resposta = cliente.post(
         f"/api/transacao/{transacao_id}",
-        json={"categoria": "Travel", "observacao": "nao sobrescrever", "duplicada": True},
+        json={
+            "categoria": "Travel", "observacao": "nao sobrescrever",
+            "duplicada": True, "confirmar_duplicada": True,
+        },
     )
     assert resposta.status_code == 200
 
