@@ -16,7 +16,6 @@ from core import (
     VAL_DESPESA,
     _montar_filtro_relatorio,
     aplicar_regras,
-    aviso_pendencias_html,
     carregar_origens,
     rotulo_valor_dimensao,
     cat_pt_puro,
@@ -121,7 +120,7 @@ def dre():
         por_dimensao.append({"nome": d["nome"], "linhas": cur.fetchall()})
 
     # o DRE e onde a ma classificacao vira numero errado - avisa aqui
-    aviso_pend = aviso_pendencias_html(levantar_pendencias(cur)) if pode("cadastros") else ""
+    pendencias = levantar_pendencias(cur) if pode("cadastros") else None
 
     cur.close()
     conn.close()
@@ -187,7 +186,7 @@ def dre():
         "dre.html",
         titulo="DRE / Centro de Custos",
         topbar=topbar_html("DRE / Centro de Custos", "dre"),
-        aviso_pend=aviso_pend,
+        pendencias=pendencias,
         ano=ano,
         anos=list(range(hoje.year - 3, hoje.year + 1)),
         rec_ano=rec_ano,

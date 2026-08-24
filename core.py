@@ -8,6 +8,7 @@ import functools
 import hashlib
 import html
 import json
+import logging
 import secrets
 import unicodedata
 import uuid
@@ -19,6 +20,9 @@ from zoneinfo import ZoneInfo
 import psycopg2
 import psycopg2.extras
 from flask import request, redirect, session, jsonify, render_template, has_request_context
+
+
+logger = logging.getLogger(__name__)
 
 
 # URL do servico bussola-financeira-app que faz a sincronizacao com o Pluggy.
@@ -695,8 +699,9 @@ def get_ultima_sincronizacao():
             "transacoes_atualizadas": row["transacoes_atualizadas"],
             "mensagem_erro": row["mensagem_erro"],
         }
-    except Exception as e:
-        return {"executado_em": None, "status": "erro", "mensagem_erro": str(e)}
+    except Exception:
+        logger.exception("Falha ao consultar o status da sincronizacao")
+        return {"executado_em": None, "status": "erro"}
 
 
 def disparar_sincronizacao():
@@ -707,10 +712,12 @@ def disparar_sincronizacao():
         with urllib.request.urlopen(req, timeout=60) as resp:
             resp.read()
         return True, None
-    except urllib.error.URLError as e:
-        return False, str(e)
-    except Exception as e:
-        return False, str(e)
+    except urllib.error.URLError:
+        logger.exception("Falha de rede ao disparar a sincronizacao")
+        return False, None
+    except Exception:
+        logger.exception("Falha inesperada ao disparar a sincronizacao")
+        return False, None
 
 
 def get_conn():

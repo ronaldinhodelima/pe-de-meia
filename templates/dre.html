@@ -1,8 +1,26 @@
 {% extends "base.html" %}
 
 {% block conteudo %}
-{# aviso_pend e HTML montado por aviso_pendencias_html(), nao entrada de usuario #}
-{{ aviso_pend|safe }}
+{% if pendencias and pendencias.total %}
+  <div style="background:var(--bad-soft);border:1px solid var(--bad);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>⚠</span>
+    <span>
+      {% if pendencias.sem_categoria %}
+        <strong>{{ pendencias.sem_categoria }}</strong> lançamento{{ 's' if pendencias.sem_categoria > 1 else '' }} sem categoria
+      {% endif %}
+      {% if pendencias.sem_natureza %}
+        {% if pendencias.sem_categoria %} · {% endif %}
+        <strong>{{ pendencias.sem_natureza|length }}</strong> categoria{{ 's' if pendencias.sem_natureza|length > 1 else '' }} sem natureza definida
+        (entra{{ 'm' if pendencias.sem_natureza|length > 1 else '' }} como despesa por padrão)
+      {% endif %}
+      {% if pendencias.despesa_sem_centro %}
+        {% if pendencias.sem_categoria or pendencias.sem_natureza %} · {% endif %}
+        <strong>{{ pendencias.despesa_sem_centro|length }}</strong> categoria{{ 's' if pendencias.despesa_sem_centro|length > 1 else '' }} de despesa sem centro de custo
+      {% endif %}
+    </span>
+    <a href="/pendencias" style="margin-left:auto;color:var(--bad);font-weight:600">Revisar agora →</a>
+  </div>
+{% endif %}
 
 <div class="filters">
   <div>

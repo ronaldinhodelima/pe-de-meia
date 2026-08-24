@@ -42,6 +42,31 @@ class TestInvestimentos:
         assert "&lt;img" in html
 
 
+class TestDRE:
+    BASE = dict(
+        titulo="DRE", topbar="", ano="2026", anos=[2026], rec_ano=0,
+        desp_ano=0, resultado_ano=0, inv_ano=0, linhas_dre=[],
+        blocos_dimensao=[], grupos=[], nao_classificadas=[],
+    )
+
+    def test_aviso_de_pendencias_e_montado_sem_html_dinamico(self, ctx):
+        pendencias = {
+            "sem_categoria": 2,
+            "sem_natureza": ["A"],
+            "despesa_sem_centro": ["B", "C"],
+            "total": 5,
+        }
+        html = render_template("dre.html", **{**self.BASE, "pendencias": pendencias})
+        assert "2</strong> lançamentos sem categoria" in html
+        assert "1</strong> categoria sem natureza" in html
+        assert "2</strong> categorias de despesa sem centro" in html
+        assert "|safe" not in html
+
+    def test_sem_pendencias_nao_mostra_alerta(self, ctx):
+        html = render_template("dre.html", **{**self.BASE, "pendencias": None})
+        assert "Revisar agora" not in html
+
+
 class TestLogs:
     def test_detalhes_e_campos_sao_escapados(self, ctx):
         evento = {

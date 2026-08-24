@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import app
 import core
-from views import auth, lancamentos
+from views import auth, lancamentos, sistema
 
 
 def test_post_sem_origem_e_bloqueado_fora_de_testes():
@@ -169,3 +169,42 @@ def test_worker_nao_tem_autorizacao_fail_open():
     texto = (pathlib.Path(__file__).parent.parent / "bussola" / "app.py").read_text(encoding="utf-8")
     assert "if not SYNC_SECRET:" in texto
     assert "return not SYNC_SECRET or" not in texto
+
+
+def test_api_de_sync_nao_expoe_detalhes_internos(monkeypatch):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(
+        sistema,
+        "get_ultima_sincronizacao",
+        lambda: {
+            "executado_em": None,
+            "status": "erro",
+            "mensagem_erro": "password=segredo host=banco-interno",
+        },
+    )
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "admin"
+        sessao["permissoes"] = ["sincronizar"]
+
+    resposta = cliente.get("/api/sync-status")
+    assert resposta.status_code == 200
+    assert "mensagem_erro" not in resposta.get_json()
+    assert "segredo" not in resposta.get_data(as_text=True)
+
+
+def test_falha_ao_disparar_sync_retorna_apenas_erro_generico(monkeypatch):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    monkeypatch.setattr(
+        sistema,
+        "disparar_sincronizacao",
+        lambda: (False, "https://usuario:senha@servico-interno/sync"),
+    )
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "admin"
+        sessao["permissoes"] = ["sincronizar"]
+
+    resposta = cliente.post("/api/sync-agora", headers={"Origin": "http://localhost"})
+    assert resposta.status_code == 502
+    assert resposta.get_json() == {"executado_em": None, "status": "erro"}
