@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, session, jsonify, render_template
+from flask import Blueprint, request, session, jsonify, render_template, g
 
 from core import (
     CATEGORIAS_EXTRA,
@@ -517,7 +517,8 @@ def update_transacao(transacao_id):
     # Serializa edições do mesmo lançamento. Combinado com payloads parciais da
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
-        "SELECT conferida, conferida_por, COALESCE(duplicada, false) "
+        "SELECT conferida, conferida_por, COALESCE(duplicada, false), "
+        "categoria, observacao, natureza "
         "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
@@ -577,20 +578,39 @@ def update_transacao(transacao_id):
             return jsonify({"ok": False, "erro": "Dimensão ou valor inválido."}), 400
 
         if valor_id_int is None:
-            cur.execute("SELECT 1 FROM cartao.dimensao WHERE id = %s;", (dim_id,))
+            cur.execute("SELECT nome FROM cartao.dimensao WHERE id = %s;", (dim_id,))
         else:
             cur.execute(
-                "SELECT 1 FROM cartao.dimensao_valor WHERE id = %s AND dimensao_id = %s;",
+                "SELECT d.nome, dv.nome FROM cartao.dimensao_valor dv "
+                "JOIN cartao.dimensao d ON d.id = dv.dimensao_id "
+                "WHERE dv.id = %s AND dv.dimensao_id = %s;",
                 (valor_id_int, dim_id),
             )
-        if not cur.fetchone():
+        dimensao_nova = cur.fetchone()
+        if not dimensao_nova:
             conn.rollback()
             cur.close()
             conn.close()
             return jsonify({"ok": False, "erro": "O valor não pertence à dimensão informada."}), 400
-        dimensoes_validadas.append((dim_id, valor_id_int))
+        nome_dimensao = dimensao_nova[0]
+        nome_valor_novo = dimensao_nova[1] if valor_id_int is not None else None
+        cur.execute(
+            "SELECT td.valor_id, dv.nome FROM cartao.transacao_dimensao td "
+            "LEFT JOIN cartao.dimensao_valor dv ON dv.id = td.valor_id "
+            "WHERE td.transacao_id = %s AND td.dimensao_id = %s;",
+            (transacao_id, dim_id),
+        )
+        dimensao_antiga = cur.fetchone()
+        dimensoes_validadas.append((
+            dim_id,
+            valor_id_int,
+            nome_dimensao,
+            dimensao_antiga[0] if dimensao_antiga else None,
+            dimensao_antiga[1] if dimensao_antiga else None,
+            nome_valor_novo,
+        ))
 
-    for dim_id, valor_id_int in dimensoes_validadas:
+    for dim_id, valor_id_int, _nome_dimensao, _valor_id_antigo, _valor_antigo, _valor_novo in dimensoes_validadas:
         cur.execute(
             "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) VALUES (%s,%s,%s) "
             "ON CONFLICT (transacao_id, dimensao_id) DO UPDATE SET valor_id = EXCLUDED.valor_id;",
@@ -656,6 +676,36 @@ def update_transacao(transacao_id):
         else (None if "conferida" in data else transacao[1])
     )
     duplicada_final = bool(data.get("duplicada")) if "duplicada" in data else bool(transacao[2])
+    alteracoes = {}
+
+    def registrar_mudanca(campo, antes, depois):
+        if antes != depois:
+            alteracoes[campo] = {"antes": antes, "depois": depois}
+
+    if "conferida" in data:
+        registrar_mudanca("Conferida", bool(transacao[0]), conferida_final)
+    if "duplicada" in data:
+        registrar_mudanca("Duplicada", bool(transacao[2]), duplicada_final)
+    if "observacao" in data:
+        registrar_mudanca("Observação", transacao[4], data.get("observacao"))
+    if "categoria" in data:
+        categoria_nova = data.get("categoria") or None
+        registrar_mudanca(
+            "Categoria",
+            {"chave": transacao[3], "nome": cat_pt_puro(transacao[3])} if transacao[3] else None,
+            {"chave": categoria_nova, "nome": cat_pt_puro(categoria_nova)} if categoria_nova else None,
+        )
+    if "natureza" in data:
+        registrar_mudanca("Natureza", transacao[5], natureza)
+    for _dim_id, valor_id, nome_dimensao, valor_id_antigo, valor_antigo, valor_novo in dimensoes_validadas:
+        registrar_mudanca(
+            nome_dimensao,
+            {"id": valor_id_antigo, "nome": valor_antigo} if valor_id_antigo else None,
+            {"id": valor_id, "nome": valor_novo} if valor_id else None,
+        )
+    if alteracoes:
+        g.audit_alteracoes = alteracoes
+
     return jsonify({
         "ok": True,
         "bloqueada": bloqueada,

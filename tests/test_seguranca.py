@@ -47,7 +47,7 @@ def test_editar_nao_da_permissao_de_conferir(monkeypatch):
             pass
 
         def fetchone(self):
-            return (False, None, False)
+            return (False, None, False, "Groceries", None, None)
 
         def close(self):
             pass
@@ -80,7 +80,7 @@ def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
             pass
 
         def fetchone(self):
-            return (False, None, False)
+            return (False, None, False, "Groceries", None, None)
 
         def fetchall(self):
             return []

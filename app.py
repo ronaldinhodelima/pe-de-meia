@@ -140,6 +140,9 @@ def _auditar_requisicao(response):
         detalhes={
             "operacao": operacao,
             "entrada": sanitizar_dados_auditoria(entrada or {}),
+            "alteracoes": sanitizar_dados_auditoria(
+                getattr(g, "audit_alteracoes", {})
+            ),
             "duracao_ms": duracao_ms,
         },
     )

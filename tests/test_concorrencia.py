@@ -35,6 +35,17 @@ def test_servidor_bloqueia_lancamento_durante_edicao_e_exclusao():
     assert texto.count("WHERE transacao_id = %s FOR UPDATE") >= 2
 
 
+def test_auditoria_de_lancamento_guarda_valores_anteriores_e_novos():
+    app = (RAIZ / "app.py").read_text(encoding="utf-8")
+    lancamentos = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+
+    assert 'getattr(g, "audit_alteracoes", {})' in app
+    assert 'alteracoes[campo] = {"antes": antes, "depois": depois}' in lancamentos
+    for campo in ("Conferida", "Duplicada", "Observação", "Natureza"):
+        assert f'registrar_mudanca("{campo}"' in lancamentos
+    assert '"Categoria",' in lancamentos
+
+
 def test_excluir_regra_libera_lancamentos_e_fk_impede_orfaos():
     cadastros = (RAIZ / "views" / "cadastros.py").read_text(encoding="utf-8")
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
