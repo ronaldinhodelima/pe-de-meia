@@ -469,10 +469,7 @@ def regras_view():
             )
             prefill["dimensoes"] = {r["dimensao_id"]: r["valor_id"] for r in cur.fetchall()}
 
-    todas_categorias = sorted(
-        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
-        key=lambda c: chave_alfa(cat_pt(c)),
-    )
+    todas_categorias = _categorias_para_regras()
 
     cur.close()
     conn.close()
@@ -720,7 +717,10 @@ def grupos_view():
     for s in subgrupos_db:
         subgrupos_por_grupo.setdefault(s["grupo_id"], []).append(s)
 
-    todas_categorias = _categorias_para_regras()
+    todas_categorias = sorted(
+        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
 
     # cada categoria vira {chave, nome, subgrupo_id} - o template filtra por
     # subgrupo_id pra montar os chips e o dropdown de vincular
