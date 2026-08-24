@@ -131,6 +131,11 @@ class TestNaturezaEfetiva:
     def test_sem_nenhuma_natureza_definida_usa_o_padrao(self):
         assert natureza_efetiva(None, None, 100) == core.NATUREZA_PADRAO
 
+    def test_estorno_mantem_natureza_e_reduz_a_despesa(self):
+        # Estorno de compra não vira receita nova: permanece na categoria de
+        # despesa com valor negativo, abatendo a despesa do período.
+        assert natureza_efetiva(None, "despesa", -100) == "despesa"
+
     def test_fluxo_com_dinheiro_saindo_e_despesa(self):
         assert natureza_efetiva(None, "fluxo", 150.0) == "despesa"
 

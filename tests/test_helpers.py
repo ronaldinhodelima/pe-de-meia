@@ -152,6 +152,18 @@ class TestAvisoPendencias:
         assert "sem natureza definida" in html
         assert "sem centro de custo" in html
 
+    def test_lancamento_sem_categoria_dispara_alerta(self):
+        pend = {
+            "sem_categoria": 2,
+            "sem_natureza": [],
+            "despesa_sem_centro": [],
+            "natureza_manual": 0,
+            "total": 2,
+        }
+        html = core.aviso_pendencias_html(pend)
+        assert "2</strong> lançamentos sem categoria" in html
+        assert "/pendencias" in html
+
 def test_auditoria_oculta_credenciais_e_limita_texto():
     dados = core.sanitizar_dados_auditoria({
         "usuario": "ronaldo",

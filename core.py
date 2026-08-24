@@ -1505,20 +1505,31 @@ def _montar_filtro_relatorio(dimensoes):
 def levantar_pendencias(cur):
     """Levanta o que esta mal classificado e pode distorcer o DRE.
 
-    Tres coisas, em ordem de gravidade contabil:
+    Quatro coisas, em ordem de gravidade contabil:
 
-    1. categoria SEM natureza definida - o app assume 'despesa' por padrao, entao
+    1. lancamento SEM categoria - entra como despesa padrao, mas nao aparece em
+       categoria nem centro de custo. Um credito/estorno sem categoria pode
+       reduzir a despesa silenciosamente no lugar errado.
+    2. categoria SEM natureza definida - o app assume 'despesa' por padrao, entao
        uma categoria nova que o Pluggy inventou (ex: um investimento) entra como
        despesa silenciosamente e infla o resultado. E o caso mais grave porque
        ninguem decidiu nada: aconteceu sozinho.
-    2. categoria de DESPESA sem centro de custo - nao afeta o resultado (a despesa
+    3. categoria de DESPESA sem centro de custo - nao afeta o resultado (a despesa
        e contada de qualquer forma), mas some dos totais por grupo do DRE. So vale
        para despesa: vincular receita ou transferencia a centro de custo nao faz
        sentido contabil (centro de custo e analise de gasto).
-    3. lancamentos com natureza manual - excecao marcada no proprio lancamento, que
+    4. lancamentos com natureza manual - excecao marcada no proprio lancamento, que
        sobrepoe a natureza da categoria. Funciona, mas fica invisivel: o certo e
        mover o lancamento para uma categoria que ja tenha a natureza correta.
     """
+    cur.execute(
+        "SELECT t.transacao_id, t.data_transacao, t.descricao, "
+        "COALESCE(t.valor_brl, t.valor_original) AS valor "
+        "FROM cartao.transacao t WHERE t.categoria IS NULL "
+        "AND COALESCE(t.duplicada, false) = false ORDER BY t.data_transacao DESC;"
+    )
+    sem_categoria_db = cur.fetchall()
+
     cur.execute(
         "SELECT DISTINCT t.categoria FROM cartao.transacao t "
         "LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
@@ -1551,6 +1562,13 @@ def levantar_pendencias(cur):
     manuais = cur.fetchall()
 
     return {
+        "sem_categoria": len(sem_categoria_db),
+        "lancamentos_sem_categoria": [{
+            "id": str(m["transacao_id"]),
+            "data": data_hora_local(m["data_transacao"]).strftime("%d/%m/%Y") if m["data_transacao"] else "-",
+            "descricao": m["descricao"] or "-",
+            "valor": float(m["valor"] or 0),
+        } for m in sem_categoria_db],
         "sem_natureza": sem_natureza,
         "despesa_sem_centro": despesa_sem_centro,
         "natureza_manual": len(manuais),
@@ -1564,7 +1582,7 @@ def levantar_pendencias(cur):
             "natureza_rotulo": NATUREZAS.get(m["natureza"], m["natureza"]),
             "valor": float(m["valor"] or 0),
         } for m in manuais],
-        "total": len(sem_natureza) + len(despesa_sem_centro),
+        "total": len(sem_categoria_db) + len(sem_natureza) + len(despesa_sem_centro),
     }
 
 
@@ -1574,6 +1592,10 @@ def aviso_pendencias_html(pend):
     if not pend["total"]:
         return ""
     partes = []
+    if pend.get("sem_categoria"):
+        n = pend["sem_categoria"]
+        rotulo = "lançamentos" if n > 1 else "lançamento"
+        partes.append(f'<strong>{n}</strong> {rotulo} sem categoria')
     if pend["sem_natureza"]:
         n = len(pend["sem_natureza"])
         partes.append(f'<strong>{n}</strong> categoria{"s" if n > 1 else ""} sem natureza definida'

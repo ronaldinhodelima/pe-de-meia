@@ -630,6 +630,30 @@ def pendencias_view():
                 )
                 conn.commit()
                 aviso = "Lançamento voltou a seguir a natureza da categoria."
+        elif acao == "definir_categoria_lancamento":
+            transacao_id = request.form.get("transacao_id")
+            categoria = request.form.get("categoria")
+            cur.execute(
+                "SELECT 1 FROM (SELECT categoria FROM cartao.categoria_natureza "
+                "UNION SELECT categoria FROM cartao.categoria "
+                "UNION SELECT DISTINCT categoria FROM cartao.transacao WHERE categoria IS NOT NULL) x "
+                "WHERE x.categoria = %s;",
+                (categoria,),
+            )
+            if not transacao_id or not categoria or not cur.fetchone():
+                erro = "Escolha uma categoria válida."
+            else:
+                cur.execute(
+                    "UPDATE cartao.transacao SET categoria = %s, categoria_manual = true, "
+                    "regra_aplicada_id = NULL WHERE transacao_id = %s AND categoria IS NULL;",
+                    (categoria, transacao_id),
+                )
+                if cur.rowcount:
+                    conn.commit()
+                    aviso = "Categoria definida. O lançamento continua pendente de conferência."
+                else:
+                    conn.rollback()
+                    erro = "O lançamento já foi alterado em outra tela. Recarregue e confira."
         elif acao == "ocultar":
             categoria = request.form.get("categoria")
             if categoria:
@@ -647,6 +671,15 @@ def pendencias_view():
     grupos_db = sorted(cur.fetchall(), key=lambda g: chave_alfa(g["nome"]))
     cur.execute("SELECT id, grupo_id, nome FROM cartao.subgrupo_custo;")
     subgrupos_db = sorted(cur.fetchall(), key=lambda s: chave_alfa(s["nome"]))
+    cur.execute(
+        "SELECT categoria FROM cartao.categoria_natureza "
+        "UNION SELECT categoria FROM cartao.categoria "
+        "UNION SELECT DISTINCT categoria FROM cartao.transacao WHERE categoria IS NOT NULL;"
+    )
+    categorias_pendencia = sorted(
+        (r["categoria"] for r in cur.fetchall() if r["categoria"] not in CATEGORIAS_OCULTAS),
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
     cur.close()
     conn.close()
 
@@ -666,6 +699,7 @@ def pendencias_view():
         pend=pend,
         grupos=grupos_db,
         subgrupos_por_grupo=subgrupos_por_grupo,
+        categorias_pendencia=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias_pendencia],
         naturezas=NATUREZAS,
         natureza_padrao=NATUREZA_PADRAO,
         nome_categoria=cat_pt_puro,
