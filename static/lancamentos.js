@@ -415,8 +415,7 @@ function renderizarRateioModal() {
   }
   if (rateioRascunhoModal === null) {
     box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong>' +
-      '<button type="button" class="ver-btn" onclick="iniciarRateioModal()">Dividir em 2 partes</button></div>' +
-      '<div class="rateio-fechamento">Use quando um único débito pertence a mais de uma classificação.</div>';
+      '<button type="button" class="ver-btn" onclick="iniciarRateioModal()">Dividir em 2 partes</button></div>';
     return;
   }
   const categorias = (window.configLancamentos.categorias || []).map(c => ({valor:c.chave,rotulo:c.nome}));
