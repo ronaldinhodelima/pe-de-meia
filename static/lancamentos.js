@@ -44,12 +44,12 @@ function hidratarSelect(sel) {
 }
 
 document.addEventListener('focusin', function (e) {
-  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select')) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, .modal-dim-select')) {
     hidratarSelect(e.target);
   }
 });
 document.addEventListener('pointerdown', function (e) {
-  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select')) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, .modal-dim-select')) {
     hidratarSelect(e.target);
   }
 });
@@ -221,40 +221,49 @@ function sincronizarControlesModal() {
   const dup = document.getElementById('modalDup');
   if (conf) conf.value = d._conferida ? 'sim' : 'nao';
   if (dup) dup.checked = !!d._duplicada;
-  document.getElementById('modalConferidaPor').textContent = d.conferida_por || '-';
-  document.getElementById('modalObservacao').textContent = d.observacao || '-';
+  const conferidaPor = document.getElementById('modalConferidaPor');
+  const usuarioConferencia = d.conferida_por && d.conferida_por !== '-' ? d.conferida_por : '';
+  conferidaPor.textContent = usuarioConferencia ? 'por ' + usuarioConferencia : '';
+  conferidaPor.hidden = !d._conferida || !usuarioConferencia;
+  const observacao = document.getElementById('modalObservacao');
+  observacao.value = d.observacao && d.observacao !== '-' ? d.observacao : '';
 }
 
 function verDetalhes(id) {
   const d = window.detalhes[id];
   if (!d) return;
   idAtualModal = id;
-  // Cabecalho tecnico ate Parcela. Depois dele o template segue exatamente a
-  // ordem da conferencia: Categoria, dimensoes, Observacao e OK.
-  const labels = {
-    data: 'Data', descricao: 'Descrição', valor: 'Valor (R$)',
-    valor_original: 'Valor original', status: 'Status', tipo: 'Tipo', origem: 'Origem',
-    parcela: 'Parcela'
-  };
-  let html = '';
-  for (const k in labels) {
-    html += '<div class="row"><span>' + labels[k] + '</span><span>' + escHtml(d[k]) + '</span></div>';
-  }
-  let htmlDimensoes = '';
-  const tratadosAparte = ['categoria', 'conferida', 'conferida_por', 'observacao'];
-  for (const k in d) {
-    if (!(k in labels) && k.charAt(0) !== '_' && tratadosAparte.indexOf(k) === -1) {
-      htmlDimensoes += '<div class="row"><span>' + escHtml(k) + '</span><span>' + escHtml(d[k]) + '</span></div>';
-    }
-  }
+  // Valores e status ficam em pares para usar melhor o espaco do modal.
+  const html =
+    '<div class="row"><span>Data</span><span>' + escHtml(d.data) + '</span></div>' +
+    '<div class="row"><span>Descrição</span><span>' + escHtml(d.descricao) + '</span></div>' +
+    '<div class="row row-pareada">' +
+      '<span class="modal-campo"><small>Valor (R$)</small><strong>' + escHtml(d.valor) + '</strong></span>' +
+      '<span class="modal-campo"><small>Valor original</small><strong>' + escHtml(d.valor_original) + '</strong></span>' +
+    '</div>' +
+    '<div class="row row-pareada">' +
+      '<span class="modal-campo"><small>Status</small><strong>' + escHtml(d.status) + '</strong></span>' +
+      '<span class="modal-campo"><small>Tipo</small><strong>' + escHtml(d.tipo) + '</strong></span>' +
+    '</div>' +
+    '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>' +
+    '<div class="row"><span>Parcela</span><span>' + escHtml(d.parcela) + '</span></div>';
   document.getElementById('modalBody').innerHTML = html;
-  document.getElementById('modalDimensoes').innerHTML = htmlDimensoes;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');
   // espelha a categoria da linha; mudar aqui muda la e salva
   const selCat = document.getElementById('modalCategoria');
   const catLinha = trAtual ? trAtual.querySelector('.cat-select') : null;
   if (selCat && catLinha) selCat.value = catLinha.value;
+  document.querySelectorAll('.modal-dim-select').forEach(selModal => {
+    const selLinha = trAtual && trAtual.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
+    const opcao = document.createElement('option');
+    opcao.value = selLinha ? selLinha.value : '';
+    opcao.textContent = selLinha && selLinha.selectedOptions[0]
+      ? selLinha.selectedOptions[0].textContent : '(nao definido)';
+    selModal.replaceChildren(opcao);
+    selModal.value = opcao.value;
+    delete selModal.dataset.hidratado;
+  });
   cancelarConfirmacaoModal();
   sincronizarControlesModal();
   document.getElementById('modalBg').classList.add('show');
@@ -333,6 +342,23 @@ function salvarCategoriaModal() {
   // a categoria carrega a natureza contabil, entao os totais do mes mudam
   guardarPosicaoAtual();
   setTimeout(() => window.location.reload(), 600);
+}
+function salvarDimensaoModal(selModal) {
+  if (!idAtualModal) return;
+  const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+  if (!tr) return;
+  const selLinha = tr.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
+  hidratarSelect(selLinha);
+  selLinha.value = selModal.value;
+  salvar(idAtualModal, selLinha);
+}
+function salvarObservacaoModal() {
+  if (!idAtualModal) return;
+  const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+  if (!tr) return;
+  const obsLinha = tr.querySelector('.obs-input');
+  obsLinha.value = document.getElementById('modalObservacao').value;
+  salvar(idAtualModal, obsLinha).then(sincronizarControlesModal);
 }
 function toggleDuplicadaModal() {
   if (!idAtualModal) return;

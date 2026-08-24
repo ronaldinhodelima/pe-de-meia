@@ -121,22 +121,30 @@
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
       </select></span>
     </div>
-    <div id="modalDimensoes"></div>
+    <div id="modalDimensoes">
+      {% for d in dimensoes %}
+      <div class="row">
+        <span>{{ d.nome }}</span>
+        <span><select class="dim-select modal-dim-select" data-dim="{{ d.id }}"
+                      data-lazy-options="dimensao" onchange="salvarDimensaoModal(this)"
+                      {{ 'disabled' if not pode_editar }}>
+          <option value="">(nao definido)</option>
+        </select></span>
+      </div>
+      {% endfor %}
+    </div>
     <div class="row">
       <span>Observação</span>
-      <span id="modalObservacao">-</span>
+      <span><input id="modalObservacao" type="text" placeholder="Observação"
+                   onchange="salvarObservacaoModal()" {{ 'disabled' if not pode_editar }}></span>
     </div>
     <div class="row">
       <span>Conferida</span>
-      <span><select id="modalConferida" onchange="alterarConferidaModal()"
-                    {{ 'disabled' if not pode_conferir }} style="padding:5px 7px;min-width:86px">
-        <option value="sim">Sim</option>
-        <option value="nao">Não</option>
-      </select></span>
-    </div>
-    <div class="row">
-      <span>Conferida por</span>
-      <span id="modalConferidaPor">-</span>
+      <span class="modal-conferencia"><select id="modalConferida" onchange="alterarConferidaModal()"
+                    {{ 'disabled' if not pode_conferir }}>
+          <option value="sim">Sim</option>
+          <option value="nao">Não</option>
+        </select><small id="modalConferidaPor" hidden></small></span>
     </div>
     <div class="row">
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--ink)">

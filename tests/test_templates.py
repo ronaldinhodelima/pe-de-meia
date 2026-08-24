@@ -6,6 +6,8 @@ e ficou dando 500 sem ninguem ver (ela nao estava mais no menu). A tela foi remo
 depois, mas a licao fica: testar com dado inventado nao pega esse tipo de erro - o
 formato usado aqui tem que espelhar o que a view realmente entrega.
 """
+from pathlib import Path
+
 import pytest
 
 import app  # noqa: F401  (cria o Flask app e registra os blueprints)
@@ -225,6 +227,19 @@ class TestIndex:
         assert 'modalConfirmacaoResumo' not in html
         assert "cancelarConfirmacaoModal(true)" in html
         assert "confirmarAcaoModal()" in html
+
+    def test_modal_edita_dimensoes_observacao_e_compacta_campos(self, ctx):
+        html = self.render([self.linha(conferida=True)])
+        js = (Path(__file__).parent.parent / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+        assert 'class="dim-select modal-dim-select"' in html
+        assert 'onchange="salvarDimensaoModal(this)"' in html
+        assert 'onchange="salvarObservacaoModal()"' in html
+        assert 'id="modalConferidaPor" hidden' in html
+        assert js.count('class="row row-pareada"') == 2
+        assert "function salvarDimensaoModal" in js
+        assert "function salvarObservacaoModal" in js
+        assert "conferidaPor.hidden = !d._conferida" in js
 
     def test_opcoes_da_tabela_sao_carregadas_sob_demanda(self, ctx):
         categorias = [

@@ -256,6 +256,16 @@
   .modal h3 { margin-top: 0; font-size: 16px; letter-spacing: -0.01em; }
   .modal .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
   .modal .row span:first-child { color: var(--ink-faint); }
+  .modal .row > span:last-child { text-align: right; }
+  .modal .row-pareada { gap: 22px; }
+  .modal .row-pareada .modal-campo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
+  .modal .modal-campo small { color: var(--ink-faint); white-space: nowrap; }
+  .modal .modal-campo strong { color: var(--ink); font-weight: 400; text-align: right; }
+  .modal select, .modal input[type="text"] { padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; max-width: 230px; }
+  .modal input[type="text"] { width: 230px; }
+  .modal-conferencia { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .modal-conferencia select { min-width: 78px; }
+  .modal-conferencia small { color: var(--ink-soft); white-space: nowrap; }
   .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: 20px; line-height: 1; transition: color .15s; }
   .modal .close:hover { color: var(--ink); }
   .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid #efb3ae; border-radius: var(--radius-sm); background: var(--bad-soft); }
