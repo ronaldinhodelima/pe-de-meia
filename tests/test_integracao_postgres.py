@@ -259,6 +259,54 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
         assert "Pé de Meia" in html, rota
 
 
+def test_renomear_dimensao_trata_nome_repetido_sem_erro_500(sistema_real):
+    _worker, core, webapp = sistema_real
+    sufixo = uuid.uuid4().hex
+    nome_a = f"DIM A {sufixo}"
+    nome_b = f"DIM B {sufixo}"
+    nome_novo = f"DIM C {sufixo}"
+
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO cartao.dimensao (nome, obrigatoria, ordem) VALUES (%s,false,99) RETURNING id;",
+        (nome_a,),
+    )
+    dimensao_a = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO cartao.dimensao (nome, obrigatoria, ordem) VALUES (%s,false,99) RETURNING id;",
+        (nome_b,),
+    )
+    dimensao_b = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    cliente = webapp.app.test_client()
+    _login(cliente)
+    resposta = cliente.post(
+        "/dimensoes",
+        data={"acao": "editar_dimensao", "dimensao_id": dimensao_a, "nome": nome_b},
+    )
+    assert resposta.status_code == 200
+    assert "Já existe uma dimensão" in resposta.get_data(as_text=True)
+
+    resposta = cliente.post(
+        "/dimensoes",
+        data={"acao": "editar_dimensao", "dimensao_id": dimensao_a, "nome": nome_novo},
+    )
+    assert resposta.status_code == 200
+
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT nome FROM cartao.dimensao WHERE id=%s;", (dimensao_a,))
+    assert cur.fetchone()[0] == nome_novo
+    cur.execute("DELETE FROM cartao.dimensao WHERE id IN (%s,%s);", (dimensao_a, dimensao_b))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def test_tela_suporta_dez_vezes_o_volume_atual(sistema_real):
     _worker, core, webapp = sistema_real
     quantidade = 1200

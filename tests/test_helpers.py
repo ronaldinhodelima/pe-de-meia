@@ -1,4 +1,6 @@
 """Testes das funcoes auxiliares puras usadas pelo DRE e pelas telas."""
+from decimal import Decimal
+
 import app  # noqa: F401
 import core
 
@@ -80,6 +82,10 @@ class TestBarraHtml:
 
     def test_com_teto_gera_barra_e_percentual(self):
         html = core._barra_html(50, 100)
+        assert "50% do teto" in html
+
+    def test_aceita_total_float_com_teto_decimal_do_postgres(self):
+        html = core._barra_html(50.0, Decimal("100.00"))
         assert "50% do teto" in html
 
     def test_estourar_o_teto_nao_passa_de_100_por_cento_de_largura(self):

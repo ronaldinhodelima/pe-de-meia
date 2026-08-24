@@ -60,11 +60,19 @@ def dimensoes_view():
                     conn.rollback()
                     erro = f"Já existe uma dimensão chamada '{nome}'."
         elif acao == "editar_dimensao":
-            cur.execute(
-                "UPDATE cartao.dimensao SET nome=%s, obrigatoria=%s WHERE id=%s;",
-                ((request.form.get("nome") or "").strip(), request.form.get("obrigatoria") == "on", request.form.get("dimensao_id")),
-            )
-            conn.commit()
+            nome = (request.form.get("nome") or "").strip()
+            if not nome:
+                erro = "Informe o nome da dimensao."
+            else:
+                try:
+                    cur.execute(
+                        "UPDATE cartao.dimensao SET nome=%s, obrigatoria=%s WHERE id=%s;",
+                        (nome, request.form.get("obrigatoria") == "on", request.form.get("dimensao_id")),
+                    )
+                    conn.commit()
+                except psycopg2.errors.UniqueViolation:
+                    conn.rollback()
+                    erro = f"Já existe uma dimensão chamada '{nome}'."
         elif acao == "excluir_dimensao":
             cur.execute("DELETE FROM cartao.dimensao WHERE id=%s;", (request.form.get("dimensao_id"),))
             conn.commit()

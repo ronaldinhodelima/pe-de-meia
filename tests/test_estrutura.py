@@ -35,6 +35,13 @@ def test_containers_rodam_sem_usuario_root_e_dependencias_estao_fixadas():
         assert all("==" in linha for linha in requisitos if linha.strip() and not linha.startswith("#"))
 
 
+def test_lancamento_conferido_usa_destaque_cinza_claro():
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "tr.conferida { background: #f1f2f3; }" in css
+    assert "tr.conferida:hover { background: #e7e9ec; }" in css
+    assert "tr.conferida { background: var(--good-soft); }" not in css
+
+
 def nomes_definidos(arvore):
     achados = set(dir(builtins)) | INJETADOS
     for n in ast.walk(arvore):

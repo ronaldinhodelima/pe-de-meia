@@ -1415,9 +1415,14 @@ def _fmt_moeda(v):
 
 
 def _barra_html(realizado, teto):
-    if not teto or teto <= 0:
+    # PostgreSQL devolve colunas NUMERIC como Decimal, enquanto os totais da
+    # tela sao convertidos para float. Normalizar os dois evita TypeError ao
+    # redesenhar /dimensoes depois de qualquer alteracao.
+    teto_num = float(teto or 0)
+    realizado_num = float(realizado or 0)
+    if teto_num <= 0:
         return ""
-    pct = min(realizado / teto * 100, 999)
+    pct = min(realizado_num / teto_num * 100, 999)
     cor = "#2e8b3d" if pct < 70 else ("#d68a00" if pct < 100 else "#c0392b")
     largura = min(pct, 100)
     return (
