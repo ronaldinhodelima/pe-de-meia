@@ -329,6 +329,7 @@ def index():
         d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
         for d in dimensoes
     }
+    dimensoes_obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
     for r in rows:
         data_local = data_hora_local(r["data_transacao"])
         data_fmt_full = data_local.strftime("%d/%m/%Y %H:%M")
@@ -376,6 +377,20 @@ def index():
                     for d in dimensoes
                 },
             })
+        soma_rateio = sum(
+            (Decimal(str(parte["valor_brl"])) for parte in rateios_por_transacao.get(str(rid), [])),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        valor_pai_rateio = Decimal(str(r["valor"] or 0)).quantize(Decimal("0.01"))
+        rateio_valido = bool(rateios_ui) and (
+            len(rateios_ui) >= 2
+            and soma_rateio == valor_pai_rateio
+            and all(parte["categoria"] for parte in rateios_ui)
+            and all(
+                all(parte["dims"].get(dim_id) is not None for dim_id in dimensoes_obrigatorias)
+                for parte in rateios_ui
+            )
+        )
         selo, origem_texto = origem_partes(r["account_id"], r["numero_cartao_final"])
         origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
 
@@ -408,6 +423,8 @@ def index():
             "duplicada": r["duplicada"],
             "suspeita_duplicidade": str(rid) in ids_suspeitos,
             "rateios": rateios_ui,
+            "rateio_valido": rateio_valido,
+            "valor_rateio": float(abs(valor_pai_rateio)),
         })
 
         detalhes = {
@@ -430,6 +447,7 @@ def index():
             "_natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
             "_valor_rateio": float(abs(r["valor"] or 0)),
             "_rateios": rateios_ui,
+            "_rateio_valido": rateio_valido,
         }
         for d in dimensoes:
             detalhes[d["nome"]] = nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
@@ -440,6 +458,7 @@ def index():
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
     config_lancamentos = {
         "pode_editar": pode_editar,
+        "pode_conferir": pode_conferir,
         "duplicada_obs": DUPLICADA_OBS_PADRAO,
         "dimensoes_cadastro_rapido": {
             str(d["id"]): d["nome"] for d in dimensoes
@@ -454,6 +473,7 @@ def index():
             for d in dimensoes
         },
         "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
+        "dimensoes_obrigatorias": [str(d["id"]) for d in dimensoes if d["obrigatoria"]],
     }
 
     return render_template(

@@ -475,7 +475,9 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
   abaixo dele com botão `+`/`−`. As partes devem somar exatamente o total (inclusive o sinal),
   substituem o pai no DRE/relatórios e não podem ser alteradas enquanto o pai estiver com OK.
-  O OK continua sendo marcado apenas pelo usuário depois de conferir todas as partes.
+  Valor, categoria, dimensões e observação são editados diretamente nas linhas das partes e
+  salvos juntos; o OK do pai fica desabilitado enquanto a soma não fechar ou faltar campo
+  obrigatório. O OK continua sendo marcado apenas pelo usuário depois de conferir tudo.
 - **Pluggy é a origem bancária, não a dona da classificação.** A sincronização pode atualizar
   apenas os campos bancários mutáveis. Nunca pode sobrescrever categoria ajustada manualmente,
   Responsável, Projeto, Portfólio, observação, OK ou a marcação de duplicidade.

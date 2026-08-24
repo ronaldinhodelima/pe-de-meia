@@ -107,6 +107,13 @@
   .rateio-row { background:#f7f8fa; cursor:default; }
   .rateio-row:hover { background:#f7f8fa; }
   .rateio-row td { color:var(--ink-soft); border-top-style:dashed; }
+  .rateio-row.rateio-alterado { background:#fff8e8; }
+  .rateio-row.rateio-alterado:hover { background:#fff8e8; }
+  .rateio-row input,.rateio-row select { width:100%;max-width:100%;box-sizing:border-box; }
+  .rateio-row .rateio-valor-inline,.rateio-row .rateio-obs-inline { padding:4px 5px;font-size:11.5px;border:1px solid var(--line);border-radius:5px;background:#fff; }
+  .rateio-row .rateio-salvar-inline { padding:4px 6px;font-size:10.5px; }
+  .rateio-resumo { display:block;margin-top:2px;font-size:9.5px;color:var(--ink-faint);white-space:normal; }
+  .rateio-resumo.invalido { color:#c23c34;font-weight:600; }
   .rateio-seta { color:var(--accent);font-weight:700;margin-right:5px; }
   .modal-rateio { margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#f7f8fa; }
   .modal-rateio-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px; }

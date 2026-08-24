@@ -19,17 +19,19 @@ function hidratarSelect(sel) {
   if (!sel || sel.dataset.hidratado === '1' || sel.disabled) return;
   const atual = sel.value;
   let opcoes;
-  if (sel.matches('.cat-select')) {
+  if (sel.matches('.cat-select, .rateio-cat-select')) {
     opcoes = [{valor: '', rotulo: '(sem categoria)'}].concat(
       (window.configLancamentos.categorias || []).map(c => ({valor: String(c.chave), rotulo: String(c.nome)}))
     );
-  } else if (sel.matches('.dim-select')) {
+  } else if (sel.matches('.dim-select, .rateio-dim-select')) {
     opcoes = [{valor: '', rotulo: '(nao definido)'}].concat(
       ((window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [])
         .map(v => ({valor: String(v.id), rotulo: String(v.rotulo)}))
     );
     const nomeDimensao = (window.configLancamentos.dimensoes_cadastro_rapido || {})[sel.dataset.dim];
-    if (nomeDimensao) opcoes.push({valor: '__novo__', rotulo: '+ Cadastrar novo ' + nomeDimensao + '...'});
+    if (nomeDimensao && sel.matches('.dim-select')) {
+      opcoes.push({valor: '__novo__', rotulo: '+ Cadastrar novo ' + nomeDimensao + '...'});
+    }
   } else {
     return;
   }
@@ -46,12 +48,12 @@ function hidratarSelect(sel) {
 }
 
 document.addEventListener('focusin', function (e) {
-  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, .modal-dim-select')) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, #tabela-lancamentos .rateio-cat-select, #tabela-lancamentos .rateio-dim-select, .modal-dim-select')) {
     hidratarSelect(e.target);
   }
 });
 document.addEventListener('pointerdown', function (e) {
-  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, .modal-dim-select')) {
+  if (e.target.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, #tabela-lancamentos .rateio-cat-select, #tabela-lancamentos .rateio-dim-select, .modal-dim-select')) {
     hidratarSelect(e.target);
     e.target.dataset.valorAnterior = e.target.value;
   }
@@ -309,6 +311,12 @@ function verDetalhes(id) {
   if (selCat && catLinha) selCat.value = catLinha.value;
   const emRateio = !!(d._rateios && d._rateios.length);
   if (selCat) selCat.disabled = !window.configLancamentos.pode_editar || emRateio;
+  const selConferida = document.getElementById('modalConferida');
+  if (selConferida) {
+    selConferida.disabled = !window.configLancamentos.pode_conferir || (emRateio && !d._rateio_valido);
+    selConferida.title = emRateio && !d._rateio_valido
+      ? 'Ajuste as partes até o rateio fechar o valor do lançamento' : '';
+  }
   document.querySelectorAll('.modal-dim-select').forEach(selModal => {
     const selLinha = trAtual && trAtual.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
     const opcao = document.createElement('option');
@@ -580,6 +588,104 @@ function excluirManual() {
       else alert(res.erro || 'Não foi possível excluir.');
     });
 }
+
+function linhasRateioInline(id) {
+  return Array.from(document.querySelectorAll('tr.rateio-row[data-rateio-parent="' + id + '"]'));
+}
+
+function lerRateioInline(id) {
+  return linhasRateioInline(id).map(linha => {
+    const dimensoes = {};
+    linha.querySelectorAll('.rateio-dim-select').forEach(sel => {
+      dimensoes[sel.dataset.dim] = sel.value || null;
+    });
+    return {
+      valor: linha.querySelector('.rateio-valor-inline').value,
+      categoria: linha.querySelector('.rateio-cat-select').value,
+      observacao: linha.querySelector('.rateio-obs-inline').value,
+      dimensoes: dimensoes,
+    };
+  });
+}
+
+function validarRateioInline(id) {
+  const pai = document.querySelector('tr[data-id="' + id + '"]');
+  const partes = lerRateioInline(id);
+  const totalCentavos = Math.round(Number(pai && pai.dataset.rateioTotal || 0) * 100);
+  const obrigatorias = window.configLancamentos.dimensoes_obrigatorias || [];
+  let somaCentavos = 0;
+  let camposValidos = partes.length >= 2;
+  partes.forEach(parte => {
+    const valor = Number(String(parte.valor || '').replace(',', '.'));
+    if (!Number.isFinite(valor) || valor <= 0 || !parte.categoria) camposValidos = false;
+    else somaCentavos += Math.round(valor * 100);
+    obrigatorias.forEach(dimId => {
+      if (!(parte.dimensoes || {})[dimId]) camposValidos = false;
+    });
+  });
+  return {
+    valido: camposValidos && somaCentavos === totalCentavos,
+    somaCentavos: somaCentavos,
+    totalCentavos: totalCentavos,
+  };
+}
+
+function atualizarValidacaoRateioInline(id, alterado) {
+  const pai = document.querySelector('tr[data-id="' + id + '"]');
+  if (!pai) return false;
+  const estado = validarRateioInline(id);
+  const conferida = !!(window.detalhes[id] || {})._conferida;
+  const conf = pai.querySelector('.conf-check');
+  if (conf) {
+    conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido;
+    conf.title = estado.valido ? '' : 'Ajuste as partes até o rateio fechar o valor do lançamento';
+  }
+  const resumo = pai.querySelector('.rateio-resumo');
+  if (resumo) {
+    const soma = estado.somaCentavos / 100;
+    const total = estado.totalCentavos / 100;
+    resumo.textContent = estado.valido
+      ? 'Rateio fechado'
+      : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
+    resumo.classList.toggle('invalido', !estado.valido);
+  }
+  linhasRateioInline(id).forEach(linha => {
+    if (alterado) linha.classList.add('rateio-alterado');
+    const botao = linha.querySelector('.rateio-salvar-inline');
+    if (botao) botao.disabled = conferida || !window.configLancamentos.pode_editar || !estado.valido;
+  });
+  pai.dataset.rateioValido = estado.valido ? '1' : '0';
+  if (window.detalhes[id]) window.detalhes[id]._rateio_valido = estado.valido;
+  return estado.valido;
+}
+
+function salvarRateioInline(id) {
+  if (!atualizarValidacaoRateioInline(id, false)) {
+    alert('Ajuste as partes até a soma fechar exatamente o valor do lançamento e preencha os campos obrigatórios.');
+    return;
+  }
+  const linhas = linhasRateioInline(id);
+  linhas.forEach(linha => {
+    const botao = linha.querySelector('.rateio-salvar-inline');
+    if (botao) { botao.disabled = true; botao.textContent = '...'; }
+  });
+  fetch('/api/transacao/' + encodeURIComponent(id) + '/rateios', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({partes: lerRateioInline(id)}),
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar o rateio.');
+    guardarPosicaoAtual();
+    window.location.reload();
+  }).catch(e => {
+    linhas.forEach(linha => {
+      const botao = linha.querySelector('.rateio-salvar-inline');
+      if (botao) { botao.disabled = false; botao.textContent = 'Salvar'; }
+    });
+    alert(e.message || 'Não foi possível salvar o rateio.');
+  });
+}
+
 // ---- delegacao dos eventos da tabela ----
 // Os handlers eram inline (onclick/onchange no HTML) com o id interpolado pelo
 // Jinja. O |tojson gera aspas duplas literais, que FECHAM o atributo antes da
@@ -594,6 +700,12 @@ function idDaLinha(el) {
 }
 
 document.addEventListener('click', function (e) {
+  const salvarRateio = e.target.closest('.rateio-salvar-inline');
+  if (salvarRateio) {
+    const linhaParte = salvarRateio.closest('tr[data-rateio-parent]');
+    if (linhaParte) salvarRateioInline(linhaParte.dataset.rateioParent);
+    return;
+  }
   const rateio = e.target.closest('.rateio-toggle');
   if (rateio) {
     const id = rateio.dataset.rateioId;
@@ -617,6 +729,11 @@ document.addEventListener('click', function (e) {
 
 document.addEventListener('change', function (e) {
   const el = e.target;
+  if (el.matches('#tabela-lancamentos .rateio-cat-select, #tabela-lancamentos .rateio-dim-select, #tabela-lancamentos .rateio-valor-inline, #tabela-lancamentos .rateio-obs-inline')) {
+    const linhaParte = el.closest('tr[data-rateio-parent]');
+    if (linhaParte) atualizarValidacaoRateioInline(linhaParte.dataset.rateioParent, true);
+    return;
+  }
   if (!el.matches('#tabela-lancamentos .cat-select, #tabela-lancamentos .dim-select, #tabela-lancamentos .conf-check')) return;
   if (el.matches('.dim-select') && el.value === '__novo__') {
     cadastrarNovoValorDimensao(el);
@@ -634,6 +751,12 @@ document.addEventListener('change', function (e) {
     return;
   }
   salvar(id, el);
+});
+
+document.addEventListener('input', function (e) {
+  if (!e.target.matches('#tabela-lancamentos .rateio-valor-inline, #tabela-lancamentos .rateio-obs-inline')) return;
+  const linhaParte = e.target.closest('tr[data-rateio-parent]');
+  if (linhaParte) atualizarValidacaoRateioInline(linhaParte.dataset.rateioParent, true);
 });
 
 // blur nao borbulha; focusout sim

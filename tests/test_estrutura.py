@@ -261,6 +261,22 @@ def test_filtro_de_tabela_existe_e_e_automatico():
     assert "clone.querySelectorAll('select').forEach" in js
 
 
+def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
+    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+    for classe in (
+        "rateio-valor-inline", "rateio-cat-select", "rateio-dim-select",
+        "rateio-obs-inline", "rateio-salvar-inline",
+    ):
+        assert classe in template
+    assert "function lerRateioInline(id)" in js
+    assert "function validarRateioInline(id)" in js
+    assert "body: JSON.stringify({partes: lerRateioInline(id)})" in js
+    assert "conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido" in js
+    assert "data-rateio-total" in template
+
+
 def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
     """Cada bloco 'if versao_atual < N' precisa ter o seu 'INSERT ... VALUES (N)'.
 
