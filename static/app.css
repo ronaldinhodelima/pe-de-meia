@@ -115,8 +115,9 @@
   .rateio-resumo { display:block;margin-top:2px;font-size:9.5px;color:var(--ink-faint);white-space:normal; }
   .rateio-resumo.invalido { color:#c23c34;font-weight:600; }
   .rateio-seta { color:var(--accent);font-weight:700;margin-right:5px; }
-  .modal-rateio { margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#f7f8fa; }
-  .modal-rateio-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px; }
+  .modal-rateio { margin:3px 0 0;padding:10px 0 0;border:0;border-top:1px solid var(--line-soft);background:transparent; }
+  .modal-rateio-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:var(--ink-soft);font-size:12px; }
+  .modal-rateio-topo .ver-btn { padding:4px 8px;font-size:11px;color:var(--ink-soft); }
   .modal-rateio-parte { display:grid;grid-template-columns:95px 1fr;gap:7px 10px;padding:10px 0;border-top:1px solid var(--line-soft); }
   .modal-rateio-parte label { color:var(--ink-faint);font-size:12px;align-self:center; }
   .modal-rateio-parte input,.modal-rateio-parte select { width:100%;box-sizing:border-box;padding:6px 7px;border:1px solid var(--line);border-radius:6px;background:#fff; }

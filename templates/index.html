@@ -106,7 +106,7 @@
       {% for parte in r.rateios %}
       <tr class="rateio-row" data-rateio-parent="{{ r.id }}" data-rateio-id="{{ parte.id }}" hidden>
         <td class="cel-data" data-col="data"></td>
-        <td class="cel-desc" data-col="desc"><span class="rateio-seta">↳</span> Parte {{ loop.index }}</td>
+        <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }} — Parte {{ loop.index }}"><span class="rateio-seta">↳</span> {{ r.descricao }} — Parte {{ loop.index }}</td>
         <td class="cel-origem" data-col="origem">Rateio interno</td>
         <td class="cel-dim" data-col="categoria"><select class="rateio-cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar }}><option value="{{ parte.categoria }}" selected>{{ parte.categoria_nome }}</option></select></td>
         {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}"><select class="rateio-dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao" {{ 'disabled' if not pode_editar }}><option value="{{ parte.dims.get(d.id) or '' }}" selected>{{ parte.dims_rotulos.get(d.id) }}</option></select></td>{% endfor %}
@@ -130,7 +130,6 @@
     <span class="close" onclick="fecharModal()">&times;</span>
     <h3>Detalhes do lançamento</h3>
     <div id="modalBody"></div>
-    <div id="modalRateioBox" class="modal-rateio"></div>
     {# Depois de Parcela, os campos seguem a mesma ordem da tabela de conferencia:
        Categoria, dimensoes, Observacao e OK. #}
     <div class="row">
@@ -173,6 +172,7 @@
         Marcar como duplicada
       </label>
     </div>
+    <div id="modalRateioBox" class="modal-rateio"></div>
     <div id="modalConfirmacao" class="modal-confirmacao" hidden>
       <strong id="modalConfirmacaoTitulo"></strong>
       <div class="modal-confirmacao-acoes">
