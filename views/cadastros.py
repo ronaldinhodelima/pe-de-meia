@@ -180,6 +180,11 @@ def regras_view():
                         )
                 conn.commit()
         elif acao == "excluir_regra":
+            cur.execute(
+                "UPDATE cartao.transacao SET regra_aplicada_id = NULL "
+                "WHERE regra_aplicada_id = %s;",
+                (request.form.get("regra_id"),),
+            )
             cur.execute("DELETE FROM cartao.regra_classificacao WHERE id=%s;", (request.form.get("regra_id"),))
             conn.commit()
         elif acao == "reaplicar_regra":

@@ -1192,6 +1192,26 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (11);")
             conn.commit()
 
+        if versao_atual < 12:
+            # Uma regra excluída não pode deixar lançamentos presos a um ID que
+            # já não existe. A FK também protege exclusões feitas fora da tela.
+            cur.execute(
+                "UPDATE cartao.transacao t SET regra_aplicada_id = NULL "
+                "WHERE regra_aplicada_id IS NOT NULL AND NOT EXISTS ("
+                "SELECT 1 FROM cartao.regra_classificacao r WHERE r.id = t.regra_aplicada_id);"
+            )
+            cur.execute(
+                "SELECT 1 FROM pg_constraint WHERE conname = 'transacao_regra_aplicada_fk';"
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    "ALTER TABLE cartao.transacao ADD CONSTRAINT transacao_regra_aplicada_fk "
+                    "FOREIGN KEY (regra_aplicada_id) REFERENCES cartao.regra_classificacao(id) "
+                    "ON DELETE SET NULL;"
+                )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (12);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

@@ -410,7 +410,8 @@ def excluir_lancamento_manual(transacao_id):
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            "SELECT account_id, COALESCE(importado, false) FROM cartao.transacao WHERE transacao_id = %s;",
+            "SELECT account_id, COALESCE(importado, false) FROM cartao.transacao "
+            "WHERE transacao_id = %s FOR UPDATE;",
             (transacao_id,),
         )
         row = cur.fetchone()
@@ -511,7 +512,12 @@ def update_transacao(transacao_id):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT conferida FROM cartao.transacao WHERE transacao_id = %s;", (transacao_id,))
+    # Serializa edições do mesmo lançamento. Combinado com payloads parciais da
+    # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
+    cur.execute(
+        "SELECT conferida FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
+        (transacao_id,),
+    )
     transacao = cur.fetchone()
     if not transacao:
         cur.close()

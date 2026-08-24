@@ -32,6 +32,9 @@ def usuarios_view():
         return cur.fetchone()["n"]
 
     if request.method == "POST":
+        # Evita que dois administradores, agindo ao mesmo tempo, passem ambos
+        # pela contagem e removam/desativem o último acesso administrativo.
+        cur.execute("LOCK TABLE cartao.usuario IN SHARE ROW EXCLUSIVE MODE;")
         acao = request.form.get("acao")
         alvo = (request.form.get("usuario") or "").strip()
         try:

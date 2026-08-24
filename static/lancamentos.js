@@ -278,29 +278,33 @@ const DUPLICADA_OBS_PADRAO = lerJson('script[data-config]', {}).duplicada_obs ||
 const filaSalvar = {};
 function salvar(id, el) {
   const tr = el.closest('tr');
-  const dimensoes = {};
-  tr.querySelectorAll('.dim-select').forEach(sel => {
-    dimensoes[sel.dataset.dim] = sel.value || null;
-  });
-  const payload = {
-    conferida: tr.querySelector('.conf-check').checked,
-    duplicada: tr.querySelector('.dup-check').checked,
-    observacao: tr.querySelector('.obs-input').value,
-    categoria: tr.querySelector('.cat-select').value,
-    natureza: (window.detalhes[id] || {})._natureza || '',
-    dimensoes: dimensoes
-  };
+  // Envia somente o campo alterado. Se outra aba mudou observação/projeto/OK,
+  // uma categoria antiga desta tela não volta por engano e não apaga aquilo.
+  const payload = {};
+  if (el.matches('.cat-select')) payload.categoria = el.value;
+  else if (el.matches('.dim-select')) payload.dimensoes = {[el.dataset.dim]: el.value || null};
+  else if (el.matches('.conf-check')) payload.conferida = el.checked;
+  else if (el.matches('.obs-input')) payload.observacao = el.value;
+  else if (el.matches('.dup-check')) {
+    payload.duplicada = el.checked;
+    // Ao marcar duplicidade o modal pode ter preenchido a observação padrão.
+    payload.observacao = tr.querySelector('.obs-input').value;
+  } else return;
   const anterior = filaSalvar[id] || Promise.resolve();
-  const atual = anterior.then(() => fetch('/api/transacao/' + id, {
+  // Uma falha anterior não pode bloquear para sempre os próximos salvamentos.
+  const atual = anterior.catch(() => {}).then(() => fetch('/api/transacao/' + id, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   })).then(r => r.json()).then(d => {
-    if (d.ok) {
-      const confFinal = payload.conferida && !d.bloqueada;
-      tr.querySelector('.conf-check').checked = confFinal;
-      tr.classList.toggle('conferida', confFinal);
-      tr.classList.toggle('duplicada', payload.duplicada);
+    if (!d.ok) throw new Error(d.erro || 'Falha ao salvar');
+    {
+      if ('conferida' in payload) {
+        const confFinal = payload.conferida && !d.bloqueada;
+        tr.querySelector('.conf-check').checked = confFinal;
+        tr.classList.toggle('conferida', confFinal);
+      }
+      if ('duplicada' in payload) tr.classList.toggle('duplicada', payload.duplicada);
       tr.querySelectorAll('.dim-select').forEach(sel => {
         sel.style.borderColor = '';
         sel.style.background = '';
@@ -313,7 +317,18 @@ function salvar(id, el) {
         alert('Nao foi possivel confirmar: preencha os campos obrigatorios destacados em vermelho.');
       }
       const s = document.getElementById('status-' + id);
-      if (s) { s.classList.add('show'); setTimeout(() => s.classList.remove('show'), 1500); }
+      if (s) {
+        s.textContent = 'ok';
+        s.classList.add('show');
+        setTimeout(() => s.classList.remove('show'), 1500);
+      }
+    }
+  }).catch(() => {
+    const s = document.getElementById('status-' + id);
+    if (s) {
+      s.textContent = 'erro ao salvar';
+      s.classList.add('show');
+      setTimeout(() => { s.classList.remove('show'); s.textContent = 'ok'; }, 3500);
     }
   });
   filaSalvar[id] = atual;
