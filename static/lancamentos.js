@@ -193,6 +193,7 @@ function desmarcarOrigem(valor) {
 function coletarQuery() {
   const params = new URLSearchParams();
   params.set('mes', document.getElementById('mesInput').value);
+  params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
   params.set('status', document.getElementById('statusInput').value);
   // [name] exigido: checkbox sem nome (ex: o do menu de colunas) nao e filtro
   document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked').forEach(cb => params.append(cb.name, cb.value));
@@ -204,8 +205,13 @@ function mudarMes(delta) {
   const campo = document.getElementById('mesInput');
   const partes = (campo.value || '').split('-').map(Number);
   if (partes.length !== 2 || !partes[0] || !partes[1]) return;
-  const d = new Date(partes[0], partes[1] - 1 + delta, 1);
-  campo.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  // com "Ano inteiro" marcado, os botoes ‹ › andam um ano por vez em vez de um mes
+  if (document.getElementById('periodoAno').checked) {
+    campo.value = (partes[0] + delta) + '-' + String(partes[1]).padStart(2, '0');
+  } else {
+    const d = new Date(partes[0], partes[1] - 1 + delta, 1);
+    campo.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
   aplicarFiltros(true);
 }
 function aplicarFiltros(recarregarPagina) {

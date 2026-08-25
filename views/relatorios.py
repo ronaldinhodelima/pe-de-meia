@@ -578,3 +578,43 @@ def api_categoria_lancamentos():
         }
         for r in rows
     ])
+
+
+@bp.route("/api/dimensao-lancamentos")
+@requer("cadastros")
+def api_dimensao_lancamentos():
+    """Lista os lancamentos vinculados a um valor (ou a todos os valores de uma
+    dimensao) - usado pelo botao 'protegida' em /dimensoes, mesma logica do
+    /api/categoria-lancamentos."""
+    valor_id = request.args.get("valor_id")
+    dimensao_id = request.args.get("dimensao_id")
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    if valor_id:
+        cur.execute(
+            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, lf.valor_brl AS valor "
+            "FROM cartao.lancamento_financeiro lf "
+            "JOIN cartao.lancamento_financeiro_dimensao ld ON ld.linha_id = lf.linha_id "
+            "WHERE ld.valor_id = %s ORDER BY lf.data_transacao DESC LIMIT 300;",
+            (valor_id,),
+        )
+    else:
+        cur.execute(
+            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, lf.valor_brl AS valor "
+            "FROM cartao.lancamento_financeiro lf "
+            "JOIN cartao.lancamento_financeiro_dimensao ld ON ld.linha_id = lf.linha_id "
+            "WHERE ld.dimensao_id = %s ORDER BY lf.data_transacao DESC LIMIT 300;",
+            (dimensao_id,),
+        )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify([
+        {
+            "transacao_id": str(r["transacao_id"]),
+            "data": data_hora_local(r["data_transacao"]).strftime("%d/%m/%Y") if r["data_transacao"] else "-",
+            "descricao": r["descricao"] or "-",
+            "valor": float(r["valor"]) if r["valor"] is not None else 0,
+        }
+        for r in rows
+    ])

@@ -32,6 +32,7 @@ from core import (
     esc,
     fechar_recursos_banco,
     get_conn,
+    intervalo_ano_local,
     intervalo_mes_local,
     json_script,
     pode,
@@ -127,10 +128,17 @@ def _estado_rateios(cur, transacao_id):
 @requer("lancamentos_ver")
 def index():
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
+    periodo = request.args.get("periodo") or "mes"
+    if periodo not in ("mes", "ano"):
+        periodo = "mes"
     try:
-        inicio_mes, fim_mes = intervalo_mes_local(mes)
+        if periodo == "ano":
+            inicio_mes, fim_mes = intervalo_ano_local(mes[:4])
+        else:
+            inicio_mes, fim_mes = intervalo_mes_local(mes)
     except ValueError:
         mes = datetime.now().strftime("%Y-%m")
+        periodo = "mes"
         inicio_mes, fim_mes = intervalo_mes_local(mes)
     status = request.args.get("status", "todas")
     if status not in ("todas", "pendente", "conferida", "duplicidade", "duplicada"):
@@ -481,6 +489,8 @@ def index():
         titulo="Lançamentos",
         topbar=topbar_html("Lançamentos", "inicio"),
         mes=mes,
+        periodo=periodo,
+        periodo_rotulo="do ano" if periodo == "ano" else "do mês",
         status=status,
         hoje_iso=datetime.now().strftime("%Y-%m-%d"),
         origem_filtro_html=chip_filter_html(

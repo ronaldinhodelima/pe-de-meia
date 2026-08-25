@@ -47,11 +47,20 @@
       </label>
       <button type="submit" class="ver-btn">Salvar</button>
     </form>
-    <form method="post" style="display:inline" onsubmit="return confirm('Excluir esta dimensão e todos os seus valores?')">
-      <input type="hidden" name="acao" value="excluir_dimensao">
-      <input type="hidden" name="dimensao_id" value="{{ d.id }}">
-      <button type="submit" class="ver-btn">Excluir dimensão</button>
-    </form>
+    {% if usados_dimensao.get(d.id) %}
+      <button type="button" data-dimensao="{{ d.id }}" onclick="verLancamentosDimensao(this)"
+              data-tip="Existem lançamentos vinculados a valores desta dimensão. Clique para ver quais são."
+              style="font-size:11px;color:var(--ink-faint);background:none;border:none;padding:0;
+                     text-decoration:underline;cursor:pointer">
+        {{ usados_dimensao[d.id] }} lanç. — dimensão protegida
+      </button>
+    {% else %}
+      <form method="post" style="display:inline" onsubmit="return confirm('Excluir esta dimensão e todos os seus valores?')">
+        <input type="hidden" name="acao" value="excluir_dimensao">
+        <input type="hidden" name="dimensao_id" value="{{ d.id }}">
+        <button type="submit" class="ver-btn">Excluir dimensão</button>
+      </form>
+    {% endif %}
 
     <table style="margin-top:12px"><tbody>
       {% for v in valores_por_dim.get(d.id, []) %}
@@ -90,11 +99,18 @@
           {% endif %}
         </td>
         <td style="vertical-align:top">
-          <form method="post" onsubmit="return confirm('Excluir este valor?')">
-            <input type="hidden" name="acao" value="excluir_valor">
-            <input type="hidden" name="valor_id" value="{{ v.id }}">
-            <button type="submit" class="ver-btn">Excluir</button>
-          </form>
+          {% if usados_valor.get(v.id) %}
+            <button type="button" data-valor="{{ v.id }}" onclick="verLancamentosValor(this)"
+                    data-tip="Existem lançamentos com este valor. Clique para ver quais são."
+                    style="font-size:11px;color:var(--ink-faint);background:none;border:none;padding:0;
+                           text-decoration:underline;cursor:pointer">{{ usados_valor[v.id] }} lanç. — protegido</button>
+          {% else %}
+            <form method="post" onsubmit="return confirm('Excluir este valor?')">
+              <input type="hidden" name="acao" value="excluir_valor">
+              <input type="hidden" name="valor_id" value="{{ v.id }}">
+              <button type="submit" class="ver-btn">Excluir</button>
+            </form>
+          {% endif %}
         </td>
       </tr>
       {% else %}
@@ -113,4 +129,14 @@
 </details>
 {% endfor %}
 
+<div class="modal-bg" id="modalLancDimBg" onclick="if(event.target===this) fecharModalLancDim()">
+  <div class="modal" style="width:520px">
+    <span class="close" onclick="fecharModalLancDim()">&times;</span>
+    <h3 id="modalLancDimTitulo">Lançamentos</h3>
+    <div id="modalLancDimBody" style="max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 {% endblock %}
+
+{% block scripts %}<script src="/static/dimensoes.js"></script>{% endblock %}

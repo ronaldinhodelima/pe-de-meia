@@ -109,6 +109,21 @@ def dimensoes_view():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     erro = None
+
+    def contar_uso_valor(valor_id):
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM cartao.lancamento_financeiro_dimensao WHERE valor_id=%s;",
+            (valor_id,),
+        )
+        return cur.fetchone()["n"]
+
+    def contar_uso_dimensao(dimensao_id):
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM cartao.lancamento_financeiro_dimensao WHERE dimensao_id=%s;",
+            (dimensao_id,),
+        )
+        return cur.fetchone()["n"]
+
     if request.method == "POST":
         acao = request.form.get("acao")
         if acao == "criar_dimensao":
@@ -154,18 +169,23 @@ def dimensoes_view():
                     conn.rollback()
                     erro = f"Já existe uma dimensão chamada '{nome}'."
         elif acao == "excluir_dimensao":
-            cur.execute(
-                "SELECT id, nome, obrigatoria FROM cartao.dimensao WHERE id=%s;",
-                (request.form.get("dimensao_id"),),
-            )
-            anterior = cur.fetchone()
-            cur.execute("DELETE FROM cartao.dimensao WHERE id=%s;", (request.form.get("dimensao_id"),))
-            conn.commit()
-            if anterior and cur.rowcount:
-                registrar_mudanca_auditoria("Dimensão", {
-                    "id": anterior["id"], "nome": anterior["nome"],
-                    "obrigatoria": bool(anterior["obrigatoria"]),
-                }, None)
+            dimensao_id = request.form.get("dimensao_id")
+            qtd = contar_uso_dimensao(dimensao_id)
+            if qtd > 0:
+                erro = f"Não é possível remover: existem {qtd} lançamento(s) vinculados a valores desta dimensão. Reclassifique-os primeiro."
+            else:
+                cur.execute(
+                    "SELECT id, nome, obrigatoria FROM cartao.dimensao WHERE id=%s;",
+                    (dimensao_id,),
+                )
+                anterior = cur.fetchone()
+                cur.execute("DELETE FROM cartao.dimensao WHERE id=%s;", (dimensao_id,))
+                conn.commit()
+                if anterior and cur.rowcount:
+                    registrar_mudanca_auditoria("Dimensão", {
+                        "id": anterior["id"], "nome": anterior["nome"],
+                        "obrigatoria": bool(anterior["obrigatoria"]),
+                    }, None)
         elif acao == "criar_valor":
             nome = (request.form.get("nome") or "").strip()
             if nome:
@@ -219,22 +239,26 @@ def dimensoes_view():
                 registrar_mudanca_auditoria("Ícone", anterior["icone"], icone_novo)
         elif acao == "excluir_valor":
             valor_id = request.form.get("valor_id")
-            cur.execute(
-                "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone "
-                "FROM cartao.dimensao_valor WHERE id=%s;",
-                (valor_id,),
-            )
-            anterior = cur.fetchone()
-            cur.execute("DELETE FROM cartao.dimensao_valor WHERE id=%s;", (valor_id,))
-            conn.commit()
-            if anterior and cur.rowcount:
-                registrar_mudanca_auditoria("Valor de dimensão", {
-                    "id": anterior["id"], "dimensao_id": anterior["dimensao_id"],
-                    "nome": anterior["nome"],
-                    "teto_mensal": float(anterior["teto_mensal"]) if anterior["teto_mensal"] is not None else None,
-                    "teto_anual": float(anterior["teto_anual"]) if anterior["teto_anual"] is not None else None,
-                    "icone": anterior["icone"],
-                }, None)
+            qtd = contar_uso_valor(valor_id)
+            if qtd > 0:
+                erro = f"Não é possível remover: existem {qtd} lançamento(s) vinculados a este valor. Reclassifique-os primeiro."
+            else:
+                cur.execute(
+                    "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone "
+                    "FROM cartao.dimensao_valor WHERE id=%s;",
+                    (valor_id,),
+                )
+                anterior = cur.fetchone()
+                cur.execute("DELETE FROM cartao.dimensao_valor WHERE id=%s;", (valor_id,))
+                conn.commit()
+                if anterior and cur.rowcount:
+                    registrar_mudanca_auditoria("Valor de dimensão", {
+                        "id": anterior["id"], "dimensao_id": anterior["dimensao_id"],
+                        "nome": anterior["nome"],
+                        "teto_mensal": float(anterior["teto_mensal"]) if anterior["teto_mensal"] is not None else None,
+                        "teto_anual": float(anterior["teto_anual"]) if anterior["teto_anual"] is not None else None,
+                        "icone": anterior["icone"],
+                    }, None)
         if erro:
             marcar_falha_auditoria()
 
@@ -257,12 +281,23 @@ def dimensoes_view():
         (mes_atual, ano_atual),
     )
     gasto_por_valor = {r["valor_id"]: r for r in cur.fetchall()}
+
+    # contagem de uso por valor, pra travar a exclusao de valor com lancamento vinculado
+    cur.execute("SELECT valor_id, COUNT(*) AS n FROM cartao.lancamento_financeiro_dimensao WHERE valor_id IS NOT NULL GROUP BY valor_id;")
+    usados_valor = {r["valor_id"]: r["n"] for r in cur.fetchall()}
     cur.close()
     conn.close()
 
     valores_por_dim = {}
     for v in valores_db:
         valores_por_dim.setdefault(v["dimensao_id"], []).append(v)
+
+    # soma de uso por dimensao (todos os valores dela), pra travar excluir_dimensao
+    usados_dimensao = {}
+    for v in valores_db:
+        n = usados_valor.get(v["id"])
+        if n:
+            usados_dimensao[v["dimensao_id"]] = usados_dimensao.get(v["dimensao_id"], 0) + n
 
     # gasto ja somado por valor de dimensao, pro template so exibir
     gastos = {
@@ -277,6 +312,8 @@ def dimensoes_view():
         erro=erro,
         dimensoes=dims,
         valores_por_dim=valores_por_dim,
+        usados_valor=usados_valor,
+        usados_dimensao=usados_dimensao,
         gastos=gastos,
     )
 
