@@ -1,5 +1,8 @@
 # Pé de Meia — contexto do projeto
 
+**Última atualização:** 25/08/2026. Estado funcional de referência: commit `9007704`; qualquer
+commit posterior pode ser apenas documentação. Confirmar `git log` e produção ao retomar.
+
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
 Ronaldo e Andrea). Substitui o antigo nome "Conferência de Cartão".
@@ -40,12 +43,14 @@ Na prática:
 ## Stack e arquitetura
 
 - **App principal**, separado em quatro camadas:
-  - `app.py` (~45 linhas) — cria o Flask app, registra os filtros Jinja e os blueprints.
+  - `app.py` — cria o Flask app, configura sessão/auditoria, registra os filtros Jinja e os
+    blueprints.
   - `core.py` — constantes, acesso ao banco, permissões, helpers de HTML. **Não importa
     nada de `views/` nem de `app.py`.**
-  - `views/` — as 22 rotas em 6 blueprints: `auth`, `sistema`, `lancamentos`, `relatorios`,
-    `cadastros`, `usuarios`. Cada módulo importa do `core` só os nomes que usa, listados
-    explicitamente.
+  - `views/` — blueprints `auth`, `sistema`, `lancamentos`, `relatorios`, `cadastros`,
+    `usuarios` e `logs`. Cada módulo importa do `core` só os nomes que usa, listados
+    explicitamente. Não fixar quantidade de rotas aqui: `tests/test_estrutura.py` mantém a
+    lista autoritativa e acusa qualquer rota perdida ou inesperada.
   - `templates/` (Jinja2) e `static/` (CSS, JS, logos). **Nenhuma tela monta HTML por
     f-string no Python** — se aparecer uma, é regressão.
   Sem framework front-end — JS puro. A view faz SQL e regra de negócio, o template só exibe.
@@ -85,9 +90,9 @@ Na prática:
     em algum redeploy) e quebrou o botão "Atualizar agora" porque a URL estava hardcoded em
     `BUSSOLA_SYNC_URL` no app principal. Se o sync voltar a dar erro 404/502, o primeiro
     passo é conferir se o domínio do worker mudou de novo.
-- **Deploy = git push + trigger via API do Coolify** (a UI de clicar "Deploy" no painel
-  se mostrou pouco confiável nesta sessão — os cliques às vezes não disparavam o build).
-  Fluxo usado:
+- **Deploy automático:** push na `main` dispara o webhook GitHub → Coolify. Acompanhar o build,
+  a troca do container e os logs; não considerar o push como conclusão. A API do Coolify é
+  apenas alternativa caso o webhook não dispare. Fluxo de contingência:
   ```bash
   git clone https://github.com/ronaldinhodelima/pe-de-meia.git
   cp app.py <repo>/app.py   # depois de editar
@@ -178,8 +183,8 @@ Usuários atuais: `ronaldo` (admin), `andrea` (admin, herdado do sistema antigo)
 13. Grupos/categorias sempre em ordem alfabética (ignorando acento/maiúscula — função
     `chave_alfa()`); `<details>` de `/grupos` lembram se estavam abertos ao salvar
     (via `localStorage`).
-14. Item "Importar extrato/fatura" removido do menu (funcionalidade continua existindo,
-    só não aparece mais na navegação).
+14. Item "Importar extrato/fatura" saiu primeiro do menu e depois a funcionalidade inteira foi
+    removida na refatoração, pois estava quebrada e sem uso. Não assumir que a rota ainda existe.
 15. `/categorias`: criar, renomear, mover lançamentos entre categorias, excluir (só permite
     excluir categoria vazia — com lançamentos, fica "protegida").
 16. `/contas`: identifica o titular de cada conexão bancária (Unicred = Ronaldo e Andrea,
@@ -191,8 +196,9 @@ Usuários atuais: `ronaldo` (admin), `andrea` (admin, herdado do sistema antigo)
 
 Segurança:
 1. Cookie de sessão com `Secure`, `HttpOnly` e `SameSite=Lax`.
-2. Senhas de fallback hardcoded (`changeme1/2`) removidas — sem env, a conta de emergência
-   simplesmente não existe.
+2. Senhas genéricas hardcoded (`changeme1/2`) foram removidas do código. Por decisão posterior
+   do usuário, os acessos administrativos antigos/de emergência continuam configurados **no
+   ambiente do Coolify**, nunca no repositório. Não alterar esses acessos sem pedido explícito.
 3. **XSS corrigido em todo o app** (`esc()` e `json_script()`): nome de categoria, dimensão,
    grupo, cartão, titular, descrição/observação de lançamento e mensagens de aviso. O caso mais
    grave era `json.dumps()` dentro de `<script>` — não escapa `</`, então uma descrição contendo
@@ -202,7 +208,8 @@ Segurança:
 
 Processo:
 6. Migração versionada (`cartao.schema_version`) — antes rodava ~30 DDL a cada boot.
-7. `tests/` com 46 testes (ver seção "Testes automatizados").
+7. A suíte começou com 46 testes nesta etapa e foi ampliada depois; ver contagem atual em
+   "Testes automatizados".
 8. `.gitignore` e identidade do git configurada.
 
 Produto:
@@ -273,16 +280,98 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 4. Em tela com número (DRE, relatórios), **anotar os valores em produção antes do deploy** e
    comparar depois. Migração de tela não pode mexer em número.
 
+## Estado atual em produção — 25/08/2026
+
+Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
+O schema está na migração **15**. A última sequência funcional entregue cobre auditoria,
+regras por valor, edição completa dos detalhes, histórico do navegador e rateio financeiro.
+Não há implementação de código conhecida aguardando commit; as pendências atuais são sobretudo
+conciliação/classificação de dados e decisões operacionais listadas abaixo.
+
+### Lançamentos e experiência de uso
+
+- Filtro **Status** tem: Todas, Pendentes, Conferidas, Possíveis duplicidades e Duplicados.
+  O aviso grande de suspeitas foi removido; a filtragem ficou centralizada no Status.
+- Possível duplicidade é apenas alerta. O Pluggy pode realmente trazer duas cobranças iguais;
+  nunca criar regra que descarte isso automaticamente. Duplicado confirmado pelo usuário fica
+  fora dos totais, mas pode ser consultado pelo status **Duplicados**.
+- Linha com OK fica cinza-claro. Tirar OK e marcar duplicidade exigem confirmação; Cancelar
+  fecha também os detalhes. A confirmação não repete data/descrição/valor, pois já estão acima.
+- Categoria, dimensões e observação podem ser alteradas tanto na tabela quanto nos detalhes.
+  Alterar qualquer campo não pode mudar o OK já salvo.
+- Detalhes compactam Data/Valor, Valor original/Parcela e Status/Tipo em pares. Campos à direita
+  ficam alinhados à direita; "Conferida" mostra `por <usuário>` somente quando estiver em Sim.
+- Botão `+` em cada lançamento abre a criação de regra automática já preenchida com a descrição.
+  O botão da linha é apenas `+`, sem a palavra "Regra" dentro dele.
+- Menu Colunas permanece aberto enquanto marca/desmarca itens e fecha ao clicar fora. Projeto e
+  Portfólio permitem cadastro rápido sem sair da tela. Trocar mês por digitação, calendário ou
+  setas recarrega a lista. Filtros/meses criam histórico real para o botão Voltar do navegador.
+- Favicon correto é a meia com fundo transparente; o arquivo HTML local cru mostra Jinja sem
+  processar e **não serve como teste do site**. Sempre validar pela URL Flask/produção.
+
+### Rateio de lançamento
+
+- Implementado nas migrações/tabelas `transacao_rateio*` e nas views financeiras
+  `lancamento_financeiro*`. O registro bancário pai nunca é alterado ou duplicado; no DRE,
+  Relatórios e totais as partes substituem o pai.
+- Na tabela, o botão `+`/`−` expande linhas chamadas `<descrição original> — Parte 1`, Parte 2…
+  Valor, categoria, Responsável, Projeto, Portfólio e observação são editáveis nas próprias
+  linhas. O quadrado `✓` no fim de qualquer parte salva **o conjunto inteiro**, não só a linha.
+- Soma usa centavos exatos e precisa fechar o valor do pai. Quando fecha, não aparece texto de
+  confirmação e a linha fica normal. Quando diverge, as partes ficam vermelho-claro, os campos
+  de valor ganham borda vermelha, aparece `Rateado R$ X de R$ Y` e Salvar/OK ficam bloqueados.
+- Nos detalhes, Rateio fica no final, abaixo de "Marcar como duplicada", com a mesma formatação
+  das linhas superiores e sem o texto explicativo antigo. É possível editar rateio com o pai
+  em OK sem apagar a assinatura, desde que o novo conjunto continue completo e válido; desfazer
+  o rateio inteiro exige retirar o OK.
+- Primeiro caso real validado: **DEB MONGERAL, R$ 705,28** — R$ 505,46 para Ronaldo e
+  R$ 199,82 para Andrea; categoria Seguros, projeto Seguro de Vida, portfólio Proteção e Futuro.
+  O total mensal ficou idêntico antes/depois e DRE/Relatórios foram validados.
+
+### Sincronização, segurança e auditoria
+
+- Sync do Pluggy importa todos os IDs recebidos, mas não pode sobrescrever categoria manual,
+  Responsável, Projeto, Portfólio, observação, OK, duplicidade ou rateio. O banco impede duas
+  linhas com a mesma chave do Pluggy; IDs diferentes são mantidos para não esconder cobrança.
+- Sessão dura 24 horas e renova com uso; cookies `Secure`, `HttpOnly`, `SameSite=Lax`. Senha
+  mínima continua em 6 caracteres por decisão do usuário. Não mudar acessos. Credenciais
+  administrativas de emergência permanecem somente nas variáveis do Coolify.
+- Login limita tentativas por usuário e IP numa janela de 15 minutos e usa mensagem genérica.
+  Senhas do banco ficam em PBKDF2. Requisições mutáveis exigem Origin/Referer do próprio site;
+  respostas incluem HSTS, CSP, proteção contra iframe/MIME sniffing e `Cache-Control: no-store`.
+- Logs fica dentro de Relatórios e registra acesso, alteração com antes/depois, falha e sync.
+  Senhas/tokens são sanitizados. Rateios também geram auditoria.
+- E-mail operacional mudou para `ronaldo@brdrive.net`; teste foi recebido. Backup no mesmo
+  servidor foi aceito pelo usuário. Não executar teste de restore agora; isso ficou adiado.
+
+### Classificações e cadastros já aprovados
+
+- Portfólio **Eventos e Negócios** foi renomeado para **Eventos**.
+- Mapeamentos aprovados: Azul → Viagem; Shein → Vestuário.
+- Regra `GuilhermeDaSilva`: abaixo de R$ 120 Água; acima de R$ 120 Gás; ambos Família / Casa /
+  Moradia. A regra antiga genérica foi desativada sem apagar histórico.
+- Transferências `Amanda Bressan de Lima` usam regra própria. **Reaplicar** libera todos os
+  lançamentos pendentes ligados à regra, em qualquer mês, e reaplica no próximo acesso; não há
+  filtro de mês nessa operação e lançamentos conferidos são preservados.
+- Conta Corrente Conjunta, julho/2026: lançamentos de condomínio foram reconhecidos; o de
+  R$ 644,88 representa três meses acumulados. Restaurante "StarWars" foi classificado Família /
+  Viagem Chile 2026 / Viagens 2026, observação StarWars.
+- Valores Quanta entre R$ 319,00 e R$ 343,15 foram identificados como previdência privada de
+  Ronaldo já paga: categoria Previdência, projeto Previdência Privada, portfólio Proteção e
+  Futuro. Projeto Saúde e projeto Seguro de Vida foram criados.
+- Exemplo já ajustado: DELTA VIDEIRA R$ 265,07 — Responsável Ronaldo, categoria Combustível,
+  projeto Jeep, portfólio Veículos. Não generalizar para toda descrição DELTA sem revisar.
+
 ## Pendências conhecidas
 
 ### Ação do usuário (nada disso o Claude pode fazer sozinho)
 
 - **Rotar o token do Coolify.** O token foi colado no chat durante a sessão de 21/08/2026 e
   deve ser considerado comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo.
-- **Revisar `/pendencias`.** Há categorias sem natureza definida (Aeroporto, Água/Gás,
-  Automotive, Bicycle, Cinema…). Sem natureza, o app assume `despesa` por padrão — ou seja,
-  elas **entram no resultado do DRE como gasto** sem ninguém ter decidido isso. É o tipo de
-  coisa que infla despesa, contra a regra de ouro do projeto.
+- **Revisar `/pendencias`.** O último retrato visto em produção (24/08/2026) mostrava **1
+  categoria sem natureza e 4 categorias de despesa sem centro de custo**. Os nomes/contagens
+  mudam conforme o Pluggy traz categorias e o usuário classifica; abrir a tela de novo antes de
+  agir. Categoria sem natureza assume `despesa` e pode inflar o DRE.
 
 ### A validar com o usuário (dado que falta)
 
@@ -298,11 +387,29 @@ Lúcia, 21/11/2025 — conferido na conta, ocorreu uma vez só). A tela de
 Lançamentos agora avisa quando encontra repetição no mês aberto, mas **os meses
 anteriores nunca foram varridos**. Vale uma passada mês a mês.
 
+**Horários 00:00 e diferença de três horas.** Em Conta Corrente Ronaldo/Andrea há movimentos
+que chegam às 00:00 e, em agosto, suspeitas com diferença de 3h. Não usar horário isoladamente
+para apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
+revisar e marcar duplicidades manualmente. O sistema deve continuar trazendo tudo do Pluggy.
+
 **Depósitos em espécie sem origem identificada.** A categoria `Transfer - Cash`
 tem 32 lançamentos; os maiores em 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00
 (10/08) e +R$ 8.072,30 (21/07). Estão em natureza `fluxo`, então **entram como
 receita**. Ronaldo não soube dizer a origem de cabeça (22/08/2026) — precisa ser
 caso a caso. Enquanto não for, esses valores podem estar inflando a receita.
+
+### Retomada recomendada da conciliação
+
+1. Voltar à revisão **um lançamento por vez**, mês **julho/2026**, filtrando por Origem.
+   Conta Corrente Ronaldo começou a ser revisada; depois houve avanço parcial em Conta Corrente
+   Conjunta. Não assumir que o restante do mês ou outras origens já está conciliado.
+2. Para cada linha decidir a cadeia completa: Categoria + natureza contábil + Responsável +
+   Projeto + Portfólio + observação. Só Ronaldo marca OK depois de conferir o extrato.
+3. Se um débito mistura pessoas/finalidades, usar Rateio; nunca criar duas transações bancárias
+   independentes nem alterar o valor do pai.
+4. Em paralelo, resolver `/pendencias`, porque natureza ausente afeta diretamente o DRE.
+5. Depois revisar depósitos `Transfer - Cash`, receita de aluguel BRDrive e duplicidades antigas.
+6. Por último decidir se vale implementar lançamentos recorrentes/projeções.
 
 ### Ideias guardadas (decidir quando fizer sentido)
 
@@ -313,6 +420,10 @@ Valeria um campo/marcação que identifique o lançamento como recorrente e perm
 **projetar os próximos com base no histórico** — para saber o compromisso do mês
 antes de ele acontecer. Levantado por Ronaldo em 22/08/2026, ao conciliar julho.
 
+**Backup fora do servidor.** O backup atual no mesmo servidor foi aceito como primeira camada,
+mas não protege contra perda do próprio servidor. Futuramente copiar para armazenamento externo.
+Teste de restauração foi explicitamente adiado pelo usuário; não executar sem nova autorização.
+
 ### Técnicas
 
 **Escape em JS montado no cliente:** três telas montam HTML no navegador com `innerHTML`
@@ -322,15 +433,15 @@ Aí o Jinja não protege — quem escapa é o `escHtml()` do `tabelas.js`, no po
 sem `esc()`) **e o JS escapa**. Não escapar no servidor também: gera escape duplo, e em
 rótulo de gráfico (Chart.js desenha em canvas) apareceria `&amp;` literal na tela.
 
-**Um worker só, com threads (não aumente `-w`):** `core.py` guarda os apelidos de categoria
+**Um processo Gunicorn, com threads (não aumente `-w`):** `core.py` guarda os apelidos de categoria
 (`CATEGORIA_PT_DB`) em memória e só recarrega depois de um POST. Com mais de um processo, cada
 um tem a sua cópia: renomear uma categoria atualiza a de quem atendeu o POST e o outro segue
 servindo o nome antigo por tempo indeterminado. Aconteceu em produção com `-w 2`. Se um dia
 precisar de mais paralelismo, aumente `--threads` (memória compartilhada), não `-w` — ou tire
 o cache de memória e leia do banco a cada requisição.
 
-**Gunicorn com `--preload` (não remova o preload):** o app roda em
-`gunicorn --preload -w 2 --timeout 120`. O `--preload` não é detalhe de performance —
+**Gunicorn com `--preload` (não remova o preload):** o app principal roda em
+`gunicorn --preload -w 1 --threads 4 --timeout 120`. O `--preload` não é detalhe de performance —
 `core.py` chama `migrate()` no import, então sem ele **cada worker roda a migração ao mesmo
 tempo no boot** e as DDL competem entre si (medido: 3 workers = 3 imports; com preload = 1).
 É seguro porque nenhuma conexão de banco fica aberta em variável de módulo. Se algum dia
@@ -447,15 +558,14 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-`tests/` cobre a "regra de ouro" do DRE (o que é despesa de verdade) e as funções auxiliares
-puras (`cat_pt`, `esc`, `json_script`, `chave_alfa`, `_fmt_moeda`, `_barra_html`, hash de senha,
-permissões por perfil). `app.py` dá pra importar sem banco — `migrate()` e
-`recarregar_categorias_db()` engolem qualquer erro de conexão e seguem com estado padrão — por
-isso os testes importam o `app.py` de verdade em vez de duplicar a lógica.
+Em 25/08/2026 a suíte local está em **180 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
+auditoria, regras automáticas, rateio e fluxos com PostgreSQL temporário. Os seis testes
+ignorados dependem de condições/serviços que não estão disponíveis em toda execução; conferir o
+motivo do `skip`, não tratar automaticamente como falha.
 
-Não cobre: as queries SQL em si (exigem Postgres real, fora do escopo hoje) — `TestNaturezaEfetiva`
-em `tests/test_dre_logic.py` é um espelho em Python do `CASE` de `NATUREZA_SQL`; se a SQL mudar,
-essa função e os testes têm que mudar junto (não há checagem automática de que os dois batem).
+Há testes de integração com PostgreSQL temporário, mas isso não substitui a validação logada em
+produção: configuração, dados reais, rede do Coolify e comportamento do Pluggy são diferentes.
 
 Rodar localmente:
 ```bash
@@ -474,8 +584,8 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
   classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
   abaixo dele com botão `+`/`−`, descritas como `<descrição original> — Parte N`. As partes
-  devem somar exatamente o total (inclusive o sinal),
-  substituem o pai no DRE/relatórios. Podem ser alteradas com o pai em OK sem apagar essa
+  devem somar exatamente o total (inclusive o sinal) e substituem o pai no DRE/relatórios.
+  Podem ser alteradas com o pai em OK sem apagar essa
   assinatura, mas o servidor só aceita o conjunto completo, fechado e com campos obrigatórios;
   desfazer o rateio por inteiro exige retirar o OK antes.
   Valor, categoria, dimensões e observação são editados diretamente nas linhas das partes e
