@@ -119,8 +119,8 @@
         <td class="valor cel-valor" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline{{ '' if r.rateio_valido else ' invalido' }}" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar }}></td>
         <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar }}></td>
         {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
-        <td class="cel-check" data-col="check"></td>
-        <td class="cel-status" data-col="status"><button type="button" class="rateio-salvar-inline" title="Salvar rateio" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or not r.rateio_valido }}>✓</button></td>
+        <td class="cel-check" data-col="check"><button type="button" class="rateio-salvar-inline" title="Salvar rateio" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or not r.rateio_valido }}>✓</button></td>
+        <td class="cel-status" data-col="status"></td>
       </tr>
       {% endfor %}
     {% else %}
