@@ -592,7 +592,8 @@ def api_dimensao_lancamentos():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     if valor_id:
         cur.execute(
-            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, lf.valor_brl AS valor "
+            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, "
+            "COALESCE(lf.valor_brl, lf.valor_original) AS valor "
             "FROM cartao.lancamento_financeiro lf "
             "JOIN cartao.lancamento_financeiro_dimensao ld ON ld.linha_id = lf.linha_id "
             "WHERE ld.valor_id = %s ORDER BY lf.data_transacao DESC LIMIT 300;",
@@ -600,7 +601,8 @@ def api_dimensao_lancamentos():
         )
     else:
         cur.execute(
-            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, lf.valor_brl AS valor "
+            "SELECT lf.transacao_id, lf.data_transacao, lf.descricao, "
+            "COALESCE(lf.valor_brl, lf.valor_original) AS valor "
             "FROM cartao.lancamento_financeiro lf "
             "JOIN cartao.lancamento_financeiro_dimensao ld ON ld.linha_id = lf.linha_id "
             "WHERE ld.dimensao_id = %s ORDER BY lf.data_transacao DESC LIMIT 300;",
