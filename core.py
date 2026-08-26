@@ -1550,7 +1550,9 @@ def migrate():
 
 def aplicar_regras(cur):
     """Aplica regras de classificacao automatica a lancamentos pendentes ainda nao tocados por nenhuma regra.
-    Nunca sobrescreve categoria escolhida pelo usuario nem transacao confirmada."""
+    Nunca sobrescreve categoria escolhida pelo usuario nem transacao confirmada, e nunca
+    classifica sozinha uma linha que pode ser a mesma compra de outra ja existente (mesma
+    conta, data e valor) - essas ficam pendentes para revisao manual."""
     # Uma regra antiga pode apontar para uma dimensao/valor removido. Isolamos a
     # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
     # consultas da pagina que chamou esta funcao.
@@ -1573,6 +1575,20 @@ def aplicar_regras(cur):
             "       ELSE false END) "
             "  WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
             "    AND COALESCE(t.categoria_manual, false) = false "
+            # O Pluggy as vezes reenvia a mesma compra com um id novo e uma
+            # descricao diferente (ex: 'Compra a Vista - X' e 'A vista sem
+            # juros - Visa - X ... BR' no mesmo minuto e valor). Se ja existe
+            # outra linha da mesma conta com data e valor identicos, essa
+            # entrada pode ser a mesma compra que o usuario ja classificou
+            # sob outro id - a regra nao decide sozinha, fica para revisao
+            # manual (o alerta de duplicidade tambem deveria pegar o caso).
+            "    AND NOT EXISTS ("
+            "      SELECT 1 FROM cartao.transacao t2 "
+            "      WHERE t2.transacao_id <> t.transacao_id "
+            "        AND t2.account_id = t.account_id "
+            "        AND t2.data_transacao = t.data_transacao "
+            "        AND COALESCE(t2.valor_brl, t2.valor_original) = COALESCE(t.valor_brl, t.valor_original)"
+            "    ) "
             "  ORDER BY t.transacao_id, r.ordem, r.id"
             ") "
             "UPDATE cartao.transacao t SET categoria = m.categoria, regra_aplicada_id = m.regra_id "
