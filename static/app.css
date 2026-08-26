@@ -68,7 +68,12 @@
     background: var(--surface);
     color: var(--ink);
   }
-  select:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  select:focus, input:not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  /* checkbox usa outline em vez de box-shadow: dentro de celula de tabela com
+     overflow:hidden (ver td[data-col] mais abaixo), o box-shadow fica cortado
+     e o foco por Tab passa a ser invisivel - so aparecia em navegadores que
+     nao respeitam esse recorte. Outline nao e afetado do mesmo jeito. */
+  input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
   /* ---------- table ---------- */
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
@@ -160,6 +165,9 @@
   /* divisor entre colunas - sempre visivel, destaca no hover pra indicar que da pra arrastar */
   table.ajustavel th[data-col]:not(:last-child) { border-right: 1px solid var(--line); }
   table.ajustavel td[data-col] { box-sizing: border-box; overflow: hidden; }
+  /* excecao: celula do checkbox OK nao tem texto longo pra cortar, e overflow
+     hidden aqui cortava o anel de foco do Tab (ver input[type=checkbox]:focus-visible) */
+  table.ajustavel td.cel-check { overflow: visible; }
   table.ajustavel th[data-col] .col-resize-handle {
     position: absolute; right: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize;
     z-index: 5;
