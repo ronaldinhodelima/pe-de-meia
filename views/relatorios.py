@@ -547,10 +547,15 @@ def conciliar_fatura():
                     # num parcelamento real) - por isso o casamento aqui e so
                     # pelo valor cheio esperado, com o numero de parcelas e a
                     # descricao servindo apenas de desempate quando ha mais de
-                    # um candidato com o mesmo valor.
+                    # um candidato proximo do valor. Tolerancia de R$1 porque o
+                    # valor da parcela impresso na fatura e arredondado por mes -
+                    # multiplicado pelo numero de parcelas pode nao bater centavo
+                    # a centavo com o valor cheio real (ex: fatura mostra parcela
+                    # de R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
+                    tolerancia = 1.00
                     candidatos_valor = [
                         c for c in candidatos
-                        if not c["_usado"] and round(float(c["valor"]), 2) == valor_esperado
+                        if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
                     ]
                     melhor = None
                     if len(candidatos_valor) == 1:
@@ -560,7 +565,10 @@ def conciliar_fatura():
                         opcoes = com_parcela or candidatos_valor
                         melhor = min(
                             opcoes,
-                            key=lambda c: (desc_norm.split()[0] not in (c["descricao"] or "").upper()),
+                            key=lambda c: (
+                                desc_norm.split()[0] not in (c["descricao"] or "").upper(),
+                                abs(round(float(c["valor"]), 2) - valor_esperado),
+                            ),
                         )
                     if melhor:
                         melhor["_usado"] = True
