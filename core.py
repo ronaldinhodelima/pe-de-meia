@@ -1542,6 +1542,33 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (15);")
             conn.commit()
 
+        if versao_atual < 16:
+            # sincronizado_em e sobrescrito a cada sync (mesmo em linha que ja existia),
+            # entao sozinho ele nao diz se o registro e novo ou so foi confirmado de novo
+            # pelo Pluggy. primeiro_sincronizado_em e gravado uma unica vez, no INSERT, e
+            # nunca mais atualizado - e o jeito de saber quando aquele transacao_id
+            # realmente apareceu no banco pela primeira vez. Motivado por um caso real:
+            # o Pluggy reenviou compras ja classificadas e conferidas com um id novo e
+            # outra descricao (ex: "Compra a Vista - X" vs "A vista sem juros - Visa - X"),
+            # criando linha pendente nova que parecia (e nao era) o ajuste antigo apagado.
+            cur.execute(
+                "ALTER TABLE cartao.transacao ADD COLUMN IF NOT EXISTS primeiro_sincronizado_em timestamptz;"
+            )
+            # backfill: para quem ja existe, a melhor aproximacao que temos e o
+            # sincronizado_em atual (ou criado_em, se vier do Pluggy e for mais antigo).
+            cur.execute(
+                "UPDATE cartao.transacao SET primeiro_sincronizado_em = "
+                "LEAST(COALESCE(sincronizado_em, now()), COALESCE(criado_em, sincronizado_em, now())) "
+                "WHERE primeiro_sincronizado_em IS NULL;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Coluna primeiro_sincronizado_em',"
+                "jsonb_build_object('versao',16));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (16);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1556,9 +1583,40 @@ def aplicar_regras(cur):
     # Uma regra antiga pode apontar para uma dimensao/valor removido. Isolamos a
     # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
     # consultas da pagina que chamou esta funcao.
-    resultado = {"lancamentos": 0, "dimensoes": 0, "erro": None}
+    resultado = {"lancamentos": 0, "dimensoes": 0, "erro": None, "duplicatas_ignoradas": []}
     cur.execute("SAVEPOINT aplicar_regras")
     try:
+        # Diagnostico: lancamentos que bateriam com uma regra mas foram pulados
+        # por parecerem duplicata de outra linha ja existente (mesma conta, data
+        # e valor). Nao decide nada sozinho - so fica visivel em Logs para o
+        # usuario avaliar se e mesmo duplicata ou coincidencia de valor.
+        cur.execute(
+            "SELECT DISTINCT t.transacao_id::text, t.descricao, t.data_transacao "
+            "FROM cartao.transacao t "
+            "JOIN cartao.regra_classificacao r ON COALESCE(r.ativa,true)=true "
+            " AND t.descricao ILIKE '%%' || r.padrao || '%%' "
+            " AND (r.valor_operador IS NULL OR r.valor_limite IS NULL OR "
+            "   CASE r.valor_operador "
+            "     WHEN 'lt' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) < r.valor_limite "
+            "     WHEN 'lte' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) <= r.valor_limite "
+            "     WHEN 'gt' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) > r.valor_limite "
+            "     WHEN 'gte' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) >= r.valor_limite "
+            "     WHEN 'eq' THEN ABS(COALESCE(t.valor_brl,t.valor_original)) = r.valor_limite "
+            "     ELSE false END) "
+            "WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
+            "  AND COALESCE(t.categoria_manual, false) = false "
+            "  AND EXISTS ("
+            "    SELECT 1 FROM cartao.transacao t2 "
+            "    WHERE t2.transacao_id <> t.transacao_id "
+            "      AND t2.account_id = t.account_id "
+            "      AND t2.data_transacao = t.data_transacao "
+            "      AND COALESCE(t2.valor_brl, t2.valor_original) = COALESCE(t.valor_brl, t.valor_original)"
+            "  ) LIMIT 50;"
+        )
+        resultado["duplicatas_ignoradas"] = [
+            {"transacao_id": row[0], "descricao": row[1], "data": row[2].isoformat() if row[2] else None}
+            for row in cur.fetchall()
+        ]
         cur.execute(
             "WITH match AS ("
             "  SELECT DISTINCT ON (t.transacao_id) t.transacao_id, r.id AS regra_id, r.categoria "
@@ -1608,6 +1666,7 @@ def aplicar_regras(cur):
         cur.execute("ROLLBACK TO SAVEPOINT aplicar_regras")
         resultado["lancamentos"] = 0
         resultado["dimensoes"] = 0
+        resultado["duplicatas_ignoradas"] = []
         resultado["erro"] = str(e)[:500]
         print("Aviso: falha ao aplicar regras:", e)
     finally:

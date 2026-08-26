@@ -236,9 +236,10 @@ class TestIndex:
         assert 'onchange="salvarDimensaoModal(this)"' in html
         assert 'onchange="salvarObservacaoModal()"' in html
         assert 'id="modalConferidaPor" hidden' in html
-        assert js.count('class="row row-pareada"') == 3
+        assert js.count('class="row row-pareada"') == 4
         assert js.index('<small>Data</small>') < js.index('<small>Valor (R$)</small>')
         assert js.index('<small>Valor original</small>') < js.index('<small>Parcela</small>')
+        assert js.index('<small>Visto 1ª vez em</small>') < js.index('<small>Última sincronização</small>')
         assert html.index('id="modalConferidaPor"') < html.index('id="modalConferida"')
         assert "function salvarDimensaoModal" in js
         assert "function salvarObservacaoModal" in js

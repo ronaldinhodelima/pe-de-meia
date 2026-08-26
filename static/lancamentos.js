@@ -307,7 +307,11 @@ function verDetalhes(id) {
       '<span class="modal-campo"><small>Status</small><strong>' + escHtml(d.status) + '</strong></span>' +
       '<span class="modal-campo"><small>Tipo</small><strong>' + escHtml(d.tipo) + '</strong></span>' +
     '</div>' +
-    '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>';
+    '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>' +
+    '<div class="row row-pareada">' +
+      '<span class="modal-campo"><small>Visto 1ª vez em</small><strong>' + escHtml(d.primeiro_sincronizado_em) + '</strong></span>' +
+      '<span class="modal-campo"><small>Última sincronização</small><strong>' + escHtml(d.sincronizado_em) + '</strong></span>' +
+    '</div>';
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');

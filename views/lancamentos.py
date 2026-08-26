@@ -150,7 +150,10 @@ def index():
 
     regras_resultado = aplicar_regras(cur)
     conn.commit()
-    if regras_resultado["lancamentos"] or regras_resultado["dimensoes"] or regras_resultado["erro"]:
+    if (
+        regras_resultado["lancamentos"] or regras_resultado["dimensoes"]
+        or regras_resultado["erro"] or regras_resultado["duplicatas_ignoradas"]
+    ):
         registrar_auditoria(
             "regra_automatica",
             "classificacao",
@@ -214,7 +217,7 @@ def index():
         "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
         "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
         "t.conferida, t.observacao, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
-        "COALESCE(t.importado, false) AS importado, t.natureza, "
+        "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, t.primeiro_sincronizado_em, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) + " ORDER BY t.data_transacao DESC;",
         params,
@@ -448,6 +451,8 @@ def index():
             "conferida": "Sim" if r["conferida"] else "Não",
             "conferida_por": r["conferida_por"] or "-",
             "observacao": r["observacao"] or "-",
+            "sincronizado_em": data_hora_local(r["sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["sincronizado_em"] else "-",
+            "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
             "_conferida": bool(r["conferida"]),
             "_duplicada": bool(r["duplicada"]),
             "_manual": bool(eh_manual),

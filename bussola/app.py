@@ -94,7 +94,8 @@ CREATE TABLE IF NOT EXISTS cartao.transacao (
     conferida_em                 TIMESTAMPTZ,
     criado_em                     TIMESTAMPTZ,
     atualizado_em                  TIMESTAMPTZ,
-    sincronizado_em                TIMESTAMPTZ DEFAULT now()
+    sincronizado_em                TIMESTAMPTZ DEFAULT now(),
+    primeiro_sincronizado_em       TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_transacao_data ON cartao.transacao (data_transacao);
@@ -342,8 +343,8 @@ def upsert_transaction(cur, tx):
         INSERT INTO cartao.transacao (
             transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original,
             valor_brl, data_transacao, categoria, categoria_id, status, tipo,
-            numero_cartao_final, mcc, criado_em, atualizado_em, sincronizado_em
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+            numero_cartao_final, mcc, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now(), now())
         ON CONFLICT (transacao_id) DO UPDATE SET
             -- Somente dados bancarios mutaveis voltam do Pluggy. Categoria e
             -- todos os ajustes feitos no sistema ficam preservados; dimensoes
@@ -357,6 +358,10 @@ def upsert_transaction(cur, tx):
             data_transacao = EXCLUDED.data_transacao,
             atualizado_em = EXCLUDED.atualizado_em,
             sincronizado_em = now()
+            -- primeiro_sincronizado_em fica de fora de proposito: e gravado uma
+            -- unica vez, no INSERT, para dar para diferenciar uma linha nova
+            -- (duplicata que o Pluggy reenviou com outro id) de uma linha
+            -- antiga que so foi reconfirmada nesta sincronizacao.
         RETURNING (xmax = 0) AS inserted;
         """,
         (
