@@ -1,9 +1,10 @@
 """Relatorios, DRE e investimentos."""
+import uuid
 from datetime import datetime, timedelta
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, session
 
 from fatura_unicred import extrair_fatura, FaturaInvalida
 from core import (
@@ -30,6 +31,7 @@ from core import (
     levantar_pendencias,
     pode,
     registrar_auditoria,
+    registrar_mudanca_auditoria,
     requer,
     topbar_html,
 )
@@ -460,6 +462,126 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
+def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None):
+    """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
+    lancamentos que o Pluggy trouxe naquela conta. fatura_linha_ids, quando
+    informado, e um dict {id(linha) python: id da cartao.fatura_linha} para o
+    template poder oferecer "criar lancamento" apontando pro registro certo."""
+    fatura_linha_ids = fatura_linha_ids or {}
+    datas = [l["data"] for l in linhas]
+    cur.execute(
+        f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
+        f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local "
+        f"FROM cartao.transacao t WHERE t.account_id = %s "
+        f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
+        (account_id, min(datas), max(datas)),
+    )
+    candidatos = [dict(r) for r in cur.fetchall()]
+    for c in candidatos:
+        c["_usado"] = False
+        c["_data_local"] = c["data_local"]
+
+    # A fatura lista cada parcela mensal numa linha (ex: "Parc.9/12 R$129,00");
+    # o Pluggy grava o parcelamento inteiro como UMA transacao so, no valor
+    # cheio, na data da compra original. Sem agrupar por parcela_total, toda
+    # compra parcelada bateria errado dos dois lados - nao por falha de
+    # sincronizacao, so porque sao representacoes diferentes da mesma compra.
+    grupos_parcela = {}
+    avulsas = []
+    for linha in linhas:
+        if linha["parcela_total"]:
+            chave = (linha["titular"], linha["descricao_base"].upper(), linha["parcela_total"])
+            grupos_parcela.setdefault(chave, []).append(linha)
+        else:
+            avulsas.append(linha)
+
+    batidos, sem_sistema = [], []
+
+    for linha in avulsas:
+        melhor, melhor_dist = None, None
+        for c in candidatos:
+            if c["_usado"] or round(float(c["valor"]), 2) != linha["valor"]:
+                continue
+            dist = abs((c["_data_local"] - linha["data"]).days)
+            if dist > 3:
+                continue
+            if melhor is None or dist < melhor_dist:
+                melhor, melhor_dist = c, dist
+        if melhor:
+            melhor["_usado"] = True
+            batidos.append({**linha, "transacao_id": str(melhor["transacao_id"]),
+                             "descricao_sistema": melhor["descricao"]})
+        else:
+            sem_sistema.append({**linha, "fatura_linha_id": fatura_linha_ids.get(id(linha))})
+
+    for (titular, desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
+        valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
+        valor_esperado = round(valor_mensal * parcela_total, 2)
+        # O Pluggy nem sempre preenche parcela_total no lancamento agregado
+        # (esse cartao chega a mostrar "Parcela: A vista" num parcelamento
+        # real) - por isso o casamento aqui e so pelo valor cheio esperado,
+        # com o numero de parcelas e a descricao servindo apenas de desempate
+        # quando ha mais de um candidato proximo do valor. Tolerancia de R$1
+        # porque o valor da parcela impresso na fatura e arredondado por mes -
+        # multiplicado pelo numero de parcelas pode nao bater centavo a
+        # centavo com o valor cheio real (ex: fatura mostra parcela de
+        # R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
+        tolerancia = 1.00
+        candidatos_valor = [
+            c for c in candidatos
+            if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
+        ]
+        melhor = None
+        if len(candidatos_valor) == 1:
+            melhor = candidatos_valor[0]
+        elif len(candidatos_valor) > 1:
+            com_parcela = [c for c in candidatos_valor if c["parcela_total"] == parcela_total]
+            opcoes = com_parcela or candidatos_valor
+            melhor = min(
+                opcoes,
+                key=lambda c: (
+                    desc_norm.split()[0] not in (c["descricao"] or "").upper(),
+                    abs(round(float(c["valor"]), 2) - valor_esperado),
+                ),
+            )
+        if melhor:
+            melhor["_usado"] = True
+            for l in linhas_grupo:
+                batidos.append({**l, "transacao_id": str(melhor["transacao_id"]),
+                                "descricao_sistema": melhor["descricao"],
+                                "valor_esperado_parcelamento": valor_esperado})
+        else:
+            for l in linhas_grupo:
+                sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
+                                     "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
+
+    # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o intervalo de
+    # busca acima e largo (cobre ate um ano, por causa de parcelas antigas que
+    # ainda aparecem cobradas), mas listar TODA sobra desse intervalo encheria
+    # a tela de lancamentos de faturas passadas que nunca deveriam bater com
+    # esta mesmo.
+    ciclo_inicio = max(datas) - timedelta(days=35)
+    sem_fatura = [
+        {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
+         "transacao_id": str(c["transacao_id"])}
+        for c in candidatos if not c["_usado"] and c["_data_local"] >= ciclo_inicio
+    ]
+
+    soma_fatura = round(sum(l["valor"] for l in linhas), 2)
+    soma_batida = round(sum(l["valor"] for l in batidos), 2)
+    return {
+        "soma_fatura": soma_fatura,
+        "batidos": sorted(batidos, key=lambda l: l["data"]),
+        "sem_sistema": sorted(sem_sistema, key=lambda l: l["data"]),
+        "sem_fatura": sorted(sem_fatura, key=lambda l: l["data"]),
+        "fecha_100": not sem_sistema and not sem_fatura,
+        "diferenca": round(soma_fatura - soma_batida, 2),
+        "periodo_inicio": min(datas),
+        "periodo_fim": max(datas),
+    }
+
+
 @bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
 @requer("relatorios")
 def conciliar_fatura():
@@ -471,10 +593,19 @@ def conciliar_fatura():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     contas_by_id, origem_opcoes = carregar_origens(cur)
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
+    categorias_db = {r["categoria"] for r in cur.fetchall()}
+    categorias = sorted(
+        (categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
+    categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
 
     erro = None
     resultado = None
+    fatura_meta = None
     account_id = request.form.get("account_id") if request.method == "POST" else None
+    fatura_id = request.args.get("fatura_id", type=int)
 
     if request.method == "POST":
         arquivo = request.files.get("fatura")
@@ -491,132 +622,93 @@ def conciliar_fatura():
                 erro = f"Não consegui ler esse PDF: {exc}"
 
             if not erro:
-                datas = [l["data"] for l in fatura["linhas"]]
+                # Guarda so os lancamentos extraidos (nao o PDF) - da historico
+                # e permite reabrir a conciliacao depois sem reenviar o arquivo.
+                # Reenviar a mesma fatura (conta+mes+ano) substitui as linhas.
                 cur.execute(
-                    f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
-                    f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
-                    f"({DATA_LOCAL_SQL})::date AS data_local "
-                    f"FROM cartao.transacao t WHERE t.account_id = %s "
-                    f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
-                    (account_id, min(datas), max(datas)),
+                    "INSERT INTO cartao.fatura_importada "
+                    "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (account_id, mes_referencia, ano_referencia) DO UPDATE SET "
+                    "total=EXCLUDED.total, cartao_final4=EXCLUDED.cartao_final4, "
+                    "arquivo_nome=EXCLUDED.arquivo_nome, importado_por=EXCLUDED.importado_por, importado_em=now() "
+                    "RETURNING id;",
+                    (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
+                     fatura["cartao_final4"], arquivo.filename, session.get("user")),
                 )
-                candidatos = [dict(r) for r in cur.fetchall()]
-                for c in candidatos:
-                    c["_usado"] = False
-                    c["_data_local"] = c["data_local"]
-
-                # A fatura lista cada parcela mensal numa linha (ex: "Parc.9/12
-                # R$129,00"); o Pluggy grava o parcelamento inteiro como UMA
-                # transacao so, no valor cheio, na data da compra original. Sem
-                # agrupar por parcela_total, toda compra parcelada bateria errado
-                # dos dois lados - nao por falha de sincronizacao, so porque sao
-                # representacoes diferentes da mesma compra.
-                grupos_parcela = {}
-                avulsas = []
-                for linha in fatura["linhas"]:
-                    if linha["parcela_total"]:
-                        chave = (linha["titular"], linha["descricao_base"].upper(), linha["parcela_total"])
-                        grupos_parcela.setdefault(chave, []).append(linha)
-                    else:
-                        avulsas.append(linha)
-
-                batidos, sem_sistema = [], []
-
-                for linha in avulsas:
-                    melhor, melhor_dist = None, None
-                    for c in candidatos:
-                        if c["_usado"] or round(float(c["valor"]), 2) != linha["valor"]:
-                            continue
-                        dist = abs((c["_data_local"] - linha["data"]).days)
-                        if dist > 3:
-                            continue
-                        if melhor is None or dist < melhor_dist:
-                            melhor, melhor_dist = c, dist
-                    if melhor:
-                        melhor["_usado"] = True
-                        batidos.append({**linha, "transacao_id": str(melhor["transacao_id"]),
-                                         "descricao_sistema": melhor["descricao"]})
-                    else:
-                        sem_sistema.append(linha)
-
-                for (titular, desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
-                    valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
-                    valor_esperado = round(valor_mensal * parcela_total, 2)
-                    # O Pluggy nem sempre preenche parcela_total no lancamento
-                    # agregado (esse cartao chega a mostrar "Parcela: A vista"
-                    # num parcelamento real) - por isso o casamento aqui e so
-                    # pelo valor cheio esperado, com o numero de parcelas e a
-                    # descricao servindo apenas de desempate quando ha mais de
-                    # um candidato proximo do valor. Tolerancia de R$1 porque o
-                    # valor da parcela impresso na fatura e arredondado por mes -
-                    # multiplicado pelo numero de parcelas pode nao bater centavo
-                    # a centavo com o valor cheio real (ex: fatura mostra parcela
-                    # de R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
-                    tolerancia = 1.00
-                    candidatos_valor = [
-                        c for c in candidatos
-                        if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
-                    ]
-                    melhor = None
-                    if len(candidatos_valor) == 1:
-                        melhor = candidatos_valor[0]
-                    elif len(candidatos_valor) > 1:
-                        com_parcela = [c for c in candidatos_valor if c["parcela_total"] == parcela_total]
-                        opcoes = com_parcela or candidatos_valor
-                        melhor = min(
-                            opcoes,
-                            key=lambda c: (
-                                desc_norm.split()[0] not in (c["descricao"] or "").upper(),
-                                abs(round(float(c["valor"]), 2) - valor_esperado),
-                            ),
-                        )
-                    if melhor:
-                        melhor["_usado"] = True
-                        for l in linhas_grupo:
-                            batidos.append({**l, "transacao_id": str(melhor["transacao_id"]),
-                                            "descricao_sistema": melhor["descricao"],
-                                            "valor_esperado_parcelamento": valor_esperado})
-                    else:
-                        for l in linhas_grupo:
-                            sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
-                                                 "titular": titular})
-
-                # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o
-                # intervalo de busca acima e largo (cobre ate um ano, por causa
-                # de parcelas antigas que ainda aparecem cobradas), mas listar
-                # TODA sobra desse intervalo encheria a tela de lancamentos de
-                # faturas passadas que nunca deveriam bater com esta mesmo.
-                ciclo_inicio = max(datas) - timedelta(days=35)
-                sem_fatura = [
-                    {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
-                     "transacao_id": str(c["transacao_id"])}
-                    for c in candidatos if not c["_usado"] and c["_data_local"] >= ciclo_inicio
-                ]
-
-                soma_fatura = round(sum(l["valor"] for l in fatura["linhas"]), 2)
-                soma_batida = round(sum(l["valor"] for l in batidos), 2)
-                resultado = {
-                    "fatura": fatura,
-                    "soma_fatura": soma_fatura,
-                    "batidos": sorted(batidos, key=lambda l: l["data"]),
-                    "sem_sistema": sorted(sem_sistema, key=lambda l: l["data"]),
-                    "sem_fatura": sorted(sem_fatura, key=lambda l: l["data"]),
-                    "fecha_100": not sem_sistema and not sem_fatura,
-                    "diferenca": round(soma_fatura - soma_batida, 2),
-                }
+                fatura_id = cur.fetchone()["id"]
+                cur.execute("DELETE FROM cartao.fatura_linha WHERE fatura_id=%s;", (fatura_id,))
+                for l in fatura["linhas"]:
+                    cur.execute(
+                        "INSERT INTO cartao.fatura_linha "
+                        "(fatura_id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s);",
+                        (fatura_id, l["data"], l["descricao"], l["descricao_base"],
+                         l["parcela_atual"], l["parcela_total"], l["valor"], l["titular"]),
+                    )
+                conn.commit()
                 registrar_auditoria(
-                    "acesso", "relatorios.conciliar_fatura", sucesso=True,
+                    "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
                     detalhes={
-                        "conta": account_id,
-                        "mes_referencia": fatura["mes_referencia"],
-                        "ano_referencia": fatura["ano_referencia"],
-                        "linhas_fatura": len(fatura["linhas"]),
-                        "batidos": len(batidos),
-                        "sem_sistema": len(sem_sistema),
-                        "sem_fatura": len(sem_fatura),
-                        "fecha_100": resultado["fecha_100"],
+                        "conta": account_id, "fatura_id": fatura_id,
+                        "mes_referencia": fatura["mes_referencia"], "ano_referencia": fatura["ano_referencia"],
+                        "linhas": len(fatura["linhas"]),
                     },
                 )
+
+    if not erro and fatura_id:
+        cur.execute(
+            "SELECT f.*, c.tipo FROM cartao.fatura_importada f "
+            "JOIN cartao.conta c ON c.account_id = f.account_id WHERE f.id = %s;",
+            (fatura_id,),
+        )
+        fatura_row = cur.fetchone()
+        if not fatura_row:
+            erro = "Fatura não encontrada."
+        else:
+            account_id = str(fatura_row["account_id"])
+            cur.execute(
+                "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
+                "transacao_id_criado FROM cartao.fatura_linha WHERE fatura_id=%s ORDER BY data;",
+                (fatura_id,),
+            )
+            linhas_db = [dict(r) for r in cur.fetchall()]
+            linhas = [{k: v for k, v in l.items() if k not in ("id", "transacao_id_criado")} for l in linhas_db]
+            ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db) if not db["transacao_id_criado"]}
+            for l, db in zip(linhas, linhas_db):
+                l["valor"] = float(l["valor"])
+                l["_ja_criado"] = bool(db["transacao_id_criado"])
+
+            fatura_meta = {
+                "id": fatura_id, "mes_referencia": fatura_row["mes_referencia"],
+                "ano_referencia": fatura_row["ano_referencia"], "total": float(fatura_row["total"]),
+                "cartao_final4": fatura_row["cartao_final4"], "arquivo_nome": fatura_row["arquivo_nome"],
+                "importado_em": fatura_row["importado_em"],
+            }
+            resultado = _conciliar_linhas(cur, account_id, linhas, ids_por_linha)
+            resultado["fatura"] = fatura_meta
+            # linhas ja resolvidas (usuario ja criou o lancamento) saem da lista
+            # de pendencias, mas continuam contando no total como "cobertas"
+            ja_criadas = [l for l, db in zip(linhas, linhas_db) if db["transacao_id_criado"]]
+            if ja_criadas:
+                resultado["sem_sistema"] = [
+                    l for l in resultado["sem_sistema"] if not l.get("_ja_criado")
+                ]
+                resultado["diferenca"] = round(
+                    resultado["diferenca"] - sum(l["valor"] for l in ja_criadas), 2
+                )
+                if not resultado["sem_sistema"] and not resultado["sem_fatura"]:
+                    resultado["fecha_100"] = True
+
+    # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
+    cur.execute(
+        "SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em "
+        "FROM cartao.fatura_importada f ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
+    )
+    historico = []
+    for r in cur.fetchall():
+        conta = contas_by_id.get(str(r["account_id"]))
+        historico.append({**r, "conta_label": conta["label_curto"] if conta else "(conta removida)"})
 
     cur.close()
     conn.close()
@@ -625,10 +717,72 @@ def conciliar_fatura():
         titulo="Conciliar fatura",
         topbar=topbar_html("Conciliar fatura", "conciliar-fatura"),
         contas_credito=contas_credito,
+        categorias=categorias_template,
         account_id=account_id,
         erro=erro,
         resultado=resultado,
+        historico=historico,
+        fatura_id=fatura_id,
     )
+
+
+@bp.route("/api/fatura-linha/<int:linha_id>/criar-lancamento", methods=["POST"])
+@requer("lancamentos_manual")
+def criar_lancamento_de_fatura(linha_id):
+    """Cria um lancamento manual a partir de uma linha da fatura que a
+    conciliacao nao achou no Pluggy (ex: tarifa que o banco nao sincronizou) -
+    a fatura oficial vira a fonte, ja que o Pluggy nao trouxe."""
+    data = request.get_json(force=True) or {}
+    categoria = (data.get("categoria") or "").strip()
+    if not categoria:
+        return jsonify({"ok": False, "erro": "Escolha uma categoria."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT fl.id, fl.data, fl.descricao, fl.valor, fl.transacao_id_criado, fi.account_id "
+            "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+            "WHERE fl.id = %s FOR UPDATE;",
+            (linha_id,),
+        )
+        linha = cur.fetchone()
+        if not linha:
+            return jsonify({"ok": False, "erro": "Linha da fatura não encontrada."}), 404
+        if linha["transacao_id_criado"]:
+            return jsonify({"ok": False, "erro": "Essa linha já tem um lançamento criado."}), 409
+
+        transacao_id = uuid.uuid4()
+        # valor da fatura sempre positivo = despesa; conta de credito trata
+        # valor_brl positivo como gasto (ver VAL_DESPESA em core.py)
+        cur.execute(
+            "INSERT INTO cartao.transacao ("
+            "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
+            "valor_brl, data_transacao, categoria, categoria_manual, status, tipo, "
+            "observacao, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,'POSTED','DEBIT',%s, now(), now(), now(), now());",
+            (
+                str(transacao_id), linha["account_id"], linha["descricao"], linha["descricao"],
+                linha["valor"], linha["valor"], f"{linha['data']} 12:00:00-03:00", categoria,
+                "Criado a partir da fatura em PDF - não veio do Pluggy.",
+            ),
+        )
+        cur.execute(
+            "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
+            (str(transacao_id), linha_id),
+        )
+        conn.commit()
+        registrar_mudanca_auditoria("Lançamento criado a partir da fatura", None, {
+            "fatura_linha_id": linha_id, "transacao_id": str(transacao_id),
+            "descricao": linha["descricao"], "valor": float(linha["valor"]), "categoria": categoria,
+        })
+        return jsonify({"ok": True, "transacao_id": str(transacao_id)})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
 
 
 @bp.route("/investimentos")

@@ -135,7 +135,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/categoria-lancamentos", "/api/dimensao-lancamentos",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
-        "/relatorios/conciliar-fatura",
+        "/relatorios/conciliar-fatura", "/api/fatura-linha/<int:linha_id>/criar-lancamento",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/dimensoes", "/regras", "/contas", "/pendencias",
         "/usuarios", "/logs",

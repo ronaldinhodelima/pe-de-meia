@@ -193,11 +193,35 @@ function desmarcarOrigem(valor) {
 function coletarQuery() {
   const params = new URLSearchParams();
   params.set('mes', document.getElementById('mesInput').value);
-  params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
+  if (document.getElementById('periodoIntervalo').checked) {
+    params.set('periodo', 'intervalo');
+    params.set('data_inicio', document.getElementById('dataInicioInput').value);
+    params.set('data_fim', document.getElementById('dataFimInput').value);
+  } else {
+    params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
+  }
   params.set('status', document.getElementById('statusInput').value);
   // [name] exigido: checkbox sem nome (ex: o do menu de colunas) nao e filtro
   document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked').forEach(cb => params.append(cb.name, cb.value));
   return params;
+}
+// "Periodo customizado" e "Ano inteiro" sao mutuamente exclusivos - ligar um
+// desliga o outro, senao os dois brigam pelo mesmo par mes/periodo na URL.
+function alternarPeriodoAno() {
+  if (document.getElementById('periodoAno').checked) {
+    document.getElementById('periodoIntervalo').checked = false;
+    document.getElementById('intervaloWrap').style.display = 'none';
+  }
+  aplicarFiltros(true);
+}
+function alternarPeriodoIntervalo() {
+  const intervalo = document.getElementById('periodoIntervalo');
+  document.getElementById('intervaloWrap').style.display = intervalo.checked ? 'flex' : 'none';
+  if (intervalo.checked) {
+    document.getElementById('periodoAno').checked = false;
+    if (!document.getElementById('dataInicioInput').value || !document.getElementById('dataFimInput').value) return;
+  }
+  aplicarFiltros(true);
 }
 // avanca/retrocede um mes no filtro. Usa Date pra virar o ano sozinho
 // (dezembro -> janeiro do ano seguinte) em vez de somar no numero do mes.

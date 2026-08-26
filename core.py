@@ -1590,6 +1590,49 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (17);")
             conn.commit()
 
+        if versao_atual < 18:
+            # Guarda os lancamentos extraidos de uma fatura em PDF importada (nao
+            # o PDF em si), pra ter historico e poder reabrir a conciliacao sem
+            # reenviar o arquivo. Uma fatura por conta+mes+ano (reenviar substitui
+            # as linhas antigas, ON DELETE CASCADE cuida disso).
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.fatura_importada ("
+                "id bigserial PRIMARY KEY, "
+                "account_id uuid NOT NULL REFERENCES cartao.conta(account_id), "
+                "mes_referencia integer NOT NULL, "
+                "ano_referencia integer NOT NULL, "
+                "total numeric(14,2) NOT NULL, "
+                "cartao_final4 text, "
+                "arquivo_nome text, "
+                "importado_por text, "
+                "importado_em timestamptz NOT NULL DEFAULT now(), "
+                "UNIQUE(account_id, mes_referencia, ano_referencia));"
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.fatura_linha ("
+                "id bigserial PRIMARY KEY, "
+                "fatura_id bigint NOT NULL REFERENCES cartao.fatura_importada(id) ON DELETE CASCADE, "
+                "data date NOT NULL, "
+                "descricao text NOT NULL, "
+                "descricao_base text, "
+                "parcela_atual integer, "
+                "parcela_total integer, "
+                "valor numeric(14,2) NOT NULL, "
+                "titular text, "
+                # preenchido quando o usuario cria um lancamento manual a partir
+                # desta linha (ver /relatorios/conciliar-fatura) - evita oferecer
+                # "criar lancamento" de novo pra quem ja foi resolvido
+                "transacao_id_criado uuid REFERENCES cartao.transacao(transacao_id));"
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_fatura_linha_fatura ON cartao.fatura_linha(fatura_id);")
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Historico de faturas importadas',"
+                "jsonb_build_object('versao',18));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (18);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

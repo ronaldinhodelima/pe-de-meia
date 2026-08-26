@@ -1,6 +1,6 @@
 """Tela de Lancamentos e a API que ela usa."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
@@ -30,6 +30,7 @@ from core import (
     chip_filter_html,
     data_hora_local,
     esc,
+    FUSO_LOCAL,
     fechar_recursos_banco,
     get_conn,
     intervalo_ano_local,
@@ -130,12 +131,23 @@ def _estado_rateios(cur, transacao_id):
 def index():
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
     periodo = request.args.get("periodo") or "mes"
-    if periodo not in ("mes", "ano"):
+    if periodo not in ("mes", "ano", "intervalo"):
         periodo = "mes"
+    data_inicio_str = request.args.get("data_inicio") or ""
+    data_fim_str = request.args.get("data_fim") or ""
     try:
-        if periodo == "ano":
+        if periodo == "intervalo" and data_inicio_str and data_fim_str:
+            # Fatura de cartao nao fecha no mes civil (ex: 13/jul a 12/ago) -
+            # esse periodo existe pra revisar exatamente a janela de uma
+            # fatura, sem forcar um recorte por mes que ela nunca respeitou.
+            inicio_mes = datetime.strptime(data_inicio_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL)
+            fim_mes = datetime.strptime(data_fim_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL) + timedelta(days=1)
+            if fim_mes <= inicio_mes:
+                raise ValueError("intervalo invalido")
+        elif periodo == "ano":
             inicio_mes, fim_mes = intervalo_ano_local(mes[:4])
         else:
+            periodo = "mes"
             inicio_mes, fim_mes = intervalo_mes_local(mes)
     except ValueError:
         mes = datetime.now().strftime("%Y-%m")
@@ -499,7 +511,9 @@ def index():
         topbar=topbar_html("Lançamentos", "inicio"),
         mes=mes,
         periodo=periodo,
-        periodo_rotulo="do ano" if periodo == "ano" else "do mês",
+        data_inicio=data_inicio_str,
+        data_fim=data_fim_str,
+        periodo_rotulo="do ano" if periodo == "ano" else ("do período" if periodo == "intervalo" else "do mês"),
         status=status,
         hoje_iso=datetime.now().strftime("%Y-%m-%d"),
         origem_filtro_html=chip_filter_html(

@@ -5,7 +5,8 @@
   Envie o PDF da fatura do cartão de crédito (hoje só o formato da Unicred é reconhecido) e o
   sistema confere, lançamento a lançamento, se o que a operadora cobrou bate com o que o Pluggy
   sincronizou nessa conta. Por mais correto que o Pluggy costume ser, quem manda é a fatura —
-  o valor pago precisa fechar 100%.
+  o valor pago precisa fechar 100%. Só os lançamentos extraídos ficam salvos (não o PDF), para
+  consultar depois sem reenviar o arquivo.
 </div>
 
 <div class="cat-breakdown">
@@ -32,6 +33,26 @@
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
 </div>
 
+{% if historico %}
+  <div class="cat-breakdown">
+    <h3>Faturas já importadas</h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Clique para reabrir a conciliação com o estado atual do sistema, sem reenviar o PDF.
+    </div>
+    <table class="compacta"><thead><tr><th>Referência</th><th>Cartão</th><th style="text-align:right">Total</th><th>Importada em</th></tr></thead>
+    <tbody>
+      {% for h in historico %}
+        <tr style="{{ 'background:var(--bg)' if h.id == fatura_id }}">
+          <td><a href="/relatorios/conciliar-fatura?fatura_id={{ h.id }}">{{ '%02d'|format(h.mes_referencia) }}/{{ h.ano_referencia }}</a></td>
+          <td>{{ h.conta_label }}</td>
+          <td class="valor">{{ h.total|moeda }}</td>
+          <td>{{ h.importado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+        </tr>
+      {% endfor %}
+    </tbody></table>
+  </div>
+{% endif %}
+
 {% if resultado %}
   {% set f = resultado.fatura %}
   <div class="cat-breakdown" style="border-left:3px solid {{ 'var(--good)' if resultado.fecha_100 else 'var(--bad)' }}">
@@ -57,6 +78,12 @@
       {{ resultado.sem_sistema|length }} só na fatura ·
       {{ resultado.sem_fatura|length }} só no sistema (não aparecem na fatura)
     </div>
+    <div style="margin-top:10px">
+      <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
+         style="font-size:12px">
+        Ver esse período inteiro em Lançamentos ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}) →
+      </a>
+    </div>
   </div>
 
   {% if resultado.sem_sistema %}
@@ -64,17 +91,33 @@
       <h3>Na fatura, mas não achei no sistema</h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
         A operadora cobrou, mas o Pluggy não trouxe (ou trouxe com data/valor muito diferente).
-        Vale conferir se sincronizou tudo ou se ficou faltando alguma sincronização antiga.
+        Se for algo que o Pluggy realmente nunca vai sincronizar (ex: tarifa que o banco não manda),
+        dá pra criar o lançamento direto daqui, usando a fatura como fonte.
       </div>
-      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th><th style="text-align:right">Valor</th></tr></thead>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th><th style="text-align:right">Valor</th><th>Criar como despesa</th></tr></thead>
       <tbody>
         {% for l in resultado.sem_sistema %}
-          <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.titular or '-' }}</td>
-              <td class="valor">{{ l.valor|moeda }}
-                {%- if l.valor_esperado_parcelamento is defined %}
-                  <br><small style="color:var(--ink-faint)">parcelamento — procurei {{ l.valor_esperado_parcelamento|moeda }} no total</small>
-                {%- endif %}
-              </td></tr>
+          <tr data-linha-id="{{ l.fatura_linha_id }}">
+            <td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.titular or '-' }}</td>
+            <td class="valor">{{ l.valor|moeda }}
+              {%- if l.valor_esperado_parcelamento is defined %}
+                <br><small style="color:var(--ink-faint)">parcelamento — procurei {{ l.valor_esperado_parcelamento|moeda }} no total</small>
+              {%- endif %}
+            </td>
+            <td>
+              {% if l.fatura_linha_id %}
+                <div style="display:flex;gap:6px;align-items:center">
+                  <select class="fatura-categoria" style="padding:5px 7px;font-size:12px">
+                    {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
+                  </select>
+                  <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
+                </div>
+                <span class="fatura-status" style="font-size:11px;color:var(--ink-faint)"></span>
+              {% else %}
+                <span style="font-size:11px;color:var(--ink-faint)">(sem PDF salvo nesta sessão)</span>
+              {% endif %}
+            </td>
+          </tr>
         {% endfor %}
       </tbody></table>
     </div>
@@ -112,4 +155,41 @@
   </details>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+function criarLancamentoFatura(btn) {
+  const linha = btn.closest('tr');
+  const linhaId = linha.dataset.linhaId;
+  const categoria = linha.querySelector('.fatura-categoria').value;
+  const status = linha.querySelector('.fatura-status');
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Salvando…';
+  fetch('/api/fatura-linha/' + encodeURIComponent(linhaId) + '/criar-lancamento', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ categoria: categoria })
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) {
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Falha ao salvar.';
+        btn.disabled = false;
+        return;
+      }
+      status.style.color = 'var(--good)';
+      status.textContent = 'Criado.';
+      linha.style.opacity = '0.5';
+      linha.querySelector('.fatura-categoria').disabled = true;
+    })
+    .catch(() => {
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Falha ao salvar.';
+      btn.disabled = false;
+    });
+}
+</script>
 {% endblock %}
