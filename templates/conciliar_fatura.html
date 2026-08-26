@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block conteudo %}
+
+<div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
+  Envie o PDF da fatura do cartão de crédito (hoje só o formato da Unicred é reconhecido) e o
+  sistema confere, lançamento a lançamento, se o que a operadora cobrou bate com o que o Pluggy
+  sincronizou nessa conta. Por mais correto que o Pluggy costume ser, quem manda é a fatura —
+  o valor pago precisa fechar 100%.
+</div>
+
+<div class="cat-breakdown">
+  <h3>Nova conciliação</h3>
+  <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label style="font-size:12px;color:#888;display:block">Cartão (origem)</label>
+      <select name="account_id" required style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;min-width:260px">
+        <option value="">selecione…</option>
+        {% for aid, curto, completo, _, _ in contas_credito %}
+          <option value="{{ aid }}" {{ 'selected' if aid == account_id }}>{{ completo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="font-size:12px;color:#888;display:block">PDF da fatura</label>
+      <input type="file" name="fatura" accept="application/pdf" required
+             style="padding:6px 0;font-size:13px">
+    </div>
+    <button type="submit" style="background:#1d2b3a;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer">
+      Conciliar
+    </button>
+  </form>
+  {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
+</div>
+
+{% if resultado %}
+  {% set f = resultado.fatura %}
+  <div class="cat-breakdown" style="border-left:3px solid {{ 'var(--good)' if resultado.fecha_100 else 'var(--bad)' }}">
+    <h3>
+      {% if resultado.fecha_100 %}
+        ✓ Fecha 100% — todo lançamento da fatura tem par no sistema
+      {% else %}
+        ⚠ Não fechou — veja as diferenças abaixo
+      {% endif %}
+    </h3>
+    <div class="cards" style="margin-top:12px">
+      <div class="card"><div class="label" title="Referência da fatura">Referência</div>
+        <div class="val">{{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}</div></div>
+      <div class="card"><div class="label" title="Saldo total impresso na fatura">Total da fatura</div>
+        <div class="val">{{ f.total|moeda }}</div></div>
+      <div class="card"><div class="label" title="Soma dos lançamentos individuais da fatura (compras, IOF, estornos, pagamento) - não inclui saldo anterior">Soma dos lançamentos</div>
+        <div class="val">{{ resultado.soma_fatura|moeda }}</div></div>
+      <div class="card"><div class="label" title="Lançamentos da fatura sem correspondente no Pluggy, menos o contrário">Diferença</div>
+        <div class="val" style="color:{{ 'var(--good)' if resultado.diferenca == 0 else 'var(--bad)' }}">{{ resultado.diferenca|moeda }}</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-faint);margin-top:10px">
+      {{ resultado.batidos|length }} lançamento(s) conferido(s) ·
+      {{ resultado.sem_sistema|length }} só na fatura ·
+      {{ resultado.sem_fatura|length }} só no sistema (não aparecem na fatura)
+    </div>
+  </div>
+
+  {% if resultado.sem_sistema %}
+    <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
+      <h3>Na fatura, mas não achei no sistema</h3>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+        A operadora cobrou, mas o Pluggy não trouxe (ou trouxe com data/valor muito diferente).
+        Vale conferir se sincronizou tudo ou se ficou faltando alguma sincronização antiga.
+      </div>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th><th style="text-align:right">Valor</th></tr></thead>
+      <tbody>
+        {% for l in resultado.sem_sistema %}
+          <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.titular or '-' }}</td>
+              <td class="valor">{{ l.valor|moeda }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+  {% endif %}
+
+  {% if resultado.sem_fatura %}
+    <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+      <h3>No sistema, mas não achei na fatura</h3>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+        O Pluggy trouxe um lançamento nessa conta, nos últimos ~35 dias cobertos por esta fatura,
+        que não bateu com nenhuma linha dela — pode ser uma duplicidade do próprio Pluggy, ou algo
+        que ainda vai aparecer na fatura seguinte.
+      </div>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th style="text-align:right">Valor</th></tr></thead>
+      <tbody>
+        {% for l in resultado.sem_fatura %}
+          <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td>
+              <td class="valor">{{ l.valor|moeda }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+  {% endif %}
+
+  <details class="cat-breakdown">
+    <summary>Ver os {{ resultado.batidos|length }} lançamentos conferidos</summary>
+    <div class="tabela-scroll" style="margin-top:10px">
+    <table class="compacta"><thead><tr><th>Data</th><th>Descrição (fatura)</th><th>Descrição (sistema)</th><th>Titular</th><th style="text-align:right">Valor</th></tr></thead>
+    <tbody>
+      {% for l in resultado.batidos %}
+        <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.descricao_sistema }}</td>
+            <td>{{ l.titular or '-' }}</td><td class="valor">{{ l.valor|moeda }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    </div>
+  </details>
+{% endif %}
+
+{% endblock %}

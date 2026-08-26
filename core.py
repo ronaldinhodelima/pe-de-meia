@@ -1825,6 +1825,7 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/relatorios" class="{cls("relatorios")}">Relatórios</a>' if pode("relatorios") else ""}
               {f'<a href="/dre" class="{cls("dre")}">DRE / Centro de Custos</a>' if pode("relatorios") else ""}
               {f'<a href="/investimentos" class="{cls("investimentos")}">Investimentos</a>' if pode("relatorios") else ""}
+              {f'<a href="/relatorios/conciliar-fatura" class="{cls("conciliar-fatura")}">Conciliar fatura (PDF)</a>' if pode("relatorios") else ""}
               {f'<a href="/logs" class="{cls("logs")}">Logs</a>' if pode("usuarios") else ""}
             </div>
           </div>''' if (pode("relatorios") or pode("usuarios")) else ""}

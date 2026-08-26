@@ -1,10 +1,11 @@
 """Relatorios, DRE e investimentos."""
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import psycopg2
 import psycopg2.extras
 from flask import Blueprint, request, jsonify, render_template
 
+from fatura_unicred import extrair_fatura, FaturaInvalida
 from core import (
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
@@ -457,6 +458,120 @@ def relatorios_lancamentos():
             "valor": float(r["valor"] or 0),
         })
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
+
+
+@bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
+@requer("relatorios")
+def conciliar_fatura():
+    """Confere se os lancamentos que o Pluggy trouxe para um cartao de credito
+    batem 100% com a fatura em PDF da Unicred. O Pluggy pode classificar
+    diferente ou duplicar - mas o valor que sai da conta pagando a fatura tem
+    que fechar com o que a operadora cobrou, e isso so a fatura oficial prova."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    contas_by_id, origem_opcoes = carregar_origens(cur)
+    contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
+
+    erro = None
+    resultado = None
+    account_id = request.form.get("account_id") if request.method == "POST" else None
+
+    if request.method == "POST":
+        arquivo = request.files.get("fatura")
+        if not arquivo or not arquivo.filename:
+            erro = "Selecione o PDF da fatura."
+        elif not account_id or account_id not in contas_by_id:
+            erro = "Selecione a qual cartão essa fatura pertence."
+        else:
+            try:
+                fatura = extrair_fatura(arquivo.stream)
+            except FaturaInvalida as exc:
+                erro = str(exc)
+            except Exception as exc:
+                erro = f"Não consegui ler esse PDF: {exc}"
+
+            if not erro:
+                datas = [l["data"] for l in fatura["linhas"]]
+                cur.execute(
+                    f"SELECT t.transacao_id, t.data_transacao, t.descricao, "
+                    f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+                    f"({DATA_LOCAL_SQL})::date AS data_local "
+                    f"FROM cartao.transacao t WHERE t.account_id = %s "
+                    f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
+                    (account_id, min(datas), max(datas)),
+                )
+                candidatos = [dict(r) for r in cur.fetchall()]
+                for c in candidatos:
+                    c["_usado"] = False
+                    c["_data_local"] = c["data_local"]
+
+                batidos, sem_sistema = [], []
+                for linha in fatura["linhas"]:
+                    melhor = None
+                    melhor_dist = None
+                    for c in candidatos:
+                        if c["_usado"] or round(float(c["valor"]), 2) != linha["valor"]:
+                            continue
+                        dist = abs((c["_data_local"] - linha["data"]).days)
+                        if dist > 3:
+                            continue
+                        if melhor is None or dist < melhor_dist:
+                            melhor, melhor_dist = c, dist
+                    if melhor:
+                        melhor["_usado"] = True
+                        batidos.append({**linha, "transacao_id": str(melhor["transacao_id"]),
+                                         "descricao_sistema": melhor["descricao"]})
+                    else:
+                        sem_sistema.append(linha)
+
+                # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o
+                # intervalo de busca acima e largo (cobre ate um ano, por causa
+                # de parcelas antigas que ainda aparecem cobradas), mas listar
+                # TODA sobra desse intervalo encheria a tela de lancamentos de
+                # faturas passadas que nunca deveriam bater com esta mesmo.
+                ciclo_inicio = max(datas) - timedelta(days=35)
+                sem_fatura = [
+                    {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
+                     "transacao_id": str(c["transacao_id"])}
+                    for c in candidatos if not c["_usado"] and c["_data_local"] >= ciclo_inicio
+                ]
+
+                soma_fatura = round(sum(l["valor"] for l in fatura["linhas"]), 2)
+                soma_batida = round(sum(l["valor"] for l in batidos), 2)
+                resultado = {
+                    "fatura": fatura,
+                    "soma_fatura": soma_fatura,
+                    "batidos": sorted(batidos, key=lambda l: l["data"]),
+                    "sem_sistema": sorted(sem_sistema, key=lambda l: l["data"]),
+                    "sem_fatura": sorted(sem_fatura, key=lambda l: l["data"]),
+                    "fecha_100": not sem_sistema and not sem_fatura,
+                    "diferenca": round(soma_fatura - soma_batida, 2),
+                }
+                registrar_auditoria(
+                    "acesso", "relatorios.conciliar_fatura", sucesso=True,
+                    detalhes={
+                        "conta": account_id,
+                        "mes_referencia": fatura["mes_referencia"],
+                        "ano_referencia": fatura["ano_referencia"],
+                        "linhas_fatura": len(fatura["linhas"]),
+                        "batidos": len(batidos),
+                        "sem_sistema": len(sem_sistema),
+                        "sem_fatura": len(sem_fatura),
+                        "fecha_100": resultado["fecha_100"],
+                    },
+                )
+
+    cur.close()
+    conn.close()
+    return render_template(
+        "conciliar_fatura.html",
+        titulo="Conciliar fatura",
+        topbar=topbar_html("Conciliar fatura", "conciliar-fatura"),
+        contas_credito=contas_credito,
+        account_id=account_id,
+        erro=erro,
+        resultado=resultado,
+    )
 
 
 @bp.route("/investimentos")
