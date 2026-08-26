@@ -1569,6 +1569,27 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (16);")
             conn.commit()
 
+        if versao_atual < 17:
+            # Snapshot diario do total de lancamentos, para o card "Lancamentos"
+            # da tela principal mostrar quanto cresceu desde ontem/semana/mes -
+            # sem isso nao ha como saber quantos existiam num dia passado, so o
+            # total de agora. Uma linha por dia, sobrescrita a cada carregamento
+            # da tela (ver core.registrar_metrica_diaria).
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.metrica_diaria ("
+                "data date PRIMARY KEY, "
+                "total_transacoes integer NOT NULL, "
+                "total_conferidas integer NOT NULL, "
+                "atualizado_em timestamptz NOT NULL DEFAULT now());"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Tabela metrica_diaria',"
+                "jsonb_build_object('versao',17));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (17);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1672,6 +1693,46 @@ def aplicar_regras(cur):
     finally:
         cur.execute("RELEASE SAVEPOINT aplicar_regras")
     return resultado
+
+
+def registrar_metrica_diaria(cur):
+    """Grava (ou atualiza) o snapshot de hoje com o total de lancamentos e de
+    conferidos. Uma linha por dia - chamado a cada carregamento da tela
+    principal, e o UPSERT deixa barato repetir isso o dia inteiro.
+    Sem isso nao ha como responder "quantos lancamentos existiam ontem" -
+    so o card mostra o total de agora."""
+    cur.execute(
+        "INSERT INTO cartao.metrica_diaria (data, total_transacoes, total_conferidas) "
+        "SELECT current_date, COUNT(*), COUNT(*) FILTER (WHERE conferida) FROM cartao.transacao "
+        "ON CONFLICT (data) DO UPDATE SET "
+        "total_transacoes = EXCLUDED.total_transacoes, "
+        "total_conferidas = EXCLUDED.total_conferidas, "
+        "atualizado_em = now();"
+    )
+
+
+def historico_lancamentos(cur):
+    """Crescimento do total de lancamentos: hoje vs. o snapshot mais proximo de
+    ontem, 7 dias e 30 dias atras. Devolve None num periodo sem snapshot
+    ainda (ex: ontem, antes deste recurso existir) - o template so mostra o
+    que tiver dado real, sem inventar zero."""
+    cur.execute("SELECT COUNT(*) FROM cartao.transacao;")
+    total_hoje = cur.fetchone()[0]
+
+    def total_ate(dias_atras):
+        cur.execute(
+            "SELECT total_transacoes FROM cartao.metrica_diaria "
+            "WHERE data <= current_date - %s::int ORDER BY data DESC LIMIT 1;",
+            (dias_atras,),
+        )
+        r = cur.fetchone()
+        return r[0] if r else None
+
+    deltas = {}
+    for rotulo, dias in (("ontem", 1), ("semana", 7), ("mes", 30)):
+        anterior = total_ate(dias)
+        deltas[rotulo] = (total_hoje - anterior) if anterior is not None else None
+    return {"total": total_hoje, "deltas": deltas}
 
 
 DUPLICADA_OBS_PADRAO = "Duplicada - mesma compra ja lancada em outra linha (registro repetido pelo Pluggy)"

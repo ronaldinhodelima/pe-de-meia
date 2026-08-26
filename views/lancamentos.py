@@ -32,11 +32,13 @@ from core import (
     esc,
     fechar_recursos_banco,
     get_conn,
+    historico_lancamentos,
     intervalo_ano_local,
     intervalo_mes_local,
     json_script,
     pode,
     registrar_auditoria,
+    registrar_metrica_diaria,
     registrar_mudanca_auditoria,
     requer,
     topbar_html,
@@ -160,6 +162,10 @@ def index():
             sucesso=not bool(regras_resultado["erro"]),
             detalhes=regras_resultado,
         )
+
+    registrar_metrica_diaria(cur)
+    crescimento = historico_lancamentos(cur)
+    conn.commit()
 
     contas_by_id, origem_opcoes = carregar_origens(cur)
 
@@ -519,6 +525,7 @@ def index():
         resultado_mes=receita_mes - gasto_real,
         conf=resumo["conferidas"] or 0,
         total=resumo["total"] or 0,
+        crescimento=crescimento,
         detalhes_json=json_script(detalhes_js),
         config_json=json_script(config_lancamentos),
     )
