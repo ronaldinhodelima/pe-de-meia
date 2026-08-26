@@ -539,18 +539,29 @@ def conciliar_fatura():
                     else:
                         sem_sistema.append(linha)
 
-                for (titular, _desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
+                for (titular, desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
                     valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
                     valor_esperado = round(valor_mensal * parcela_total, 2)
+                    # O Pluggy nem sempre preenche parcela_total no lancamento
+                    # agregado (esse cartao chega a mostrar "Parcela: A vista"
+                    # num parcelamento real) - por isso o casamento aqui e so
+                    # pelo valor cheio esperado, com o numero de parcelas e a
+                    # descricao servindo apenas de desempate quando ha mais de
+                    # um candidato com o mesmo valor.
+                    candidatos_valor = [
+                        c for c in candidatos
+                        if not c["_usado"] and round(float(c["valor"]), 2) == valor_esperado
+                    ]
                     melhor = None
-                    for c in candidatos:
-                        if c["_usado"] or c["parcela_total"] != parcela_total:
-                            continue
-                        if round(float(c["valor"]), 2) != valor_esperado:
-                            continue
-                        melhor = c
-                        break
-                    representante = linhas_grupo[0]
+                    if len(candidatos_valor) == 1:
+                        melhor = candidatos_valor[0]
+                    elif len(candidatos_valor) > 1:
+                        com_parcela = [c for c in candidatos_valor if c["parcela_total"] == parcela_total]
+                        opcoes = com_parcela or candidatos_valor
+                        melhor = min(
+                            opcoes,
+                            key=lambda c: (desc_norm.split()[0] not in (c["descricao"] or "").upper()),
+                        )
                     if melhor:
                         melhor["_usado"] = True
                         for l in linhas_grupo:
