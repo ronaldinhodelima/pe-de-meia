@@ -493,7 +493,7 @@ def conciliar_fatura():
             if not erro:
                 datas = [l["data"] for l in fatura["linhas"]]
                 cur.execute(
-                    f"SELECT t.transacao_id, t.data_transacao, t.descricao, "
+                    f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
                     f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
                     f"({DATA_LOCAL_SQL})::date AS data_local "
                     f"FROM cartao.transacao t WHERE t.account_id = %s "
@@ -505,10 +505,25 @@ def conciliar_fatura():
                     c["_usado"] = False
                     c["_data_local"] = c["data_local"]
 
-                batidos, sem_sistema = [], []
+                # A fatura lista cada parcela mensal numa linha (ex: "Parc.9/12
+                # R$129,00"); o Pluggy grava o parcelamento inteiro como UMA
+                # transacao so, no valor cheio, na data da compra original. Sem
+                # agrupar por parcela_total, toda compra parcelada bateria errado
+                # dos dois lados - nao por falha de sincronizacao, so porque sao
+                # representacoes diferentes da mesma compra.
+                grupos_parcela = {}
+                avulsas = []
                 for linha in fatura["linhas"]:
-                    melhor = None
-                    melhor_dist = None
+                    if linha["parcela_total"]:
+                        chave = (linha["titular"], linha["descricao_base"].upper(), linha["parcela_total"])
+                        grupos_parcela.setdefault(chave, []).append(linha)
+                    else:
+                        avulsas.append(linha)
+
+                batidos, sem_sistema = [], []
+
+                for linha in avulsas:
+                    melhor, melhor_dist = None, None
                     for c in candidatos:
                         if c["_usado"] or round(float(c["valor"]), 2) != linha["valor"]:
                             continue
@@ -523,6 +538,29 @@ def conciliar_fatura():
                                          "descricao_sistema": melhor["descricao"]})
                     else:
                         sem_sistema.append(linha)
+
+                for (titular, _desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
+                    valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
+                    valor_esperado = round(valor_mensal * parcela_total, 2)
+                    melhor = None
+                    for c in candidatos:
+                        if c["_usado"] or c["parcela_total"] != parcela_total:
+                            continue
+                        if round(float(c["valor"]), 2) != valor_esperado:
+                            continue
+                        melhor = c
+                        break
+                    representante = linhas_grupo[0]
+                    if melhor:
+                        melhor["_usado"] = True
+                        for l in linhas_grupo:
+                            batidos.append({**l, "transacao_id": str(melhor["transacao_id"]),
+                                            "descricao_sistema": melhor["descricao"],
+                                            "valor_esperado_parcelamento": valor_esperado})
+                    else:
+                        for l in linhas_grupo:
+                            sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
+                                                 "titular": titular})
 
                 # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o
                 # intervalo de busca acima e largo (cobre ate um ano, por causa

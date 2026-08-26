@@ -18,6 +18,7 @@ MESES = {
 }
 DATA_RE = re.compile(r"^(\d{2})/([a-zç]{3})$", re.IGNORECASE)
 TITULAR_RE = re.compile(r"^[A-ZÀ-Ú][A-ZÀ-Ú ]+$")
+PARC_RE = re.compile(r"Parc\.\d+/\d+", re.IGNORECASE)
 
 
 class FaturaInvalida(ValueError):
@@ -123,9 +124,23 @@ def extrair_fatura(arquivo):
                 except ValueError:
                     continue
 
+                descricao = " ".join(desc_toks).strip()
+                # "Parc.9/12" na fatura vira UMA linha por mes; o Pluggy grava o
+                # parcelamento inteiro como UMA transacao so, no valor cheio, na
+                # data da compra original (ex: 12 parcelas de R$129 -> uma linha
+                # de R$1.548). Sem separar isso, toda compra parcelada bate errado
+                # nos dois lados da conciliacao.
+                pm = re.search(r"Parc\.(\d+)/(\d+)", descricao, re.IGNORECASE)
+                parcela_atual = int(pm.group(1)) if pm else None
+                parcela_total = int(pm.group(2)) if pm else None
+                descricao_base = PARC_RE.sub("", descricao).strip()
+
                 linhas.append({
                     "data": dt,
-                    "descricao": " ".join(desc_toks).strip(),
+                    "descricao": descricao,
+                    "descricao_base": descricao_base,
+                    "parcela_atual": parcela_atual,
+                    "parcela_total": parcela_total,
                     "valor": round(valor, 2),
                     "titular": titular_atual,
                 })

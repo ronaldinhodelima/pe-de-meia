@@ -70,7 +70,11 @@
       <tbody>
         {% for l in resultado.sem_sistema %}
           <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.titular or '-' }}</td>
-              <td class="valor">{{ l.valor|moeda }}</td></tr>
+              <td class="valor">{{ l.valor|moeda }}
+                {%- if l.valor_esperado_parcelamento is defined %}
+                  <br><small style="color:var(--ink-faint)">parcelamento — procurei {{ l.valor_esperado_parcelamento|moeda }} no total</small>
+                {%- endif %}
+              </td></tr>
         {% endfor %}
       </tbody></table>
     </div>
