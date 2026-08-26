@@ -19,6 +19,7 @@ ROTULOS_ACAO = {
     "sincronizacao": "Sincronização",
     "sincronizacao_solicitada": "Sincronização solicitada",
     "regra_automatica": "Regra automática",
+    "alerta_sync_conferida": "Alerta: lançamento conferido mudou no sync",
 }
 
 

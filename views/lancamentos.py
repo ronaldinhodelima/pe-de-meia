@@ -421,12 +421,15 @@ def index():
         selo, origem_texto = origem_partes(r["account_id"], r["numero_cartao_final"])
         origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
 
+        pendente_banco = (r["status"] or "").upper() == "PENDING"
         linhas_tabela.append({
             "id": str(rid),
             "classes": " ".join(c for c in [
                 "conferida" if r["conferida"] else "",
                 "duplicada" if r["duplicada"] else "",
+                "pendente-banco" if pendente_banco else "",
             ] if c),
+            "pendente_banco": pendente_banco,
             "data_dia": data_local.strftime("%d/%m/%y"),
             "data_hora": data_local.strftime("%H:%M"),
             "data_full": data_fmt_full,
@@ -470,6 +473,7 @@ def index():
             "sincronizado_em": data_hora_local(r["sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["sincronizado_em"] else "-",
             "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
             "_conferida": bool(r["conferida"]),
+            "_pendente_banco": pendente_banco,
             "_duplicada": bool(r["duplicada"]),
             "_manual": bool(eh_manual),
             "_natureza": r["natureza"] or "",
@@ -841,7 +845,7 @@ def update_transacao(transacao_id):
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
         "SELECT conferida, conferida_por, COALESCE(duplicada, false), "
-        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original) "
+        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original), status "
         "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
@@ -971,11 +975,20 @@ def update_transacao(transacao_id):
         )
         faltando = [r[0] for r in cur.fetchall()]
     conferida_atual = bool(transacao[0])
+    # PENDING e um status provisorio do banco - o Pluggy pode ainda alterar
+    # valor/data, ou ate substituir a transacao por outra com id diferente,
+    # antes da fatura fechar. Marcar OK num lancamento que ainda pode mudar
+    # daria uma assinatura de conferencia sobre um dado que nao e definitivo.
+    pendente_banco = (transacao[7] or "").upper() == "PENDING"
     alterando_conferencia = "conferida" in data
     conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
-    # Campos obrigatorios bloqueiam somente uma NOVA marcacao de OK. Uma edicao
-    # de categoria/dimensao/observacao jamais pode desmarcar um OK ja existente.
-    bloqueada = bool(faltando or rateio_invalido) and alterando_conferencia and conferida_solicitada
+    # Campos obrigatorios (e o status pendente) bloqueiam somente uma NOVA
+    # marcacao de OK. Uma edicao de categoria/dimensao/observacao jamais pode
+    # desmarcar um OK ja existente.
+    bloqueada = (
+        bool(faltando or rateio_invalido or pendente_banco)
+        and alterando_conferencia and conferida_solicitada
+    )
     conferida_final = conferida_solicitada and not bloqueada if alterando_conferencia else conferida_atual
 
     # natureza especifica deste lancamento ("" = volta a seguir a natureza da categoria)
@@ -1047,6 +1060,7 @@ def update_transacao(transacao_id):
         "bloqueada": bloqueada,
         "faltando": faltando,
         "rateio_invalido": rateio_invalido,
+        "pendente_banco": pendente_banco,
         # A tela sincroniza estes dois estados depois de QUALQUER edicao. Assim
         # nunca mostra OK/duplicidade diferentes do que esta salvo no banco.
         "conferida": conferida_final,

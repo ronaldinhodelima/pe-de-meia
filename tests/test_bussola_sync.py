@@ -98,6 +98,10 @@ def test_pluggy_importa_ids_distintos_sem_marcar_duplicidade(monkeypatch):
             self.comandos.append((sql, params))
 
         def fetchone(self):
+            # a query "antes" (le o estado atual pra comparar depois do sync)
+            # e distinta do INSERT...RETURNING - aqui simula "nunca existiu"
+            if "WHERE transacao_id = %s;" in self.comandos[-1][0]:
+                return None
             return (True,)
 
     cursor = CursorFalso()
@@ -110,11 +114,12 @@ def test_pluggy_importa_ids_distintos_sem_marcar_duplicidade(monkeypatch):
     worker.upsert_transaction(cursor, {**base, "id": "pluggy-id-1"})
     worker.upsert_transaction(cursor, {**base, "id": "pluggy-id-2"})
 
-    assert len(cursor.comandos) == 2
-    assert cursor.comandos[0][1][0] == "pluggy-id-1"
-    assert cursor.comandos[1][1][0] == "pluggy-id-2"
-    assert "ON CONFLICT (transacao_id)" in cursor.comandos[0][0]
-    assert "duplicada" not in cursor.comandos[0][0].lower()
+    # cada upsert faz 1 SELECT (estado anterior) + 1 INSERT...ON CONFLICT
+    inserts = [c for c in cursor.comandos if "ON CONFLICT (transacao_id)" in c[0]]
+    assert len(inserts) == 2
+    assert inserts[0][1][0] == "pluggy-id-1"
+    assert inserts[1][1][0] == "pluggy-id-2"
+    assert "duplicada" not in inserts[0][0].lower()
 
 
 def test_falha_de_uma_conexao_nao_impede_as_demais_e_gera_aviso(monkeypatch):

@@ -347,9 +347,12 @@ function verDetalhes(id) {
   if (selCat) selCat.disabled = !window.configLancamentos.pode_editar || emRateio;
   const selConferida = document.getElementById('modalConferida');
   if (selConferida) {
-    selConferida.disabled = !window.configLancamentos.pode_conferir || (emRateio && !d._rateio_valido);
+    const pendenteSemOk = d._pendente_banco && !d._conferida;
+    selConferida.disabled = !window.configLancamentos.pode_conferir || (emRateio && !d._rateio_valido) || pendenteSemOk;
     selConferida.title = emRateio && !d._rateio_valido
-      ? 'Ajuste as partes até o rateio fechar o valor do lançamento' : '';
+      ? 'Ajuste as partes até o rateio fechar o valor do lançamento'
+      : pendenteSemOk
+      ? 'Pendente no banco — aguarde confirmar para marcar OK' : '';
   }
   document.querySelectorAll('.modal-dim-select').forEach(selModal => {
     const selLinha = trAtual && trAtual.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
@@ -868,6 +871,8 @@ function salvar(id, el, opcoes) {
         });
         alert(d.rateio_invalido
           ? 'Não foi possível confirmar: revise o rateio e faça as partes fecharem exatamente com o valor do lançamento.'
+          : d.pendente_banco
+          ? 'Não foi possível confirmar: esse lançamento ainda está pendente no banco (pode mudar até a fatura fechar). Aguarde virar "Concluída" para marcar OK.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
       const s = document.getElementById('status-' + id);

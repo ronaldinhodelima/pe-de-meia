@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import threading
@@ -338,6 +339,19 @@ def upsert_account(cur, item_id, acc):
 
 def upsert_transaction(cur, tx):
     meta = tx.get("creditCardMetadata") or {}
+
+    # Se esta transacao ja estava marcada como conferida (o OK e uma assinatura
+    # humana), guardamos o estado anterior para comparar depois do UPDATE. O OK
+    # em si nunca e mexido por este worker - mas se o Pluggy trocar o valor ou a
+    # data por baixo de um lancamento que o usuario ja deu como resolvido, isso
+    # precisa aparecer em algum lugar, porque senao ninguem percebe.
+    cur.execute(
+        "SELECT conferida, COALESCE(valor_brl, valor_original), data_transacao, descricao, status "
+        "FROM cartao.transacao WHERE transacao_id = %s;",
+        (tx["id"],),
+    )
+    antes = cur.fetchone()
+
     cur.execute(
         """
         INSERT INTO cartao.transacao (
@@ -383,7 +397,35 @@ def upsert_transaction(cur, tx):
             tx.get("updatedAt"),
         ),
     )
-    return cur.fetchone()[0]
+    inserido = cur.fetchone()[0]
+
+    if antes and antes[0]:  # conferida == true
+        valor_antigo = float(antes[1]) if antes[1] is not None else None
+        valor_novo = tx.get("amountInAccountCurrency")
+        valor_mudou = (
+            valor_antigo is not None and valor_novo is not None
+            and abs(valor_antigo - float(valor_novo)) > 0.01
+        )
+        data_mudou = tx.get("date") and antes[2] and str(antes[2]) != str(tx.get("date"))
+        if valor_mudou or data_mudou:
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario, acao, recurso, recurso_id, sucesso, detalhes) "
+                "VALUES ('sistema', 'alerta_sync_conferida', 'transacao', %s, false, %s::jsonb);",
+                (
+                    str(tx["id"]),
+                    json.dumps({
+                        "descricao": antes[3],
+                        "valor_antes": valor_antigo,
+                        "valor_depois": valor_novo,
+                        "data_antes": str(antes[2]) if antes[2] else None,
+                        "data_depois": tx.get("date"),
+                        "status_antes": antes[4],
+                        "status_depois": tx.get("status"),
+                    }),
+                ),
+            )
+
+    return inserido
 
 
 CONTA_MANUAL_ITEM = "00000000-0000-0000-0000-000000000001"
