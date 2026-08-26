@@ -1695,44 +1695,57 @@ def aplicar_regras(cur):
     return resultado
 
 
-def registrar_metrica_diaria(cur):
-    """Grava (ou atualiza) o snapshot de hoje com o total de lancamentos e de
-    conferidos. Uma linha por dia - chamado a cada carregamento da tela
-    principal, e o UPSERT deixa barato repetir isso o dia inteiro.
-    Sem isso nao ha como responder "quantos lancamentos existiam ontem" -
-    so o card mostra o total de agora."""
-    cur.execute(
-        "INSERT INTO cartao.metrica_diaria (data, total_transacoes, total_conferidas) "
-        "SELECT current_date, COUNT(*), COUNT(*) FILTER (WHERE conferida) FROM cartao.transacao "
-        "ON CONFLICT (data) DO UPDATE SET "
-        "total_transacoes = EXCLUDED.total_transacoes, "
-        "total_conferidas = EXCLUDED.total_conferidas, "
-        "atualizado_em = now();"
-    )
+def registrar_e_calcular_crescimento(cur):
+    """Grava o snapshot de hoje (total de lancamentos e conferidos) e devolve o
+    crescimento desde ontem, 7 dias e 30 dias, para o card "Lancamentos" da
+    tela principal. Tudo dentro de um savepoint proprio, com lock_timeout
+    curto: se por qualquer motivo nao conseguir escrever ou ler a tempo
+    (ex: disputa de lock com outra requisicao concorrente), desiste e devolve
+    None nos deltas - a tela principal nunca pode cair por causa disto.
 
-
-def historico_lancamentos(cur):
-    """Crescimento do total de lancamentos: hoje vs. o snapshot mais proximo de
-    ontem, 7 dias e 30 dias atras. Devolve None num periodo sem snapshot
-    ainda (ex: ontem, antes deste recurso existir) - o template so mostra o
-    que tiver dado real, sem inventar zero."""
-    cur.execute("SELECT COUNT(*) FROM cartao.transacao;")
-    total_hoje = cur.fetchone()[0]
-
-    def total_ate(dias_atras):
+    cur e sempre RealDictCursor aqui (import de core so cursor com esse
+    factory por convencao); fetchone()[0] quebraria porque RealDictRow so
+    aceita chave por nome, nao indice numerico.
+    """
+    resultado = {"total": 0, "deltas": {"ontem": None, "semana": None, "mes": None}}
+    cur.execute("SAVEPOINT crescimento_lancamentos")
+    try:
+        # nao vale travar a tela inteira esperando lock de outra aba/thread
+        # gravando o mesmo snapshot do dia - 2s e tempo de sobra pra um UPSERT
+        # de uma linha, e se nao rolar essa requisicao so fica sem o dado novo
+        cur.execute("SET LOCAL lock_timeout = '2s';")
         cur.execute(
-            "SELECT total_transacoes FROM cartao.metrica_diaria "
-            "WHERE data <= current_date - %s::int ORDER BY data DESC LIMIT 1;",
-            (dias_atras,),
+            "INSERT INTO cartao.metrica_diaria (data, total_transacoes, total_conferidas) "
+            "SELECT current_date, COUNT(*), COUNT(*) FILTER (WHERE conferida) FROM cartao.transacao "
+            "ON CONFLICT (data) DO UPDATE SET "
+            "total_transacoes = EXCLUDED.total_transacoes, "
+            "total_conferidas = EXCLUDED.total_conferidas, "
+            "atualizado_em = now();"
         )
-        r = cur.fetchone()
-        return r[0] if r else None
 
-    deltas = {}
-    for rotulo, dias in (("ontem", 1), ("semana", 7), ("mes", 30)):
-        anterior = total_ate(dias)
-        deltas[rotulo] = (total_hoje - anterior) if anterior is not None else None
-    return {"total": total_hoje, "deltas": deltas}
+        cur.execute("SELECT COUNT(*) AS n FROM cartao.transacao;")
+        total_hoje = cur.fetchone()["n"]
+
+        def total_ate(dias_atras):
+            cur.execute(
+                "SELECT total_transacoes FROM cartao.metrica_diaria "
+                "WHERE data <= current_date - %s::int ORDER BY data DESC LIMIT 1;",
+                (dias_atras,),
+            )
+            r = cur.fetchone()
+            return r["total_transacoes"] if r else None
+
+        deltas = {}
+        for rotulo, dias in (("ontem", 1), ("semana", 7), ("mes", 30)):
+            anterior = total_ate(dias)
+            deltas[rotulo] = (total_hoje - anterior) if anterior is not None else None
+        resultado = {"total": total_hoje, "deltas": deltas}
+    except Exception as e:
+        cur.execute("ROLLBACK TO SAVEPOINT crescimento_lancamentos")
+        print("Aviso: falha ao calcular crescimento de lancamentos:", e)
+    finally:
+        cur.execute("RELEASE SAVEPOINT crescimento_lancamentos")
+    return resultado
 
 
 DUPLICADA_OBS_PADRAO = "Duplicada - mesma compra ja lancada em outra linha (registro repetido pelo Pluggy)"
