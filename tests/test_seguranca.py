@@ -91,7 +91,7 @@ def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
         def fetchone(self):
             if "COUNT(*), COALESCE(SUM(valor_brl),0)" in getattr(self, "sql", ""):
                 return (0, 0, 0)
-            return (False, None, False, "Groceries", None, None, None, "POSTED")
+            return (False, None, False, "Groceries", None, None, None, "POSTED", None)
 
         def fetchall(self):
             return []

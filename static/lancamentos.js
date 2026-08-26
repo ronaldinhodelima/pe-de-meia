@@ -347,7 +347,7 @@ function verDetalhes(id) {
   if (selCat) selCat.disabled = !window.configLancamentos.pode_editar || emRateio;
   const selConferida = document.getElementById('modalConferida');
   if (selConferida) {
-    const pendenteSemOk = d._pendente_banco && !d._conferida;
+    const pendenteSemOk = d._pendente_bloqueia_ok && !d._conferida;
     selConferida.disabled = !window.configLancamentos.pode_conferir || (emRateio && !d._rateio_valido) || pendenteSemOk;
     selConferida.title = emRateio && !d._rateio_valido
       ? 'Ajuste as partes até o rateio fechar o valor do lançamento'

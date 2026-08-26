@@ -134,8 +134,8 @@
         <td class="cel-obs" data-col="obs"><input class="obs-input" type="text" value="{{ r.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar or r.rateios }}></td>
         {% if pode_regras %}<td class="cel-regra" data-col="regra"><button type="button" class="regra-btn ver-btn" title="Criar regra automática a partir deste lançamento" aria-label="Criar regra automática">+</button></td>{% endif %}
         <td class="cel-check" data-col="check"><input class="conf-check" type="checkbox" {{ 'checked' if r.conferida }}
-          {{ 'disabled' if not pode_conferir or (r.rateios and not r.rateio_valido) or (r.pendente_banco and not r.conferida) }}
-          data-tip="{{ 'Feche o rateio antes de marcar OK' if r.rateios and not r.rateio_valido else ('Pendente no banco — aguarde confirmar para marcar OK' if r.pendente_banco else 'Confirmado pelo banco') }}">
+          {{ 'disabled' if not pode_conferir or (r.rateios and not r.rateio_valido) or (r.pendente_bloqueia_ok and not r.conferida) }}
+          data-tip="{{ 'Feche o rateio antes de marcar OK' if r.rateios and not r.rateio_valido else ('Pendente no banco — aguarde confirmar para marcar OK' if r.pendente_bloqueia_ok else ('Pendente há mais de 30 dias — o Pluggy provavelmente não atualizou o status, dá pra conferir' if r.pendente_banco else 'Confirmado pelo banco')) }}">
           <input class="dup-check" type="checkbox" {{ 'checked' if r.duplicada }} hidden></td>
         <td class="cel-status" data-col="status"><span class="status" id="status-{{ r.id }}">ok</span></td>
       </tr>

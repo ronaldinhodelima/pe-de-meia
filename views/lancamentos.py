@@ -46,6 +46,22 @@ from core import (
 
 bp = Blueprint("lancamentos", __name__)
 
+# O Pluggy pode deixar uma transacao PENDING mesmo depois da fatura fechar e
+# ser paga - as vezes ele simplesmente nao atualiza o status pra POSTED.
+# Bloquear o OK pra sempre nesse caso trava o lancamento sem necessidade;
+# passados esses dias (mais que o ciclo normal de uma fatura em aberto),
+# PENDING deixa de ser motivo de bloqueio.
+JANELA_PENDENTE_DIAS = 35
+
+
+def _pendente_bloqueia(status, data_transacao_local):
+    if (status or "").upper() != "PENDING":
+        return False
+    if data_transacao_local is None:
+        return True
+    idade = datetime.now(FUSO_LOCAL) - data_transacao_local
+    return idade.days <= JANELA_PENDENTE_DIAS
+
 
 def _valor_manual(valor, direcao):
     """Normaliza dinheiro manual seguindo o sinal usado pelo Pluggy em contas.
@@ -422,6 +438,7 @@ def index():
         origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
 
         pendente_banco = (r["status"] or "").upper() == "PENDING"
+        pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
         linhas_tabela.append({
             "id": str(rid),
             "classes": " ".join(c for c in [
@@ -430,6 +447,7 @@ def index():
                 "pendente-banco" if pendente_banco else "",
             ] if c),
             "pendente_banco": pendente_banco,
+            "pendente_bloqueia_ok": pendente_bloqueia_ok,
             "data_dia": data_local.strftime("%d/%m/%y"),
             "data_hora": data_local.strftime("%H:%M"),
             "data_full": data_fmt_full,
@@ -474,6 +492,7 @@ def index():
             "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
             "_conferida": bool(r["conferida"]),
             "_pendente_banco": pendente_banco,
+            "_pendente_bloqueia_ok": pendente_bloqueia_ok,
             "_duplicada": bool(r["duplicada"]),
             "_manual": bool(eh_manual),
             "_natureza": r["natureza"] or "",
@@ -845,7 +864,7 @@ def update_transacao(transacao_id):
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
         "SELECT conferida, conferida_por, COALESCE(duplicada, false), "
-        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original), status "
+        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original), status, data_transacao "
         "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
@@ -979,7 +998,13 @@ def update_transacao(transacao_id):
     # valor/data, ou ate substituir a transacao por outra com id diferente,
     # antes da fatura fechar. Marcar OK num lancamento que ainda pode mudar
     # daria uma assinatura de conferencia sobre um dado que nao e definitivo.
-    pendente_banco = (transacao[7] or "").upper() == "PENDING"
+    # Mas o Pluggy as vezes nunca atualiza o status pra POSTED mesmo depois
+    # da fatura fechar e paga - por isso so bloqueia enquanto for recente
+    # (ver JANELA_PENDENTE_DIAS); passado isso, tratamos como falha do
+    # Pluggy em atualizar, nao como dado ainda instavel.
+    pendente_banco = _pendente_bloqueia(
+        transacao[7], data_hora_local(transacao[8]) if transacao[8] else None
+    )
     alterando_conferencia = "conferida" in data
     conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
     # Campos obrigatorios (e o status pendente) bloqueiam somente uma NOVA
