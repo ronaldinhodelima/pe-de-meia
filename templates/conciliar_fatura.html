@@ -86,6 +86,38 @@
     </div>
   </div>
 
+  {% if resultado.repetidas_na_fatura %}
+    <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+      <h3>Cobranças repetidas na própria fatura — revisar</h3>
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+        A operadora lançou a mesma descrição, mesmo valor e mesmo dia mais de uma vez. Nem toda
+        repetição é erro (pedágio, por exemplo, aparece várias vezes no mesmo dia legitimamente) —
+        por isso confira uma a uma. Quando há estorno da própria operadora, o caso já se resolveu
+        sozinho; quando não há, vale contestar.
+      </div>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th>
+        <th style="text-align:right">Valor</th><th style="text-align:right">Cobrado</th><th>Estorno</th></tr></thead>
+      <tbody>
+        {% for r in resultado.repetidas_na_fatura %}
+          <tr>
+            <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ r.descricao }}</td>
+            <td>{{ r.titular or '-' }}</td>
+            <td class="valor">{{ r.valor|moeda }} × {{ r.vezes }}</td>
+            <td class="valor">{{ r.total_cobrado|moeda }}</td>
+            <td>
+              {% if r.estorno_data %}
+                <span style="color:var(--good)">estornado em {{ r.estorno_data.strftime('%d/%m/%Y') }}</span>
+              {% else %}
+                <strong style="color:var(--bad)">sem estorno — verificar</strong>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody></table>
+    </div>
+  {% endif %}
+
   {% if resultado.sem_sistema %}
     <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
       <h3>Na fatura, mas não achei no sistema</h3>

@@ -579,7 +579,55 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None):
         "diferenca": round(soma_fatura - soma_batida, 2),
         "periodo_inicio": min(datas),
         "periodo_fim": max(datas),
+        "repetidas_na_fatura": _repetidas_na_fatura(linhas),
     }
+
+
+def _repetidas_na_fatura(linhas):
+    """Cobrancas que a propria operadora lancou mais de uma vez no mesmo dia,
+    com mesmo titular, descricao e valor - caso real ja visto: um acougue
+    cobrado 2x em 08/08 e depois estornado pela propria operadora.
+
+    Isto e diferente da duplicidade do Pluggy (mesmo gasto chegando com dois
+    ids): aqui a fatura oficial mostra a cobranca repetida, entao o dinheiro
+    saiu duas vezes de verdade. Casamos com o estorno (linha negativa de mesmo
+    valor e titular) para separar "ja resolvido" de "contestar com a operadora".
+
+    Repeticao no mesmo dia nao prova erro - pedagio, por exemplo, aparece
+    legitimamente varias vezes - por isso a tela chama de "revisar", nao de
+    duplicidade confirmada.
+    """
+    grupos = {}
+    for l in linhas:
+        if l["valor"] <= 0 or l["parcela_total"]:
+            continue  # estorno/pagamento e parcelamento nao entram
+        chave = (l["titular"], (l["descricao_base"] or l["descricao"]).upper(), l["valor"], l["data"])
+        grupos.setdefault(chave, []).append(l)
+
+    estornos = [l for l in linhas if l["valor"] < 0]
+    usados = set()
+    repetidas = []
+    for (titular, desc, valor, data), grupo in grupos.items():
+        if len(grupo) < 2:
+            continue
+        # procura um estorno de mesmo valor/titular que ainda nao foi atribuido
+        estorno = None
+        for e in estornos:
+            if id(e) in usados or e["titular"] != titular:
+                continue
+            if abs(abs(e["valor"]) - valor) > 0.01 or e["data"] < data:
+                continue
+            estorno = e
+            usados.add(id(e))
+            break
+        repetidas.append({
+            "titular": titular, "descricao": grupo[0]["descricao"], "valor": valor,
+            "data": data, "vezes": len(grupo),
+            "total_cobrado": round(valor * len(grupo), 2),
+            "estorno_data": estorno["data"] if estorno else None,
+            "estorno_valor": estorno["valor"] if estorno else None,
+        })
+    return sorted(repetidas, key=lambda r: r["data"])
 
 
 @bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
