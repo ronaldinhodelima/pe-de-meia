@@ -587,7 +587,19 @@ function salvarDimensaoModal(selModal) {
   const selLinha = tr.querySelector('.dim-select[data-dim="' + selModal.dataset.dim + '"]');
   hidratarSelect(selLinha);
   selLinha.value = selModal.value;
-  salvar(idAtualModal, selLinha);
+  salvar(idAtualModal, selLinha).then(() => {
+    const dimPortfolio = window.configLancamentos.dim_id_portfolio;
+    const portfolioId = portfolioDoProjeto(selModal.value);
+    if (!portfolioId || !dimPortfolio || selModal.dataset.dim === dimPortfolio) return;
+    const selLinhaPortfolio = tr.querySelector('.dim-select[data-dim="' + dimPortfolio + '"]');
+    const selModalPortfolio = document.querySelector('.modal-dim-select[data-dim="' + dimPortfolio + '"]');
+    if (selLinhaPortfolio && selLinhaPortfolio.value !== portfolioId) {
+      hidratarSelect(selLinhaPortfolio);
+      selLinhaPortfolio.value = portfolioId;
+      salvar(idAtualModal, selLinhaPortfolio);
+    }
+    if (selModalPortfolio) selModalPortfolio.value = portfolioId;
+  });
 }
 function salvarObservacaoModal() {
   if (!idAtualModal) return;
@@ -631,6 +643,15 @@ function excluirManual() {
       if (res.ok) { fecharModal(); guardarPosicaoAtual(); window.location.reload(); }
       else alert(res.erro || 'Não foi possível excluir.');
     });
+}
+
+// Regra automatica Projeto -> Portfolio, cadastrada em /dimensoes (cada
+// Projeto pode ter um Portfolio padrao). Devolve o id do Portfolio vinculado
+// a este valor de Projeto, ou null se nao houver vinculo - so entra no mapa
+// quem tem vinculo, entao um id de outra dimensao (Responsavel etc) nunca
+// bate aqui por acaso (ids de dimensao_valor sao unicos no banco inteiro).
+function portfolioDoProjeto(valorId) {
+  return (window.configLancamentos.projeto_portfolio_map || {})[valorId] || null;
 }
 
 function linhasRateioInline(id) {
@@ -774,6 +795,15 @@ document.addEventListener('click', function (e) {
 document.addEventListener('change', function (e) {
   const el = e.target;
   if (el.matches('#tabela-lancamentos .rateio-cat-select, #tabela-lancamentos .rateio-dim-select, #tabela-lancamentos .rateio-valor-inline, #tabela-lancamentos .rateio-obs-inline')) {
+    if (el.matches('.rateio-dim-select')) {
+      const dimPortfolio = window.configLancamentos.dim_id_portfolio;
+      const portfolioId = portfolioDoProjeto(el.value);
+      if (portfolioId && dimPortfolio && el.dataset.dim !== dimPortfolio) {
+        const linhaRateio = el.closest('tr.rateio-row');
+        const selPortfolio = linhaRateio && linhaRateio.querySelector('.rateio-dim-select[data-dim="' + dimPortfolio + '"]');
+        if (selPortfolio) { hidratarSelect(selPortfolio); selPortfolio.value = portfolioId; }
+      }
+    }
     const linhaParte = el.closest('tr[data-rateio-parent]');
     if (linhaParte) atualizarValidacaoRateioInline(linhaParte.dataset.rateioParent, true);
     return;
@@ -794,7 +824,22 @@ document.addEventListener('change', function (e) {
     abrirConfirmacaoModal('desconferir');
     return;
   }
-  salvar(id, el);
+  salvar(id, el).then(() => {
+    if (!el.matches('.dim-select')) return;
+    const dimPortfolio = window.configLancamentos.dim_id_portfolio;
+    const portfolioId = portfolioDoProjeto(el.value);
+    if (!portfolioId || !dimPortfolio || el.dataset.dim === dimPortfolio) return;
+    const tr = el.closest('tr');
+    const selPortfolio = tr && tr.querySelector('.dim-select[data-dim="' + dimPortfolio + '"]');
+    if (!selPortfolio || selPortfolio.value === portfolioId) return;
+    hidratarSelect(selPortfolio);
+    selPortfolio.value = portfolioId;
+    salvar(id, selPortfolio);
+    if (idAtualModal === id) {
+      const selModalPortfolio = document.querySelector('.modal-dim-select[data-dim="' + dimPortfolio + '"]');
+      if (selModalPortfolio) selModalPortfolio.value = portfolioId;
+    }
+  });
 });
 
 document.addEventListener('input', function (e) {

@@ -210,7 +210,7 @@ def dimensoes_view():
                 return float(v) if v else None
             valor_id = request.form.get("valor_id")
             cur.execute(
-                "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone "
+                "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, icone, portfolio_valor_id "
                 "FROM cartao.dimensao_valor WHERE id=%s;",
                 (valor_id,),
             )
@@ -219,15 +219,21 @@ def dimensoes_view():
             teto_mensal_novo = to_num(request.form.get("teto_mensal"))
             teto_anual_novo = to_num(request.form.get("teto_anual"))
             icone_novo = ((request.form.get("icone") or "").strip() or None)
+            # so a dimensao Projeto manda esse campo no formulario (ver
+            # dimensoes.html); para qualquer outra dimensao o form nao tem o
+            # select, entao "portfolio_valor_id" vem ausente e cai em None,
+            # que e' o comportamento certo (nenhum vinculo).
+            portfolio_valor_id_novo = request.form.get("portfolio_valor_id") or None
             cur.execute(
                 "UPDATE cartao.dimensao_valor SET nome=%s, teto_mensal=%s, teto_anual=%s, "
-                "icone=%s WHERE id=%s;",
+                "icone=%s, portfolio_valor_id=%s WHERE id=%s;",
                 (
                     nome_novo,
                     teto_mensal_novo,
                     teto_anual_novo,
                     # varchar(8): cabe um emoji (que pode ter varios code points)
                     icone_novo,
+                    portfolio_valor_id_novo,
                     valor_id,
                 ),
             )
@@ -237,6 +243,8 @@ def dimensoes_view():
                 registrar_mudanca_auditoria("Teto mensal", float(anterior["teto_mensal"]) if anterior["teto_mensal"] is not None else None, teto_mensal_novo)
                 registrar_mudanca_auditoria("Teto anual", float(anterior["teto_anual"]) if anterior["teto_anual"] is not None else None, teto_anual_novo)
                 registrar_mudanca_auditoria("Ícone", anterior["icone"], icone_novo)
+                anterior_portfolio = str(anterior["portfolio_valor_id"]) if anterior["portfolio_valor_id"] else None
+                registrar_mudanca_auditoria("Portfólio padrão do projeto", anterior_portfolio, portfolio_valor_id_novo)
         elif acao == "excluir_valor":
             valor_id = request.form.get("valor_id")
             qtd = contar_uso_valor(valor_id)
@@ -264,8 +272,20 @@ def dimensoes_view():
 
     cur.execute("SELECT id, nome, obrigatoria, ordem FROM cartao.dimensao ORDER BY ordem, nome;")
     dims = cur.fetchall()
-    cur.execute("SELECT id, dimensao_id, nome, teto_mensal, teto_anual FROM cartao.dimensao_valor ORDER BY nome;")
+    cur.execute(
+        "SELECT id, dimensao_id, nome, teto_mensal, teto_anual, portfolio_valor_id "
+        "FROM cartao.dimensao_valor ORDER BY nome;"
+    )
     valores_db = cur.fetchall()
+    # opcoes pro select "Portfolio padrao" que so aparece nos valores da
+    # dimensao Projeto (ver dimensoes.html) - lista todos os valores da
+    # dimensao Portfolio, se ela existir.
+    cur.execute(
+        "SELECT dv.id, dv.nome FROM cartao.dimensao_valor dv "
+        "JOIN cartao.dimensao d ON d.id = dv.dimensao_id AND lower(d.nome) = lower('Portfólio') "
+        "ORDER BY dv.nome;"
+    )
+    portfolio_opcoes = cur.fetchall()
 
     # gasto do mes e do ano corrente por valor de dimensao, pra comparar com o teto
     mes_atual = datetime.now().strftime("%Y-%m")
@@ -315,6 +335,7 @@ def dimensoes_view():
         usados_valor=usados_valor,
         usados_dimensao=usados_dimensao,
         gastos=gastos,
+        portfolio_opcoes=portfolio_opcoes,
     )
 
 

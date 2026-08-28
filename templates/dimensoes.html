@@ -80,6 +80,16 @@
             <span style="font-size:12px;color:#888">teto anual</span>
             <input name="teto_anual" value="{{ v.teto_anual|num }}" placeholder="opcional"
                    style="width:100px;padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+            {% if d.nome == 'Projeto' %}
+              <span style="font-size:12px;color:#888" title="Ao escolher este Projeto num lançamento, o Portfólio é preenchido sozinho com este valor (dá pra trocar depois)">portfólio padrão</span>
+              <select name="portfolio_valor_id"
+                      style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+                <option value="">nenhum</option>
+                {% for p in portfolio_opcoes %}
+                  <option value="{{ p.id }}" {{ 'selected' if p.id == v.portfolio_valor_id }}>{{ p.nome }}</option>
+                {% endfor %}
+              </select>
+            {% endif %}
             <button type="submit" class="ver-btn">Salvar</button>
           </form>
           {% set g = gastos.get(v.id, {}) %}

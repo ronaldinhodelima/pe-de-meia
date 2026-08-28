@@ -298,10 +298,13 @@ def index():
     cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
     dimensoes = cur.fetchall()
 
-    cur.execute("SELECT id, dimensao_id, nome, icone FROM cartao.dimensao_valor ORDER BY nome;")
+    cur.execute("SELECT id, dimensao_id, nome, icone, portfolio_valor_id FROM cartao.dimensao_valor ORDER BY nome;")
     valores_por_dim = {}
+    projeto_portfolio_map = {}
     for v in cur.fetchall():
         valores_por_dim.setdefault(v["dimensao_id"], []).append(v)
+        if v["portfolio_valor_id"]:
+            projeto_portfolio_map[str(v["id"])] = str(v["portfolio_valor_id"])
 
     mapa_dim_transacao = {}
     ids_visiveis = [r["transacao_id"] for r in rows]
@@ -526,6 +529,14 @@ def index():
         },
         "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
         "dimensoes_obrigatorias": [str(d["id"]) for d in dimensoes if d["obrigatoria"]],
+        # regra automatica Projeto -> Portfolio (cadastrada em /dimensoes):
+        # ao escolher um Projeto que tem portfolio padrao, o JS preenche o
+        # select de Portfolio sozinho (ver aplicarPortfolioDoProjeto em
+        # lancamentos.js). Continua editavel - e' so um ponto de partida.
+        "dim_id_portfolio": next(
+            (str(d["id"]) for d in dimensoes if chave_alfa(d["nome"]) == "portfolio"), None
+        ),
+        "projeto_portfolio_map": projeto_portfolio_map,
     }
 
     return render_template(

@@ -1659,6 +1659,27 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (19);")
             conn.commit()
 
+        if versao_atual < 20:
+            # Vinculo Projeto -> Portfolio padrao: cada valor de Projeto pode
+            # apontar para o Portfolio que ele "sempre" usa (ex: Projeto "Jeep"
+            # -> Portfolio "Veiculos"), pra nao ter que escolher os dois toda
+            # vez. So faz sentido em valor da dimensao Projeto apontando para
+            # um valor da dimensao Portfolio - por isso e' auto-referencia na
+            # mesma tabela (dimensao_valor serve qualquer dimensao) em vez de
+            # uma coluna por dimensao.
+            cur.execute(
+                "ALTER TABLE cartao.dimensao_valor "
+                "ADD COLUMN IF NOT EXISTS portfolio_valor_id integer "
+                "REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Vinculo Projeto -> Portfolio padrao',"
+                "jsonb_build_object('versao',20));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (20);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1752,6 +1773,23 @@ def aplicar_regras(cur):
             "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
         )
         resultado["dimensoes"] = max(cur.rowcount, 0)
+
+        # Regra automatica Projeto -> Portfolio: quando uma regra_classificacao
+        # define o Projeto de um lancamento (linha acima) mas nao define o
+        # Portfolio, e aquele Projeto tem um Portfolio padrao cadastrado em
+        # /dimensoes, usa esse padrao. ON CONFLICT DO NOTHING garante que isto
+        # nunca sobrescreve um Portfolio que a propria regra ja tenha definido.
+        cur.execute(
+            "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
+            "SELECT td.transacao_id, dport.id, dvp.portfolio_valor_id "
+            "FROM cartao.transacao_dimensao td "
+            "JOIN cartao.transacao t ON t.transacao_id::text = td.transacao_id "
+            "JOIN cartao.dimensao dproj ON lower(dproj.nome)=lower('Projeto') AND dproj.id = td.dimensao_id "
+            "JOIN cartao.dimensao_valor dvp ON dvp.id = td.valor_id AND dvp.portfolio_valor_id IS NOT NULL "
+            "JOIN cartao.dimensao dport ON lower(dport.nome)=lower('Portfólio') "
+            "WHERE t.regra_aplicada_id IS NOT NULL "
+            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
+        )
     except Exception as e:
         cur.execute("ROLLBACK TO SAVEPOINT aplicar_regras")
         resultado["lancamentos"] = 0
