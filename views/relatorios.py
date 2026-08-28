@@ -462,12 +462,15 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
-def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None):
+def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
     lancamentos que o Pluggy trouxe naquela conta. fatura_linha_ids, quando
     informado, e um dict {id(linha) python: id da cartao.fatura_linha} para o
-    template poder oferecer "criar lancamento" apontando pro registro certo."""
+    template poder oferecer "criar lancamento" apontando pro registro certo -
+    exclui linha que ja virou lancamento. todos_fatura_linha_ids e o mesmo dict
+    sem essa exclusao, usado para marcar "conferido" em cobranca repetida."""
     fatura_linha_ids = fatura_linha_ids or {}
+    todos_fatura_linha_ids = todos_fatura_linha_ids or fatura_linha_ids
     datas = [l["data"] for l in linhas]
     cur.execute(
         f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
@@ -579,11 +582,11 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None):
         "diferenca": round(soma_fatura - soma_batida, 2),
         "periodo_inicio": min(datas),
         "periodo_fim": max(datas),
-        "repetidas_na_fatura": _repetidas_na_fatura(linhas),
+        "repetidas_na_fatura": _repetidas_na_fatura(linhas, todos_fatura_linha_ids),
     }
 
 
-def _repetidas_na_fatura(linhas):
+def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     """Cobrancas que a propria operadora lancou mais de uma vez no mesmo dia,
     com mesmo titular, descricao e valor - caso real ja visto: um acougue
     cobrado 2x em 08/08 e depois estornado pela propria operadora.
@@ -596,7 +599,12 @@ def _repetidas_na_fatura(linhas):
     Repeticao no mesmo dia nao prova erro - pedagio, por exemplo, aparece
     legitimamente varias vezes - por isso a tela chama de "revisar", nao de
     duplicidade confirmada.
+
+    fatura_linha_ids mapeia id(linha python) -> id de cartao.fatura_linha,
+    para o "conferido" poder ser marcado no banco (grupo inteiro fica com a
+    mesma marcacao, guardando quem conferiu e quando).
     """
+    fatura_linha_ids = fatura_linha_ids or {}
     grupos = {}
     for l in linhas:
         if l["valor"] <= 0 or l["parcela_total"]:
@@ -620,12 +628,17 @@ def _repetidas_na_fatura(linhas):
             estorno = e
             usados.add(id(e))
             break
+        linha_ids = [fatura_linha_ids[id(l)] for l in grupo if id(l) in fatura_linha_ids]
         repetidas.append({
             "titular": titular, "descricao": grupo[0]["descricao"], "valor": valor,
             "data": data, "vezes": len(grupo),
             "total_cobrado": round(valor * len(grupo), 2),
             "estorno_data": estorno["data"] if estorno else None,
             "estorno_valor": estorno["valor"] if estorno else None,
+            "linha_ids": linha_ids,
+            "conferida": bool(linha_ids) and all(l.get("conferida_repeticao") for l in grupo),
+            "conferida_por": grupo[0].get("conferida_repeticao_por"),
+            "conferida_em": grupo[0].get("conferida_repeticao_em"),
         })
     return sorted(repetidas, key=lambda r: r["data"])
 
@@ -717,12 +730,14 @@ def conciliar_fatura():
             account_id = str(fatura_row["account_id"])
             cur.execute(
                 "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
-                "transacao_id_criado FROM cartao.fatura_linha WHERE fatura_id=%s ORDER BY data;",
+                "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em "
+                "FROM cartao.fatura_linha WHERE fatura_id=%s ORDER BY data;",
                 (fatura_id,),
             )
             linhas_db = [dict(r) for r in cur.fetchall()]
             linhas = [{k: v for k, v in l.items() if k not in ("id", "transacao_id_criado")} for l in linhas_db]
             ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db) if not db["transacao_id_criado"]}
+            todos_ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db)}
             for l, db in zip(linhas, linhas_db):
                 l["valor"] = float(l["valor"])
                 l["_ja_criado"] = bool(db["transacao_id_criado"])
@@ -733,7 +748,7 @@ def conciliar_fatura():
                 "cartao_final4": fatura_row["cartao_final4"], "arquivo_nome": fatura_row["arquivo_nome"],
                 "importado_em": fatura_row["importado_em"],
             }
-            resultado = _conciliar_linhas(cur, account_id, linhas, ids_por_linha)
+            resultado = _conciliar_linhas(cur, account_id, linhas, ids_por_linha, todos_ids_por_linha)
             resultado["fatura"] = fatura_meta
             # linhas ja resolvidas (usuario ja criou o lancamento) saem da lista
             # de pendencias, mas continuam contando no total como "cobertas"
@@ -825,6 +840,48 @@ def criar_lancamento_de_fatura(linha_id):
             "descricao": linha["descricao"], "valor": float(linha["valor"]), "categoria": categoria,
         })
         return jsonify({"ok": True, "transacao_id": str(transacao_id)})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/fatura-linha/marcar-conferida-repeticao", methods=["POST"])
+@requer("relatorios")
+def marcar_repeticao_conferida():
+    """Marca (ou desmarca) como revisado um grupo de cobranca repetida na
+    fatura (ver _repetidas_na_fatura). E' so o registro de quem ja olhou
+    aquele grupo e quando - nao altera nenhuma transacao nem valor."""
+    data = request.get_json(force=True) or {}
+    ids = data.get("ids") or []
+    conferida = bool(data.get("conferida"))
+    if not ids or not all(isinstance(i, int) for i in ids):
+        return jsonify({"ok": False, "erro": "Lista de linhas inválida."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        if conferida:
+            cur.execute(
+                "UPDATE cartao.fatura_linha SET conferida_repeticao = true, "
+                "conferida_repeticao_por = %s, conferida_repeticao_em = now() "
+                "WHERE id = ANY(%s);",
+                (session.get("user"), ids),
+            )
+        else:
+            cur.execute(
+                "UPDATE cartao.fatura_linha SET conferida_repeticao = false, "
+                "conferida_repeticao_por = NULL, conferida_repeticao_em = NULL "
+                "WHERE id = ANY(%s);",
+                (ids,),
+            )
+        conn.commit()
+        registrar_mudanca_auditoria("Cobrança repetida na fatura conferida", not conferida, {
+            "fatura_linha_ids": ids, "conferida": conferida,
+        })
+        return jsonify({"ok": True})
     except Exception as exc:
         conn.rollback()
         return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400

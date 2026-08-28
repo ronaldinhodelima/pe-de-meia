@@ -100,7 +100,6 @@
         <th style="text-align:right">Conferido</th></tr></thead>
       <tbody>
         {% for r in resultado.repetidas_na_fatura %}
-          {% set r_chave = [f.id, r.data.isoformat(), r.titular or '', r.descricao, r.valor]|join('|') %}
           <tr>
             <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
             <td>{{ r.descricao }}</td>
@@ -115,8 +114,13 @@
               {% endif %}
             </td>
             <td style="text-align:right">
-              <input type="checkbox" class="fatura-repetida-conferida" data-chave="{{ r_chave }}"
-                     onchange="marcarRepetidaConferida(this)">
+              {% if r.linha_ids %}
+                <input type="checkbox" class="fatura-repetida-conferida"
+                       data-ids="{{ r.linha_ids|join(',') }}"
+                       {{ 'checked' if r.conferida }}
+                       title="{{ 'Conferido por ' + r.conferida_por + ' em ' + r.conferida_em.strftime('%d/%m/%Y %H:%M') if r.conferida and r.conferida_por else '' }}"
+                       onchange="marcarRepetidaConferida(this)">
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -198,16 +202,28 @@
 {% block scripts %}
 <script>
 function marcarRepetidaConferida(chk) {
-  const chave = 'pedemeia_repetida_conferida_' + chk.dataset.chave;
-  if (chk.checked) {
-    localStorage.setItem(chave, '1');
-  } else {
-    localStorage.removeItem(chave);
-  }
+  const ids = chk.dataset.ids.split(',').map(Number);
+  const conferida = chk.checked;
+  chk.disabled = true;
+  fetch('/api/fatura-linha/marcar-conferida-repeticao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids, conferida: conferida })
+  })
+    .then(r => r.json())
+    .then(d => {
+      chk.disabled = false;
+      if (!d.ok) {
+        chk.checked = !conferida;
+        alert(d.erro || 'Não consegui salvar.');
+      }
+    })
+    .catch(() => {
+      chk.disabled = false;
+      chk.checked = !conferida;
+      alert('Não consegui salvar.');
+    });
 }
-document.querySelectorAll('.fatura-repetida-conferida').forEach(function (chk) {
-  chk.checked = localStorage.getItem('pedemeia_repetida_conferida_' + chk.dataset.chave) === '1';
-});
 
 function criarLancamentoFatura(btn) {
   const linha = btn.closest('tr');

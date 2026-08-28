@@ -1633,6 +1633,32 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (18);")
             conn.commit()
 
+        if versao_atual < 19:
+            # "Conferido" da tela de cobrancas repetidas na fatura (ver
+            # views/relatorios.py:_repetidas_na_fatura). E' so um registro de quem
+            # ja revisou aquele grupo de cobranca repetida e quando - nao mexe em
+            # transacao nem em dinheiro, e' historico de revisao humana, igual ao
+            # OK de lancamento (so quem confere marca).
+            cur.execute(
+                "ALTER TABLE cartao.fatura_linha "
+                "ADD COLUMN IF NOT EXISTS conferida_repeticao boolean NOT NULL DEFAULT false;"
+            )
+            cur.execute(
+                "ALTER TABLE cartao.fatura_linha "
+                "ADD COLUMN IF NOT EXISTS conferida_repeticao_por text;"
+            )
+            cur.execute(
+                "ALTER TABLE cartao.fatura_linha "
+                "ADD COLUMN IF NOT EXISTS conferida_repeticao_em timestamptz;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Conferido de cobranca repetida na fatura',"
+                "jsonb_build_object('versao',19));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (19);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
