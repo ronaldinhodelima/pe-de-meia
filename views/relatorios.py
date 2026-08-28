@@ -571,7 +571,18 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         for c in candidatos if not c["_usado"] and c["_data_local"] >= ciclo_inicio
     ]
 
-    soma_fatura = round(sum(l["valor"] for l in linhas), 2)
+    # "Pagamento Recebido" e' a Unicred informando, por transparencia, que a
+    # fatura ANTERIOR foi paga - nao e' uma cobranca deste ciclo. O proprio
+    # SALDO TOTAL da fatura (extraido na pagina 2) nao inclui essa linha, entao
+    # a soma daqui tambem nao pode incluir, senao "nao fecha" por R$dezenas de
+    # milhares mesmo com tudo batido (caso real: fatura de 08/2026, SALDO TOTAL
+    # R$18.821,76 batendo 100% so depois de tirar -R$16.543,97 dessa linha).
+    # A linha continua em `linhas` para casar com o lancamento correspondente
+    # no Pluggy (a propria fatura de cartao sendo paga) e nao sobrar como
+    # "sem_fatura" - so sai da soma usada na comparacao.
+    soma_fatura = round(
+        sum(l["valor"] for l in linhas if l["descricao"].strip().lower() != "pagamento recebido"), 2
+    )
     soma_batida = round(sum(l["valor"] for l in batidos), 2)
     return {
         "soma_fatura": soma_fatura,
@@ -580,7 +591,12 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         "sem_fatura": sorted(sem_fatura, key=lambda l: l["data"]),
         "fecha_100": not sem_sistema and not sem_fatura,
         "diferenca": round(soma_fatura - soma_batida, 2),
-        "periodo_inicio": min(datas),
+        # min(datas) fica errado quando ha parcela antiga na fatura: a data
+        # impressa dela e' a da COMPRA ORIGINAL (pode ser quase um ano atras),
+        # nao deste ciclo - ja vimos isso mostrar "periodo" de 10 meses. Usar
+        # o mesmo ciclo_inicio (~35 dias antes do fim) da checagem de
+        # "sem_fatura" da o periodo real desta fatura.
+        "periodo_inicio": ciclo_inicio,
         "periodo_fim": max(datas),
         "repetidas_na_fatura": _repetidas_na_fatura(linhas, todos_fatura_linha_ids),
     }
