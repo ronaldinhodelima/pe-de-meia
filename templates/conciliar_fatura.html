@@ -96,9 +96,11 @@
         sozinho; quando não há, vale contestar.
       </div>
       <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th>
-        <th style="text-align:right">Valor</th><th style="text-align:right">Cobrado</th><th>Estorno</th></tr></thead>
+        <th style="text-align:right">Valor</th><th style="text-align:right">Cobrado</th><th>Estorno</th>
+        <th style="text-align:right">Conferido</th></tr></thead>
       <tbody>
         {% for r in resultado.repetidas_na_fatura %}
+          {% set r_chave = [f.id, r.data.isoformat(), r.titular or '', r.descricao, r.valor]|join('|') %}
           <tr>
             <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
             <td>{{ r.descricao }}</td>
@@ -111,6 +113,10 @@
               {% else %}
                 <strong style="color:var(--bad)">sem estorno — verificar</strong>
               {% endif %}
+            </td>
+            <td style="text-align:right">
+              <input type="checkbox" class="fatura-repetida-conferida" data-chave="{{ r_chave }}"
+                     onchange="marcarRepetidaConferida(this)">
             </td>
           </tr>
         {% endfor %}
@@ -191,6 +197,18 @@
 
 {% block scripts %}
 <script>
+function marcarRepetidaConferida(chk) {
+  const chave = 'pedemeia_repetida_conferida_' + chk.dataset.chave;
+  if (chk.checked) {
+    localStorage.setItem(chave, '1');
+  } else {
+    localStorage.removeItem(chave);
+  }
+}
+document.querySelectorAll('.fatura-repetida-conferida').forEach(function (chk) {
+  chk.checked = localStorage.getItem('pedemeia_repetida_conferida_' + chk.dataset.chave) === '1';
+});
+
 function criarLancamentoFatura(btn) {
   const linha = btn.closest('tr');
   const linhaId = linha.dataset.linhaId;
