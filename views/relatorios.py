@@ -1316,22 +1316,6 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     )
     ultima_por_conta = {str(r["account_id"]): dict(r) for r in cur.fetchall()}
 
-    cur.execute(
-        f"SELECT t.transacao_id, t.account_id, t.descricao, "
-        f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
-        f"({DATA_LOCAL_SQL})::date AS data_local, t.categoria "
-        f"FROM cartao.transacao t "
-        f"JOIN cartao.fatura_importada fi ON fi.account_id = t.account_id "
-        f"AND ({DATA_LOCAL_SQL})::date BETWEEN fi.periodo_inicio AND fi.periodo_fim "
-        f"WHERE ({'TRUE' if incluir_duplicadas else 'COALESCE(t.duplicada,false) = false'}) "
-        f"AND COALESCE(t.somente_conciliacao,false) = false "
-        f"AND t.substituido_por IS NULL "
-        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
-        f"WHERE v.transacao_id = t.transacao_id) "
-        f"GROUP BY t.transacao_id, t.account_id, t.descricao, t.valor_brl, t.valor_original, "
-        f"t.data_transacao, t.categoria "
-        f"ORDER BY 5, 3;"
-    )
     # ja vinculadas: servem de "par" quando o Pluggy gravou o mesmo evento
     # duas vezes com descricoes diferentes (pending -> posted)
     cur.execute(
@@ -1356,6 +1340,22 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     estornos = {(str(r["account_id"]), r["data_local"], round(abs(float(r["valor"] or 0)), 2))
                 for r in cur.fetchall()}
 
+    cur.execute(
+        f"SELECT t.transacao_id, t.account_id, t.descricao, "
+        f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local, t.categoria "
+        f"FROM cartao.transacao t "
+        f"JOIN cartao.fatura_importada fi ON fi.account_id = t.account_id "
+        f"AND ({DATA_LOCAL_SQL})::date BETWEEN fi.periodo_inicio AND fi.periodo_fim "
+        f"WHERE ({'TRUE' if incluir_duplicadas else 'COALESCE(t.duplicada,false) = false'}) "
+        f"AND COALESCE(t.somente_conciliacao,false) = false "
+        f"AND t.substituido_por IS NULL "
+        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+        f"WHERE v.transacao_id = t.transacao_id) "
+        f"GROUP BY t.transacao_id, t.account_id, t.descricao, t.valor_brl, t.valor_original, "
+        f"t.data_transacao, t.categoria "
+        f"ORDER BY 5, 3;"
+    )
     repetidas, ecos, estornadas, aguardando, revisar = [], [], [], [], []
     for r in cur.fetchall():
         valor = round(float(r["valor"] or 0), 2)
