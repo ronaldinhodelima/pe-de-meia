@@ -1419,6 +1419,17 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     marcar "esta linha ja virou lancamento". Rodar de novo nao duplica.
     Herda categoria e dimensoes do agregado, para nao perder classificacao.
     """
+    # Garante o vinculo de toda linha que ja virou lancamento. Sem isso, um
+    # "refazer vinculos" apagava o vinculo da parcela gerada (e a geracao nao
+    # recria, porque e' idempotente por transacao_id_criado) e a parcela
+    # aparecia como orfa - 340 falsos positivos de uma vez.
+    cur.execute(
+        "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+        "SELECT fl.id, fl.transacao_id_criado, 'fatura', %s FROM cartao.fatura_linha fl "
+        "WHERE fl.transacao_id_criado IS NOT NULL "
+        "ON CONFLICT (fatura_linha_id, transacao_id) DO NOTHING;",
+        (usuario,),
+    )
     cur.execute(
         "SELECT v.transacao_id, COUNT(*) AS linhas FROM cartao.fatura_vinculo v "
         "GROUP BY v.transacao_id HAVING COUNT(*) >= 2;"
