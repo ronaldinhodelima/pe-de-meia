@@ -189,3 +189,48 @@ def test_primeira_fatura_da_conta_cai_no_valor_guardado():
         "periodo_fim": date(2025, 7, 10),
     }
     assert _ciclo_inicio_encadeado(CursorEncadeamento(None), fatura) == date(2025, 6, 5)
+
+
+def test_agregado_tem_prioridade_sobre_a_mensal():
+    """Quando o parcelamento TEM agregado no Pluggy (valor cheio), todas as
+    parcelas da fatura tem que apontar pra ele - mesmo existindo uma cobranca
+    mensal de valor exato dentro do ciclo. Essa mensal e' cobranca a mais (o
+    agregado ja cobre as 10 parcelas) e precisa sobrar como orfa, pra aparecer
+    como candidata a duplicidade. Caso real: OTICA CALLIARI 10x R$316, agregado
+    de R$3.160 em 02/11/2025 + mensais em 12/06, 12/07 e 12/08 de 2026."""
+    candidatos = [
+        _transacao("agreg", date(2025, 11, 2), "Parcelado Lojista - Visa - OTICA CALLIARI", 3160.00),
+        _transacao("mensal", date(2026, 8, 12), "Parcela Lojista Visa - OTICA CALLIARI", 316.00),
+    ]
+    linhas = [_linha(date(2025, 11, 2), "OTICA CALLIARI Parc.10/10", 316.00, 10, 10)]
+    r = _conciliar_linhas(
+        CursorFake(candidatos), "conta-1", linhas,
+        ciclo_inicio_min=date(2026, 7, 10), ciclo_fim_real=date(2026, 8, 12),
+    )
+    assert [b["transacao_id"] for b in r["batidos"]] == ["agreg"], "a parcela tem que ir pro agregado"
+    assert [s["transacao_id"] for s in r["sem_fatura"]] == ["mensal"], "a mensal tem que sobrar como orfa"
+
+
+def test_sem_agregado_continua_casando_uma_a_uma():
+    """Parcelamento que o Pluggy so mandou mensal a mensal (sem agregado)
+    continua no casamento 1:1 - a prioridade do agregado nao pode quebrar isso."""
+    candidatos = [_transacao("m1", date(2026, 8, 12), "Parcela Lojista Visa - LOJA", 316.00)]
+    linhas = [_linha(date(2025, 11, 2), "LOJA Parc.10/10", 316.00, 10, 10)]
+    r = _conciliar_linhas(
+        CursorFake(candidatos), "conta-1", linhas,
+        ciclo_inicio_min=date(2026, 7, 10), ciclo_fim_real=date(2026, 8, 12),
+    )
+    assert [b["transacao_id"] for b in r["batidos"]] == ["m1"]
+
+
+def test_parcela_unica_nao_e_confundida_com_agregado():
+    """Com parcela_total=1 o valor cheio e' igual ao da parcela - nao pode
+    tratar uma cobranca normal como se fosse parcelamento agregado."""
+    candidatos = [_transacao("t1", date(2026, 8, 12), "Compra - Visa - LOJA", 316.00)]
+    linhas = [_linha(date(2026, 8, 12), "LOJA Parc.1/1", 316.00, 1, 1)]
+    r = _conciliar_linhas(
+        CursorFake(candidatos), "conta-1", linhas,
+        ciclo_inicio_min=date(2026, 7, 10), ciclo_fim_real=date(2026, 8, 12),
+    )
+    assert [b["transacao_id"] for b in r["batidos"]] == ["t1"]
+    assert "valor_esperado_parcelamento" not in r["batidos"][0]

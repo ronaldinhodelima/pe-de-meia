@@ -464,6 +464,37 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
+def _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm):
+    """Procura a transacao que representa o parcelamento INTEIRO (valor cheio,
+    data da compra). O Pluggy nem sempre preenche parcela_total nesse
+    lancamento agregado (esse cartao chega a mostrar "Parcela: A vista" num
+    parcelamento real) - por isso o casamento e' pelo valor cheio esperado,
+    com o numero de parcelas e a descricao servindo apenas de desempate.
+    Tolerancia de R$1 porque o valor da parcela impresso na fatura e'
+    arredondado por mes: multiplicado pelo numero de parcelas pode nao bater
+    centavo a centavo com o valor cheio real (ex: fatura mostra R$198,05 x12 =
+    R$2.376,60, o lancamento real e R$2.376,70).
+
+    Nao filtra por _bloqueado de proposito: a mesma transacao agregada atende
+    uma linha por mes, em faturas diferentes - e' o unico caso em que reusar
+    transacao ja vinculada e' correto."""
+    tolerancia = 1.00
+    candidatos_valor = [
+        c for c in candidatos
+        if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
+    ]
+    if not candidatos_valor:
+        return None
+    if len(candidatos_valor) == 1:
+        return candidatos_valor[0]
+    com_parcela = [c for c in candidatos_valor if c["parcela_total"] == parcela_total]
+    opcoes = com_parcela or candidatos_valor
+    return min(opcoes, key=lambda c: (
+        desc_norm.split()[0] not in (c["descricao"] or "").upper(),
+        abs(round(float(c["valor"]), 2) - valor_esperado),
+    ))
+
+
 def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None,
                        ciclo_inicio_min=None, transacoes_bloqueadas=None, ciclo_fim_real=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
@@ -558,7 +589,31 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
         valor_esperado = round(valor_mensal * parcela_total, 2)
 
-        # CAMINHO PRINCIPAL: uma transacao por parcela, no valor da parcela.
+        # PRIORIDADE 1: parcelamento agregado, quando existe.
+        # O Pluggy as vezes grava o parcelamento inteiro como UMA transacao, no
+        # valor cheio, na data da compra. Quando essa transacao existe, ela ja
+        # representa TODAS as parcelas - entao toda linha do grupo tem que
+        # apontar pra ela, em qualquer mes. Se em vez disso a parcela casasse
+        # com uma cobranca mensal de mesmo valor (o que acontecia antes), a
+        # escolha ficava arbitraria e, pior, escondia a mensal atras de um
+        # vinculo: ela e' cobranca A MAIS (o agregado ja cobre tudo) e precisa
+        # sobrar como orfa pra aparecer como candidata a duplicidade.
+        # Caso real: OTICA CALLIARI 10x R$316, agregado de R$3.160 em
+        # 02/11/2025, mais mensais de R$316 em 12/06, 12/07 e 12/08 de 2026.
+        # So vale com 2+ parcelas: com parcela_total=1 o "valor cheio" e' igual
+        # ao da parcela e qualquer cobranca normal pareceria um agregado.
+        agregado = _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm) \
+            if parcela_total >= 2 else None
+        if agregado:
+            agregado["_usado"] = True
+            for l in linhas_grupo:
+                batidos.append({**l, "transacao_id": str(agregado["transacao_id"]),
+                                "descricao_sistema": agregado["descricao"],
+                                "valor_esperado_parcelamento": valor_esperado,
+                                "fatura_linha_id": fatura_linha_ids.get(id(l))})
+            continue
+
+        # PRIORIDADE 2: uma transacao por parcela, no valor da parcela.
         # A fatura lista so a(s) parcela(s) COBRADA(S) neste mes (ex: agosto
         # traz "AQUAMATER Parc.9/12", julho traz "Parc.8/12") e o Pluggy manda
         # uma transacao por mes, no mesmo valor - entao o casamento natural e'
@@ -599,24 +654,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # fatura e' arredondado por mes: multiplicado pelo numero de parcelas
         # pode nao bater centavo a centavo com o valor cheio real (ex: fatura
         # mostra R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
-        tolerancia = 1.00
-        candidatos_valor = [
-            c for c in candidatos
-            if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
-        ]
-        melhor = None
-        if len(candidatos_valor) == 1:
-            melhor = candidatos_valor[0]
-        elif len(candidatos_valor) > 1:
-            com_parcela = [c for c in candidatos_valor if c["parcela_total"] == parcela_total]
-            opcoes = com_parcela or candidatos_valor
-            melhor = min(
-                opcoes,
-                key=lambda c: (
-                    desc_norm.split()[0] not in (c["descricao"] or "").upper(),
-                    abs(round(float(c["valor"]), 2) - valor_esperado),
-                ),
-            )
+        melhor = _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm)
         if melhor:
             melhor["_usado"] = True
             for l in pendentes:
