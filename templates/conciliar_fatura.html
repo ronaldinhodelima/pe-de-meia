@@ -132,7 +132,13 @@
             </td>
           </tr>
         {% endfor %}
-      </tbody></table>
+      </tbody>
+      <tfoot><tr>
+        <td colspan="4"><strong>{{ resultado.repetidas_na_fatura|length }} lançamento(s)</strong></td>
+        <td class="valor"><strong>{{ resultado.repetidas_na_fatura|sum(attribute='total_cobrado')|moeda }}</strong></td>
+        <td></td><td></td>
+      </tr></tfoot>
+      </table>
     </div>
   {% endif %}
 
@@ -175,7 +181,9 @@
 
   {% if resultado.sem_fatura %}
     <div class="cat-breakdown" style="border-left:3px solid #d9a441">
-      <h3>No sistema, mas não achei na fatura</h3>
+      <h3>No sistema, mas não achei na fatura
+        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.sem_fatura|length }} lançamento(s))</span>
+      </h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
         O Pluggy trouxe um lançamento nessa conta, nos últimos ~35 dias cobertos por esta fatura,
         que não bateu com nenhuma linha dela — pode ser uma duplicidade do próprio Pluggy, ou algo
@@ -189,7 +197,7 @@
         {% endfor %}
       </tbody>
       <tfoot><tr>
-        <td colspan="2"><strong>{{ resultado.sem_fatura|length }} lançamento(s)</strong></td>
+        <td colspan="2"><strong>Total</strong></td>
         <td class="valor"><strong>{{ resultado.sem_fatura|sum(attribute='valor')|moeda }}</strong></td>
       </tr></tfoot>
       </table>
