@@ -476,6 +476,69 @@ entra quando a fatura do mês for importada. **Mas atenção:** parcelamento com
 jul/2025 perde essa despesa, porque não existe fatura importada cobrindo o período. Importar
 faturas mais antigas recupera automaticamente (a sincronização é idempotente).
 
+## Hierarquia de fontes — CARTÃO DE CRÉDITO UNICRED (aprovada em 29/08/2026)
+
+**Escopo:** só o cartão de crédito da Unicred. Cartão Nubank e conta corrente ainda não foram
+avaliados e provavelmente precisam de regras próprias — conta corrente não tem fatura, então a
+hierarquia lá nasce diferente (o extrato do Pluggy vira a única fonte de "houve cobrança").
+
+> **A fatura manda sobre o que foi cobrado. O Pluggy manda sobre o que aconteceu.
+> O usuário manda sobre o que significa.**
+
+| Campo | Manda | Por quê |
+|---|---|---|
+| A cobrança existiu? | **Fatura** | É a prova do que a operadora cobrou. Sem linha, não houve cobrança. |
+| Valor cobrado | **Fatura** | Idem. |
+| Mês da parcela | **Fatura** (`periodo_fim`) | A data impressa na linha é a da compra original. |
+| Data/hora da compra à vista | **Pluggy** | Traz data e hora reais; a fatura só o dia. |
+| Estabelecimento (detalhe) | **Pluggy** | Traz cidade/país; a fatura abrevia. |
+| Compra ainda não faturada | **Pluggy** | Comprou após o fechamento: existe, sem fatura ainda. |
+| Categoria, dimensões, observação | **Usuário** > regra > Pluggy | Regra antiga do projeto. |
+| Conferida (OK) | **Só usuário** | Regra antiga do projeto. |
+
+Nenhuma fonte sobrescreve as outras fora do seu campo.
+
+### Os três estados de um lançamento (não confundir)
+
+- **`somente_conciliacao`** — registro de conciliação, não é evento de caixa. Hoje: a compra
+  parcelada agregada. Visível, vinculável, fora do resultado.
+- **`substituido_por`** (uuid → outra transação) — este lançamento é o **mesmo evento real** que
+  outro; só o outro conta, e o vínculo 1-para-1 diz qual. Cobre o *pending → posted* (o eco
+  aponta para a compra consolidada) e a *parcela mensal repetida* (aponta para a parcela que a
+  fatura gerou naquele mês).
+- **`duplicada`** — só o que sobrar: mesma cobrança duas vezes, sem estorno e sem par
+  identificável. Se nada cair aqui na prática, o campo pode ser aposentado.
+
+**Cobrança dupla REAL da operadora não usa nenhum dos três.** Ela vem como cobrança + estorno,
+os dois lançamentos legítimos, que se anulam sozinhos no resultado — marcar qualquer um quebraria
+a conta (esconderia a cobrança e deixaria o estorno negativo solto). Ela aparece **só** na
+conciliação do PDF, no bloco "cobranças repetidas na própria fatura", que mostra o estorno e tem
+o "conferido" para registrar a revisão humana.
+
+### Tela `/relatorios/duplicidades-fatura`
+
+Classifica no servidor (nunca por heurística sobre HTML) em quatro baldes: *parcela cobrada de
+novo*, *eco pending → posted*, *precisa de revisão* e *aguardando a próxima fatura* (compra perto
+do fechamento, que entra na fatura seguinte — não é duplicidade e não tem ação).
+
+**Armadilha já resolvida:** agrupar parcelamento por `lojista + nº de parcelas` COLIDE — MECANICA
+HOCHIOVE tem 6× R$583,33 e 6× R$1.316,66, e SESI FARMACIA tem vários. **O valor da parcela entra
+na chave.** Foi essa colisão que fez o primeiro levantamento subcontar (R$ 9.907,69 em vez dos
+R$ 18.915,71 reais).
+
+**Outra armadilha:** `"Parcelado Lojista - Visa - X"` é o parcelamento inteiro (agregado);
+`"Parcela Lojista Visa - X"` é a cobrança de UMA parcela. Só a forma mensal pode entrar em
+"evidência inequívoca" — um agregado sem vínculo costuma ser parcelamento novo cujas parcelas
+ainda vão aparecer, e marcá-lo apagaria compra real.
+
+### Resultado aplicado em 29/08/2026
+
+74 parcelas repetidas + 35 ecos vinculados via `substituido_por`. Despesa de 2026 caiu de
+R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 não mudou: o fenômeno só existe a
+partir de **abril/2026**, quando o Pluggy mudou o comportamento nessa conta e passou a mandar as
+mensais além do agregado. Sobraram 11 lançamentos para revisão humana (R$ 1.678,72) e 7
+aguardando a próxima fatura (R$ 1.232,52).
+
 ## Descoberta de 29/08/2026: R$ 9.907,69 contados em dobro (a decidir)
 
 Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estão no Pluggy
