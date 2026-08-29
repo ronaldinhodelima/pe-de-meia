@@ -712,6 +712,52 @@ servidor (45.163.12.5). Foi revertido. A proteção real hoje é por chave (`SYN
 rede. Se algum dia quiser fechar de verdade: fazer o app chamar o worker pela rede interna
 (`http://<container>:8000/sync`) e remover o domínio público dele.
 
+## Armadilhas do matcher de fatura (todas já custaram caro — não repetir)
+
+Cada uma destas causou erro real e tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer
+em `_conciliar_linhas`, `_classificar_orfaos` ou `_vincular_automatico`, leia esta lista.
+
+**1. Chave de agrupamento sem o valor.** Agrupar parcelamento por `titular + lojista + nº de
+parcelas` **colide**: o mesmo lojista tem mais de um parcelamento com o mesmo número de parcelas
+e valores diferentes (MECANICA HOCHIOVE: 2× R$135,00 e 2× R$233,50 na MESMA fatura; SESI FARMACIA
+tem vários). Colidindo, o valor da parcela vira a média, o valor cheio esperado sai errado e
+nenhum agregado é encontrado — os dois viram órfãos. **O valor entra sempre na chave.** Esse erro
+apareceu duas vezes no mesmo dia: no código de produção e na análise que eu fiz por fora.
+
+**2. Um cursor por conexão — consumir antes da próxima consulta.** Inserir um `cur.execute` entre
+o `execute` e o `fetchall` de outra consulta faz a primeira sumir **em silêncio**: a tela mostrou
+"nenhuma cobrança em dobro" com tudo zerado, HTTP 200, sem erro nenhum.
+
+**3. Lançamento nascido da fatura não é candidato.** A parcela gerada tem o valor exato da parcela
+e cai dentro do ciclo, então disputa a linha com o agregado do Pluggy e vira órfã. Ela não é um
+lançamento do Pluggy — ela **é** a fatura. Filtrada por `fatura_linha.transacao_id_criado`.
+
+**4. Vínculo `origem='fatura'` não bloqueia o vínculo com o agregado.** São os dois lados da
+conciliação: a parcela gerada é o evento de caixa, o agregado é o registro da compra. Tratar a
+linha como "já vinculada" fazia o agregado nunca ser reencontrado e o regime de caixa parar de
+se aplicar.
+
+**5. "Refazer vínculos" só apaga `origem='automatico'`.** Apagar o vínculo `fatura` deixava a
+parcela gerada órfã para sempre (a geração é idempotente por `transacao_id_criado` e não recria).
+Deu 340 falsos positivos numa rodada. Hoje `_sincronizar_parcelas_de_agregado` recria o que faltar.
+
+**6. Janela de candidatos vai além do fim do ciclo.** O Pluggy às vezes data a compra 1–2 dias
+depois do que a fatura imprime (D MORI: fatura 11/02, Pluggy 12/02). Sem folga, a transação nem
+entra como candidata. Hoje busca 3 dias além; só a avulsa aproveita.
+
+**7. Comparar descrição inteira nunca casa o par do mesmo evento.** O Pluggy grava o mesmo evento
+com prefixos diferentes (`"Compra Exterior R$ - Visa - X"` vs `"Compra Exterior - Visa - X ...COMUS"`).
+`_tokens_significativos()` remove o prefixo genérico e compara só o que identifica o
+estabelecimento — exige 2+ tokens em comum, mesmo valor e ±1 dia.
+
+**8. `"Parcelado Lojista"` ≠ `"Parcela Lojista"`.** O primeiro é o parcelamento inteiro (agregado);
+o segundo é a cobrança de UMA parcela. Só a forma mensal pode entrar em "evidência inequívoca":
+um agregado sem vínculo costuma ser parcelamento novo cujas parcelas ainda vão aparecer, e
+marcá-lo apagaria compra real.
+
+**9. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
+lançamentos são legítimos e se anulam sozinhos. Marcar um deixaria o estorno negativo solto.
+
 ## Lições da sessão de 29/08/2026 (incidente real — não repetir)
 
 Nesta sessão o Claude **corrompeu 22 datas de lançamentos reais em produção** e, antes disso,
@@ -822,7 +868,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **192 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **196 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
