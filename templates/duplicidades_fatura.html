@@ -38,26 +38,47 @@
   </table>
 {% endmacro %}
 
-{% if inequivocos %}
+{% if repetidas %}
   <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
-    <h3>Evidência inequívoca — cobrança que a fatura não reconhece
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ inequivocos|length }})</span>
+    <h3>Parcela cobrada de novo
+      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ repetidas|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-      Cada um destes repete uma parcela de um parcelamento cuja compra inteira já está lançada
-      (e fora do resultado), com as parcelas já cobertas pela fatura. O dinheiro está sendo
-      contado duas vezes.
+      A compra inteira já está lançada (e fora do resultado) e a fatura já cobre as parcelas.
+      Estas chegaram meses depois, por cima — o dinheiro está sendo contado duas vezes.
     </div>
-    {{ tabela(inequivocos, true) }}
+    {{ tabela(repetidas, true) }}
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Marcar selecionadas</button>
-      <button type="button" class="ver-btn" onclick="marcarTodasInequivocas(this)">
-        Marcar todas as {{ inequivocos|length }}
+      <button type="button" class="ver-btn" onclick="marcarTodasRepetidas(this)">
+        Marcar todas as {{ repetidas|length }}
       </button>
       <span id="dup-status" style="font-size:12px;color:var(--ink-faint)"></span>
     </div>
   </div>
-{% else %}
+{% endif %}
+
+{% if ecos %}
+  <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+    <h3>Mesma compra gravada duas vezes pelo Pluggy (pending → posted)
+      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ ecos|length }})</span>
+    </h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Estes caem a poucos dias do lançamento da compra inteira: o Pluggy registra na autorização
+      e registra de novo ao consolidar como parcelamento, sem remover o primeiro. Os pares com
+      1 centavo de diferença são a assinatura disso.
+      <strong>Não é a operadora cobrando duas vezes</strong> — é o mesmo registro em dois
+      estados, e por isso o tratamento pode não ser o mesmo de uma parcela repetida.
+      Aguardando decisão: sem ação em massa aqui.
+    </div>
+    {{ tabela(ecos, true) }}
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
+      <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Marcar selecionadas</button>
+    </div>
+  </div>
+{% endif %}
+
+{% if not repetidas and not ecos %}
   <div class="cat-breakdown" style="border-left:3px solid var(--good)">
     <h3>✓ Nenhuma cobrança em dobro pendente</h3>
     <div style="font-size:12px;color:var(--ink-soft)">
@@ -147,12 +168,12 @@ function marcarSelecionadas(btn) {
   enviarMarcacao({ ids: ids }, btn, status);
 }
 
-function marcarTodasInequivocas(btn) {
+function marcarTodasRepetidas(btn) {
   const status = document.getElementById('dup-status');
-  if (!confirm('Marcar como duplicados todos os lançamentos de evidência inequívoca? Eles saem dos totais e do DRE, mas não são apagados.')) {
+  if (!confirm('Marcar como duplicados todos os lançamentos de parcela cobrada de novo? Eles saem dos totais e do DRE, mas não são apagados.')) {
     return;
   }
-  enviarMarcacao({ apenas_inequivocos: true }, btn, status);
+  enviarMarcacao({ apenas_repetidas: true }, btn, status);
 }
 </script>
 {% endblock %}

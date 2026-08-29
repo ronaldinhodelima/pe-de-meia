@@ -1239,14 +1239,14 @@ def _classificar_orfaos(cur):
     parcela entra na chave.
     """
     cur.execute(
-        "SELECT fl.descricao_base, fl.parcela_total, fl.titular, fl.valor, "
-        "bool_and(COALESCE(t.somente_conciliacao,false)) AS todo_agregado, "
-        "COUNT(DISTINCT fl.id) AS linhas "
-        "FROM cartao.fatura_linha fl "
-        "JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
-        "JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
-        "WHERE fl.parcela_total >= 2 AND COALESCE(t.somente_conciliacao,false) "
-        "GROUP BY fl.descricao_base, fl.parcela_total, fl.titular, fl.valor;"
+        f"SELECT fl.descricao_base, fl.parcela_total, fl.titular, fl.valor, "
+        f"COUNT(DISTINCT fl.id) AS linhas, "
+        f"MIN(({DATA_LOCAL_SQL})::date) AS data_agregado "
+        f"FROM cartao.fatura_linha fl "
+        f"JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
+        f"JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
+        f"WHERE fl.parcela_total >= 2 AND COALESCE(t.somente_conciliacao,false) "
+        f"GROUP BY fl.descricao_base, fl.parcela_total, fl.titular, fl.valor;"
     )
     cobertos = []
     for r in cur.fetchall():
@@ -1255,6 +1255,7 @@ def _classificar_orfaos(cur):
             "parcela_total": r["parcela_total"],
             "valor": round(float(r["valor"]), 2),
             "linhas": r["linhas"],
+            "data_agregado": r["data_agregado"],
         })
 
     # ciclo da fatura mais recente por conta (compra perto do fechamento entra
@@ -1282,7 +1283,7 @@ def _classificar_orfaos(cur):
         f"t.data_transacao, t.categoria "
         f"ORDER BY 5, 3;"
     )
-    inequivocos, aguardando, revisar = [], [], []
+    repetidas, ecos, aguardando, revisar = [], [], [], []
     for r in cur.fetchall():
         valor = round(float(r["valor"] or 0), 2)
         item = {
@@ -1309,13 +1310,32 @@ def _classificar_orfaos(cur):
             None,
         ) if e_mensal else None
         if casado:
-            item["motivo"] = (
-                f"Repete uma parcela de {casado['base']} ({casado['parcela_total']}x de "
-                f"R$ {casado['valor']:,.2f}). A compra inteira já está lançada e fora do "
-                f"resultado, e a fatura já cobre {casado['linhas']} parcela(s) desse "
-                f"parcelamento — essa cobrança a mais não existe na fatura."
-            )
-            inequivocos.append(item)
+            # Dois fenomenos diferentes, com causas diferentes:
+            #  - ECO do ciclo PENDING -> POSTED: o Pluggy registra a compra na
+            #    autorizacao e registra DE NOVO ao consolidar como parcelamento,
+            #    sem remover a primeira. Cai a 1-5 dias do agregado, e costuma
+            #    ter 1 centavo de diferenca (arredondamento da parcela).
+            #  - PARCELA REPETIDA: cobranca mensal que chega meses depois do
+            #    agregado, que ja cobre o parcelamento inteiro.
+            dias = abs((item["data"] - casado["data_agregado"]).days) \
+                if casado["data_agregado"] else 999
+            item["dias_do_agregado"] = dias
+            if dias <= 5:
+                item["motivo"] = (
+                    f"Registrado {dias} dia(s) do lançamento da compra inteira de "
+                    f"{casado['base']} ({casado['parcela_total']}x de R$ {casado['valor']:,.2f}) — "
+                    f"é a mesma compra gravada duas vezes pelo Pluggy, na autorização e "
+                    f"depois já consolidada como parcelamento."
+                )
+                ecos.append(item)
+            else:
+                item["motivo"] = (
+                    f"Repete uma parcela de {casado['base']} ({casado['parcela_total']}x de "
+                    f"R$ {casado['valor']:,.2f}), cobrada {dias} dias depois da compra. A compra "
+                    f"inteira já está lançada e fora do resultado, e a fatura já cobre "
+                    f"{casado['linhas']} parcela(s) — essa cobrança a mais não existe na fatura."
+                )
+                repetidas.append(item)
             continue
 
         ultima = ultima_por_conta.get(str(r["account_id"]))
@@ -1329,7 +1349,8 @@ def _classificar_orfaos(cur):
         else:
             item["motivo"] = "Sem vínculo com nenhuma linha de fatura e sem padrão claro."
             revisar.append(item)
-    return {"inequivocos": inequivocos, "aguardando": aguardando, "revisar": revisar}
+    return {"repetidas": repetidas, "ecos": ecos,
+            "aguardando": aguardando, "revisar": revisar}
 
 
 def _sincronizar_parcelas_de_agregado(cur, usuario):
@@ -1457,8 +1478,8 @@ def marcar_duplicidades():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        if data.get("apenas_inequivocos"):
-            ids = [i["transacao_id"] for i in _classificar_orfaos(cur)["inequivocos"]]
+        if data.get("apenas_repetidas"):
+            ids = [i["transacao_id"] for i in _classificar_orfaos(cur)["repetidas"]]
         else:
             ids = [str(i) for i in (data.get("ids") or [])]
         if not ids:
