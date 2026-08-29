@@ -878,7 +878,7 @@ def conciliar_fatura():
                 "id": fatura_id, "mes_referencia": fatura_row["mes_referencia"],
                 "ano_referencia": fatura_row["ano_referencia"], "total": float(fatura_row["total"]),
                 "cartao_final4": fatura_row["cartao_final4"], "arquivo_nome": fatura_row["arquivo_nome"],
-                "importado_em": fatura_row["importado_em"],
+                "importado_em": data_hora_local(fatura_row["importado_em"]),
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
                 "vencimento": fatura_row["vencimento"],
             }
@@ -914,7 +914,10 @@ def conciliar_fatura():
     historico = []
     for r in cur.fetchall():
         conta = contas_by_id.get(str(r["account_id"]))
-        historico.append({**r, "conta_label": conta["label_curto"] if conta else "(conta removida)"})
+        historico.append({
+            **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
+            "importado_em": data_hora_local(r["importado_em"]),
+        })
 
     cur.close()
     conn.close()

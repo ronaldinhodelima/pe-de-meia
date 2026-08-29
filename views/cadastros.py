@@ -26,6 +26,7 @@ from core import (
     cat_pt_puro,
     categoria_com_nome,
     chave_alfa,
+    data_hora_local,
     detectar_banco,
     esc,
     get_conn,
@@ -1358,7 +1359,10 @@ def faturas_pdf_view():
     faturas = []
     for r in cur.fetchall():
         conta = contas_by_id.get(str(r["account_id"]))
-        faturas.append({**r, "conta_label": conta["label_curto"] if conta else "(conta removida)"})
+        faturas.append({
+            **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
+            "importado_em": data_hora_local(r["importado_em"]),
+        })
     cur.close()
     conn.close()
 
