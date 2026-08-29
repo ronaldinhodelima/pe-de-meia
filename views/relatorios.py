@@ -1775,77 +1775,122 @@ COBRANCAS_SO_NA_FATURA = [
     ("Unicred TAG%", "Tolls and in vehicle payment", "pedágio"),
     ("Anuidade - bonifica%", "Credit card fees", "bonificação da anuidade"),
     ("IOF compra internacional%", "Tax on financial operations", "IOF de compra internacional"),
+    ("ESTORNO%", None, "estorno"),
 ]
+
+# Linhas que NUNCA viram lancamento: sao a fatura anterior sendo quitada, nao
+# uma cobranca deste ciclo (o proprio SALDO TOTAL da Unicred nao as inclui).
+LINHAS_NAO_LANCAVEIS = ("Pagamento Recebido%", "Pagamento recebido%", "Pag de Fatura%")
+
+
+def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
+    """Cria um lancamento usando a fatura como fonte e devolve o id.
+
+    `categoria_manual` so fica ligado quando a categoria veio de um padrao
+    conferido; sem categoria, as regras automaticas ainda podem classificar.
+    """
+    novo_id = str(uuid.uuid4())
+    valor = float(linha["valor"])
+    cur.execute(
+        "INSERT INTO cartao.transacao ("
+        "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
+        "moeda_original, valor_brl, data_transacao, categoria, categoria_manual, "
+        "status, tipo, observacao, criado_em, atualizado_em, sincronizado_em, "
+        "primeiro_sincronizado_em) "
+        "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s,%s, now(), now(), now(), now());",
+        (novo_id, linha["account_id"], linha["descricao"], linha["descricao"], valor, valor,
+         f"{linha['data']} 12:00:00-03:00", categoria, bool(categoria),
+         "CREDIT" if valor < 0 else "DEBIT",
+         f"Criado a partir da fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} — "
+         f"a operadora cobrou e o Pluggy não sincronizou."),
+    )
+    cur.execute(
+        "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
+        (novo_id, linha["id"]),
+    )
+    cur.execute(
+        "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+        "VALUES (%s, %s, 'fatura', %s) ON CONFLICT DO NOTHING;",
+        (linha["id"], novo_id, usuario),
+    )
+    return novo_id
 
 
 @bp.route("/api/faturas/criar-cobrancas-sem-pluggy", methods=["POST"])
 @requer("lancamentos_manual")
 def criar_cobrancas_sem_pluggy():
-    """Cria, a partir da fatura, as cobrancas que o Pluggy nunca mandou.
+    """Cria, a partir da fatura, as cobrancas que o Pluggy nao sincronizou.
 
-    Sao tipos que a operadora lanca e o Pluggy nao repassa de forma
-    confiavel: pedagio (Unicred TAG), a bonificacao que estorna a anuidade e o
-    IOF de compra internacional. Ficavam como "linha sem vinculo" para sempre,
-    e a despesa (ou o credito) simplesmente nao existia no DRE.
+    A fatura e' a autoridade: se ela cobrou, o dinheiro saiu. Depois de todo o
+    casamento (agregado, parcela, eco, tokens), uma linha SEM VINCULO significa
+    que nao existe contraparte no Pluggy - e a despesa (ou o credito)
+    simplesmente nao existe no resultado.
 
-    Idempotente por `fatura_linha.transacao_id_criado`. Nasce sem OK - a
-    conferencia continua sendo humana.
+    Isso so e' seguro porque o outro lado esta zerado: quando nao sobra
+    lancamento do Pluggy sem vinculo, criar pela fatura nao pode duplicar.
+    Por isso a rota RECUSA se ainda houver orfao pendente.
+
+    `preview: true` devolve o levantamento sem gravar nada.
     """
+    data = request.get_json(silent=True) or {}
+    preview = bool(data.get("preview"))
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        resumo, criadas = {}, 0
-        for padrao, categoria, rotulo in COBRANCAS_SO_NA_FATURA:
-            cur.execute(
-                "SELECT fl.id, fl.data, fl.descricao, fl.valor, fi.account_id, "
-                "fi.mes_referencia, fi.ano_referencia "
-                "FROM cartao.fatura_linha fl "
-                "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
-                "WHERE fl.descricao ILIKE %s AND fl.transacao_id_criado IS NULL "
-                "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
-                "                WHERE v.fatura_linha_id = fl.id) "
-                "ORDER BY fl.data;",
-                (padrao,),
+        if not preview:
+            orfaos = _classificar_orfaos(cur)
+            pendentes = len(orfaos["repetidas"]) + len(orfaos["ecos"]) + len(orfaos["revisar"])
+            if pendentes:
+                return jsonify({
+                    "ok": False,
+                    "erro": f"Ainda há {pendentes} lançamento(s) do Pluggy sem vínculo esperando "
+                            f"decisão. Resolva em Duplicidades da fatura antes de criar pela "
+                            f"fatura, senão o mesmo gasto pode entrar duas vezes.",
+                }), 409
+
+        nao_lancaveis = " AND ".join(["fl.descricao NOT ILIKE %s"] * len(LINHAS_NAO_LANCAVEIS))
+        cur.execute(
+            "SELECT fl.id, fl.data, fl.descricao, fl.valor, fi.account_id, "
+            "fi.mes_referencia, fi.ano_referencia "
+            "FROM cartao.fatura_linha fl "
+            "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+            "WHERE fl.transacao_id_criado IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id) "
+            f"AND {nao_lancaveis} "
+            "ORDER BY fi.ano_referencia, fi.mes_referencia, fl.data;",
+            LINHAS_NAO_LANCAVEIS,
+        )
+        linhas = [dict(r) for r in cur.fetchall()]
+
+        por_mes, criadas = {}, 0
+        for l in linhas:
+            categoria = next(
+                (cat for padrao, cat, _ in COBRANCAS_SO_NA_FATURA
+                 if cat and _normalizar_desc(l["descricao"]).startswith(
+                     _normalizar_desc(padrao.replace("%", "")))),
+                None,
             )
-            linhas = [dict(r) for r in cur.fetchall()]
-            for l in linhas:
-                novo_id = str(uuid.uuid4())
-                valor = float(l["valor"])
-                cur.execute(
-                    "INSERT INTO cartao.transacao ("
-                    "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
-                    "moeda_original, valor_brl, data_transacao, categoria, categoria_manual, "
-                    "status, tipo, observacao, criado_em, atualizado_em, sincronizado_em, "
-                    "primeiro_sincronizado_em) "
-                    "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,'POSTED',%s,%s, now(), now(), now(), now());",
-                    (novo_id, l["account_id"], l["descricao"], l["descricao"], valor, valor,
-                     f"{l['data']} 12:00:00-03:00", categoria,
-                     "CREDIT" if valor < 0 else "DEBIT",
-                     f"Criado a partir da fatura {l['mes_referencia']:02d}/{l['ano_referencia']} — "
-                     f"a operadora cobrou e o Pluggy não sincronizou."),
-                )
-                cur.execute(
-                    "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
-                    (novo_id, l["id"]),
-                )
-                cur.execute(
-                    "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
-                    "VALUES (%s, %s, 'fatura', %s) ON CONFLICT DO NOTHING;",
-                    (l["id"], novo_id, session.get("user")),
-                )
+            chave = f"{l['mes_referencia']:02d}/{l['ano_referencia']}"
+            resumo = por_mes.setdefault(chave, {"linhas": 0, "total": 0.0})
+            resumo["linhas"] += 1
+            resumo["total"] = round(resumo["total"] + float(l["valor"]), 2)
+            if not preview:
+                _criar_lancamento_da_linha(cur, l, categoria, session.get("user"))
                 criadas += 1
-            if linhas:
-                resumo[rotulo] = {
-                    "linhas": len(linhas),
-                    "total": round(sum(float(l["valor"]) for l in linhas), 2),
-                }
-        conn.commit()
-        if criadas:
+
+        if not preview and criadas:
+            conn.commit()
+            aplicar_regras()
             registrar_auditoria(
                 "alteracao", "relatorios.criar_cobrancas_sem_pluggy", sucesso=True,
-                detalhes={"criadas": criadas, "por_tipo": resumo},
+                detalhes={"criadas": criadas, "por_mes": por_mes},
             )
-        return jsonify({"ok": True, "criadas": criadas, "por_tipo": resumo})
+        return jsonify({
+            "ok": True, "preview": preview,
+            "linhas": len(linhas), "criadas": criadas,
+            "total": round(sum(float(l["valor"]) for l in linhas), 2),
+            "por_mes": por_mes,
+        })
     except Exception as exc:
         conn.rollback()
         return jsonify({"ok": False, "erro": f"Não consegui criar: {exc}"}), 400
