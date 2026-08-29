@@ -25,6 +25,24 @@ class FaturaInvalida(ValueError):
     pass
 
 
+# Datas de fechamento REAIS, conferidas pelo usuario direto no app do Unicred
+# (tela "Melhor dia para compra" = data de fechamento). O PDF da fatura nao
+# imprime essa data, e o intervalo vencimento-fechamento varia mes a mes
+# (9 a 14 dias nos meses abaixo) - por isso nao da pra usar um deslocamento
+# fixo. Preencher aqui conforme o usuario for confirmando novos meses no app;
+# fora daqui, cai no fallback por heuristica (ultima compra impressa).
+FECHAMENTOS_CONHECIDOS = {
+    (2026, 9): date(2026, 9, 11),
+    (2026, 10): date(2026, 10, 13),
+    (2026, 11): date(2026, 11, 12),
+    (2026, 12): date(2026, 12, 11),
+    (2027, 1): date(2027, 1, 8),
+    (2027, 2): date(2027, 2, 9),
+    (2027, 3): date(2027, 3, 9),
+    (2027, 4): date(2027, 4, 9),
+}
+
+
 def _num_valor(txt):
     return float(txt.replace(".", "").replace(",", "."))
 
@@ -161,11 +179,18 @@ def extrair_fatura(arquivo):
     if not linhas:
         raise FaturaInvalida("Não encontrei nenhum lançamento nas páginas do PDF.")
 
-    # Data mais recente entre as linhas = fim do ciclo desta fatura (parcela
-    # antiga tem a data da COMPRA ORIGINAL, sempre no passado, entao nunca
-    # puxa o maximo pra frente). Inicio aproximado: 35 dias antes, mesma
-    # janela usada na conciliacao para achar "sem_fatura".
-    periodo_fim = max(l["data"] for l in linhas)
+    # Fechamento real (conferido no app do Unicred) tem prioridade. Sem isso,
+    # cai no fallback: data mais recente entre as linhas (parcela antiga tem a
+    # data da COMPRA ORIGINAL, sempre no passado, entao nunca puxa o maximo pra
+    # frente) - e nunca pode fechar no dia do vencimento ou depois dele.
+    periodo_fim = FECHAMENTOS_CONHECIDOS.get((ref_ano, ref_mes))
+    if periodo_fim is None:
+        periodo_fim = max(l["data"] for l in linhas)
+        if vencimento and periodo_fim >= vencimento:
+            periodo_fim = vencimento - timedelta(days=1)
+    # Inicio aproximado: 35 dias antes - so usado quando nao ha fatura anterior
+    # no sistema (views/relatorios.py troca por periodo_fim+1 da fatura
+    # anterior sempre que ela existir).
     periodo_inicio = periodo_fim - timedelta(days=35)
 
     return {
