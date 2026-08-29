@@ -464,13 +464,18 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
-def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None):
+def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None,
+                       ciclo_inicio_min=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
     lancamentos que o Pluggy trouxe naquela conta. fatura_linha_ids, quando
     informado, e um dict {id(linha) python: id da cartao.fatura_linha} para o
     template poder oferecer "criar lancamento" apontando pro registro certo -
     exclui linha que ja virou lancamento. todos_fatura_linha_ids e o mesmo dict
-    sem essa exclusao, usado para marcar "conferido" em cobranca repetida."""
+    sem essa exclusao, usado para marcar "conferido" em cobranca repetida.
+    ciclo_inicio_min, quando informado (dia seguinte ao fim do ciclo da fatura
+    anterior desta mesma conta), evita que "sem_fatura" reapresente lancamento
+    que ja pertence ao ciclo anterior so porque a janela padrao de 35 dias
+    (usada quando nao ha fatura anterior salva) e' mais larga que o ciclo real."""
     fatura_linha_ids = fatura_linha_ids or {}
     todos_fatura_linha_ids = todos_fatura_linha_ids or fatura_linha_ids
     datas = [l["data"] for l in linhas]
@@ -478,7 +483,10 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
         f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
         f"({DATA_LOCAL_SQL})::date AS data_local "
-        f"FROM cartao.transacao t WHERE t.account_id = %s "
+        # Cobranca ja marcada duplicada pelo usuario fica fora dos totais de
+        # proposito (ver regra de duplicidade) - nao faz sentido a conciliacao
+        # cobrar dela um par na fatura, ela ja foi resolvida.
+        f"FROM cartao.transacao t WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
         (account_id, min(datas), max(datas)),
     )
@@ -565,8 +573,13 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     # busca acima e largo (cobre ate um ano, por causa de parcelas antigas que
     # ainda aparecem cobradas), mas listar TODA sobra desse intervalo encheria
     # a tela de lancamentos de faturas passadas que nunca deveriam bater com
-    # esta mesmo.
+    # esta mesmo. Quando ha fatura anterior salva desta mesma conta,
+    # ciclo_inicio_min (dia seguinte ao fim daquele ciclo) e' mais preciso que
+    # o palpite generico de 35 dias, que sobra pra dentro do ciclo anterior e
+    # fazia lancamento ja coberto por outra fatura aparecer aqui de novo.
     ciclo_inicio = max(datas) - timedelta(days=35)
+    if ciclo_inicio_min and ciclo_inicio_min > ciclo_inicio:
+        ciclo_inicio = ciclo_inicio_min
     sem_fatura = [
         {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
          "transacao_id": str(c["transacao_id"])}
@@ -780,7 +793,25 @@ def conciliar_fatura():
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
                 "vencimento": fatura_row["vencimento"],
             }
-            resultado = _conciliar_linhas(cur, account_id, linhas, ids_por_linha, todos_ids_por_linha)
+            # fatura do mes anterior desta mesma conta, se ja foi conciliada -
+            # o fim daquele ciclo e' o piso real do ciclo atual, mais preciso
+            # que o palpite generico de 35 dias (ver comentario em
+            # _conciliar_linhas). "anterior" por referencia, nao por data de
+            # importacao: cobre reprocessar fora de ordem.
+            cur.execute(
+                "SELECT periodo_fim FROM cartao.fatura_importada "
+                "WHERE account_id=%s AND (ano_referencia, mes_referencia) < (%s, %s) "
+                "AND periodo_fim IS NOT NULL "
+                "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
+                (account_id, fatura_row["ano_referencia"], fatura_row["mes_referencia"]),
+            )
+            fatura_anterior = cur.fetchone()
+            ciclo_inicio_min = (
+                fatura_anterior["periodo_fim"] + timedelta(days=1) if fatura_anterior else None
+            )
+            resultado = _conciliar_linhas(
+                cur, account_id, linhas, ids_por_linha, todos_ids_por_linha, ciclo_inicio_min,
+            )
             resultado["fatura"] = fatura_meta
             # linhas ja resolvidas (usuario ja criou o lancamento) saem da lista
             # de pendencias, mas continuam contando no total como "cobertas"
