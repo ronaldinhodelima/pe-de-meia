@@ -1422,13 +1422,18 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         # par tem o MESMO sinal, um estorno (que tem sinal oposto ao da
         # cobranca) nunca casa aqui.
         if valor <= 0:
+            # Aqui os tokens nao ajudam: o Pluggy chama o mesmo pagamento de
+            # "Pagamento recebido" e de "Pag de Fatura Via Deb Aut", que nao
+            # tem palavra nenhuma em comum. O que identifica o par e' valor
+            # identico no MESMO dia, com a outra gravacao ja vinculada a
+            # fatura. Exige dia exato (nao 5) justamente por nao ter o reforco
+            # da descricao.
             par_neg = next(
                 (v for v in vinculadas
                  if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
-                 and abs((v["data"] - r["data_local"]).days) <= 5
-                 and len(tokens & v["tokens"]) >= 1),
+                 and v["data"] == r["data_local"]),
                 None,
-            ) if tokens else None
+            )
             if par_neg:
                 item["motivo"] = (
                     f"O Pluggy gravou este mesmo lançamento duas vezes. A outra gravação "
