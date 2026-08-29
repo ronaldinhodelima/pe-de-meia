@@ -1233,13 +1233,25 @@ def vincular_automatico_fatura(fatura_id):
         fatura_row = cur.fetchone()
         if not fatura_row:
             return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+        # refazer=1 apaga os vinculos AUTOMATICOS desta fatura antes de
+        # recalcular (usado quando a regra de casamento muda). Vinculo manual
+        # e' decisao humana e nunca e' apagado aqui.
+        removidos = 0
+        if (request.get_json(silent=True) or {}).get("refazer"):
+            cur.execute(
+                "DELETE FROM cartao.fatura_vinculo v USING cartao.fatura_linha fl "
+                "WHERE fl.id = v.fatura_linha_id AND fl.fatura_id = %s AND v.origem = 'automatico';",
+                (fatura_row["id"],),
+            )
+            removidos = cur.rowcount or 0
         criados = _vincular_automatico(cur, fatura_row, session.get("user"))
         conn.commit()
-        if criados:
+        if criados or removidos:
             registrar_mudanca_auditoria(
-                f"Vínculos automáticos criados (fatura_id={fatura_id})", 0, criados,
+                f"Vínculos automáticos recalculados (fatura_id={fatura_id})",
+                {"removidos": removidos}, {"criados": criados},
             )
-        return jsonify({"ok": True, "criados": criados})
+        return jsonify({"ok": True, "criados": criados, "removidos": removidos})
     except Exception as exc:
         conn.rollback()
         return jsonify({"ok": False, "erro": f"Não consegui vincular: {exc}"}), 400
