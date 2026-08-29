@@ -939,12 +939,17 @@ def _vincular_automatico(cur, fatura_row, usuario):
         return 0
 
     cur.execute(
+        # origem='fatura' e' o vinculo com a parcela que a propria fatura
+        # gerou - ele NAO impede a linha de tambem apontar para o agregado do
+        # Pluggy, que e' o outro lado da conciliacao. Sem essa ressalva a linha
+        # ficava "ja vinculada" e o agregado nunca era reencontrado.
         "SELECT DISTINCT v.fatura_linha_id FROM cartao.fatura_vinculo v "
-        "JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id WHERE fl.fatura_id = %s;",
+        "JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id "
+        "WHERE fl.fatura_id = %s AND v.origem <> 'fatura';",
         (fatura_id,),
     )
     ja_vinculadas = {r["fatura_linha_id"] for r in cur.fetchall()}
-    pendentes = [l for l in linhas_db if l["id"] not in ja_vinculadas and not l["transacao_id_criado"]]
+    pendentes = [l for l in linhas_db if l["id"] not in ja_vinculadas]
     if not pendentes:
         return 0
 
