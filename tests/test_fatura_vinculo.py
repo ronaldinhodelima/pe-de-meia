@@ -297,3 +297,43 @@ def test_tokens_de_lojistas_diferentes_nao_se_confundem():
     a = _tokens_significativos("A vista sem juros - Visa - SUPERVIZA VIDEIRA BR")
     b = _tokens_significativos("A vista sem juros - Visa - HIPERCENTER VIDEIRA BR")
     assert len(a & b) < 2, f"nao podiam casar: {a & b}"
+
+
+def test_eco_de_parcelamento_novo_casa_pela_linha_da_fatura():
+    """Parcelamento novo: o agregado ainda atende UMA linha so, entao nao e'
+    reconhecido como agregado (isso exige 2+ linhas) e o eco escapa das duas
+    regras. Casos reais de 08/2026:
+
+      16/07 Parcela Lojista Visa - PARC=106ANJOS DE QUINTA  R$360,00
+        linha da fatura: PARC=106ANJOS DE QUINTA Parc.1/6   R$360,00
+        ja vinculada ao agregado de 18/07                   R$2.160,00
+
+    Comparar com a descricao do AGREGADO nao funciona ("ANJOS" != "106ANJOS");
+    o que casa e' a descricao_base da LINHA da fatura."""
+    from views.relatorios import _tokens_significativos
+
+    orfao = _tokens_significativos("Parcela Lojista Visa - PARC=106ANJOS DE QUINTA")
+    linha = _tokens_significativos("PARC=106ANJOS DE QUINTA")
+    agregado = _tokens_significativos("Parcelado Lojista - Visa - ANJOS DE QUINTAL VIDEIRA BR")
+    assert len(orfao & linha) >= 2, f"linha deveria casar: {orfao & linha}"
+    assert len(orfao & agregado) < 2, "o agregado tem outro nome - por isso a linha e' a referencia"
+
+    orfao_d = _tokens_significativos("Parcela Lojista Visa - DIMED SA-DISTRIBUIDOR")
+    linha_d = _tokens_significativos("DIMED SA-DISTRIBUIDOR")
+    assert len(orfao_d & linha_d) >= 2
+
+
+def test_mesmo_evento_com_ate_cinco_dias_de_diferenca():
+    """O Pluggy manda o valor cheio duas vezes, com ate 3 dias de diferenca:
+      08/08 AIRBNB * HM2DSX2SAO PAULO BR  R$271,47  (orfao)
+      11/08 AIRBNB * HM2DSX2 SAO PAULO BR R$271,47  (vinculada)
+    A janela de 1 dia nao alcancava. Os tokens ainda casam apesar do
+    'HM2DSX2SAO' colado."""
+    from views.relatorios import _tokens_significativos
+
+    a = _tokens_significativos("Parcelado Lojista - Visa -  AIRBNB * HM2DSX2SAO PAULO    BR")
+    b = _tokens_significativos("Parcelado Lojista - Visa - AIRBNB * HM2DSX2 SAO PAULO    BR")
+    assert len(a & b) >= 2, f"tokens em comum: {a & b}"
+
+    c = _tokens_significativos("Parcelado Lojista - Visa - LISCIA           VIDEIRA      BR")
+    assert len(c & _tokens_significativos("Parcelado Lojista - Visa - LISCIA VIDEIRA BR")) >= 2

@@ -1342,6 +1342,26 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         "data": r["data_local"], "tokens": _tokens_significativos(r["descricao"]),
     } for r in cur.fetchall()]
 
+    # linhas de fatura que ja tem vinculo, com o valor da parcela e a descricao
+    # impressa: cobrem o eco de parcelamento NOVO, em que o agregado ainda
+    # atende uma linha so e por isso nao foi reconhecido como agregado.
+    cur.execute(
+        f"SELECT fl.descricao_base, fl.valor AS valor_parcela, fl.parcela_total, "
+        f"v.transacao_id, t.account_id, t.descricao AS desc_vinculada, "
+        f"({DATA_LOCAL_SQL})::date AS data_vinculada "
+        f"FROM cartao.fatura_linha fl "
+        f"JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
+        f"JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
+        f"WHERE fl.parcela_total >= 2 AND fl.descricao_base IS NOT NULL;"
+    )
+    linhas_vinculadas = [{
+        "tokens": _tokens_significativos(r["descricao_base"]),
+        "valor_parcela": round(float(r["valor_parcela"] or 0), 2),
+        "parcela_total": r["parcela_total"],
+        "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
+        "descricao_base": r["descricao_base"], "data": r["data_vinculada"],
+    } for r in cur.fetchall()]
+
     # estornos/cancelamentos: anulam uma cobranca do mesmo dia e valor
     cur.execute(
         f"SELECT t.account_id, COALESCE(t.valor_brl, t.valor_original) AS valor, "
@@ -1460,7 +1480,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         par = next(
             (v for v in vinculadas
              if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
-             and abs((v["data"] - r["data_local"]).days) <= 1
+             and abs((v["data"] - r["data_local"]).days) <= 5
              and len(tokens & v["tokens"]) >= 2),
             None,
         ) if tokens else None
@@ -1470,6 +1490,31 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
                 f"A outra gravação (\"{par['descricao'][:60]}\") é a que está vinculada à fatura."
             )
             item["substituto_id"] = par["transacao_id"]
+            ecos.append(item)
+            continue
+
+        # eco de parcelamento NOVO: existe uma linha de fatura do mesmo
+        # estabelecimento ja vinculada, e o orfao vale ou a parcela dela ou o
+        # parcelamento inteiro. O agregado dessa compra ainda atende uma linha
+        # so, entao nao entrou em `cobertos` - sem esta regra o eco so seria
+        # pego quando a fatura do mes seguinte chegasse.
+        alvo = next(
+            (l for l in linhas_vinculadas
+             if l["account_id"] == str(r["account_id"])
+             and l["data"] and abs((l["data"] - r["data_local"]).days) <= 5
+             and len(tokens & l["tokens"]) >= 2
+             and (abs(l["valor_parcela"] - valor) <= 0.05
+                  or abs(round(l["valor_parcela"] * l["parcela_total"], 2) - valor) <= 1.00)),
+            None,
+        ) if tokens else None
+        if alvo:
+            item["motivo"] = (
+                f"Mesma compra de {alvo['descricao_base']} ({alvo['parcela_total']}x de "
+                f"R$ {alvo['valor_parcela']:,.2f}) gravada duas vezes pelo Pluggy, com "
+                f"{abs((alvo['data'] - r['data_local']).days)} dia(s) de diferença. A linha da "
+                f"fatura já está vinculada à outra gravação."
+            )
+            item["substituto_id"] = alvo["transacao_id"]
             ecos.append(item)
             continue
 
