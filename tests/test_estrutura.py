@@ -136,9 +136,10 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/api/fatura-linha/<int:linha_id>/criar-lancamento",
-        "/api/fatura-linha/marcar-conferida-repeticao",
+        "/api/fatura-linha/marcar-conferida-repeticao", "/relatorios/fatura/<int:fatura_id>/pdf",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/dimensoes", "/regras", "/contas", "/pendencias",
+        "/configuracoes/faturas-pdf",
         "/usuarios", "/logs",
     }
     assert rotas == esperadas

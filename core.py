@@ -1698,6 +1698,28 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (21);")
             conn.commit()
 
+        if versao_atual < 22:
+            # "Fechamento" saiu (era sempre igual a periodo_fim na pratica -
+            # a Unicred nunca imprime essa data separada, entao a coluna so
+            # duplicava periodo_fim; migracao ja aplicada, entao aqui e' DROP,
+            # nao reescrita). As datas do ciclo (inicio/fim/vencimento) agora
+            # sao so leitura - vem inteiras do PDF, ninguem edita na tela.
+            #
+            # pdf_arquivo guarda o PDF original (nao so as linhas extraidas)
+            # para poder reprocessar sem pedir upload de novo - o app roda em
+            # container no Coolify sem volume persistente confirmado, e o
+            # arquivo (500KB-1MB) cabe tranquilo como bytea no Postgres, que
+            # ja sobrevive a qualquer deploy.
+            cur.execute("ALTER TABLE cartao.fatura_importada DROP COLUMN IF EXISTS fechamento;")
+            cur.execute("ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS pdf_arquivo bytea;")
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Remove fechamento e guarda PDF original da fatura',"
+                "jsonb_build_object('versao',22));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (22);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -1963,6 +1985,7 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/dimensoes" class="{cls("dimensoes")}">Gerenciar dimensões</a>' if pode("cadastros") else ""}
               {f'<a href="/regras" class="{cls("regras")}">Regras automáticas</a>' if pode("cadastros") else ""}
               {f'<a href="/contas" class="{cls("contas")}">Configurações de Contas / Cartão</a>' if pode("cadastros") else ""}
+              {f'<a href="/configuracoes/faturas-pdf" class="{cls("faturas-pdf")}">Faturas em PDF</a>' if pode("cadastros") else ""}
               {f'<a href="/usuarios" class="{cls("usuarios")}">Usuários e permissões</a>' if pode("usuarios") else ""}
             </div>
           </div>''' if (pode("cadastros") or pode("usuarios")) else ""}

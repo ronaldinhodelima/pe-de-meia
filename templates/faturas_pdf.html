@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block conteudo %}
+
+<div style="font-size:13px;color:#666;margin-bottom:16px">
+  PDFs originais das faturas já conciliadas em <a href="/relatorios/conciliar-fatura">Conciliar fatura</a>.
+  Ficam salvos no próprio banco (não em disco, porque o app roda em container e pode ser
+  reiniciado a qualquer deploy) — dá pra baixar de novo se precisar reprocessar, sem pedir o
+  arquivo outra vez. Apagar o PDF aqui não mexe no histórico de conciliação, só libera o espaço
+  do arquivo em si.
+</div>
+
+<div class="cat-breakdown">
+  <h3>Faturas com PDF salvo</h3>
+  <table class="compacta">
+    <thead><tr>
+      <th>Referência</th><th>Cartão</th><th>Arquivo</th><th>Tamanho</th><th>Importada em</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for f in faturas %}
+        <tr>
+          <td>{{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}</td>
+          <td>{{ f.conta_label }}</td>
+          <td>{{ f.arquivo_nome or '-' }}</td>
+          <td>
+            {% if f.pdf_tamanho %}
+              {{ (f.pdf_tamanho / 1024)|round(0, 'floor')|int }} KB
+            {% else %}
+              <span style="color:var(--ink-faint)">apagado</span>
+            {% endif %}
+          </td>
+          <td>{{ f.importado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td style="white-space:nowrap">
+            {% if f.pdf_tamanho %}
+              <a class="ver-btn" href="/relatorios/fatura/{{ f.id }}/pdf" target="_blank">Baixar</a>
+              <form method="post" style="display:inline" onsubmit="return confirm('Apagar o PDF desta fatura? O histórico de conciliação continua disponível, só o arquivo some.')">
+                <input type="hidden" name="acao" value="apagar_pdf">
+                <input type="hidden" name="fatura_id" value="{{ f.id }}">
+                <button type="submit" class="ver-btn">Apagar</button>
+              </form>
+            {% else %}
+              <a class="ver-btn" href="/relatorios/conciliar-fatura?fatura_id={{ f.id }}">Ver conciliação</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" style="padding:20px;text-align:center;color:#888">Nenhuma fatura importada ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

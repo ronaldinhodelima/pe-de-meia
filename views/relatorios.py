@@ -1,10 +1,12 @@
 """Relatorios, DRE e investimentos."""
+import io
+import re
 import uuid
 from datetime import datetime, timedelta
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, jsonify, redirect, render_template, session, url_for
+from flask import Blueprint, Response, request, jsonify, render_template, session
 
 from fatura_unicred import extrair_fatura, FaturaInvalida
 from core import (
@@ -685,35 +687,6 @@ def conciliar_fatura():
     account_id = request.form.get("account_id") if request.method == "POST" else None
     fatura_id = request.args.get("fatura_id", type=int)
 
-    if request.method == "POST" and request.form.get("acao") == "editar_datas":
-        def _data(campo):
-            valor = (request.form.get(campo) or "").strip()
-            return valor or None
-        fatura_id_editar = request.form.get("fatura_id", type=int)
-        cur.execute(
-            "SELECT periodo_inicio, periodo_fim, fechamento, vencimento "
-            "FROM cartao.fatura_importada WHERE id=%s;",
-            (fatura_id_editar,),
-        )
-        anterior = cur.fetchone()
-        cur.execute(
-            "UPDATE cartao.fatura_importada SET periodo_inicio=%s, periodo_fim=%s, "
-            "fechamento=%s, vencimento=%s WHERE id=%s;",
-            (_data("periodo_inicio"), _data("periodo_fim"), _data("fechamento"),
-             _data("vencimento"), fatura_id_editar),
-        )
-        conn.commit()
-        if anterior:
-            registrar_mudanca_auditoria(
-                "Datas da fatura importada",
-                {k: (v.isoformat() if v else None) for k, v in anterior.items()},
-                {"periodo_inicio": _data("periodo_inicio"), "periodo_fim": _data("periodo_fim"),
-                 "fechamento": _data("fechamento"), "vencimento": _data("vencimento")},
-            )
-        cur.close()
-        conn.close()
-        return redirect(url_for("relatorios.conciliar_fatura", fatura_id=fatura_id_editar))
-
     if request.method == "POST":
         arquivo = request.files.get("fatura")
         if not arquivo or not arquivo.filename:
@@ -721,38 +694,38 @@ def conciliar_fatura():
         elif not account_id or account_id not in contas_by_id:
             erro = "Selecione a qual cartão essa fatura pertence."
         else:
+            pdf_bytes = arquivo.read()
             try:
-                fatura = extrair_fatura(arquivo.stream)
+                fatura = extrair_fatura(io.BytesIO(pdf_bytes))
             except FaturaInvalida as exc:
                 erro = str(exc)
             except Exception as exc:
                 erro = f"Não consegui ler esse PDF: {exc}"
 
             if not erro:
-                # Guarda so os lancamentos extraidos (nao o PDF) - da historico
-                # e permite reabrir a conciliacao depois sem reenviar o arquivo.
-                # Reenviar a mesma fatura (conta+mes+ano) substitui as linhas.
-                # Fechamento nao vem impresso em lugar nenhum do PDF da Unicred
-                # (ja conferido) - a melhor estimativa automatica e' a data do
-                # ultimo lancamento avulso da propria fatura (periodo_fim).
-                # COALESCE no UPDATE preserva uma correcao manual que o usuario
-                # ja tenha feito nessa fatura, em vez de sobrescrever ao reenviar
-                # o mesmo PDF.
+                # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
+                # o app roda em container sem volume persistente confirmado,
+                # entao o arquivo fica como bytea no Postgres (500KB-1MB,
+                # tranquilo) em vez de disco, pra sobreviver a deploy e poder
+                # ser baixado de novo em /configuracoes/faturas-pdf.
+                # Reenviar a mesma fatura (conta+mes+ano) substitui tudo.
+                # As datas do ciclo (inicio/fim/vencimento) sao so leitura -
+                # vem inteiras do PDF, ninguem edita na tela.
                 cur.execute(
                     "INSERT INTO cartao.fatura_importada "
                     "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por, "
-                    "periodo_inicio, periodo_fim, fechamento, vencimento) "
+                    "periodo_inicio, periodo_fim, vencimento, pdf_arquivo) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (account_id, mes_referencia, ano_referencia) DO UPDATE SET "
                     "total=EXCLUDED.total, cartao_final4=EXCLUDED.cartao_final4, "
                     "arquivo_nome=EXCLUDED.arquivo_nome, importado_por=EXCLUDED.importado_por, importado_em=now(), "
                     "periodo_inicio=EXCLUDED.periodo_inicio, periodo_fim=EXCLUDED.periodo_fim, "
-                    "fechamento=COALESCE(cartao.fatura_importada.fechamento, EXCLUDED.fechamento), "
-                    "vencimento=EXCLUDED.vencimento "
+                    "vencimento=EXCLUDED.vencimento, pdf_arquivo=EXCLUDED.pdf_arquivo "
                     "RETURNING id;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
                      fatura["cartao_final4"], arquivo.filename, session.get("user"),
-                     fatura["periodo_inicio"], fatura["periodo_fim"], fatura["periodo_fim"], fatura["vencimento"]),
+                     fatura["periodo_inicio"], fatura["periodo_fim"], fatura["vencimento"],
+                     psycopg2.Binary(pdf_bytes)),
                 )
                 fatura_id = cur.fetchone()["id"]
                 cur.execute("DELETE FROM cartao.fatura_linha WHERE fatura_id=%s;", (fatura_id,))
@@ -805,7 +778,7 @@ def conciliar_fatura():
                 "cartao_final4": fatura_row["cartao_final4"], "arquivo_nome": fatura_row["arquivo_nome"],
                 "importado_em": fatura_row["importado_em"],
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
-                "fechamento": fatura_row["fechamento"], "vencimento": fatura_row["vencimento"],
+                "vencimento": fatura_row["vencimento"],
             }
             resultado = _conciliar_linhas(cur, account_id, linhas, ids_por_linha, todos_ids_por_linha)
             resultado["fatura"] = fatura_meta
@@ -825,7 +798,7 @@ def conciliar_fatura():
     # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
     cur.execute(
         "SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
-        "f.periodo_inicio, f.periodo_fim, f.fechamento, f.vencimento "
+        "f.periodo_inicio, f.periodo_fim, f.vencimento "
         "FROM cartao.fatura_importada f ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
     )
     historico = []
@@ -948,6 +921,34 @@ def marcar_repeticao_conferida():
     finally:
         cur.close()
         conn.close()
+
+
+@bp.route("/relatorios/fatura/<int:fatura_id>/pdf")
+@requer("relatorios")
+def baixar_fatura_pdf(fatura_id):
+    """Devolve o PDF original guardado da fatura (ver /configuracoes/faturas-pdf
+    em cadastros.py). Nao guardamos em disco - o app roda em container sem
+    volume persistente confirmado no Coolify, entao o arquivo fica como bytea
+    no proprio Postgres."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT arquivo_nome, pdf_arquivo FROM cartao.fatura_importada WHERE id=%s;",
+        (fatura_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row or not row["pdf_arquivo"]:
+        return "PDF não encontrado (pode ter sido apagado).", 404
+    # nome vem do arquivo enviado pelo usuario - tira aspas/controle antes de
+    # colocar no header, pra nao dar pra escapar do filename="..."
+    nome = re.sub(r'[\r\n"]', "", row["arquivo_nome"] or "") or f"fatura-{fatura_id}.pdf"
+    return Response(
+        bytes(row["pdf_arquivo"]),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome}"'},
+    )
 
 
 @bp.route("/investimentos")

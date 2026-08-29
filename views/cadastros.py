@@ -21,6 +21,7 @@ from core import (
     SEED_NATUREZAS,
     VAL_DESPESA,
     aplicar_regras,
+    carregar_origens,
     cat_pt,
     cat_pt_puro,
     categoria_com_nome,
@@ -1318,4 +1319,53 @@ def categorias_view():
         # o modal de detalhes deixa trocar a categoria do lancamento; quem so tem
         # 'cadastros' e nao 'lancamentos_editar' ve o seletor travado (a API recusaria)
         pode_editar=pode("lancamentos_editar"),
+    )
+
+
+@bp.route("/configuracoes/faturas-pdf", methods=["GET", "POST"])
+@requer("cadastros")
+def faturas_pdf_view():
+    """Gerencia os PDFs originais das faturas conciliadas (ver
+    /relatorios/conciliar-fatura). Guardados como bytea no proprio Postgres -
+    o app roda em container sem volume persistente confirmado no Coolify, e o
+    banco ja sobrevive a qualquer deploy sem depender de configuracao extra."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    aviso = None
+
+    if request.method == "POST" and request.form.get("acao") == "apagar_pdf":
+        fatura_id = request.form.get("fatura_id", type=int)
+        cur.execute(
+            "SELECT arquivo_nome FROM cartao.fatura_importada WHERE id=%s;",
+            (fatura_id,),
+        )
+        anterior = cur.fetchone()
+        cur.execute(
+            "UPDATE cartao.fatura_importada SET pdf_arquivo=NULL WHERE id=%s;",
+            (fatura_id,),
+        )
+        conn.commit()
+        if anterior and cur.rowcount:
+            registrar_mudanca_auditoria("PDF da fatura", anterior["arquivo_nome"], None)
+            aviso = f'PDF "{anterior["arquivo_nome"]}" apagado. O histórico de conciliação continua disponível.'
+
+    contas_by_id, _ = carregar_origens(cur)
+    cur.execute(
+        "SELECT id, account_id, mes_referencia, ano_referencia, arquivo_nome, importado_em, "
+        "octet_length(pdf_arquivo) AS pdf_tamanho "
+        "FROM cartao.fatura_importada ORDER BY ano_referencia DESC, mes_referencia DESC;"
+    )
+    faturas = []
+    for r in cur.fetchall():
+        conta = contas_by_id.get(str(r["account_id"]))
+        faturas.append({**r, "conta_label": conta["label_curto"] if conta else "(conta removida)"})
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "faturas_pdf.html",
+        titulo="Faturas em PDF",
+        topbar=topbar_html("Faturas em PDF", "faturas-pdf"),
+        aviso=aviso,
+        faturas=faturas,
     )
