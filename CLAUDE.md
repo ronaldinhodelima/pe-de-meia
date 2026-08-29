@@ -470,6 +470,14 @@ Resultado medido em produção (92 agregados marcados, 331 parcelas geradas):
 `nov/25: 43.904,64 → 25.406,01` · `ago/26: 55.395,59 → 60.862,16`. A despesa saiu do mês da
 compra e foi para os meses em que foi cobrada.
 
+**Sincronização do Pluggy não desfaz nada disto** (verificado em 29/08/2026, 2.336 transações
+atualizadas, 0 novas: DRE, vínculos, duplicidades e conciliação idênticos antes/depois). O
+`UPSERT` do worker só escreve `status`, `valor_brl`, `data_transacao` e os carimbos — não toca em
+`somente_conciliacao`, `substituido_por`, `duplicada`, categoria nem dimensões. **Atenção:**
+`data_transacao` PODE mudar se o Pluggy corrigir fuso/data, e isso move o lançamento para dentro
+ou fora do ciclo de uma fatura. Os vínculos não se perdem (são por id), mas a lista de órfãos
+pode oscilar — se acontecer, rodar o vínculo automático de novo.
+
 **Consequência esperada, não é erro:** a despesa total caiu R$ 15.956,42. Parcela que só será
 cobrada em fatura futura deixou de contar antecipadamente — correto no regime de caixa; ela
 entra quando a fatura do mês for importada. **Mas atenção:** parcelamento com parcela anterior a
@@ -755,7 +763,19 @@ o segundo é a cobrança de UMA parcela. Só a forma mensal pode entrar em "evid
 um agregado sem vínculo costuma ser parcelamento novo cujas parcelas ainda vão aparecer, e
 marcá-lo apagaria compra real.
 
-**9. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
+**9. Reenviar o PDF apaga os vínculos da fatura.** As linhas são apagadas e recriadas com ids
+novos, e o `ON DELETE CASCADE` leva `fatura_vinculo` junto. O `transacao_id_criado` sobrevive
+pela chave natural, mas o vínculo não — e a geração de parcelas é idempotente, então não repõe.
+A fatura 01/2026, reenviada pelo usuário, ficou com 33 parcelas geradas aparecendo como órfãs.
+Hoje `_revincular_lancamentos_da_fatura()` roda no import e na sincronização de parcelas.
+
+**10. Cada tela tem que aplicar os MESMOS filtros de "já resolvido".** A lista de órfãos da
+conciliação não excluía `substituido_por` nem `somente_conciliacao`, então repetia como pendência
+tudo o que a tela de duplicidades já tinha resolvido: 57 falsos pendentes em 08/2026 enquanto a
+outra tela dizia "nada pendente". Ao criar um estado novo, procurar TODAS as consultas que
+listam pendência.
+
+**11. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
 lançamentos são legítimos e se anulam sozinhos. Marcar um deixaria o estorno negativo solto.
 
 ## Lições da sessão de 29/08/2026 (incidente real — não repetir)
