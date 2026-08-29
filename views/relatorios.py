@@ -713,6 +713,85 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     return sorted(repetidas, key=lambda r: r["data"])
 
 
+@bp.route("/relatorios/fatura/<int:fatura_id>/consolidar-datas", methods=["POST"])
+@requer("relatorios")
+def consolidar_datas_fatura(fatura_id):
+    """A fatura em PDF e' a fonte oficial - quando um lancamento bate 1:1 com
+    uma linha dela (descricao+valor sem ambiguidade) mas a data que o Pluggy
+    sincronizou e' diferente, corrige data_transacao pela data da fatura.
+    So mexe na data: categoria, dimensao, observacao, conferida e duplicada
+    ficam intocadas, e cada mudanca vira registro de auditoria com
+    antes/depois. Nunca mexe em match por valor cheio (parcelamento
+    agregado): ali uma transacao representa varias linhas da fatura, sem
+    correspondencia 1:1 de data."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT account_id, periodo_inicio FROM cartao.fatura_importada WHERE id = %s;",
+            (fatura_id,),
+        )
+        fatura_row = cur.fetchone()
+        if not fatura_row:
+            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+        account_id = str(fatura_row["account_id"])
+
+        cur.execute(
+            "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
+            "transacao_id_criado FROM cartao.fatura_linha WHERE fatura_id = %s ORDER BY data;",
+            (fatura_id,),
+        )
+        linhas_db = [dict(r) for r in cur.fetchall()]
+        linhas = [{k: v for k, v in l.items() if k not in ("id", "transacao_id_criado")} for l in linhas_db]
+        for l in linhas:
+            l["valor"] = float(l["valor"])
+        ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db) if not db["transacao_id_criado"]}
+
+        resultado = _conciliar_linhas(
+            cur, account_id, linhas, ids_por_linha, ids_por_linha, fatura_row["periodo_inicio"],
+        )
+
+        alteracoes = []
+        for b in resultado["batidos"]:
+            if "valor_esperado_parcelamento" in b:
+                continue
+            cur.execute(
+                "SELECT (data_transacao AT TIME ZONE 'America/Sao_Paulo')::date AS data_local, "
+                "descricao FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
+                (b["transacao_id"],),
+            )
+            t = cur.fetchone()
+            if not t or t["data_local"] == b["data"]:
+                continue
+            cur.execute(
+                "UPDATE cartao.transacao SET "
+                "data_transacao = (%s::date + (data_transacao AT TIME ZONE 'America/Sao_Paulo')::time) "
+                "AT TIME ZONE 'America/Sao_Paulo', atualizado_em = now() "
+                "WHERE transacao_id = %s;",
+                (b["data"], b["transacao_id"]),
+            )
+            alteracoes.append({
+                "transacao_id": b["transacao_id"], "descricao": t["descricao"],
+                "data_antes": t["data_local"].isoformat(), "data_depois": b["data"].isoformat(),
+            })
+        conn.commit()
+        if alteracoes:
+            registrar_mudanca_auditoria(
+                f"Data consolidada pela fatura em PDF (fatura_id={fatura_id})",
+                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_antes"]}
+                 for a in alteracoes],
+                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_depois"]}
+                 for a in alteracoes],
+            )
+        return jsonify({"ok": True, "alteradas": len(alteracoes), "detalhe": alteracoes})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
 @requer("relatorios")
 def conciliar_fatura():

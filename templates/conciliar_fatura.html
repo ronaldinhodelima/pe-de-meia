@@ -86,11 +86,22 @@
       {{ resultado.sem_sistema|length }} só na fatura ·
       {{ resultado.sem_fatura|length }} só no sistema (não aparecem na fatura)
     </div>
-    <div style="margin-top:10px">
+    <div style="margin-top:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
       <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
          style="font-size:12px">
         Ver esse período inteiro em Lançamentos ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}) →
       </a>
+      {% if fatura_id %}
+        <button type="button" class="ver-btn" style="font-size:12px" onclick="consolidarDatasFatura({{ fatura_id }}, this)">
+          Consolidar datas com a fatura
+        </button>
+        <span id="consolidar-status" style="font-size:12px;color:var(--ink-faint)"></span>
+      {% endif %}
+    </div>
+    <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px">
+      A fatura em PDF é a fonte oficial. "Consolidar datas" corrige, só na data, os lançamentos que já batem
+      1:1 com uma linha da fatura (descrição e valor sem ambiguidade) — não mexe em categoria, dimensão,
+      observação, conferida ou duplicidade, e fica registrado em Logs.
     </div>
   </div>
 
@@ -243,6 +254,36 @@ function marcarRepetidaConferida(chk) {
       chk.disabled = false;
       chk.checked = !conferida;
       alert('Não consegui salvar.');
+    });
+}
+
+function consolidarDatasFatura(faturaId, btn) {
+  if (!confirm('Corrigir a data dos lançamentos que batem com a fatura, usando a data oficial do PDF? Só a data muda — categoria, dimensão, observação, conferida e duplicidade continuam como estão.')) {
+    return;
+  }
+  const status = document.getElementById('consolidar-status');
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Consolidando…';
+  fetch('/relatorios/fatura/' + encodeURIComponent(faturaId) + '/consolidar-datas', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      btn.disabled = false;
+      if (!d.ok) {
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Não consegui consolidar.';
+        return;
+      }
+      status.style.color = 'var(--good)';
+      status.textContent = d.alteradas + ' data(s) corrigida(s).';
+      if (d.alteradas > 0) {
+        setTimeout(() => location.reload(), 1200);
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Não consegui consolidar.';
     });
 }
 
