@@ -762,9 +762,17 @@ def conciliar_fatura():
             if not erro:
                 # O dia de fechamento real da conta (Pluggy, cartao.conta.
                 # fechamento_fatura) da o inicio/fim exatos do ciclo - muito
-                # mais preciso que adivinhar pela data das proprias linhas do
-                # PDF (fatura["periodo_inicio/fim"], usado so como fallback
-                # quando a conta nao tem esse dado, ex: conta manual).
+                # mais preciso que adivinhar. NA PRATICA nenhuma das contas
+                # tem esse dado hoje (Pluggy so manda vencimento, "fechamento
+                # nao informado pelo banco" em /contas) - fica pronto pro dia
+                # que o banco passar a mandar, mas o caminho que roda de
+                # verdade e' o fallback: periodo_fim ja e' confiavel (e' a
+                # data do ultimo lancamento REAL da propria fatura, extraida
+                # do PDF); so periodo_inicio usa o fim da fatura do mes
+                # anterior desta mesma conta, quando ela ja foi importada -
+                # muito mais preciso que o palpite fixo de 35 dias, que so
+                # entra em ultimo caso (primeira fatura desta conta no app).
+                periodo_fim = fatura["periodo_fim"]
                 cur.execute(
                     "SELECT fechamento_fatura FROM cartao.conta WHERE account_id=%s;",
                     (account_id,),
@@ -776,7 +784,18 @@ def conciliar_fatura():
                         dia_fechamento, fatura["mes_referencia"], fatura["ano_referencia"]
                     )
                 else:
-                    periodo_inicio, periodo_fim = fatura["periodo_inicio"], fatura["periodo_fim"]
+                    cur.execute(
+                        "SELECT periodo_fim FROM cartao.fatura_importada "
+                        "WHERE account_id=%s AND (ano_referencia, mes_referencia) < (%s, %s) "
+                        "AND periodo_fim IS NOT NULL "
+                        "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
+                        (account_id, fatura["ano_referencia"], fatura["mes_referencia"]),
+                    )
+                    fatura_anterior = cur.fetchone()
+                    periodo_inicio = (
+                        fatura_anterior["periodo_fim"] + timedelta(days=1)
+                        if fatura_anterior else fatura["periodo_inicio"]
+                    )
 
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
