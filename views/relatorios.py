@@ -1243,7 +1243,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
 
     cur.execute(
         "UPDATE cartao.transacao SET somente_conciliacao = true, atualizado_em = now() "
-        "WHERE transacao_id = ANY(%s) AND NOT somente_conciliacao;",
+        "WHERE transacao_id = ANY(%s::uuid[]) AND NOT somente_conciliacao;",
         (agregados,),
     )
     marcados = cur.rowcount or 0
@@ -1256,7 +1256,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         "FROM cartao.fatura_linha fl "
         "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
         "JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
-        "WHERE v.transacao_id = ANY(%s) AND fl.transacao_id_criado IS NULL "
+        "WHERE v.transacao_id = ANY(%s::uuid[]) AND fl.transacao_id_criado IS NULL "
         "AND fi.periodo_fim IS NOT NULL "
         "ORDER BY fi.ano_referencia, fi.mes_referencia;",
         (agregados,),
