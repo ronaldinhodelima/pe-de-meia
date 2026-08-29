@@ -1803,6 +1803,12 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
     """
     novo_id = str(uuid.uuid4())
     valor = float(linha["valor"])
+    # Numa linha de PARCELA a data impressa e' a da COMPRA ORIGINAL, fixa em
+    # toda reimpressao mensal - usa-la jogaria a despesa no mes da compra, que
+    # e' o oposto do regime de caixa. Vale o fim do ciclo da fatura que cobrou.
+    # Em compra avulsa a data impressa e' a da propria cobranca.
+    data_evento = (linha["periodo_fim"] if (linha.get("parcela_total") or 0) >= 2
+                   and linha.get("periodo_fim") else linha["data"])
     cur.execute(
         "INSERT INTO cartao.transacao ("
         "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
@@ -1811,7 +1817,7 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
         "primeiro_sincronizado_em) "
         "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s,%s, now(), now(), now(), now());",
         (novo_id, linha["account_id"], linha["descricao"], linha["descricao"], valor, valor,
-         f"{linha['data']} 12:00:00-03:00", categoria, bool(categoria),
+         f"{data_evento} 12:00:00-03:00", categoria, bool(categoria),
          "CREDIT" if valor < 0 else "DEBIT",
          f"Criado a partir da fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} — "
          f"a operadora cobrou e o Pluggy não sincronizou."),
@@ -1863,10 +1869,23 @@ def criar_cobrancas_sem_pluggy():
                             f"fatura, senão o mesmo gasto pode entrar duas vezes.",
                 }), 409
 
+        # Corrige a data de parcela ja criada com a data impressa (a da compra
+        # original). Idempotente: so mexe em quem esta fora do mes cobrado.
+        cur.execute(
+            "UPDATE cartao.transacao t SET data_transacao = "
+            "(fi.periodo_fim + time '12:00') AT TIME ZONE 'America/Sao_Paulo', "
+            "atualizado_em = now() "
+            "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+            "WHERE fl.transacao_id_criado = t.transacao_id AND fl.parcela_total >= 2 "
+            "AND fi.periodo_fim IS NOT NULL "
+            f"AND ({DATA_LOCAL_SQL})::date <> fi.periodo_fim;"
+        )
+        datas_corrigidas = cur.rowcount or 0
+
         nao_lancaveis = " AND ".join(["fl.descricao NOT ILIKE %s"] * len(LINHAS_NAO_LANCAVEIS))
         cur.execute(
-            "SELECT fl.id, fl.data, fl.descricao, fl.valor, fi.account_id, "
-            "fi.mes_referencia, fi.ano_referencia "
+            "SELECT fl.id, fl.data, fl.descricao, fl.valor, fl.parcela_total, "
+            "fi.account_id, fi.mes_referencia, fi.ano_referencia, fi.periodo_fim "
             "FROM cartao.fatura_linha fl "
             "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
             "WHERE fl.transacao_id_criado IS NULL "
@@ -1895,15 +1914,15 @@ def criar_cobrancas_sem_pluggy():
                 criadas += 1
 
         if not preview and criadas:
+            aplicar_regras(cur)
             conn.commit()
-            aplicar_regras()
             registrar_auditoria(
                 "alteracao", "relatorios.criar_cobrancas_sem_pluggy", sucesso=True,
                 detalhes={"criadas": criadas, "por_mes": por_mes},
             )
         return jsonify({
             "ok": True, "preview": preview,
-            "linhas": len(linhas), "criadas": criadas,
+            "linhas": len(linhas), "criadas": criadas, "datas_corrigidas": datas_corrigidas,
             "total": round(sum(float(l["valor"]) for l in linhas), 2),
             "por_mes": por_mes,
         })
