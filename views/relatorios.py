@@ -1245,6 +1245,25 @@ def _normalizar_desc(texto):
     return re.sub(r"\s+", " ", (texto or "")).strip().upper()
 
 
+# Palavras que aparecem em quase toda descricao do Pluggy e nao identificam
+# estabelecimento nenhum - nao podem sustentar um par sozinhas.
+_TOKENS_GENERICOS = {
+    "COMPRA", "EXTERIOR", "VISA", "LOJISTA", "PARCELA", "PARCELADO", "VISTA",
+    "JUROS", "SEM", "CARTAO", "CREDITO", "DEBITO", "TRANSACOES", "INTERNACIONAL",
+    "NACIONAL", "PAGAMENTO", "ESTORNO", "CANCELAMENTO",
+}
+
+
+def _tokens_significativos(descricao):
+    """Tokens que identificam o estabelecimento, sem o prefixo generico.
+
+    O Pluggy grava o MESMO evento com prefixos diferentes ("Compra Exterior
+    R$ - Visa - X" e "Compra Exterior - Visa - X ...COMUS"), entao comparar a
+    descricao inteira nunca casa o par."""
+    brutos = re.findall(r"[A-Za-zÀ-Ú0-9]{4,}", _normalizar_desc(descricao))
+    return {t for t in brutos if t not in _TOKENS_GENERICOS and not t.isdigit()}
+
+
 def _classificar_orfaos(cur, incluir_duplicadas=False):
     """Separa os lancamentos sem vinculo em tres baldes, usando o modelo de
     dados (nao heuristica de lojista):
@@ -1313,7 +1332,31 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         f"t.data_transacao, t.categoria "
         f"ORDER BY 5, 3;"
     )
-    repetidas, ecos, aguardando, revisar = [], [], [], []
+    # ja vinculadas: servem de "par" quando o Pluggy gravou o mesmo evento
+    # duas vezes com descricoes diferentes (pending -> posted)
+    cur.execute(
+        f"SELECT t.transacao_id, t.account_id, t.descricao, "
+        f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local FROM cartao.transacao t "
+        f"WHERE EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+        f"WHERE v.transacao_id = t.transacao_id);"
+    )
+    vinculadas = [{
+        "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
+        "descricao": r["descricao"], "valor": round(float(r["valor"] or 0), 2),
+        "data": r["data_local"], "tokens": _tokens_significativos(r["descricao"]),
+    } for r in cur.fetchall()]
+
+    # estornos/cancelamentos: anulam uma cobranca do mesmo dia e valor
+    cur.execute(
+        f"SELECT t.account_id, COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local FROM cartao.transacao t "
+        f"WHERE COALESCE(t.valor_brl, t.valor_original) < 0;"
+    )
+    estornos = {(str(r["account_id"]), r["data_local"], round(abs(float(r["valor"] or 0)), 2))
+                for r in cur.fetchall()}
+
+    repetidas, ecos, estornadas, aguardando, revisar = [], [], [], [], []
     for r in cur.fetchall():
         valor = round(float(r["valor"] or 0), 2)
         item = {
@@ -1387,6 +1430,38 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
                 repetidas.append(item)
             continue
 
+        # cobranca que a operadora estornou: os dois lancamentos sao legitimos
+        # e se anulam sozinhos no resultado. Marcar um deles deixaria o estorno
+        # negativo solto - por isso fica so informativo, sem acao.
+        if (str(r["account_id"]), r["data_local"], valor) in estornos:
+            item["motivo"] = (
+                "Existe um estorno de mesmo valor no mesmo dia. Os dois lançamentos são "
+                "legítimos e se anulam sozinhos — não há nada a marcar."
+            )
+            estornadas.append(item)
+            continue
+
+        # mesmo evento gravado duas vezes pelo Pluggy, com descricoes
+        # diferentes (pending -> posted): existe uma transacao JA VINCULADA a
+        # fatura, mesma conta, mesmo valor, mesmo dia (ou um de diferenca), e
+        # com os mesmos tokens de estabelecimento.
+        tokens = _tokens_significativos(r["descricao"])
+        par = next(
+            (v for v in vinculadas
+             if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
+             and abs((v["data"] - r["data_local"]).days) <= 1
+             and len(tokens & v["tokens"]) >= 2),
+            None,
+        ) if tokens else None
+        if par:
+            item["motivo"] = (
+                f"O Pluggy gravou este mesmo evento duas vezes, com descrições diferentes. "
+                f"A outra gravação (\"{par['descricao'][:60]}\") é a que está vinculada à fatura."
+            )
+            item["substituto_id"] = par["transacao_id"]
+            ecos.append(item)
+            continue
+
         ultima = ultima_por_conta.get(str(r["account_id"]))
         if ultima and ultima["periodo_inicio"] <= r["data_local"] <= ultima["periodo_fim"]:
             item["motivo"] = (
@@ -1398,7 +1473,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         else:
             item["motivo"] = "Sem vínculo com nenhuma linha de fatura e sem padrão claro."
             revisar.append(item)
-    return {"repetidas": repetidas, "ecos": ecos,
+    return {"repetidas": repetidas, "ecos": ecos, "estornadas": estornadas,
             "aguardando": aguardando, "revisar": revisar}
 
 

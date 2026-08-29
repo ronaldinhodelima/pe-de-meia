@@ -273,3 +273,27 @@ def test_avulsa_um_dia_depois_do_fim_do_ciclo_ainda_casa():
         ciclo_inicio_min=date(2026, 1, 26), ciclo_fim_real=date(2026, 2, 11),
     )
     assert [b["transacao_id"] for b in r["batidos"]] == ["t1"]
+
+
+def test_tokens_significativos_ignora_prefixo_generico():
+    """Duas gravacoes do MESMO evento pelo Pluggy diferem no prefixo generico
+    ('Compra Exterior R$ -' vs 'Compra Exterior -') e no sufixo. O que
+    identifica o par sao os tokens do estabelecimento. Caso real ANTHROPIC:
+    duas transacoes de R$110,63 em 04/07/2026 19:13, uma vinculada a fatura e
+    outra nao."""
+    from views.relatorios import _tokens_significativos
+
+    a = _tokens_significativos("Compra Exterior R$ - Visa - ANTHROPIC* CLAUDE SUB")
+    b = _tokens_significativos("Compra Exterior - Visa - ANTHROPIC* CLAUDE SUB ANTHROPIC.COMUS")
+    assert "ANTHROPIC" in a and "CLAUDE" in a
+    assert len(a & b) >= 2, f"tokens em comum: {a & b}"
+    # generico nao pode sustentar um par sozinho
+    assert "COMPRA" not in a and "EXTERIOR" not in a and "VISA" not in a
+
+
+def test_tokens_de_lojistas_diferentes_nao_se_confundem():
+    from views.relatorios import _tokens_significativos
+
+    a = _tokens_significativos("A vista sem juros - Visa - SUPERVIZA VIDEIRA BR")
+    b = _tokens_significativos("A vista sem juros - Visa - HIPERCENTER VIDEIRA BR")
+    assert len(a & b) < 2, f"nao podiam casar: {a & b}"
