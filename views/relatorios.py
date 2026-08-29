@@ -1394,10 +1394,16 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     } for r in cur.fetchall()]
 
     # estornos/cancelamentos: anulam uma cobranca do mesmo dia e valor
+    # So conta como estorno o negativo que AINDA ESTA no resultado. Se ele ja
+    # foi excluido (duplicada, substituido_por, somente_conciliacao), o par
+    # deixou de se anular: a cobranca positiva ficou sozinha contando, e tem
+    # que seguir para as outras regras em vez de ser dada como resolvida.
     cur.execute(
         f"SELECT t.account_id, COALESCE(t.valor_brl, t.valor_original) AS valor, "
         f"({DATA_LOCAL_SQL})::date AS data_local FROM cartao.transacao t "
-        f"WHERE COALESCE(t.valor_brl, t.valor_original) < 0;"
+        f"WHERE COALESCE(t.valor_brl, t.valor_original) < 0 "
+        f"AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
+        f"AND COALESCE(t.somente_conciliacao,false) = false;"
     )
     estornos = {(str(r["account_id"]), r["data_local"], round(abs(float(r["valor"] or 0)), 2))
                 for r in cur.fetchall()}
