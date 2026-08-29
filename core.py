@@ -1763,6 +1763,60 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (23);")
             conn.commit()
 
+        if versao_atual < 24:
+            # "Somente conciliacao": o lancamento existe e serve para conciliar
+            # com a fatura, mas NAO entra no resultado.
+            #
+            # Caso real: parcelamento que o Pluggy grava como UMA transacao no
+            # valor cheio, na data da compra (OTICA CALLIARI, R$3.160 em
+            # 02/11/2025, 10x R$316). Contar esse valor inteiro joga a despesa
+            # toda em novembro e deixa os outros nove meses vazios - mas o
+            # dinheiro saiu R$316 por mes. Decisao do usuario (29/08/2026):
+            # regime de CAIXA, a despesa acontece quando a fatura cobra.
+            # Entao o agregado vira so o registro da compra (aqui) e cada
+            # parcela vira um lancamento no mes em que foi cobrada, gerado a
+            # partir da fatura, que e' a autoridade.
+            #
+            # NAO e' o mesmo que `duplicada`: a compra agregada e' legitima,
+            # so nao e' a cobranca. Marcar como duplicada seria mentir sobre a
+            # natureza do dado e atrapalhar a revisao futura.
+            cur.execute(
+                "ALTER TABLE cartao.transacao "
+                "ADD COLUMN IF NOT EXISTS somente_conciliacao boolean NOT NULL DEFAULT false;"
+            )
+            # A view financeira e' o ponto unico por onde passa tudo que conta
+            # dinheiro (DRE, relatorios, totais de Lancamentos, pendencias) -
+            # excluir aqui vale para todos de uma vez. A tela de Lancamentos
+            # le cartao.transacao direto, entao o agregado continua visivel e
+            # editavel; a conciliacao tambem le a tabela, entao continua
+            # enxergando o agregado para vincular.
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS "
+                "SELECT t.transacao_id::text AS linha_id, NULL::bigint AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+                "t.valor_brl, t.valor_original, t.moeda_original, t.status, t.tipo, "
+                "t.numero_cartao_final, t.conferida, COALESCE(t.duplicada,false) AS duplicada, "
+                "t.natureza, t.observacao "
+                "FROM cartao.transacao t "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false) AND NOT EXISTS ("
+                "SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id=t.transacao_id) "
+                "UNION ALL "
+                "SELECT t.transacao_id::text || ':' || r.id::text AS linha_id, r.id AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, r.categoria, "
+                "r.valor_brl, r.valor_brl AS valor_original, 'BRL'::text AS moeda_original, "
+                "t.status, t.tipo, t.numero_cartao_final, t.conferida, "
+                "COALESCE(t.duplicada,false) AS duplicada, NULL::text AS natureza, r.observacao "
+                "FROM cartao.transacao t JOIN cartao.transacao_rateio r ON r.transacao_id=t.transacao_id "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false);"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Lancamento somente conciliacao (fora do resultado)',"
+                "jsonb_build_object('versao',24));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (24);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

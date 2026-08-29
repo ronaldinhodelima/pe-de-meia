@@ -1216,6 +1216,124 @@ def criar_lancamento_de_fatura(linha_id):
         conn.close()
 
 
+def _sincronizar_parcelas_de_agregado(cur, usuario):
+    """Regime de caixa para parcelamento (decisão do usuário, 29/08/2026).
+
+    O Pluggy as vezes grava o parcelamento inteiro como UMA transacao no valor
+    cheio, na data da compra. Contar assim joga a despesa toda no mes da compra
+    e deixa os demais meses vazios - mas o dinheiro sai parcela a parcela.
+    Aqui:
+      1. todo agregado (transacao vinculada a 2+ linhas de fatura) vira
+         `somente_conciliacao` - continua existindo e conciliando, sai do
+         resultado;
+      2. cada linha de fatura ligada a ele vira um lancamento proprio, no valor
+         e no mes em que a fatura cobrou - a fatura e' a autoridade.
+
+    Idempotente: usa `fatura_linha.transacao_id_criado`, que ja existe pra
+    marcar "esta linha ja virou lancamento". Rodar de novo nao duplica.
+    Herda categoria e dimensoes do agregado, para nao perder classificacao.
+    """
+    cur.execute(
+        "SELECT v.transacao_id, COUNT(*) AS linhas FROM cartao.fatura_vinculo v "
+        "GROUP BY v.transacao_id HAVING COUNT(*) >= 2;"
+    )
+    agregados = [str(r["transacao_id"]) for r in cur.fetchall()]
+    if not agregados:
+        return {"agregados": 0, "parcelas_criadas": 0}
+
+    cur.execute(
+        "UPDATE cartao.transacao SET somente_conciliacao = true, atualizado_em = now() "
+        "WHERE transacao_id = ANY(%s) AND NOT somente_conciliacao;",
+        (agregados,),
+    )
+    marcados = cur.rowcount or 0
+
+    # linhas cobertas por um agregado e que ainda nao viraram lancamento
+    cur.execute(
+        "SELECT fl.id, fl.data, fl.descricao, fl.valor, fl.titular, "
+        "fi.periodo_fim, fi.account_id, fi.mes_referencia, fi.ano_referencia, "
+        "v.transacao_id AS agregado_id "
+        "FROM cartao.fatura_linha fl "
+        "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+        "JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
+        "WHERE v.transacao_id = ANY(%s) AND fl.transacao_id_criado IS NULL "
+        "AND fi.periodo_fim IS NOT NULL "
+        "ORDER BY fi.ano_referencia, fi.mes_referencia;",
+        (agregados,),
+    )
+    pendentes = [dict(r) for r in cur.fetchall()]
+
+    criadas = 0
+    for linha in pendentes:
+        cur.execute(
+            "SELECT categoria, natureza FROM cartao.transacao WHERE transacao_id = %s;",
+            (str(linha["agregado_id"]),),
+        )
+        origem = cur.fetchone()
+        novo_id = str(uuid.uuid4())
+        # data = fim do ciclo da fatura que cobrou esta parcela. Nao da' pra
+        # usar a data impressa na linha: numa parcela ela e' a da COMPRA
+        # ORIGINAL, fixa em toda reimpressao mensal.
+        cur.execute(
+            "INSERT INTO cartao.transacao ("
+            "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
+            "valor_brl, data_transacao, categoria, categoria_manual, natureza, status, tipo, "
+            "observacao, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,%s,'POSTED','DEBIT',%s, now(), now(), now(), now());",
+            (
+                novo_id, linha["account_id"], linha["descricao"], linha["descricao"],
+                linha["valor"], linha["valor"],
+                f"{linha['periodo_fim']} 12:00:00-03:00",
+                origem["categoria"] if origem else None,
+                origem["natureza"] if origem else None,
+                f"Parcela gerada pela fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} "
+                f"(a compra inteira está em outro lançamento, fora do resultado).",
+            ),
+        )
+        cur.execute(
+            "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
+            "SELECT %s, dimensao_id, valor_id FROM cartao.transacao_dimensao WHERE transacao_id = %s "
+            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;",
+            (novo_id, str(linha["agregado_id"])),
+        )
+        cur.execute(
+            "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
+            (novo_id, linha["id"]),
+        )
+        cur.execute(
+            "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+            "VALUES (%s, %s, 'automatico', %s) ON CONFLICT DO NOTHING;",
+            (linha["id"], novo_id, usuario),
+        )
+        criadas += 1
+
+    return {"agregados": len(agregados), "marcados_agora": marcados, "parcelas_criadas": criadas}
+
+
+@bp.route("/api/faturas/sincronizar-parcelas", methods=["POST"])
+@requer("relatorios")
+def sincronizar_parcelas():
+    """Aplica o regime de caixa nos parcelamentos agregados (ver
+    _sincronizar_parcelas_de_agregado). Muda numero do DRE de proposito:
+    tira a compra cheia do mes da compra e coloca cada parcela no mes em que
+    a fatura cobrou."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        resumo = _sincronizar_parcelas_de_agregado(cur, session.get("user"))
+        conn.commit()
+        registrar_auditoria(
+            "alteracao", "relatorios.sincronizar_parcelas", sucesso=True, detalhes=resumo,
+        )
+        return jsonify({"ok": True, **resumo})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui sincronizar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/api/fatura/<int:fatura_id>/vincular-automatico", methods=["POST"])
 @requer("relatorios")
 def vincular_automatico_fatura(fatura_id):
