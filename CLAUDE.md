@@ -1,7 +1,7 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 25/08/2026. Estado funcional de referência: commit `9007704`; qualquer
-commit posterior pode ser apenas documentação. Confirmar `git log` e produção ao retomar.
+**Última atualização:** 29/08/2026. Estado funcional de referência: commit `f86ef5b` (conciliação
+de fatura com vínculo persistente, migração 23). Confirmar `git log` e produção ao retomar.
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
@@ -362,6 +362,120 @@ conciliação/classificação de dados e decisões operacionais listadas abaixo.
 - Exemplo já ajustado: DELTA VIDEIRA R$ 265,07 — Responsável Ronaldo, categoria Combustível,
   projeto Jeep, portfólio Veículos. Não generalizar para toda descrição DELTA sem revisar.
 
+## Conciliação de fatura em PDF (reescrita em 29/08/2026 — leia antes de mexer)
+
+Tela `/relatorios/conciliar-fatura`. Confere a fatura oficial da Unicred (PDF) contra o que o
+Pluggy sincronizou. **A fatura é a autoridade**: ela é a prova do que a operadora cobrou.
+
+### O erro de arquitetura que foi corrigido
+
+Até 29/08/2026 a conciliação era **sem memória**: recalculava tudo por heurística a cada
+abertura da tela e não tinha onde registrar decisão humana. Consequências, todas observadas em
+produção: resultado mudava sozinho entre uma visita e outra, a mesma cobrança aparecia como
+"sobra" em dois meses seguidos, e parcelamento era impossível de resolver.
+
+**Migração 23** criou `cartao.fatura_vinculo` — relação **N:N** entre `fatura_linha` e
+`transacao`. O N:N não é luxo: um parcelamento que o Pluggy gravou como UMA transação (valor
+cheio, data da compra) corresponde a **uma linha por mês, em faturas diferentes**. Com
+"usado/não usado" dentro de uma fatura isso era irrepresentável, e um mês roubava a transação
+do outro.
+
+Regras:
+- Transação já vinculada não é reivindicada pelo casamento 1:1 nem por avulsa.
+- **Exceção deliberada:** o fallback de parcelamento agregado PODE reusar transação já
+  vinculada — é o caso legítimo acima.
+- Vínculo `origem='manual'` nunca é sobrescrito pelo automático (mesma regra de
+  `categoria_manual` e do OK).
+- O casamento automático só roda em **POST** (import do PDF ou botão "Vincular
+  automaticamente"), nunca em GET. GET que grava faria a tela mudar sozinha e furaria a
+  checagem de Origin/Referer.
+- **A ordem importa ao rodar o vínculo automático em lote: da fatura mais antiga para a mais
+  nova**, porque o bloqueio depende dos vínculos já existentes.
+
+### Datas do ciclo — três armadilhas já resolvidas
+
+1. **A Unicred não imprime a data de fechamento em lugar nenhum do PDF.** Conferido nas 14
+   faturas: só existem `REF.:`, `VENCIMENTO:` e o resumo de saldo. Não adianta procurar de novo.
+2. **O intervalo vencimento−fechamento NÃO é fixo** (varia de 9 a 14 dias). Não cabe fórmula.
+   O usuário conferiu as datas reais no app do Unicred (tela "Melhor dia para compra" = data de
+   fechamento) e elas estão em `FECHAMENTOS_CONHECIDOS`, em `fatura_unicred.py`. **Preencher ali
+   conforme ele for confirmando novos meses.** Fora da tabela, cai na heurística (última compra
+   impressa) com trava: nunca fecha no dia do vencimento ou depois.
+3. **`periodo_inicio` é calculado na LEITURA, nunca congelado no import**
+   (`_ciclo_inicio_encadeado`). Congelar tornava o resultado dependente da ORDEM de envio dos
+   PDFs: quem mandasse da fatura mais nova para a mais antiga ficava com todas no palpite de 35
+   dias. Aconteceu de verdade com as 6 faturas de 2025. **O palpite de 35 dias só vale quando
+   não existe fatura anterior daquela conta** — nunca como regra.
+
+`cartao.conta.fechamento_fatura` é **coluna morta**: o Pluggy nunca preenche para nenhuma conta
+real (a tela `/contas` mostra "fechamento não informado pelo banco" nas 3 conexões). Já foi
+tentado e revertido; não voltar a depender dela.
+
+### O que cada número da tela significa (já confundiu o usuário)
+
+- **Total impresso no PDF** — o SALDO TOTAL da fatura.
+- **Soma das linhas lidas** — soma das linhas extraídas do PDF, sem "Pagamento Recebido".
+  É **fatura contra fatura**, não contra o Pluggy: prova que a leitura do PDF está correta.
+  Tem que ser igual ao total impresso (fica vermelho quando não é).
+- **Já vinculado ao Pluggy** / **Falta vincular** — aí sim é contra o Pluggy.
+  "Falta vincular" **não é** `Total − Soma`; é o quanto da fatura ainda não foi conciliado.
+
+"Pagamento Recebido" é a fatura ANTERIOR sendo quitada; o próprio SALDO TOTAL da Unicred não a
+inclui. Ela fica fora das duas somas — se entrar em um lado só, a tela acusa diferença de
+dezenas de milhares sem erro nenhum (aconteceu: R$ 16.647,99 falsos).
+
+### Consolidação de data: por que não existe botão em massa
+
+Existiu por algumas horas em 29/08/2026 e **corrompeu 22 datas reais** de agosto/2026,
+jogando-as para a data da compra original (algumas em novembro/2025). Causa: numa linha de
+parcela a data impressa é a da **COMPRA ORIGINAL**, fixa em toda reimpressão mensal — não a data
+da cobrança daquele mês. Foi revertido no mesmo dia pelo log de auditoria (que guardava
+antes/depois de cada uma).
+
+Decisão do usuário: consolidação de data, se voltar, é **por lançamento, um a um**, dentro do
+painel de vínculo, junto com observação — nunca em lote por fatura. **Não reintroduzir sem
+uma fonte de data mensal confiável, que a fatura não fornece.**
+
+## Descoberta de 29/08/2026: R$ 9.907,69 contados em dobro (a decidir)
+
+Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estão no Pluggy
+com as duas representações ao mesmo tempo**: a compra inteira (valor cheio) E as cobranças
+mensais. Como o agregado já cobre todas as parcelas, cada mensal por cima entra duas vezes na
+despesa e **infla o DRE**.
+
+São dois mecanismos distintos:
+
+**Família 1 — "eco da compra": 21 lançamentos, R$ 2.268,07.** Transação individual de UMA
+parcela, **2 dias antes** do agregado (19 dos 21 casos). É o ciclo PENDING → POSTED que não
+fecha: o Pluggy registra a autorização e depois registra de novo consolidado, sem remover a
+primeira. Sinal claro: pares com 1 centavo de diferença (R$43,34/R$43,33 PITTOLCALCADOS,
+R$67,19/R$67,18 HNA, R$31,08/R$31,06 FARMACIA SAGRADO) — arredondamento da parcela.
+
+**Família 2 — "mensais tardias": 34 lançamentos, R$ 7.639,62.** Cobranças **sempre no dia 12**
+(12/06, 12/07, 12/08 de 2026), até 283 dias depois do agregado. **Nenhuma existe antes de
+junho/2026** — o Pluggy mudou o comportamento nessa conta nessa data e passou a emitir as
+parcelas mensais além do agregado. É por isso que o órfão é quase sempre 12/07/2026: no ciclo de
+agosto chegam duas mensais para uma única parcela impressa.
+
+Caso exemplar rastreado ponta a ponta — **OTICA CALLIARI, Ronaldo, 10× R$316 = R$3.160**,
+comprado em 02/11/2025. A fatura cobrou as 10 parcelas certinho. O Pluggy mandou o agregado de
+R$3.160 **mais** R$316 em 12/06, 12/07 e 12/08. Total no sistema: R$4.108. Sobrando R$948.
+
+**Anomalia separada, precisa do olho do Ronaldo:** FARM GEREMIAS (Andrea) 3× R$63,30 tem **dois
+agregados** (26/11/2025 e 10/07/2026, ambos R$189,90) e linhas duplicadas nas faturas. Pode ser
+duas compras iguais de verdade ou duplicidade da operadora.
+
+**Nada foi marcado como duplicado.** Marcação de duplicidade é decisão do usuário — regra do
+projeto. O caminho contabilmente correto discutido: **manter o agregado e marcar as mensais/ecos
+como duplicados**, porque o agregado é o valor total real; manter as mensais deixaria a despesa
+incompleta (só existem 1 a 3 mensais de parcelamentos de 6, 10, 15 parcelas).
+
+**Melhoria pendente no matcher:** em parcelamento que TEM agregado, algumas parcelas se
+vincularam à mensal em vez do agregado (OTICA CALLIARI Parc.9 → 12/06, Parc.10 → 12/08). É
+arbitrário; o correto seria todas apontarem para o agregado, deixando as mensais 100% órfãs e
+portanto visíveis como candidatas a duplicidade. Não muda o valor de R$ 9.907,69 — muda o que
+a tela mostra. **Estava para ser feito quando a sessão parou.**
+
 ## Pendências conhecidas
 
 ### Ação do usuário (nada disso o Claude pode fazer sozinho)
@@ -386,6 +500,8 @@ Levantado em 22/08/2026, a ajustar depois.
 Lúcia, 21/11/2025 — conferido na conta, ocorreu uma vez só). A tela de
 Lançamentos agora avisa quando encontra repetição no mês aberto, mas **os meses
 anteriores nunca foram varridos**. Vale uma passada mês a mês.
+Ver também a descoberta de 29/08/2026 (R$ 9.907,69 em parcelamento contado em dobro), que é
+um caso de duplicidade sistemática, com padrão identificado, esperando decisão.
 
 **Horários 00:00 e diferença de três horas.** Em Conta Corrente Ronaldo/Andrea há movimentos
 que chegam às 00:00 e, em agosto, suspeitas com diferença de 3h. Não usar horário isoladamente
@@ -398,7 +514,26 @@ tem 32 lançamentos; os maiores em 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,0
 receita**. Ronaldo não soube dizer a origem de cabeça (22/08/2026) — precisa ser
 caso a caso. Enquanto não for, esses valores podem estar inflando a receita.
 
-### Retomada recomendada da conciliação
+### Retomada recomendada (atualizada em 29/08/2026)
+
+**Onde a sessão parou:** a conciliação de fatura foi reescrita, está em produção e validada; as
+14 faturas (set/2025 a ago/2026) estão importadas, com datas encadeadas e 1.502 vínculos criados.
+A análise de duplicidade de parcelamento está concluída, com padrão identificado e valor apurado.
+
+Próximo passo imediato, já acordado e não executado: **ajustar o matcher para dar prioridade ao
+agregado** quando ele existe, para que as 34 mensais da Família 2 e os 21 ecos da Família 1
+apareçam todos como órfãos — a lista completa de candidatos a duplicidade, pronta para o Ronaldo
+revisar e marcar. Depois disso, ele marca as duplicidades (só ele pode).
+
+Retrato das faturas em 29/08/2026 (linhas sem vínculo caem conforme avança no tempo, porque o
+Pluggy não cobria o período antigo — é ausência de dado histórico, não erro):
+`07/2025: 149 sem vínculo · ... · 06/2026: 2 · 07/2026: 1 · 08/2026: 0`.
+Agosto/2026 fecha 100% pelo lado da fatura.
+
+Fatura 01/2026 tem `periodo_fim` = 25/01 mas vencimento 22/01 — fim depois do vencimento, o que
+é impossível. Ela foi importada antes da trava de sanidade entrar. **Reenviar esse PDF corrige.**
+
+Conciliação/classificação de lançamento (independente do acima):
 
 1. Voltar à revisão **um lançamento por vez**, mês **julho/2026**, filtrando por Origem.
    Conta Corrente Ronaldo começou a ser revisada; depois houve avanço parcial em Conta Corrente
@@ -467,6 +602,26 @@ o worker pela URL pública e o Traefik enxerga um IP interno do Docker, não o I
 servidor (45.163.12.5). Foi revertido. A proteção real hoje é por chave (`SYNC_SECRET`), não por
 rede. Se algum dia quiser fechar de verdade: fazer o app chamar o worker pela rede interna
 (`http://<container>:8000/sync`) e remover o domínio público dele.
+
+## Lições da sessão de 29/08/2026 (incidente real — não repetir)
+
+Nesta sessão o Claude **corrompeu 22 datas de lançamentos reais em produção** e, antes disso,
+subiu duas correções baseadas em hipótese não verificada. Vale mais que qualquer regra abstrata:
+
+1. **Testar hipótese localmente, nunca em produção.** Os dois erros do dia vieram do mesmo
+   vício: deployar para descobrir se a teoria estava certa. O `consolidar-datas` corrompeu dado
+   real; o fix do "mês vizinho" foi subido com base num caso (SAMILA) que não generalizava para
+   o caso que se queria resolver (AQUAMATER), e não resolveu nada.
+2. **Escrever o teste do caso real ANTES de mexer no algoritmo.** Quando os testes de
+   `tests/test_fatura_vinculo.py` foram escritos, dois bugs latentes apareceram na hora — um
+   deles (`ciclo_fim` vindo de `max(datas)` das linhas) estava em produção havia dias, invisível.
+3. **Quando o número contradiz o que já se viu na tela, o erro provavelmente é da análise.**
+   A primeira contagem de parcelamentos duplicados deu "0", contradizendo o AQUAMATER já visto.
+   Causa: a célula de valor do vínculo tem `colspan="2"`, então o índice do `children[]` estava
+   deslocado e todos os valores vinham zerados. Conferir contra um caso conhecido antes de
+   confiar em qualquer levantamento.
+4. **O log de auditoria salvou o dia.** Foi só porque cada alteração gravava antes/depois que
+   deu para reverter as 22 datas exatamente. Não enfraquecer a auditoria.
 
 ## Como trabalhar neste projeto (fluxo que deu certo)
 
@@ -558,9 +713,19 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 25/08/2026 a suíte local está em **180 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **189 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
-auditoria, regras automáticas, rateio e fluxos com PostgreSQL temporário. Os seis testes
+auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
+
+`tests/test_fatura_vinculo.py` reproduz, com dados sintéticos e cursor dublado (roda sem
+Postgres), os casos reais que quebraram a conciliação: parcela 1:1 dentro do ciclo, transação já
+vinculada que não pode ser roubada, parcelamento agregado que PODE ser reusado, "Pagamento
+Recebido" fora das duas somas, e o encadeamento das datas. **Foi escrevendo esses testes que dois
+bugs latentes apareceram** — ver "Lições da sessão de 29/08/2026".
+
+Validação do parser contra dado real (fazer de novo se mexer em `fatura_unicred.py`): parsear os
+PDFs e conferir que a soma das linhas, sem "Pagamento Recebido", bate com o total impresso. Em
+29/08/2026 bateu **centavo a centavo nas 14 faturas** (set/2025 a ago/2026). Os seis testes
 ignorados dependem de condições/serviços que não estão disponíveis em toda execução; conferir o
 motivo do `skip`, não tratar automaticamente como falha.
 
@@ -610,6 +775,21 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   executar teste de restauração agora; não confundir isso com garantia de recuperação externa.
 - **Navegação:** alterações de tela/filtro/URL devem criar histórico real, para o botão Voltar
   retornar ao estado anterior dentro do sistema. Troca de mês em Lançamentos faz recarga completa.
+
+### Decisões da sessão de 29/08/2026 (conciliação de fatura)
+
+- **A fatura em PDF é a autoridade.** Se está no Pluggy, tem que bater com a fatura de alguma
+  forma — não basta "fechar o valor", cada lançamento precisa de vínculo ou de explicação.
+- **Vínculo automático grava sozinho quando não há ambiguidade** (decisão do usuário, entre
+  "gravar sozinho" e "só sugerir"). Ambíguo fica pendente esperando ele. Vínculo automático pode
+  ser desfeito a qualquer momento; vínculo manual nunca é sobrescrito.
+- **Consolidação de data é por lançamento, um a um** — nunca em lote por fatura. Exige conferência
+  manual e vai junto com observação/vínculo. Ficou para ser desenhada com calma dentro do painel
+  de vínculo (o usuário pediu explicitamente "pensar melhor como fazer e usarmos").
+- **A tela é organizada em torno da fatura**, com `+` por linha abrindo os lançamentos vinculados,
+  e vínculo possível nos dois sentidos (da linha para o lançamento e do lançamento para a linha).
+- **Marcação de duplicidade continua sendo só do usuário**, inclusive nos R$ 9.907,69 de
+  parcelamento contado em dobro. O Claude levanta, evidencia e explica; não marca.
 
 ### Regras automáticas
 
