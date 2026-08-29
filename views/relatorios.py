@@ -1,8 +1,9 @@
 """Relatorios, DRE e investimentos."""
+import calendar
 import io
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import psycopg2
 import psycopg2.extras
@@ -464,6 +465,29 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
+def _data_fechamento_mes(dia_fechamento, ano, mes):
+    """Data de fechamento da fatura NESTE mes, a partir do dia fixo que o
+    Pluggy informa por conta (cartao.conta.fechamento_fatura.day) - mes com
+    menos dias que esse numero usa o ultimo dia disponivel (ex: fechamento
+    dia 31 num fevereiro vira 28/29)."""
+    ultimo_dia = calendar.monthrange(ano, mes)[1]
+    return date(ano, mes, min(dia_fechamento, ultimo_dia))
+
+
+def _ciclo_fatura(dia_fechamento, mes_referencia, ano_referencia):
+    """Inicio/fim reais do ciclo desta fatura, a partir do dia de fechamento
+    fixo da conta (Pluggy) - muito mais preciso que adivinhar pela data das
+    proprias linhas extraidas do PDF (usado so como fallback quando a conta
+    nao tem fechamento_fatura, ex: conta manual)."""
+    fim = _data_fechamento_mes(dia_fechamento, ano_referencia, mes_referencia)
+    if mes_referencia == 1:
+        mes_anterior, ano_anterior = 12, ano_referencia - 1
+    else:
+        mes_anterior, ano_anterior = mes_referencia - 1, ano_referencia
+    inicio = _data_fechamento_mes(dia_fechamento, ano_anterior, mes_anterior) + timedelta(days=1)
+    return inicio, fim
+
+
 def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None,
                        ciclo_inicio_min=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
@@ -565,9 +589,29 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
                                 "descricao_sistema": melhor["descricao"],
                                 "valor_esperado_parcelamento": valor_esperado})
         else:
+            # Nem todo parcelamento vira UMA transacao de valor cheio no
+            # Pluggy - mensalidade (ex: academia) e alguns parcelamentos reais
+            # chegam como uma transacao por mes, no valor daquela parcela (caso
+            # real: "AQUAMATER" parcelado em varias vezes, cada mes uma
+            # transacao separada). Sem achar o valor cheio, tenta casar cada
+            # linha do grupo individualmente por data+valor, igual as avulsas.
             for l in linhas_grupo:
-                sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
-                                     "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
+                melhor_linha, melhor_dist = None, None
+                for c in candidatos:
+                    if c["_usado"] or round(float(c["valor"]), 2) != l["valor"]:
+                        continue
+                    dist = abs((c["_data_local"] - l["data"]).days)
+                    if dist > 3:
+                        continue
+                    if melhor_linha is None or dist < melhor_dist:
+                        melhor_linha, melhor_dist = c, dist
+                if melhor_linha:
+                    melhor_linha["_usado"] = True
+                    batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),
+                                     "descricao_sistema": melhor_linha["descricao"]})
+                else:
+                    sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
+                                         "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
 
     # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o intervalo de
     # busca acima e largo (cobre ate um ano, por causa de parcelas antigas que
@@ -716,6 +760,24 @@ def conciliar_fatura():
                 erro = f"Não consegui ler esse PDF: {exc}"
 
             if not erro:
+                # O dia de fechamento real da conta (Pluggy, cartao.conta.
+                # fechamento_fatura) da o inicio/fim exatos do ciclo - muito
+                # mais preciso que adivinhar pela data das proprias linhas do
+                # PDF (fatura["periodo_inicio/fim"], usado so como fallback
+                # quando a conta nao tem esse dado, ex: conta manual).
+                cur.execute(
+                    "SELECT fechamento_fatura FROM cartao.conta WHERE account_id=%s;",
+                    (account_id,),
+                )
+                conta_row = cur.fetchone()
+                dia_fechamento = conta_row["fechamento_fatura"].day if conta_row and conta_row["fechamento_fatura"] else None
+                if dia_fechamento:
+                    periodo_inicio, periodo_fim = _ciclo_fatura(
+                        dia_fechamento, fatura["mes_referencia"], fatura["ano_referencia"]
+                    )
+                else:
+                    periodo_inicio, periodo_fim = fatura["periodo_inicio"], fatura["periodo_fim"]
+
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
                 # entao o arquivo fica como bytea no Postgres (500KB-1MB,
@@ -723,7 +785,7 @@ def conciliar_fatura():
                 # ser baixado de novo em /configuracoes/faturas-pdf.
                 # Reenviar a mesma fatura (conta+mes+ano) substitui tudo.
                 # As datas do ciclo (inicio/fim/vencimento) sao so leitura -
-                # vem inteiras do PDF, ninguem edita na tela.
+                # vem inteiras do PDF/Pluggy, ninguem edita na tela.
                 cur.execute(
                     "INSERT INTO cartao.fatura_importada "
                     "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por, "
@@ -737,7 +799,7 @@ def conciliar_fatura():
                     "RETURNING id;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
                      fatura["cartao_final4"], arquivo.filename, session.get("user"),
-                     fatura["periodo_inicio"], fatura["periodo_fim"], fatura["vencimento"],
+                     periodo_inicio, periodo_fim, fatura["vencimento"],
                      psycopg2.Binary(pdf_bytes)),
                 )
                 fatura_id = cur.fetchone()["id"]
@@ -793,22 +855,12 @@ def conciliar_fatura():
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
                 "vencimento": fatura_row["vencimento"],
             }
-            # fatura do mes anterior desta mesma conta, se ja foi conciliada -
-            # o fim daquele ciclo e' o piso real do ciclo atual, mais preciso
-            # que o palpite generico de 35 dias (ver comentario em
-            # _conciliar_linhas). "anterior" por referencia, nao por data de
-            # importacao: cobre reprocessar fora de ordem.
-            cur.execute(
-                "SELECT periodo_fim FROM cartao.fatura_importada "
-                "WHERE account_id=%s AND (ano_referencia, mes_referencia) < (%s, %s) "
-                "AND periodo_fim IS NOT NULL "
-                "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
-                (account_id, fatura_row["ano_referencia"], fatura_row["mes_referencia"]),
-            )
-            fatura_anterior = cur.fetchone()
-            ciclo_inicio_min = (
-                fatura_anterior["periodo_fim"] + timedelta(days=1) if fatura_anterior else None
-            )
+            # periodo_inicio ja e' o piso real do ciclo quando veio do dia de
+            # fechamento da conta (Pluggy) - ver _ciclo_fatura(). So cai no
+            # palpite generico de 35 dias (dentro de _conciliar_linhas) pra
+            # fatura antiga, importada antes dessa conta ter fechamento_fatura
+            # conhecido.
+            ciclo_inicio_min = fatura_row["periodo_inicio"]
             resultado = _conciliar_linhas(
                 cur, account_id, linhas, ids_por_linha, todos_ids_por_linha, ciclo_inicio_min,
             )
