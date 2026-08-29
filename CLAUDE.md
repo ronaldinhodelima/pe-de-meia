@@ -1,7 +1,7 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 29/08/2026. Estado funcional de referência: commit `f86ef5b` (conciliação
-de fatura com vínculo persistente, migração 23). Confirmar `git log` e produção ao retomar.
+**Última atualização:** 29/08/2026. Estado funcional de referência: migração **24** (regime de
+caixa para parcelamento). Confirmar `git log` e produção ao retomar.
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
@@ -436,6 +436,46 @@ Decisão do usuário: consolidação de data, se voltar, é **por lançamento, u
 painel de vínculo, junto com observação — nunca em lote por fatura. **Não reintroduzir sem
 uma fonte de data mensal confiável, que a fatura não fornece.**
 
+## Regime de caixa para parcelamento (decidido e aplicado em 29/08/2026)
+
+**Decisão do usuário:** parcelamento vira despesa **mês a mês, conforme a fatura cobra** —
+regime de caixa, não competência. A despesa acontece quando o dinheiro sai.
+
+O problema que isso resolve: o Pluggy grava parte dos parcelamentos como UMA transação no valor
+cheio, na data da compra (OTICA CALLIARI, R$3.160 em 02/11/2025, 10× R$316). Contar assim
+**inflava o mês da compra e deixava os outros nove vazios**. Novembro/2025 sozinho tinha
+R$ 18.498,63 de despesa que não saiu naquele mês.
+
+Como funciona (migração 24 + `_sincronizar_parcelas_de_agregado` em `views/relatorios.py`):
+
+1. Toda transação vinculada a **2+ linhas de fatura** é um agregado, e recebe
+   `transacao.somente_conciliacao = true`. Ela continua existindo, visível e vinculável — só
+   sai do resultado.
+2. Cada linha de fatura ligada a esse agregado vira um lançamento próprio, **no valor e no mês
+   em que a fatura cobrou**, herdando categoria e dimensões do agregado.
+3. Idempotente por `fatura_linha.transacao_id_criado` — rodar de novo não duplica.
+
+**`somente_conciliacao` NÃO é `duplicada`.** A compra agregada é legítima; ela só não é a
+cobrança. Marcar como duplicada mentiria sobre a natureza do dado e atrapalharia a revisão.
+
+**A exclusão mora na view `cartao.lancamento_financeiro`**, que é o ponto único por onde passam
+DRE, relatórios, totais de Lançamentos e pendências — mexer lá vale para todos de uma vez. A
+tela de Lançamentos e a conciliação leem `cartao.transacao` direto, por isso o agregado continua
+aparecendo e podendo ser vinculado.
+
+**Data da parcela gerada = `periodo_fim` da fatura que a cobrou.** Não dá para usar a data
+impressa na linha: numa parcela ela é a da COMPRA ORIGINAL, fixa em toda reimpressão mensal.
+
+Resultado medido em produção (92 agregados marcados, 331 parcelas geradas):
+`nov/25: 43.904,64 → 25.406,01` · `ago/26: 55.395,59 → 60.862,16`. A despesa saiu do mês da
+compra e foi para os meses em que foi cobrada.
+
+**Consequência esperada, não é erro:** a despesa total caiu R$ 15.956,42. Parcela que só será
+cobrada em fatura futura deixou de contar antecipadamente — correto no regime de caixa; ela
+entra quando a fatura do mês for importada. **Mas atenção:** parcelamento com parcela anterior a
+jul/2025 perde essa despesa, porque não existe fatura importada cobrindo o período. Importar
+faturas mais antigas recupera automaticamente (a sincronização é idempotente).
+
 ## Descoberta de 29/08/2026: R$ 9.907,69 contados em dobro (a decidir)
 
 Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estão no Pluggy
@@ -470,11 +510,17 @@ projeto. O caminho contabilmente correto discutido: **manter o agregado e marcar
 como duplicados**, porque o agregado é o valor total real; manter as mensais deixaria a despesa
 incompleta (só existem 1 a 3 mensais de parcelamentos de 6, 10, 15 parcelas).
 
-**Melhoria pendente no matcher:** em parcelamento que TEM agregado, algumas parcelas se
-vincularam à mensal em vez do agregado (OTICA CALLIARI Parc.9 → 12/06, Parc.10 → 12/08). É
-arbitrário; o correto seria todas apontarem para o agregado, deixando as mensais 100% órfãs e
-portanto visíveis como candidatas a duplicidade. Não muda o valor de R$ 9.907,69 — muda o que
-a tela mostra. **Estava para ser feito quando a sessão parou.**
+**Matcher já corrigido (commit `87a664b`):** quando o parcelamento TEM agregado, todas as linhas
+do grupo apontam para ele (`_melhor_agregado` roda antes do casamento 1:1). Antes algumas
+parcelas ficavam presas a uma mensal de mesmo valor — escolha arbitrária que ainda escondia a
+duplicata atrás de um vínculo. Com a correção os órfãos de agosto/2026 subiram de 29 para 51:
+**são as duplicatas ficando visíveis**, não regressão. Refazer vínculos de uma fatura já
+existente: `POST /api/fatura/<id>/vincular-automatico` com `{"refazer": true}` — apaga só
+`origem='automatico'`, nunca o manual.
+
+**Por que o regime de caixa não mudou esse valor:** as parcelas geradas pela fatura substituem o
+agregado (que saiu do resultado), então o total do parcelamento continua correto; as mensais e
+ecos continuam por cima. O excesso segue exatamente R$ 9.907,69 até o usuário marcar.
 
 ## Pendências conhecidas
 
@@ -713,7 +759,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **189 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **192 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
