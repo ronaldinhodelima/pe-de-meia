@@ -732,20 +732,27 @@ def conciliar_fatura():
                 # Guarda so os lancamentos extraidos (nao o PDF) - da historico
                 # e permite reabrir a conciliacao depois sem reenviar o arquivo.
                 # Reenviar a mesma fatura (conta+mes+ano) substitui as linhas.
+                # Fechamento nao vem impresso em lugar nenhum do PDF da Unicred
+                # (ja conferido) - a melhor estimativa automatica e' a data do
+                # ultimo lancamento avulso da propria fatura (periodo_fim).
+                # COALESCE no UPDATE preserva uma correcao manual que o usuario
+                # ja tenha feito nessa fatura, em vez de sobrescrever ao reenviar
+                # o mesmo PDF.
                 cur.execute(
                     "INSERT INTO cartao.fatura_importada "
                     "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por, "
-                    "periodo_inicio, periodo_fim, vencimento) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "periodo_inicio, periodo_fim, fechamento, vencimento) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (account_id, mes_referencia, ano_referencia) DO UPDATE SET "
                     "total=EXCLUDED.total, cartao_final4=EXCLUDED.cartao_final4, "
                     "arquivo_nome=EXCLUDED.arquivo_nome, importado_por=EXCLUDED.importado_por, importado_em=now(), "
                     "periodo_inicio=EXCLUDED.periodo_inicio, periodo_fim=EXCLUDED.periodo_fim, "
+                    "fechamento=COALESCE(cartao.fatura_importada.fechamento, EXCLUDED.fechamento), "
                     "vencimento=EXCLUDED.vencimento "
                     "RETURNING id;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
                      fatura["cartao_final4"], arquivo.filename, session.get("user"),
-                     fatura["periodo_inicio"], fatura["periodo_fim"], fatura["vencimento"]),
+                     fatura["periodo_inicio"], fatura["periodo_fim"], fatura["periodo_fim"], fatura["vencimento"]),
                 )
                 fatura_id = cur.fetchone()["id"]
                 cur.execute("DELETE FROM cartao.fatura_linha WHERE fatura_id=%s;", (fatura_id,))

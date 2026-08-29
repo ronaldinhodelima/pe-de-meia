@@ -63,7 +63,7 @@
                        style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
               </label>
               <label style="font-size:11px;color:#888;display:flex;flex-direction:column;gap:2px"
-                     title="A Unicred não imprime essa data no PDF — preencha manualmente se souber">
+                     title="A Unicred não imprime a data de fechamento no PDF — vem estimada como o último lançamento avulso da fatura. Corrija aqui se souber a data exata.">
                 Fechamento
                 <input type="date" name="fechamento" value="{{ h.fechamento.isoformat() if h.fechamento else '' }}"
                        style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
