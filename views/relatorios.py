@@ -713,6 +713,35 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     return sorted(repetidas, key=lambda r: r["data"])
 
 
+def _transacoes_ja_batidas(cur, account_id, ano_referencia, mes_referencia):
+    """Reconcilia de novo a fatura de um mes especifico (se existir) e devolve
+    o conjunto de transacao_id que ela ja da como batido. Usado pra tirar de
+    "sem_fatura" um lancamento que caiu bem na borda do ciclo (ex: cobrado no
+    ultimo dia do mes anterior) e que o mes vizinho ja reivindicou de verdade -
+    sem isso, a mesma transacao aparece como "sobra" em dois meses seguidos,
+    porque cada view reconcilia do zero e nao sabe o que o vizinho decidiu."""
+    cur.execute(
+        "SELECT id, account_id, periodo_inicio FROM cartao.fatura_importada "
+        "WHERE account_id = %s AND ano_referencia = %s AND mes_referencia = %s;",
+        (account_id, ano_referencia, mes_referencia),
+    )
+    fatura_row = cur.fetchone()
+    if not fatura_row:
+        return set()
+    cur.execute(
+        "SELECT data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular "
+        "FROM cartao.fatura_linha WHERE fatura_id = %s ORDER BY data;",
+        (fatura_row["id"],),
+    )
+    linhas = [dict(r) for r in cur.fetchall()]
+    for l in linhas:
+        l["valor"] = float(l["valor"])
+    if not linhas:
+        return set()
+    resultado = _conciliar_linhas(cur, str(fatura_row["account_id"]), linhas, {}, {}, fatura_row["periodo_inicio"])
+    return {b["transacao_id"] for b in resultado["batidos"]}
+
+
 @bp.route("/relatorios/fatura/<int:fatura_id>/restaurar-datas", methods=["POST"])
 @requer("relatorios")
 def restaurar_datas_fatura(fatura_id):
@@ -1037,8 +1066,26 @@ def conciliar_fatura():
                 resultado["diferenca"] = round(
                     resultado["diferenca"] - sum(l["valor"] for l in ja_criadas), 2
                 )
-                if not resultado["sem_sistema"] and not resultado["sem_fatura"]:
-                    resultado["fecha_100"] = True
+
+            # "sem_fatura" pode reaparecer transacao que caiu bem na borda do
+            # ciclo e que o MES VIZINHO ja reconciliou de verdade (ver
+            # _transacoes_ja_batidas) - cada view roda do zero e nao compartilha
+            # esse estado, entao confere os dois lados antes de dar como sobra.
+            mes_ant = fatura_row["mes_referencia"] - 1 or 12
+            ano_ant = fatura_row["ano_referencia"] - (1 if fatura_row["mes_referencia"] == 1 else 0)
+            mes_prox = fatura_row["mes_referencia"] % 12 + 1
+            ano_prox = fatura_row["ano_referencia"] + (1 if fatura_row["mes_referencia"] == 12 else 0)
+            ja_batidas_vizinhas = (
+                _transacoes_ja_batidas(cur, account_id, ano_ant, mes_ant)
+                | _transacoes_ja_batidas(cur, account_id, ano_prox, mes_prox)
+            )
+            if ja_batidas_vizinhas:
+                resultado["sem_fatura"] = [
+                    l for l in resultado["sem_fatura"] if l["transacao_id"] not in ja_batidas_vizinhas
+                ]
+
+            if not resultado["sem_sistema"] and not resultado["sem_fatura"]:
+                resultado["fecha_100"] = True
 
     # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
     cur.execute(
