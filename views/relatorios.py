@@ -532,6 +532,12 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # proposito (ver regra de duplicidade) - nao faz sentido a conciliacao
         # cobrar dela um par na fatura, ela ja foi resolvida.
         f"FROM cartao.transacao t WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
+        # Lancamento que NASCEU da fatura (parcela gerada, ou criado a mao a
+        # partir de uma linha) nao e' candidato: ele ja E' a fatura. Deixar
+        # entrar fazia a parcela gerada disputar a linha com o agregado do
+        # Pluggy e virar orfa.
+        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
+        f"WHERE fl.transacao_id_criado = t.transacao_id) "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
         (account_id, min(datas), fim_busca_sql),
     )
@@ -1477,7 +1483,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         )
         cur.execute(
             "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
-            "VALUES (%s, %s, 'automatico', %s) ON CONFLICT DO NOTHING;",
+            "VALUES (%s, %s, 'fatura', %s) ON CONFLICT DO NOTHING;",
             (linha["id"], novo_id, usuario),
         )
         criadas += 1
