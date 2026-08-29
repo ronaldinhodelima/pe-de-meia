@@ -1720,6 +1720,49 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (22);")
             conn.commit()
 
+        if versao_atual < 23:
+            # Vinculo persistente entre linha da fatura (autoridade) e o
+            # lancamento que o Pluggy trouxe. Antes disso a conciliacao era
+            # SEM MEMORIA: recalculava tudo por heuristica a cada abertura da
+            # tela e nao tinha onde registrar decisao humana - dai vinham os
+            # falsos positivos de "sobra" e a impossibilidade de resolver
+            # parcelamento.
+            #
+            # E' N:N de proposito. O caso que exige isso: parcelamento que o
+            # Pluggy gravou como UMA transacao so (valor cheio, data da compra)
+            # corresponde a UMA linha por mes, em faturas DIFERENTES - ou seja,
+            # varias linhas apontando pra mesma transacao, legitimamente. Com
+            # "usado/nao usado" dentro de uma fatura isso era impossivel de
+            # representar, e um mes acabava "roubando" a transacao do outro.
+            #
+            # origem='manual' e' decisao humana e nunca e' sobrescrita pelo
+            # vinculo automatico (mesma regra de categoria_manual e do OK).
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.fatura_vinculo ("
+                "id bigserial PRIMARY KEY, "
+                "fatura_linha_id bigint NOT NULL REFERENCES cartao.fatura_linha(id) ON DELETE CASCADE, "
+                "transacao_id uuid NOT NULL REFERENCES cartao.transacao(transacao_id), "
+                "origem text NOT NULL DEFAULT 'automatico', "
+                "criado_por text, "
+                "criado_em timestamptz NOT NULL DEFAULT now(), "
+                "UNIQUE(fatura_linha_id, transacao_id));"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fatura_vinculo_linha "
+                "ON cartao.fatura_vinculo(fatura_linha_id);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fatura_vinculo_transacao "
+                "ON cartao.fatura_vinculo(transacao_id);"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Vinculo persistente entre fatura e lancamento',"
+                "jsonb_build_object('versao',23));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (23);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

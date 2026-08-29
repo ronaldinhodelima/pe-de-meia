@@ -66,43 +66,43 @@
   <div class="cat-breakdown" style="border-left:3px solid {{ 'var(--good)' if resultado.fecha_100 else 'var(--bad)' }}">
     <h3>
       {% if resultado.fecha_100 %}
-        ✓ Fecha 100% — todo lançamento da fatura tem par no sistema
+        ✓ Fecha 100% — toda linha da fatura tem vínculo e nada sobrou no sistema
       {% else %}
-        ⚠ Não fechou — veja as diferenças abaixo
+        ⚠ Falta vincular — veja abaixo
       {% endif %}
     </h3>
     <div class="cards" style="margin-top:12px">
       <div class="card"><div class="label" title="Referência da fatura">Referência</div>
         <div class="val">{{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}</div></div>
-      <div class="card"><div class="label" title="Saldo total impresso na fatura">Total da fatura</div>
+      <div class="card"><div class="label" title="SALDO TOTAL impresso no PDF da fatura">Total impresso no PDF</div>
         <div class="val">{{ f.total|moeda }}</div></div>
-      <div class="card"><div class="label" title="Soma dos lançamentos individuais da fatura (compras, IOF, estornos, pagamento) - não inclui saldo anterior">Soma dos lançamentos</div>
-        <div class="val">{{ resultado.soma_fatura|moeda }}</div></div>
-      <div class="card"><div class="label" title="Lançamentos da fatura sem correspondente no Pluggy, menos o contrário">Diferença</div>
+      <div class="card"><div class="label" title="Soma das linhas que o sistema leu do PDF (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura do PDF está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
+        <div class="val" style="color:{{ 'var(--good)' if (resultado.soma_fatura - f.total)|abs < 0.01 else 'var(--bad)' }}">{{ resultado.soma_fatura|moeda }}</div></div>
+      <div class="card"><div class="label" title="Soma das linhas da fatura que já têm vínculo com um lançamento do Pluggy">Já vinculado ao Pluggy</div>
+        <div class="val">{{ resultado.soma_vinculada|moeda }}</div></div>
+      <div class="card"><div class="label" title="Soma das linhas da fatura que ainda não têm vínculo com nenhum lançamento do Pluggy. Não é 'total menos soma' - é o quanto da fatura ainda não foi conciliado.">Falta vincular</div>
         <div class="val" style="color:{{ 'var(--good)' if resultado.diferenca == 0 else 'var(--bad)' }}">{{ resultado.diferenca|moeda }}</div></div>
     </div>
     <div style="font-size:12px;color:var(--ink-faint);margin-top:10px">
-      {{ resultado.batidos|length }} lançamento(s) conferido(s) ·
-      {{ resultado.sem_sistema|length }} só na fatura ·
-      {{ resultado.sem_fatura|length }} só no sistema (não aparecem na fatura)
+      {{ resultado.linhas|length }} linha(s) na fatura ·
+      {{ resultado.sem_vinculo|length }} sem vínculo ·
+      {{ resultado.orfas|length }} lançamento(s) do Pluggy sem vínculo
     </div>
     <div style="margin-top:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
       <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
          style="font-size:12px">
         Ver esse período inteiro em Lançamentos ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}) →
       </a>
-      {% if fatura_id %}
-        <button type="button" class="ver-btn" style="font-size:12px" onclick="consolidarDatasFatura({{ fatura_id }}, this)">
-          Consolidar datas com a fatura
-        </button>
-        <span id="consolidar-status" style="font-size:12px;color:var(--ink-faint)"></span>
-      {% endif %}
+      <button type="button" class="ver-btn" style="font-size:12px" onclick="vincularAutomatico({{ f.id }}, this)">
+        Vincular automaticamente o que sobrou
+      </button>
+      <span id="vinculo-status" style="font-size:12px;color:var(--ink-faint)"></span>
     </div>
     <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px">
-      A fatura em PDF é a fonte oficial. "Consolidar datas" corrige, só na data, os lançamentos avulsos
-      (não parcelados) que já batem 1:1 com uma linha da fatura — não mexe em categoria, dimensão,
-      observação, conferida ou duplicidade, e fica registrado em Logs. Parcelas ficam de fora: a data
-      impressa nelas é a da compra original, não a da cobrança do mês.
+      A fatura em PDF é a autoridade. Cada linha dela guarda o vínculo com o lançamento que o Pluggy trouxe —
+      o vínculo fica salvo, então o resultado não muda sozinho de uma visita para outra. Vínculo feito por você
+      nunca é desfeito pelo automático. Uma mesma transação pode atender várias linhas (parcelamento que o
+      Pluggy gravou de uma vez só).
     </div>
   </div>
 
@@ -154,36 +154,39 @@
     </div>
   {% endif %}
 
-  {% if resultado.sem_sistema %}
+  {% if resultado.sem_vinculo %}
     <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
-      <h3>Na fatura, mas não achei no sistema</h3>
+      <h3>Linhas da fatura sem vínculo
+        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.sem_vinculo|length }})</span>
+      </h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-        A operadora cobrou, mas o Pluggy não trouxe (ou trouxe com data/valor muito diferente).
-        Se for algo que o Pluggy realmente nunca vai sincronizar (ex: tarifa que o banco não manda),
-        dá pra criar o lançamento direto daqui, usando a fatura como fonte.
+        A operadora cobrou e ainda não há lançamento do Pluggy associado. Vincule a um dos lançamentos
+        órfãos, ou crie o lançamento pela fatura quando o Pluggy realmente nunca vai trazer (ex: tarifa).
       </div>
-      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th><th style="text-align:right">Valor</th><th>Criar como despesa</th></tr></thead>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th>Titular</th>
+        <th style="text-align:right">Valor</th><th>Vincular a um lançamento</th></tr></thead>
       <tbody>
-        {% for l in resultado.sem_sistema %}
-          <tr data-linha-id="{{ l.fatura_linha_id }}">
-            <td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.titular or '-' }}</td>
-            <td class="valor">{{ l.valor|moeda }}
-              {%- if l.valor_esperado_parcelamento is defined %}
-                <br><small style="color:var(--ink-faint)">parcelamento — procurei {{ l.valor_esperado_parcelamento|moeda }} no total</small>
-              {%- endif %}
-            </td>
+        {% for l in resultado.sem_vinculo %}
+          <tr data-linha-id="{{ l.id }}">
+            <td>{{ l.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ l.descricao }}</td>
+            <td>{{ l.titular or '-' }}</td>
+            <td class="valor">{{ l.valor|moeda }}</td>
             <td>
-              {% if l.fatura_linha_id %}
-                <div style="display:flex;gap:6px;align-items:center">
-                  <select class="fatura-categoria" style="padding:5px 7px;font-size:12px">
-                    {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
-                  </select>
-                  <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
-                </div>
-                <span class="fatura-status" style="font-size:11px;color:var(--ink-faint)"></span>
-              {% else %}
-                <span style="font-size:11px;color:var(--ink-faint)">(sem PDF salvo nesta sessão)</span>
-              {% endif %}
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <select class="vincular-orfa" style="padding:5px 7px;font-size:12px;max-width:320px">
+                  <option value="">escolha o lançamento…</option>
+                  {% for o in resultado.orfas %}
+                    <option value="{{ o.transacao_id }}">{{ o.data.strftime('%d/%m') }} · {{ o.descricao }} · {{ o.valor|moeda }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="ver-btn" onclick="vincularLinha(this)">Vincular</button>
+                <select class="fatura-categoria" style="padding:5px 7px;font-size:12px">
+                  {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
+                </select>
+                <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
+              </div>
+              <span class="fatura-status" style="font-size:11px;color:var(--ink-faint)"></span>
             </td>
           </tr>
         {% endfor %}
@@ -191,39 +194,88 @@
     </div>
   {% endif %}
 
-  {% if resultado.sem_fatura %}
+  {% if resultado.orfas %}
     <div class="cat-breakdown" style="border-left:3px solid #d9a441">
-      <h3>No sistema, mas não achei na fatura
-        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.sem_fatura|length }} lançamento(s))</span>
+      <h3>Lançamentos do Pluggy sem vínculo
+        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.orfas|length }})</span>
       </h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-        O Pluggy trouxe um lançamento nessa conta, nos últimos ~35 dias cobertos por esta fatura,
-        que não bateu com nenhuma linha dela — pode ser uma duplicidade do próprio Pluggy, ou algo
-        que ainda vai aparecer na fatura seguinte.
+        Estão na conta, dentro do ciclo desta fatura, e não têm vínculo com nenhuma linha de nenhuma fatura.
+        Pode ser cobrança que aparece na fatura seguinte, duplicidade do Pluggy, ou vínculo que falta fazer.
       </div>
-      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th><th style="text-align:right">Valor</th></tr></thead>
+      <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th>
+        <th style="text-align:right">Valor</th><th>Vincular a uma linha da fatura</th></tr></thead>
       <tbody>
-        {% for l in resultado.sem_fatura %}
-          <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td>
-              <td class="valor">{{ l.valor|moeda }}</td></tr>
+        {% for o in resultado.orfas %}
+          <tr data-transacao-id="{{ o.transacao_id }}">
+            <td>{{ o.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ o.descricao }}</td>
+            <td class="valor">{{ o.valor|moeda }}</td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center">
+                <select class="vincular-linha-alvo" style="padding:5px 7px;font-size:12px;max-width:340px">
+                  <option value="">escolha a linha da fatura…</option>
+                  {% for l in resultado.linhas %}
+                    <option value="{{ l.id }}">{{ l.data.strftime('%d/%m') }} · {{ l.descricao }} · {{ l.valor|moeda }}{{ ' (já vinculada)' if l.tem_vinculo }}</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="ver-btn" onclick="vincularOrfa(this)">Vincular</button>
+              </div>
+              <span class="orfa-status" style="font-size:11px;color:var(--ink-faint)"></span>
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
       <tfoot><tr>
         <td colspan="2"><strong>Total</strong></td>
-        <td class="valor"><strong>{{ resultado.sem_fatura|sum(attribute='valor')|moeda }}</strong></td>
+        <td class="valor"><strong>{{ resultado.orfas|sum(attribute='valor')|moeda }}</strong></td>
+        <td></td>
       </tr></tfoot>
       </table>
     </div>
   {% endif %}
 
   <details class="cat-breakdown">
-    <summary>Ver os {{ resultado.batidos|length }} lançamentos conferidos</summary>
-    <div class="tabela-scroll" style="margin-top:10px">
-    <table class="compacta"><thead><tr><th>Data</th><th>Descrição (fatura)</th><th>Descrição (sistema)</th><th>Titular</th><th style="text-align:right">Valor</th></tr></thead>
+    <summary>Todas as {{ resultado.linhas|length }} linhas da fatura, com seus vínculos</summary>
+    <div style="font-size:12px;color:var(--ink-soft);margin:10px 0">
+      Clique no <strong>+</strong> de uma linha para ver os lançamentos vinculados a ela e desfazer o vínculo se estiver errado.
+    </div>
+    <div class="tabela-scroll">
+    <table class="compacta"><thead><tr><th style="width:28px"></th><th>Data</th><th>Descrição (fatura)</th>
+      <th>Titular</th><th style="text-align:right">Valor</th><th>Vínculo</th></tr></thead>
     <tbody>
-      {% for l in resultado.batidos %}
-        <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td><td>{{ l.descricao_sistema }}</td>
-            <td>{{ l.titular or '-' }}</td><td class="valor">{{ l.valor|moeda }}</td></tr>
+      {% for l in resultado.linhas %}
+        <tr class="linha-fatura" data-linha-id="{{ l.id }}">
+          <td><button type="button" class="ver-btn" onclick="alternarVinculos(this)"
+                      {{ 'disabled' if not l.vinculos }}>+</button></td>
+          <td>{{ l.data.strftime('%d/%m/%Y') }}</td>
+          <td>{{ l.descricao }}</td>
+          <td>{{ l.titular or '-' }}</td>
+          <td class="valor">{{ l.valor|moeda }}</td>
+          <td style="font-size:11.5px">
+            {% if l.vinculos %}
+              <span style="color:var(--good)">{{ l.vinculos|length }} vínculo(s)</span>
+            {% elif l.transacao_id_criado %}
+              <span style="color:var(--ink-faint)">lançamento criado pela fatura</span>
+            {% else %}
+              <strong style="color:var(--bad)">sem vínculo</strong>
+            {% endif %}
+          </td>
+        </tr>
+        {% for v in l.vinculos %}
+          <tr class="vinculo-de-{{ l.id }}" style="display:none;background:var(--bg)">
+            <td></td>
+            <td>{{ v.data.strftime('%d/%m/%Y') }}</td>
+            <td colspan="2" style="font-size:12px">↳ {{ v.descricao }}</td>
+            <td class="valor">{{ v.valor|moeda }}</td>
+            <td style="font-size:11.5px">
+              {{ 'manual' if v.origem == 'manual' else 'automático' }}
+              <button type="button" class="ver-btn" style="margin-left:6px"
+                      data-linha-id="{{ l.id }}" data-transacao-id="{{ v.transacao_id }}"
+                      onclick="desvincular(this)">desvincular</button>
+            </td>
+          </tr>
+        {% endfor %}
       {% endfor %}
     </tbody></table>
     </div>
@@ -258,33 +310,132 @@ function marcarRepetidaConferida(chk) {
     });
 }
 
-function consolidarDatasFatura(faturaId, btn) {
-  if (!confirm('Corrigir a data dos lançamentos que batem com a fatura, usando a data oficial do PDF? Só a data muda — categoria, dimensão, observação, conferida e duplicidade continuam como estão.')) {
-    return;
-  }
-  const status = document.getElementById('consolidar-status');
+function postJSON(url, corpo) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo || {})
+  }).then(r => r.json());
+}
+
+function vincularAutomatico(faturaId, btn) {
+  const status = document.getElementById('vinculo-status');
   btn.disabled = true;
   status.style.color = 'var(--ink-faint)';
-  status.textContent = 'Consolidando…';
-  fetch('/relatorios/fatura/' + encodeURIComponent(faturaId) + '/consolidar-datas', { method: 'POST' })
-    .then(r => r.json())
+  status.textContent = 'Vinculando…';
+  postJSON('/api/fatura/' + encodeURIComponent(faturaId) + '/vincular-automatico')
     .then(d => {
       btn.disabled = false;
       if (!d.ok) {
         status.style.color = 'var(--bad)';
-        status.textContent = d.erro || 'Não consegui consolidar.';
+        status.textContent = d.erro || 'Não consegui vincular.';
         return;
       }
       status.style.color = 'var(--good)';
-      status.textContent = d.alteradas + ' data(s) corrigida(s).';
-      if (d.alteradas > 0) {
-        setTimeout(() => location.reload(), 1200);
-      }
+      status.textContent = d.criados + ' vínculo(s) criado(s).';
+      if (d.criados > 0) setTimeout(() => location.reload(), 900);
     })
     .catch(() => {
       btn.disabled = false;
       status.style.color = 'var(--bad)';
-      status.textContent = 'Não consegui consolidar.';
+      status.textContent = 'Não consegui vincular.';
+    });
+}
+
+function vincularLinha(btn) {
+  const linha = btn.closest('tr');
+  const linhaId = linha.dataset.linhaId;
+  const transacaoId = linha.querySelector('.vincular-orfa').value;
+  const status = linha.querySelector('.fatura-status');
+  if (!transacaoId) {
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Escolha o lançamento.';
+    return;
+  }
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Vinculando…';
+  postJSON('/api/fatura-linha/' + encodeURIComponent(linhaId) + '/vincular', { transacao_id: transacaoId })
+    .then(d => {
+      if (!d.ok) {
+        btn.disabled = false;
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Falha ao vincular.';
+        return;
+      }
+      status.style.color = 'var(--good)';
+      status.textContent = 'Vinculado.';
+      setTimeout(() => location.reload(), 700);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Falha ao vincular.';
+    });
+}
+
+function vincularOrfa(btn) {
+  const linha = btn.closest('tr');
+  const transacaoId = linha.dataset.transacaoId;
+  const linhaId = linha.querySelector('.vincular-linha-alvo').value;
+  const status = linha.querySelector('.orfa-status');
+  if (!linhaId) {
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Escolha a linha da fatura.';
+    return;
+  }
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Vinculando…';
+  postJSON('/api/fatura-linha/' + encodeURIComponent(linhaId) + '/vincular', { transacao_id: transacaoId })
+    .then(d => {
+      if (!d.ok) {
+        btn.disabled = false;
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Falha ao vincular.';
+        return;
+      }
+      status.style.color = 'var(--good)';
+      status.textContent = 'Vinculado.';
+      setTimeout(() => location.reload(), 700);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Falha ao vincular.';
+    });
+}
+
+function alternarVinculos(btn) {
+  const linhaId = btn.closest('tr').dataset.linhaId;
+  const filhas = document.querySelectorAll('.vinculo-de-' + linhaId);
+  const abrindo = btn.textContent.trim() === '+';
+  filhas.forEach(f => { f.style.display = abrindo ? '' : 'none'; });
+  btn.textContent = abrindo ? '−' : '+';
+}
+
+function desvincular(btn) {
+  if (!confirm('Desfazer o vínculo entre essa linha da fatura e o lançamento? O lançamento em si não é alterado.')) {
+    return;
+  }
+  const linhaId = btn.dataset.linhaId;
+  const transacaoId = btn.dataset.transacaoId;
+  btn.disabled = true;
+  btn.textContent = 'desvinculando…';
+  postJSON('/api/fatura-linha/' + encodeURIComponent(linhaId) + '/desvincular', { transacao_id: transacaoId })
+    .then(d => {
+      if (!d.ok) {
+        btn.disabled = false;
+        btn.textContent = 'desvincular';
+        alert(d.erro || 'Não consegui desvincular.');
+        return;
+      }
+      location.reload();
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = 'desvincular';
+      alert('Não consegui desvincular.');
     });
 }
 

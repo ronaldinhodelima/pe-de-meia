@@ -465,7 +465,7 @@ def relatorios_lancamentos():
 
 
 def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None,
-                       ciclo_inicio_min=None):
+                       ciclo_inicio_min=None, transacoes_bloqueadas=None, ciclo_fim_real=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
     lancamentos que o Pluggy trouxe naquela conta. fatura_linha_ids, quando
     informado, e um dict {id(linha) python: id da cartao.fatura_linha} para o
@@ -479,6 +479,13 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     fatura_linha_ids = fatura_linha_ids or {}
     todos_fatura_linha_ids = todos_fatura_linha_ids or fatura_linha_ids
     datas = [l["data"] for l in linhas]
+    # O fim do ciclo tem que vir do periodo da FATURA, nao de max(datas): numa
+    # fatura em que toda linha e' parcela, a data impressa e' a da compra
+    # original e o "fim" cairia meses no passado, deixando de fora justamente
+    # as cobrancas deste mes. max(datas) fica so como ultimo recurso.
+    fim_busca = ciclo_fim_real or max(datas)
+    if fim_busca < max(datas):
+        fim_busca = max(datas)
     cur.execute(
         f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
         f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
@@ -488,12 +495,19 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # cobrar dela um par na fatura, ela ja foi resolvida.
         f"FROM cartao.transacao t WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
-        (account_id, min(datas), max(datas)),
+        (account_id, min(datas), fim_busca),
     )
     candidatos = [dict(r) for r in cur.fetchall()]
+    # Transacao ja vinculada a alguma linha de fatura (ver cartao.fatura_vinculo)
+    # nao pode ser reivindicada de novo pelo casamento 1:1 nem por avulsa - foi
+    # isso que fazia um mes "roubar" a cobranca do outro. A excecao e' o
+    # fallback de parcelamento agregado, onde a MESMA transacao (valor cheio)
+    # legitimamente atende uma linha por mes, em faturas diferentes.
+    transacoes_bloqueadas = transacoes_bloqueadas or set()
     for c in candidatos:
         c["_usado"] = False
         c["_data_local"] = c["data_local"]
+        c["_bloqueado"] = str(c["transacao_id"]) in transacoes_bloqueadas
 
     # Ciclo real desta fatura - calculado aqui (nao so mais embaixo, perto de
     # "sem_fatura") porque o fallback de parcela por mes tambem precisa dele:
@@ -501,10 +515,10 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     # cobranca atual, entao filtrar candidato por proximidade dessa data (como
     # se faz com avulsa) nunca acha nada - o filtro certo e' "aconteceu dentro
     # do ciclo desta fatura", nao "perto da data impressa".
-    ciclo_inicio = max(datas) - timedelta(days=35)
+    ciclo_fim = fim_busca
+    ciclo_inicio = ciclo_fim - timedelta(days=35)
     if ciclo_inicio_min and ciclo_inicio_min > ciclo_inicio:
         ciclo_inicio = ciclo_inicio_min
-    ciclo_fim = max(datas)
 
     # A fatura lista cada parcela mensal numa linha (ex: "Parc.9/12 R$129,00");
     # o Pluggy grava o parcelamento inteiro como UMA transacao so, no valor
@@ -525,7 +539,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     for linha in avulsas:
         melhor, melhor_dist = None, None
         for c in candidatos:
-            if c["_usado"] or round(float(c["valor"]), 2) != linha["valor"]:
+            if c["_usado"] or c["_bloqueado"] or round(float(c["valor"]), 2) != linha["valor"]:
                 continue
             dist = abs((c["_data_local"] - linha["data"]).days)
             if dist > 3:
@@ -535,7 +549,8 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         if melhor:
             melhor["_usado"] = True
             batidos.append({**linha, "transacao_id": str(melhor["transacao_id"]),
-                             "descricao_sistema": melhor["descricao"]})
+                             "descricao_sistema": melhor["descricao"],
+                             "fatura_linha_id": fatura_linha_ids.get(id(linha))})
         else:
             sem_sistema.append({**linha, "fatura_linha_id": fatura_linha_ids.get(id(linha))})
 
@@ -554,7 +569,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         for l in linhas_grupo:
             melhor_linha = None
             for c in candidatos:
-                if c["_usado"] or round(float(c["valor"]), 2) != l["valor"]:
+                if c["_usado"] or c["_bloqueado"] or round(float(c["valor"]), 2) != l["valor"]:
                     continue
                 if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
                     continue
@@ -566,7 +581,8 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
             if melhor_linha:
                 melhor_linha["_usado"] = True
                 batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),
-                                 "descricao_sistema": melhor_linha["descricao"]})
+                                 "descricao_sistema": melhor_linha["descricao"],
+                                 "fatura_linha_id": fatura_linha_ids.get(id(l))})
             else:
                 pendentes.append(l)
 
@@ -606,7 +622,8 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
             for l in pendentes:
                 batidos.append({**l, "transacao_id": str(melhor["transacao_id"]),
                                 "descricao_sistema": melhor["descricao"],
-                                "valor_esperado_parcelamento": valor_esperado})
+                                "valor_esperado_parcelamento": valor_esperado,
+                                "fatura_linha_id": fatura_linha_ids.get(id(l))})
         else:
             for l in pendentes:
                 sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
@@ -651,7 +668,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # o mesmo ciclo_inicio (~35 dias antes do fim) da checagem de
         # "sem_fatura" da o periodo real desta fatura.
         "periodo_inicio": ciclo_inicio,
-        "periodo_fim": max(datas),
+        "periodo_fim": ciclo_fim,
         "repetidas_na_fatura": _repetidas_na_fatura(linhas, todos_fatura_linha_ids),
     }
 
@@ -713,171 +730,190 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     return sorted(repetidas, key=lambda r: r["data"])
 
 
-def _transacoes_ja_batidas(cur, account_id, ano_referencia, mes_referencia):
-    """Reconcilia de novo a fatura de um mes especifico (se existir) e devolve
-    o conjunto de transacao_id que ela ja da como batido. Usado pra tirar de
-    "sem_fatura" um lancamento que caiu bem na borda do ciclo (ex: cobrado no
-    ultimo dia do mes anterior) e que o mes vizinho ja reivindicou de verdade -
-    sem isso, a mesma transacao aparece como "sobra" em dois meses seguidos,
-    porque cada view reconcilia do zero e nao sabe o que o vizinho decidiu."""
+def _linhas_da_fatura(cur, fatura_id):
+    """Linhas da fatura no formato que o matcher espera, com o id do banco."""
     cur.execute(
-        "SELECT id, account_id, periodo_inicio FROM cartao.fatura_importada "
-        "WHERE account_id = %s AND ano_referencia = %s AND mes_referencia = %s;",
-        (account_id, ano_referencia, mes_referencia),
+        "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
+        "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em "
+        "FROM cartao.fatura_linha WHERE fatura_id=%s ORDER BY data, id;",
+        (fatura_id,),
     )
-    fatura_row = cur.fetchone()
-    if not fatura_row:
-        return set()
-    cur.execute(
-        "SELECT data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular "
-        "FROM cartao.fatura_linha WHERE fatura_id = %s ORDER BY data;",
-        (fatura_row["id"],),
-    )
-    linhas = [dict(r) for r in cur.fetchall()]
-    for l in linhas:
+    linhas_db = [dict(r) for r in cur.fetchall()]
+    for l in linhas_db:
         l["valor"] = float(l["valor"])
-    if not linhas:
-        return set()
-    resultado = _conciliar_linhas(cur, str(fatura_row["account_id"]), linhas, {}, {}, fatura_row["periodo_inicio"])
-    return {b["transacao_id"] for b in resultado["batidos"]}
+    return linhas_db
 
 
-@bp.route("/relatorios/fatura/<int:fatura_id>/restaurar-datas", methods=["POST"])
-@requer("relatorios")
-def restaurar_datas_fatura(fatura_id):
-    """Reversao emergencial de um consolidar-datas que aplicou data errada
-    (ver auditoria "Data consolidada..."). Recebe {"itens": [{"transacao_id":
-    ..., "data": "AAAA-MM-DD"}, ...]} - normalmente colado direto do campo
-    "antes" do proprio log de auditoria do evento que se quer desfazer."""
-    data_in = request.get_json(force=True) or {}
-    itens = data_in.get("itens") or []
-    if not itens or not all(i.get("transacao_id") and i.get("data") for i in itens):
-        return jsonify({"ok": False, "erro": "Lista de itens inválida."}), 400
-
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        alteracoes = []
-        for item in itens:
-            cur.execute(
-                "SELECT (data_transacao AT TIME ZONE 'America/Sao_Paulo')::date AS data_local, "
-                "descricao FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
-                (item["transacao_id"],),
-            )
-            t = cur.fetchone()
-            if not t:
-                continue
-            cur.execute(
-                "UPDATE cartao.transacao SET "
-                "data_transacao = (%s::date + (data_transacao AT TIME ZONE 'America/Sao_Paulo')::time) "
-                "AT TIME ZONE 'America/Sao_Paulo', atualizado_em = now() "
-                "WHERE transacao_id = %s;",
-                (item["data"], item["transacao_id"]),
-            )
-            alteracoes.append({
-                "transacao_id": item["transacao_id"], "descricao": t["descricao"],
-                "data_antes": t["data_local"].isoformat(), "data_depois": item["data"],
-            })
-        conn.commit()
-        if alteracoes:
-            registrar_mudanca_auditoria(
-                f"Data restaurada manualmente (fatura_id={fatura_id})",
-                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_antes"]}
-                 for a in alteracoes],
-                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_depois"]}
-                 for a in alteracoes],
-            )
-        return jsonify({"ok": True, "alteradas": len(alteracoes)})
-    except Exception as exc:
-        conn.rollback()
-        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
-    finally:
-        cur.close()
-        conn.close()
-
-
-@bp.route("/relatorios/fatura/<int:fatura_id>/consolidar-datas", methods=["POST"])
-@requer("relatorios")
-def consolidar_datas_fatura(fatura_id):
-    """A fatura em PDF e' a fonte oficial - quando um lancamento AVULSO (nao
-    parcelado) bate 1:1 com uma linha dela (descricao+valor sem ambiguidade)
-    mas a data que o Pluggy sincronizou e' diferente, corrige data_transacao
-    pela data da fatura. So mexe na data: categoria, dimensao, observacao,
-    conferida e duplicada ficam intocadas, e cada mudanca vira registro de
-    auditoria com antes/depois.
-    NUNCA mexe em lancamento de parcela (linha["parcela_total"] preenchido):
-    a data impressa numa linha de parcela e' a da COMPRA ORIGINAL, fixa em
-    toda reimpressao mensal da fatura - nao a data desta cobranca. Um bug
-    real aqui (29/08/2026) trocou a data de 22 parcelas de agosto/2026 pela
-    data da compra original (algumas de novembro/2025) - revertido na hora
-    via /restaurar-datas. Nunca reintroduzir consolidacao pra parcela sem
-    uma fonte de data mensal confiavel, que a fatura nao da."""
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
+def _transacoes_vinculadas(cur, ignorar_fatura_id=None):
+    """transacao_id que ja tem vinculo com alguma linha de fatura. Ignorando
+    opcionalmente uma fatura (a que esta sendo reconciliada agora, cujos
+    proprios vinculos nao devem bloquear o recalculo dela mesma)."""
+    if ignorar_fatura_id is None:
+        cur.execute("SELECT DISTINCT transacao_id FROM cartao.fatura_vinculo;")
+    else:
         cur.execute(
-            "SELECT account_id, periodo_inicio FROM cartao.fatura_importada WHERE id = %s;",
-            (fatura_id,),
+            "SELECT DISTINCT v.transacao_id FROM cartao.fatura_vinculo v "
+            "JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id "
+            "WHERE fl.fatura_id <> %s;",
+            (ignorar_fatura_id,),
         )
-        fatura_row = cur.fetchone()
-        if not fatura_row:
-            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
-        account_id = str(fatura_row["account_id"])
+    return {str(r["transacao_id"]) for r in cur.fetchall()}
 
+
+def _ciclo_inicio_encadeado(cur, fatura_row):
+    """Inicio real do ciclo = fim da fatura do mes anterior + 1 dia, calculado
+    na LEITURA e nao congelado no import.
+
+    Congelar no import tornava o resultado dependente da ORDEM em que os PDFs
+    foram enviados: quem mandasse da fatura mais nova para a mais antiga ficava
+    com todas no palpite generico de 35 dias, porque a anterior ainda nao
+    existia no banco na hora. Aconteceu de verdade com as faturas de 2025.
+    Calculando aqui, a ordem de envio deixa de importar."""
+    cur.execute(
+        "SELECT periodo_fim FROM cartao.fatura_importada "
+        "WHERE account_id = %s AND (ano_referencia, mes_referencia) < (%s, %s) "
+        "AND periodo_fim IS NOT NULL "
+        "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
+        (fatura_row["account_id"], fatura_row["ano_referencia"], fatura_row["mes_referencia"]),
+    )
+    anterior = cur.fetchone()
+    if anterior and anterior["periodo_fim"]:
+        return anterior["periodo_fim"] + timedelta(days=1)
+    return fatura_row["periodo_inicio"]
+
+
+def _estado_fatura(cur, fatura_row):
+    """Retrato da fatura a partir dos VINCULOS gravados - nao por heuristica.
+    A fatura e' a autoridade: cada linha dela aparece com os lancamentos que
+    o usuario (ou o vinculo automatico) associou. Fica orfao o que o Pluggy
+    trouxe dentro do ciclo e nao tem vinculo com NENHUMA linha de NENHUMA
+    fatura - antes a checagem era so contra a fatura aberta, e por isso a
+    mesma cobranca aparecia como sobra em dois meses seguidos."""
+    fatura_id = fatura_row["id"]
+    account_id = str(fatura_row["account_id"])
+    linhas = _linhas_da_fatura(cur, fatura_id)
+
+    cur.execute(
+        f"SELECT v.fatura_linha_id, v.transacao_id, v.origem, v.criado_por, v.criado_em, "
+        f"t.descricao, COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local "
+        f"FROM cartao.fatura_vinculo v "
+        f"JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id "
+        f"JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
+        f"WHERE fl.fatura_id = %s ORDER BY v.criado_em;",
+        (fatura_id,),
+    )
+    vinculos_por_linha = {}
+    for r in cur.fetchall():
+        vinculos_por_linha.setdefault(r["fatura_linha_id"], []).append({
+            "transacao_id": str(r["transacao_id"]),
+            "descricao": r["descricao"],
+            "valor": round(float(r["valor"] or 0), 2),
+            "data": r["data_local"],
+            "origem": r["origem"],
+            "criado_por": r["criado_por"],
+            "criado_em": data_hora_local(r["criado_em"]),
+        })
+
+    for l in linhas:
+        l["vinculos"] = vinculos_por_linha.get(l["id"], [])
+        l["tem_vinculo"] = bool(l["vinculos"]) or bool(l["transacao_id_criado"])
+
+    # orfas: no ciclo desta fatura e sem vinculo com nenhuma fatura
+    datas_linhas = [l["data"] for l in linhas]
+    periodo_inicio = _ciclo_inicio_encadeado(cur, fatura_row) or (min(datas_linhas) if datas_linhas else None)
+    periodo_fim = fatura_row["periodo_fim"] or (max(datas_linhas) if datas_linhas else None)
+    if not periodo_inicio or not periodo_fim:
+        # fatura sem linha nenhuma (nao deveria acontecer: o import recusa PDF
+        # sem lancamento) - sem ciclo nao da pra dizer o que e' orfao
+        return {
+            "linhas": linhas, "sem_vinculo": linhas, "orfas": [],
+            "soma_fatura": 0.0, "soma_vinculada": 0.0, "diferenca": 0.0,
+            "fecha_100": False, "periodo_inicio": periodo_inicio, "periodo_fim": periodo_fim,
+            "repetidas_na_fatura": [],
+        }
+    cur.execute(
+        f"SELECT t.transacao_id, t.descricao, COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local "
+        f"FROM cartao.transacao t "
+        f"WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
+        f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s "
+        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id) "
+        f"ORDER BY 4, 2;",
+        (account_id, periodo_inicio, periodo_fim),
+    )
+    orfas = [{
+        "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
+        "valor": round(float(r["valor"] or 0), 2), "data": r["data_local"],
+    } for r in cur.fetchall()]
+
+    def _nao_e_pagamento_recebido(l):
+        return l["descricao"].strip().lower() != "pagamento recebido"
+
+    consideradas = [l for l in linhas if _nao_e_pagamento_recebido(l)]
+    soma_fatura = round(sum(l["valor"] for l in consideradas), 2)
+    soma_vinculada = round(sum(l["valor"] for l in consideradas if l["tem_vinculo"]), 2)
+    sem_vinculo = [l for l in linhas if not l["tem_vinculo"]]
+
+    return {
+        "linhas": linhas,
+        "sem_vinculo": sem_vinculo,
+        "orfas": orfas,
+        "soma_fatura": soma_fatura,
+        "soma_vinculada": soma_vinculada,
+        "diferenca": round(soma_fatura - soma_vinculada, 2),
+        "fecha_100": not sem_vinculo and not orfas,
+        "periodo_inicio": periodo_inicio,
+        "periodo_fim": periodo_fim,
+        "repetidas_na_fatura": _repetidas_na_fatura(linhas, {id(l): l["id"] for l in linhas}),
+    }
+
+
+def _vincular_automatico(cur, fatura_row, usuario):
+    """Cria vinculo para as linhas que ainda nao tem, usando as heuristicas de
+    _conciliar_linhas apenas como SUGESTAO. Nunca toca em vinculo que ja
+    existe (inclusive manual) e nunca reivindica transacao ja vinculada a
+    outra fatura, salvo no caso do parcelamento agregado. Devolve quantos
+    vinculos criou."""
+    fatura_id = fatura_row["id"]
+    linhas_db = _linhas_da_fatura(cur, fatura_id)
+    if not linhas_db:
+        return 0
+
+    cur.execute(
+        "SELECT DISTINCT v.fatura_linha_id FROM cartao.fatura_vinculo v "
+        "JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id WHERE fl.fatura_id = %s;",
+        (fatura_id,),
+    )
+    ja_vinculadas = {r["fatura_linha_id"] for r in cur.fetchall()}
+    pendentes = [l for l in linhas_db if l["id"] not in ja_vinculadas and not l["transacao_id_criado"]]
+    if not pendentes:
+        return 0
+
+    linhas = [{k: v for k, v in l.items() if k != "id"} for l in pendentes]
+    ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, pendentes)}
+    bloqueadas = _transacoes_vinculadas(cur, ignorar_fatura_id=fatura_id)
+
+    resultado = _conciliar_linhas(
+        cur, str(fatura_row["account_id"]), linhas, ids_por_linha, ids_por_linha,
+        _ciclo_inicio_encadeado(cur, fatura_row), transacoes_bloqueadas=bloqueadas,
+        ciclo_fim_real=fatura_row["periodo_fim"],
+    )
+
+    criados = 0
+    for b in resultado["batidos"]:
+        linha_id = b.get("fatura_linha_id")
+        if not linha_id:
+            continue
         cur.execute(
-            "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
-            "transacao_id_criado FROM cartao.fatura_linha WHERE fatura_id = %s ORDER BY data;",
-            (fatura_id,),
+            "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+            "VALUES (%s, %s, 'automatico', %s) ON CONFLICT (fatura_linha_id, transacao_id) DO NOTHING;",
+            (linha_id, b["transacao_id"], usuario),
         )
-        linhas_db = [dict(r) for r in cur.fetchall()]
-        linhas = [{k: v for k, v in l.items() if k not in ("id", "transacao_id_criado")} for l in linhas_db]
-        for l in linhas:
-            l["valor"] = float(l["valor"])
-        ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db) if not db["transacao_id_criado"]}
+        criados += cur.rowcount or 0
+    return criados
 
-        resultado = _conciliar_linhas(
-            cur, account_id, linhas, ids_por_linha, ids_por_linha, fatura_row["periodo_inicio"],
-        )
 
-        alteracoes = []
-        for b in resultado["batidos"]:
-            if b.get("parcela_total"):
-                continue  # data impressa e' da compra original, nao da cobranca deste mes
-            cur.execute(
-                "SELECT (data_transacao AT TIME ZONE 'America/Sao_Paulo')::date AS data_local, "
-                "descricao FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
-                (b["transacao_id"],),
-            )
-            t = cur.fetchone()
-            if not t or t["data_local"] == b["data"]:
-                continue
-            cur.execute(
-                "UPDATE cartao.transacao SET "
-                "data_transacao = (%s::date + (data_transacao AT TIME ZONE 'America/Sao_Paulo')::time) "
-                "AT TIME ZONE 'America/Sao_Paulo', atualizado_em = now() "
-                "WHERE transacao_id = %s;",
-                (b["data"], b["transacao_id"]),
-            )
-            alteracoes.append({
-                "transacao_id": b["transacao_id"], "descricao": t["descricao"],
-                "data_antes": t["data_local"].isoformat(), "data_depois": b["data"].isoformat(),
-            })
-        conn.commit()
-        if alteracoes:
-            registrar_mudanca_auditoria(
-                f"Data consolidada pela fatura em PDF (fatura_id={fatura_id})",
-                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_antes"]}
-                 for a in alteracoes],
-                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_depois"]}
-                 for a in alteracoes],
-            )
-        return jsonify({"ok": True, "alteradas": len(alteracoes), "detalhe": alteracoes})
-    except Exception as exc:
-        conn.rollback()
-        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
-    finally:
-        cur.close()
-        conn.close()
 
 
 @bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
@@ -1003,6 +1039,15 @@ def conciliar_fatura():
                          anterior["conferida_repeticao_por"] if anterior else None,
                          anterior["conferida_repeticao_em"] if anterior else None),
                     )
+                # Casamento automatico roda aqui (POST), nao na abertura da
+                # tela: GET nao pode gravar - e assim o resultado para de mudar
+                # sozinho entre uma visita e outra.
+                cur.execute(
+                    "SELECT id, account_id, ano_referencia, mes_referencia, periodo_inicio, periodo_fim "
+                    "FROM cartao.fatura_importada WHERE id = %s;",
+                    (fatura_id,),
+                )
+                _vincular_automatico(cur, cur.fetchone(), session.get("user"))
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -1024,20 +1069,6 @@ def conciliar_fatura():
             erro = "Fatura não encontrada."
         else:
             account_id = str(fatura_row["account_id"])
-            cur.execute(
-                "SELECT id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
-                "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em "
-                "FROM cartao.fatura_linha WHERE fatura_id=%s ORDER BY data;",
-                (fatura_id,),
-            )
-            linhas_db = [dict(r) for r in cur.fetchall()]
-            linhas = [{k: v for k, v in l.items() if k not in ("id", "transacao_id_criado")} for l in linhas_db]
-            ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db) if not db["transacao_id_criado"]}
-            todos_ids_por_linha = {id(l): db["id"] for l, db in zip(linhas, linhas_db)}
-            for l, db in zip(linhas, linhas_db):
-                l["valor"] = float(l["valor"])
-                l["_ja_criado"] = bool(db["transacao_id_criado"])
-
             fatura_meta = {
                 "id": fatura_id, "mes_referencia": fatura_row["mes_referencia"],
                 "ano_referencia": fatura_row["ano_referencia"], "total": float(fatura_row["total"]),
@@ -1046,46 +1077,12 @@ def conciliar_fatura():
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
                 "vencimento": fatura_row["vencimento"],
             }
-            # periodo_inicio ja e' o piso real do ciclo (fim da fatura do mes
-            # anterior + 1 dia, calculado no import - ver mais acima). So cai
-            # no palpite generico de 35 dias (dentro de _conciliar_linhas)
-            # quando foi a primeira fatura desta conta, sem anterior pra
-            # comparar na hora que foi importada.
-            ciclo_inicio_min = fatura_row["periodo_inicio"]
-            resultado = _conciliar_linhas(
-                cur, account_id, linhas, ids_por_linha, todos_ids_por_linha, ciclo_inicio_min,
-            )
+            # A tela le o estado dos VINCULOS gravados, nao recalcula heuristica
+            # a cada abertura (era isso que fazia o resultado mudar sozinho e a
+            # mesma cobranca aparecer como sobra em dois meses). O casamento
+            # automatico so roda no import ou quando o usuario pede.
+            resultado = _estado_fatura(cur, fatura_row)
             resultado["fatura"] = fatura_meta
-            # linhas ja resolvidas (usuario ja criou o lancamento) saem da lista
-            # de pendencias, mas continuam contando no total como "cobertas"
-            ja_criadas = [l for l, db in zip(linhas, linhas_db) if db["transacao_id_criado"]]
-            if ja_criadas:
-                resultado["sem_sistema"] = [
-                    l for l in resultado["sem_sistema"] if not l.get("_ja_criado")
-                ]
-                resultado["diferenca"] = round(
-                    resultado["diferenca"] - sum(l["valor"] for l in ja_criadas), 2
-                )
-
-            # "sem_fatura" pode reaparecer transacao que caiu bem na borda do
-            # ciclo e que o MES VIZINHO ja reconciliou de verdade (ver
-            # _transacoes_ja_batidas) - cada view roda do zero e nao compartilha
-            # esse estado, entao confere os dois lados antes de dar como sobra.
-            mes_ant = fatura_row["mes_referencia"] - 1 or 12
-            ano_ant = fatura_row["ano_referencia"] - (1 if fatura_row["mes_referencia"] == 1 else 0)
-            mes_prox = fatura_row["mes_referencia"] % 12 + 1
-            ano_prox = fatura_row["ano_referencia"] + (1 if fatura_row["mes_referencia"] == 12 else 0)
-            ja_batidas_vizinhas = (
-                _transacoes_ja_batidas(cur, account_id, ano_ant, mes_ant)
-                | _transacoes_ja_batidas(cur, account_id, ano_prox, mes_prox)
-            )
-            if ja_batidas_vizinhas:
-                resultado["sem_fatura"] = [
-                    l for l in resultado["sem_fatura"] if l["transacao_id"] not in ja_batidas_vizinhas
-                ]
-
-            if not resultado["sem_sistema"] and not resultado["sem_fatura"]:
-                resultado["fecha_100"] = True
 
     # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
     cur.execute(
@@ -1094,11 +1091,16 @@ def conciliar_fatura():
         "FROM cartao.fatura_importada f ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
     )
     historico = []
-    for r in cur.fetchall():
+    linhas_historico = cur.fetchall()
+    # o inicio mostrado e' o encadeado (fim da fatura anterior + 1 dia), nao o
+    # que ficou congelado no import - assim a ordem de envio dos PDFs nao muda
+    # o que a tela mostra
+    for r in linhas_historico:
         conta = contas_by_id.get(str(r["account_id"]))
         historico.append({
             **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
+            "periodo_inicio": _ciclo_inicio_encadeado(cur, r),
         })
 
     cur.close()
@@ -1171,6 +1173,126 @@ def criar_lancamento_de_fatura(linha_id):
     except Exception as exc:
         conn.rollback()
         return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/fatura/<int:fatura_id>/vincular-automatico", methods=["POST"])
+@requer("relatorios")
+def vincular_automatico_fatura(fatura_id):
+    """Roda o casamento automatico nas linhas que ainda nao tem vinculo.
+    Nao mexe em vinculo existente - nem no manual, nem no automatico ja
+    gravado antes."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT id, account_id, ano_referencia, mes_referencia, periodo_inicio, periodo_fim "
+            "FROM cartao.fatura_importada WHERE id = %s;",
+            (fatura_id,),
+        )
+        fatura_row = cur.fetchone()
+        if not fatura_row:
+            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+        criados = _vincular_automatico(cur, fatura_row, session.get("user"))
+        conn.commit()
+        if criados:
+            registrar_mudanca_auditoria(
+                f"Vínculos automáticos criados (fatura_id={fatura_id})", 0, criados,
+            )
+        return jsonify({"ok": True, "criados": criados})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui vincular: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/fatura-linha/<int:linha_id>/vincular", methods=["POST"])
+@requer("relatorios")
+def vincular_linha_fatura(linha_id):
+    """Vincula manualmente um lancamento do Pluggy a uma linha da fatura.
+    Vinculo manual e' decisao humana: o automatico nunca sobrescreve."""
+    data = request.get_json(force=True) or {}
+    transacao_id = (data.get("transacao_id") or "").strip()
+    if not transacao_id:
+        return jsonify({"ok": False, "erro": "Informe o lançamento."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT fl.id, fl.descricao, fl.valor, fi.account_id "
+            "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+            "WHERE fl.id = %s;",
+            (linha_id,),
+        )
+        linha = cur.fetchone()
+        if not linha:
+            return jsonify({"ok": False, "erro": "Linha da fatura não encontrada."}), 404
+        cur.execute(
+            "SELECT descricao, account_id FROM cartao.transacao WHERE transacao_id = %s;",
+            (transacao_id,),
+        )
+        transacao = cur.fetchone()
+        if not transacao:
+            return jsonify({"ok": False, "erro": "Lançamento não encontrado."}), 404
+        if str(transacao["account_id"]) != str(linha["account_id"]):
+            return jsonify({"ok": False, "erro": "Esse lançamento é de outra conta."}), 400
+
+        cur.execute(
+            "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+            "VALUES (%s, %s, 'manual', %s) "
+            "ON CONFLICT (fatura_linha_id, transacao_id) DO UPDATE SET origem='manual', "
+            "criado_por=EXCLUDED.criado_por, criado_em=now();",
+            (linha_id, transacao_id, session.get("user")),
+        )
+        conn.commit()
+        registrar_mudanca_auditoria(
+            f"Vínculo manual com a fatura (linha {linha_id})", None,
+            {"transacao_id": transacao_id, "lancamento": transacao["descricao"],
+             "linha_fatura": linha["descricao"], "valor_linha": float(linha["valor"])},
+        )
+        return jsonify({"ok": True})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui vincular: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
+@bp.route("/api/fatura-linha/<int:linha_id>/desvincular", methods=["POST"])
+@requer("relatorios")
+def desvincular_linha_fatura(linha_id):
+    """Desfaz um vinculo (automatico ou manual) entre linha da fatura e
+    lancamento. Nao apaga nem altera o lancamento em si."""
+    data = request.get_json(force=True) or {}
+    transacao_id = (data.get("transacao_id") or "").strip()
+    if not transacao_id:
+        return jsonify({"ok": False, "erro": "Informe o lançamento."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "DELETE FROM cartao.fatura_vinculo WHERE fatura_linha_id = %s AND transacao_id = %s "
+            "RETURNING origem;",
+            (linha_id, transacao_id),
+        )
+        removido = cur.fetchone()
+        conn.commit()
+        if removido:
+            registrar_mudanca_auditoria(
+                f"Vínculo com a fatura removido (linha {linha_id})",
+                {"transacao_id": transacao_id, "origem": removido["origem"]}, None,
+            )
+        return jsonify({"ok": True, "removido": bool(removido)})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui desvincular: {exc}"}), 400
     finally:
         cur.close()
         conn.close()
