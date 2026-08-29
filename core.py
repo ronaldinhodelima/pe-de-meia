@@ -1680,6 +1680,24 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (20);")
             conn.commit()
 
+        if versao_atual < 21:
+            # Datas do ciclo da fatura, mostradas em "Faturas ja importadas"
+            # (/relatorios/conciliar-fatura). Inicio/fim e vencimento vem do
+            # proprio PDF (fatura_unicred.py); fechamento a Unicred nao
+            # imprime em lugar nenhum do documento, entao fica so editavel
+            # manualmente na tela - por isso as 4 colunas sao nullable.
+            cur.execute("ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS periodo_inicio date;")
+            cur.execute("ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS periodo_fim date;")
+            cur.execute("ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS fechamento date;")
+            cur.execute("ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS vencimento date;")
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Datas do ciclo da fatura importada',"
+                "jsonb_build_object('versao',21));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (21);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

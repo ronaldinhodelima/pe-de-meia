@@ -8,7 +8,7 @@ bater e precisa ser revisado - por isso ele levanta erro claro em vez de
 devolver numero errado quando nao acha o total ou a referencia.
 """
 import re
-from datetime import date
+from datetime import date, timedelta
 
 import pdfplumber
 
@@ -59,6 +59,19 @@ def extrair_fatura(arquivo):
         if not m:
             raise FaturaInvalida("Não encontrei o SALDO TOTAL da fatura na segunda página.")
         total_fatura = _num_valor(m.group(1))
+
+        # A Unicred nao imprime a data de FECHAMENTO no PDF (so o vencimento) -
+        # por isso fechamento fica de fora daqui; a tela deixa o usuario
+        # preencher esse campo manualmente.
+        vencimento = None
+        m = re.search(r"VENCIMENTO:?\s*(\d{2})\s*([A-ZÇ]{3})\s*(\d{4})", texto_pag2 or "", re.IGNORECASE)
+        if m:
+            venc_mes = MESES.get(m.group(2).lower())
+            if venc_mes:
+                try:
+                    vencimento = date(int(m.group(3)), venc_mes, int(m.group(1)))
+                except ValueError:
+                    vencimento = None
 
         for page in pdf.pages[2:]:
             words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
@@ -148,10 +161,20 @@ def extrair_fatura(arquivo):
     if not linhas:
         raise FaturaInvalida("Não encontrei nenhum lançamento nas páginas do PDF.")
 
+    # Data mais recente entre as linhas = fim do ciclo desta fatura (parcela
+    # antiga tem a data da COMPRA ORIGINAL, sempre no passado, entao nunca
+    # puxa o maximo pra frente). Inicio aproximado: 35 dias antes, mesma
+    # janela usada na conciliacao para achar "sem_fatura".
+    periodo_fim = max(l["data"] for l in linhas)
+    periodo_inicio = periodo_fim - timedelta(days=35)
+
     return {
         "mes_referencia": ref_mes,
         "ano_referencia": ref_ano,
         "total": total_fatura,
         "cartao_final4": final4,
+        "vencimento": vencimento,
+        "periodo_inicio": periodo_inicio,
+        "periodo_fim": periodo_fim,
         "linhas": linhas,
     }

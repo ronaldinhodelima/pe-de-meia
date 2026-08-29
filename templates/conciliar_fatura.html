@@ -39,7 +39,8 @@
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       Clique para reabrir a conciliação com o estado atual do sistema, sem reenviar o PDF.
     </div>
-    <table class="compacta"><thead><tr><th>Referência</th><th>Cartão</th><th style="text-align:right">Total</th><th>Importada em</th></tr></thead>
+    <table class="compacta"><thead><tr><th>Referência</th><th>Cartão</th><th style="text-align:right">Total</th><th>Importada em</th>
+      <th>Datas do ciclo</th></tr></thead>
     <tbody>
       {% for h in historico %}
         <tr style="{{ 'background:var(--bg)' if h.id == fatura_id }}">
@@ -47,6 +48,34 @@
           <td>{{ h.conta_label }}</td>
           <td class="valor">{{ h.total|moeda }}</td>
           <td>{{ h.importado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <input type="hidden" name="acao" value="editar_datas">
+              <input type="hidden" name="fatura_id" value="{{ h.id }}">
+              <label style="font-size:11px;color:#888;display:flex;flex-direction:column;gap:2px">
+                Início
+                <input type="date" name="periodo_inicio" value="{{ h.periodo_inicio.isoformat() if h.periodo_inicio else '' }}"
+                       style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
+              </label>
+              <label style="font-size:11px;color:#888;display:flex;flex-direction:column;gap:2px">
+                Fim
+                <input type="date" name="periodo_fim" value="{{ h.periodo_fim.isoformat() if h.periodo_fim else '' }}"
+                       style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
+              </label>
+              <label style="font-size:11px;color:#888;display:flex;flex-direction:column;gap:2px"
+                     title="A Unicred não imprime essa data no PDF — preencha manualmente se souber">
+                Fechamento
+                <input type="date" name="fechamento" value="{{ h.fechamento.isoformat() if h.fechamento else '' }}"
+                       style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
+              </label>
+              <label style="font-size:11px;color:#888;display:flex;flex-direction:column;gap:2px">
+                Vencimento
+                <input type="date" name="vencimento" value="{{ h.vencimento.isoformat() if h.vencimento else '' }}"
+                       style="padding:4px 5px;border:1px solid #ccc;border-radius:5px;font-size:12px;width:128px">
+              </label>
+              <button type="submit" class="ver-btn">Salvar</button>
+            </form>
+          </td>
         </tr>
       {% endfor %}
     </tbody></table>
