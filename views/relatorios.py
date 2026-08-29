@@ -542,15 +542,47 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     for (titular, desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
         valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
         valor_esperado = round(valor_mensal * parcela_total, 2)
-        # O Pluggy nem sempre preenche parcela_total no lancamento agregado
-        # (esse cartao chega a mostrar "Parcela: A vista" num parcelamento
-        # real) - por isso o casamento aqui e so pelo valor cheio esperado,
-        # com o numero de parcelas e a descricao servindo apenas de desempate
-        # quando ha mais de um candidato proximo do valor. Tolerancia de R$1
-        # porque o valor da parcela impresso na fatura e arredondado por mes -
-        # multiplicado pelo numero de parcelas pode nao bater centavo a
-        # centavo com o valor cheio real (ex: fatura mostra parcela de
-        # R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
+
+        # CAMINHO PRINCIPAL: uma transacao por parcela, no valor da parcela.
+        # A fatura lista so a(s) parcela(s) COBRADA(S) neste mes (ex: agosto
+        # traz "AQUAMATER Parc.9/12", julho traz "Parc.8/12") e o Pluggy manda
+        # uma transacao por mes, no mesmo valor - entao o casamento natural e'
+        # 1:1. Filtra por estar dentro do ciclo desta fatura, nao por
+        # proximidade da data impressa: essa data e' a da COMPRA ORIGINAL
+        # (pode ser de um ano atras), nao a da cobranca deste mes.
+        pendentes = []
+        for l in linhas_grupo:
+            melhor_linha = None
+            for c in candidatos:
+                if c["_usado"] or round(float(c["valor"]), 2) != l["valor"]:
+                    continue
+                if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
+                    continue
+                # varios candidatos com o mesmo valor dentro do ciclo (ex: duas
+                # parcelas iguais de compras diferentes) - fica com o mais
+                # recente, sem motivo melhor pra escolher
+                if melhor_linha is None or c["_data_local"] > melhor_linha["_data_local"]:
+                    melhor_linha = c
+            if melhor_linha:
+                melhor_linha["_usado"] = True
+                batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),
+                                 "descricao_sistema": melhor_linha["descricao"]})
+            else:
+                pendentes.append(l)
+
+        if not pendentes:
+            continue
+
+        # FALLBACK: parcelamento que o Pluggy gravou como UMA transacao so, no
+        # valor cheio, na data da compra original (acontece com parte das
+        # compras parceladas). O Pluggy nem sempre preenche parcela_total nesse
+        # lancamento agregado (esse cartao chega a mostrar "Parcela: A vista"
+        # num parcelamento real) - por isso o casamento e' pelo valor cheio
+        # esperado, com o numero de parcelas e a descricao servindo apenas de
+        # desempate. Tolerancia de R$1 porque o valor da parcela impresso na
+        # fatura e' arredondado por mes: multiplicado pelo numero de parcelas
+        # pode nao bater centavo a centavo com o valor cheio real (ex: fatura
+        # mostra R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
         tolerancia = 1.00
         candidatos_valor = [
             c for c in candidatos
@@ -571,36 +603,14 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
             )
         if melhor:
             melhor["_usado"] = True
-            for l in linhas_grupo:
+            for l in pendentes:
                 batidos.append({**l, "transacao_id": str(melhor["transacao_id"]),
                                 "descricao_sistema": melhor["descricao"],
                                 "valor_esperado_parcelamento": valor_esperado})
         else:
-            # Nem todo parcelamento vira UMA transacao de valor cheio no
-            # Pluggy - mensalidade (ex: academia) e alguns parcelamentos reais
-            # chegam como uma transacao por mes, no valor daquela parcela (caso
-            # real: "AQUAMATER" parcelado em varias vezes, cada mes uma
-            # transacao separada). Sem achar o valor cheio, tenta casar cada
-            # linha do grupo individualmente por data+valor, igual as avulsas.
-            for l in linhas_grupo:
-                melhor_linha = None
-                for c in candidatos:
-                    if c["_usado"] or round(float(c["valor"]), 2) != l["valor"]:
-                        continue
-                    if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
-                        continue
-                    # varios candidatos com o mesmo valor dentro do ciclo (ex:
-                    # duas parcelas iguais de compras diferentes) - fica com o
-                    # mais recente, sem motivo melhor pra escolher
-                    if melhor_linha is None or c["_data_local"] > melhor_linha["_data_local"]:
-                        melhor_linha = c
-                if melhor_linha:
-                    melhor_linha["_usado"] = True
-                    batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),
-                                     "descricao_sistema": melhor_linha["descricao"]})
-                else:
-                    sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
-                                         "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
+            for l in pendentes:
+                sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
+                                     "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
 
     # ciclo_inicio/ciclo_fim ja calculados mais acima (o fallback de parcela
     # tambem usa). "sem_fatura" so faz sentido dentro desse ciclo - o intervalo

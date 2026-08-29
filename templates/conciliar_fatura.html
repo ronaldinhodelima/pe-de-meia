@@ -187,7 +187,12 @@
           <tr><td>{{ l.data.strftime('%d/%m/%Y') }}</td><td>{{ l.descricao }}</td>
               <td class="valor">{{ l.valor|moeda }}</td></tr>
         {% endfor %}
-      </tbody></table>
+      </tbody>
+      <tfoot><tr>
+        <td colspan="2"><strong>{{ resultado.sem_fatura|length }} lançamento(s)</strong></td>
+        <td class="valor"><strong>{{ resultado.sem_fatura|sum(attribute='valor')|moeda }}</strong></td>
+      </tr></tfoot>
+      </table>
     </div>
   {% endif %}
 
