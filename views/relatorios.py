@@ -713,17 +713,76 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     return sorted(repetidas, key=lambda r: r["data"])
 
 
+@bp.route("/relatorios/fatura/<int:fatura_id>/restaurar-datas", methods=["POST"])
+@requer("relatorios")
+def restaurar_datas_fatura(fatura_id):
+    """Reversao emergencial de um consolidar-datas que aplicou data errada
+    (ver auditoria "Data consolidada..."). Recebe {"itens": [{"transacao_id":
+    ..., "data": "AAAA-MM-DD"}, ...]} - normalmente colado direto do campo
+    "antes" do proprio log de auditoria do evento que se quer desfazer."""
+    data_in = request.get_json(force=True) or {}
+    itens = data_in.get("itens") or []
+    if not itens or not all(i.get("transacao_id") and i.get("data") for i in itens):
+        return jsonify({"ok": False, "erro": "Lista de itens inválida."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        alteracoes = []
+        for item in itens:
+            cur.execute(
+                "SELECT (data_transacao AT TIME ZONE 'America/Sao_Paulo')::date AS data_local, "
+                "descricao FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
+                (item["transacao_id"],),
+            )
+            t = cur.fetchone()
+            if not t:
+                continue
+            cur.execute(
+                "UPDATE cartao.transacao SET "
+                "data_transacao = (%s::date + (data_transacao AT TIME ZONE 'America/Sao_Paulo')::time) "
+                "AT TIME ZONE 'America/Sao_Paulo', atualizado_em = now() "
+                "WHERE transacao_id = %s;",
+                (item["data"], item["transacao_id"]),
+            )
+            alteracoes.append({
+                "transacao_id": item["transacao_id"], "descricao": t["descricao"],
+                "data_antes": t["data_local"].isoformat(), "data_depois": item["data"],
+            })
+        conn.commit()
+        if alteracoes:
+            registrar_mudanca_auditoria(
+                f"Data restaurada manualmente (fatura_id={fatura_id})",
+                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_antes"]}
+                 for a in alteracoes],
+                [{"transacao_id": a["transacao_id"], "descricao": a["descricao"], "data": a["data_depois"]}
+                 for a in alteracoes],
+            )
+        return jsonify({"ok": True, "alteradas": len(alteracoes)})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui salvar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/relatorios/fatura/<int:fatura_id>/consolidar-datas", methods=["POST"])
 @requer("relatorios")
 def consolidar_datas_fatura(fatura_id):
-    """A fatura em PDF e' a fonte oficial - quando um lancamento bate 1:1 com
-    uma linha dela (descricao+valor sem ambiguidade) mas a data que o Pluggy
-    sincronizou e' diferente, corrige data_transacao pela data da fatura.
-    So mexe na data: categoria, dimensao, observacao, conferida e duplicada
-    ficam intocadas, e cada mudanca vira registro de auditoria com
-    antes/depois. Nunca mexe em match por valor cheio (parcelamento
-    agregado): ali uma transacao representa varias linhas da fatura, sem
-    correspondencia 1:1 de data."""
+    """A fatura em PDF e' a fonte oficial - quando um lancamento AVULSO (nao
+    parcelado) bate 1:1 com uma linha dela (descricao+valor sem ambiguidade)
+    mas a data que o Pluggy sincronizou e' diferente, corrige data_transacao
+    pela data da fatura. So mexe na data: categoria, dimensao, observacao,
+    conferida e duplicada ficam intocadas, e cada mudanca vira registro de
+    auditoria com antes/depois.
+    NUNCA mexe em lancamento de parcela (linha["parcela_total"] preenchido):
+    a data impressa numa linha de parcela e' a da COMPRA ORIGINAL, fixa em
+    toda reimpressao mensal da fatura - nao a data desta cobranca. Um bug
+    real aqui (29/08/2026) trocou a data de 22 parcelas de agosto/2026 pela
+    data da compra original (algumas de novembro/2025) - revertido na hora
+    via /restaurar-datas. Nunca reintroduzir consolidacao pra parcela sem
+    uma fonte de data mensal confiavel, que a fatura nao da."""
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
@@ -753,8 +812,8 @@ def consolidar_datas_fatura(fatura_id):
 
         alteracoes = []
         for b in resultado["batidos"]:
-            if "valor_esperado_parcelamento" in b:
-                continue
+            if b.get("parcela_total"):
+                continue  # data impressa e' da compra original, nao da cobranca deste mes
             cur.execute(
                 "SELECT (data_transacao AT TIME ZONE 'America/Sao_Paulo')::date AS data_local, "
                 "descricao FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",

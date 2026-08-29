@@ -99,9 +99,10 @@
       {% endif %}
     </div>
     <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px">
-      A fatura em PDF é a fonte oficial. "Consolidar datas" corrige, só na data, os lançamentos que já batem
-      1:1 com uma linha da fatura (descrição e valor sem ambiguidade) — não mexe em categoria, dimensão,
-      observação, conferida ou duplicidade, e fica registrado em Logs.
+      A fatura em PDF é a fonte oficial. "Consolidar datas" corrige, só na data, os lançamentos avulsos
+      (não parcelados) que já batem 1:1 com uma linha da fatura — não mexe em categoria, dimensão,
+      observação, conferida ou duplicidade, e fica registrado em Logs. Parcelas ficam de fora: a data
+      impressa nelas é a da compra original, não a da cobrança do mês.
     </div>
   </div>
 
