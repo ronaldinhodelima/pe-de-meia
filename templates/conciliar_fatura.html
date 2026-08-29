@@ -67,6 +67,34 @@
 
 {% if resultado %}
   {% set f = resultado.fatura %}
+  <div class="cat-breakdown" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    {% if fatura_mais_antiga %}
+      <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura_mais_antiga.id }}" class="ver-btn"
+         style="text-decoration:none" title="Mês anterior">‹</a>
+    {% else %}
+      <span class="ver-btn" style="opacity:.35;cursor:default">‹</span>
+    {% endif %}
+    <div>
+      <div style="font-size:20px;font-weight:600;line-height:1.2">
+        Fatura {{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}
+        {%- if resultado.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}
+      </div>
+      <div style="font-size:12px;color:var(--ink-faint)">
+        ciclo {{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}
+        {%- if f.vencimento %} · vence {{ f.vencimento.strftime('%d/%m/%Y') }}{% endif %}
+      </div>
+    </div>
+    {% if fatura_mais_nova %}
+      <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura_mais_nova.id }}" class="ver-btn"
+         style="text-decoration:none" title="Mês seguinte">›</a>
+    {% else %}
+      <span class="ver-btn" style="opacity:.35;cursor:default">›</span>
+    {% endif %}
+    <span style="font-size:11.5px;color:var(--ink-faint);margin-left:auto">
+      Tudo abaixo se refere a esta fatura.
+    </span>
+  </div>
+
   <div class="cat-breakdown" style="border-left:3px solid {{ 'var(--good)' if resultado.fecha_100 else 'var(--bad)' }}">
     <h3>
       {% if resultado.fecha_100 %}

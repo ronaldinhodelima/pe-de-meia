@@ -1196,10 +1196,22 @@ def conciliar_fatura():
             "fecha_100": not r["linhas_sem_vinculo"] and not r["orfaos"],
         })
 
+    # navegacao entre faturas: `historico` ja vem da mais nova para a mais
+    # antiga, entao a seguinte na lista e' o mes ANTERIOR
+    fatura_mais_nova = fatura_mais_antiga = None
+    if fatura_id:
+        ids = [h["id"] for h in historico]
+        if fatura_id in ids:
+            pos = ids.index(fatura_id)
+            fatura_mais_nova = historico[pos - 1] if pos > 0 else None
+            fatura_mais_antiga = historico[pos + 1] if pos + 1 < len(historico) else None
+
     cur.close()
     conn.close()
     return render_template(
         "conciliar_fatura.html",
+        fatura_mais_nova=fatura_mais_nova,
+        fatura_mais_antiga=fatura_mais_antiga,
         titulo="Conciliar fatura",
         topbar=topbar_html("Conciliar fatura", "conciliar-fatura"),
         contas_credito=contas_credito,
@@ -1834,6 +1846,9 @@ def criar_cobrancas_sem_pluggy():
     """
     data = request.get_json(silent=True) or {}
     preview = bool(data.get("preview"))
+    # `ano` limita o alcance: 2025 e' historico e 2026 e' o que precisa fechar,
+    # entao raramente se quer criar tudo de uma vez.
+    ano = data.get("ano")
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
@@ -1857,8 +1872,9 @@ def criar_cobrancas_sem_pluggy():
             "WHERE fl.transacao_id_criado IS NULL "
             "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id) "
             f"AND {nao_lancaveis} "
-            "ORDER BY fi.ano_referencia, fi.mes_referencia, fl.data;",
-            LINHAS_NAO_LANCAVEIS,
+            + ("AND fi.ano_referencia = %s " if ano else "")
+            + "ORDER BY fi.ano_referencia, fi.mes_referencia, fl.data;",
+            LINHAS_NAO_LANCAVEIS + ((int(ano),) if ano else ()),
         )
         linhas = [dict(r) for r in cur.fetchall()]
 
