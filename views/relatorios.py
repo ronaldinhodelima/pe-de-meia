@@ -1117,7 +1117,11 @@ def conciliar_fatura():
                     "FROM cartao.fatura_importada WHERE id = %s;",
                     (fatura_id,),
                 )
-                _vincular_automatico(cur, cur.fetchone(), session.get("user"))
+                fatura_para_vincular = cur.fetchone()
+                # reenviar o PDF recria as linhas com ids novos e o CASCADE
+                # leva os vinculos junto - inclusive o da parcela ja gerada
+                _revincular_lancamentos_da_fatura(cur, session.get("user"))
+                _vincular_automatico(cur, fatura_para_vincular, session.get("user"))
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -1484,6 +1488,26 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             "aguardando": aguardando, "revisar": revisar}
 
 
+def _revincular_lancamentos_da_fatura(cur, usuario):
+    """Garante o vinculo de toda linha que ja virou lancamento.
+
+    Duas situacoes apagam esse vinculo sem recria-lo, porque a geracao de
+    parcelas e' idempotente por `transacao_id_criado`:
+      - "refazer vinculos automaticos" (deu 340 falsos orfaos de uma vez);
+      - REENVIAR o PDF: as linhas sao apagadas e recriadas com ids novos, e o
+        ON DELETE CASCADE leva os vinculos junto. O `transacao_id_criado` e'
+        preservado pela chave natural, mas o vinculo nao.
+    """
+    cur.execute(
+        "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+        "SELECT fl.id, fl.transacao_id_criado, 'fatura', %s FROM cartao.fatura_linha fl "
+        "WHERE fl.transacao_id_criado IS NOT NULL "
+        "ON CONFLICT (fatura_linha_id, transacao_id) DO NOTHING;",
+        (usuario,),
+    )
+    return cur.rowcount or 0
+
+
 def _sincronizar_parcelas_de_agregado(cur, usuario):
     """Regime de caixa para parcelamento (decisão do usuário, 29/08/2026).
 
@@ -1501,17 +1525,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     marcar "esta linha ja virou lancamento". Rodar de novo nao duplica.
     Herda categoria e dimensoes do agregado, para nao perder classificacao.
     """
-    # Garante o vinculo de toda linha que ja virou lancamento. Sem isso, um
-    # "refazer vinculos" apagava o vinculo da parcela gerada (e a geracao nao
-    # recria, porque e' idempotente por transacao_id_criado) e a parcela
-    # aparecia como orfa - 340 falsos positivos de uma vez.
-    cur.execute(
-        "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
-        "SELECT fl.id, fl.transacao_id_criado, 'fatura', %s FROM cartao.fatura_linha fl "
-        "WHERE fl.transacao_id_criado IS NOT NULL "
-        "ON CONFLICT (fatura_linha_id, transacao_id) DO NOTHING;",
-        (usuario,),
-    )
+    _revincular_lancamentos_da_fatura(cur, usuario)
     cur.execute(
         "SELECT v.transacao_id, COUNT(*) AS linhas FROM cartao.fatura_vinculo v "
         "GROUP BY v.transacao_id HAVING COUNT(*) >= 2;"
