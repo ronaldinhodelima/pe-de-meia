@@ -1913,12 +1913,17 @@ def criar_cobrancas_sem_pluggy():
                 _criar_lancamento_da_linha(cur, l, categoria, session.get("user"))
                 criadas += 1
 
-        if not preview and criadas:
-            aplicar_regras(cur)
+        # commita tambem quando so houve correcao de data: antes o UPDATE ficava
+        # sem commit quando nenhuma linha nova era criada, e a correcao se perdia
+        # no fechamento da conexao - em silencio, com a rota devolvendo sucesso.
+        if not preview and (criadas or datas_corrigidas):
+            if criadas:
+                aplicar_regras(cur)
             conn.commit()
             registrar_auditoria(
                 "alteracao", "relatorios.criar_cobrancas_sem_pluggy", sucesso=True,
-                detalhes={"criadas": criadas, "por_mes": por_mes},
+                detalhes={"criadas": criadas, "datas_corrigidas": datas_corrigidas,
+                          "por_mes": por_mes},
             )
         return jsonify({
             "ok": True, "preview": preview,
