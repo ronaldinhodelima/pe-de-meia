@@ -139,6 +139,8 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/fatura-linha/marcar-conferida-repeticao", "/relatorios/fatura/<int:fatura_id>/pdf",
         "/api/fatura/<int:fatura_id>/vincular-automatico",
         "/api/faturas/sincronizar-parcelas",
+        "/relatorios/duplicidades-fatura",
+        "/api/duplicidades/marcar",
         "/api/fatura-linha/<int:linha_id>/vincular",
         "/api/fatura-linha/<int:linha_id>/desvincular",
         "/dre", "/investimentos",

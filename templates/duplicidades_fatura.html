@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block conteudo %}
+
+<div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
+  A fatura em PDF é a autoridade. Toda linha dela já tem a cobrança contabilizada — por um
+  lançamento casado com ela, ou pela parcela gerada a partir da própria fatura. Logo, o que o
+  Pluggy trouxe e ficou <strong>sem vínculo com nenhuma linha de nenhuma fatura</strong> ou é
+  cobrança repetida, ou é compra que ainda vai aparecer na fatura seguinte.
+  Marcar como duplicada <strong>não apaga</strong> o lançamento: ele sai dos totais e do DRE e
+  continua consultável pelo filtro "Duplicados" em Lançamentos.
+</div>
+
+{% macro tabela(itens, com_acao) %}
+  <table class="compacta">
+    <thead><tr>
+      {% if com_acao %}<th style="width:28px"></th>{% endif %}
+      <th>Data</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Por quê</th>
+    </tr></thead>
+    <tbody>
+      {% for i in itens %}
+        <tr>
+          {% if com_acao %}
+            <td><input type="checkbox" class="dup-check" value="{{ i.transacao_id }}"></td>
+          {% endif %}
+          <td style="white-space:nowrap">{{ i.data.strftime('%d/%m/%Y') }}</td>
+          <td>{{ i.descricao }}</td>
+          <td class="valor">{{ i.valor|moeda }}</td>
+          <td style="font-size:11.5px;color:var(--ink-soft)">{{ i.motivo }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr>
+      {% if com_acao %}<td></td>{% endif %}
+      <td colspan="2"><strong>{{ itens|length }} lançamento(s)</strong></td>
+      <td class="valor"><strong>{{ itens|sum(attribute='valor')|moeda }}</strong></td>
+      <td></td>
+    </tr></tfoot>
+  </table>
+{% endmacro %}
+
+{% if inequivocos %}
+  <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
+    <h3>Evidência inequívoca — cobrança que a fatura não reconhece
+      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ inequivocos|length }})</span>
+    </h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Cada um destes repete uma parcela de um parcelamento cuja compra inteira já está lançada
+      (e fora do resultado), com as parcelas já cobertas pela fatura. O dinheiro está sendo
+      contado duas vezes.
+    </div>
+    {{ tabela(inequivocos, true) }}
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Marcar selecionadas</button>
+      <button type="button" class="ver-btn" onclick="marcarTodasInequivocas(this)">
+        Marcar todas as {{ inequivocos|length }}
+      </button>
+      <span id="dup-status" style="font-size:12px;color:var(--ink-faint)"></span>
+    </div>
+  </div>
+{% else %}
+  <div class="cat-breakdown" style="border-left:3px solid var(--good)">
+    <h3>✓ Nenhuma cobrança em dobro pendente</h3>
+    <div style="font-size:12px;color:var(--ink-soft)">
+      Nenhum lançamento sem vínculo repete parcela de parcelamento já coberto pela fatura.
+    </div>
+  </div>
+{% endif %}
+
+{% if revisar %}
+  <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+    <h3>Precisa da sua revisão
+      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ revisar|length }})</span>
+    </h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Sem vínculo com nenhuma linha de fatura e sem padrão que permita concluir sozinho. Pode ser
+      cobrança que a fatura daquele mês realmente não trouxe, parcelamento que o Pluggy
+      representou de outro jeito, ou duplicidade da operadora. Confira contra o PDF antes de marcar.
+    </div>
+    {{ tabela(revisar, true) }}
+    <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
+      <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Marcar selecionadas</button>
+    </div>
+  </div>
+{% endif %}
+
+{% if aguardando %}
+  <div class="cat-breakdown">
+    <h3>Aguardando a próxima fatura
+      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ aguardando|length }})</span>
+    </h3>
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Compras feitas perto do fechamento do último mês importado. A operadora lança na fatura
+      seguinte — devem sumir daqui sozinhas quando você importar o próximo PDF.
+      <strong>Não são duplicidade</strong>, por isso não têm ação.
+    </div>
+    {{ tabela(aguardando, false) }}
+  </div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function idsSelecionados(bloco) {
+  return [...bloco.querySelectorAll('.dup-check:checked')].map(c => c.value);
+}
+
+function enviarMarcacao(corpo, btn, status) {
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Marcando…';
+  fetch('/api/duplicidades/marcar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo)
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) {
+        btn.disabled = false;
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Não consegui marcar.';
+        return;
+      }
+      status.style.color = 'var(--good)';
+      status.textContent = d.marcados + ' marcado(s).';
+      setTimeout(() => location.reload(), 900);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Não consegui marcar.';
+    });
+}
+
+function marcarSelecionadas(btn) {
+  const bloco = btn.closest('.cat-breakdown');
+  const ids = idsSelecionados(bloco);
+  const status = document.getElementById('dup-status') || btn.parentNode.querySelector('span') || btn;
+  if (!ids.length) {
+    alert('Selecione ao menos um lançamento.');
+    return;
+  }
+  if (!confirm('Marcar ' + ids.length + ' lançamento(s) como duplicados? Eles saem dos totais e do DRE, mas não são apagados.')) {
+    return;
+  }
+  enviarMarcacao({ ids: ids }, btn, status);
+}
+
+function marcarTodasInequivocas(btn) {
+  const status = document.getElementById('dup-status');
+  if (!confirm('Marcar como duplicados todos os lançamentos de evidência inequívoca? Eles saem dos totais e do DRE, mas não são apagados.')) {
+    return;
+  }
+  enviarMarcacao({ apenas_inequivocos: true }, btn, status);
+}
+</script>
+{% endblock %}

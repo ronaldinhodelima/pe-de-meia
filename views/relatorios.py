@@ -1216,6 +1216,114 @@ def criar_lancamento_de_fatura(linha_id):
         conn.close()
 
 
+def _normalizar_desc(texto):
+    return re.sub(r"\s+", " ", (texto or "")).strip().upper()
+
+
+def _classificar_orfaos(cur):
+    """Separa os lancamentos sem vinculo em tres baldes, usando o modelo de
+    dados (nao heuristica de lojista):
+
+    - inequivocos: o lancamento repete uma parcela de um parcelamento cujo
+      AGREGADO ja esta marcado `somente_conciliacao` e cujas parcelas ja foram
+      geradas pela fatura. Como a fatura e' a autoridade e ela ja cobra aquele
+      parcelamento por inteiro, essa cobranca a mais nao existe na fatura.
+    - aguardando: cai no ciclo da fatura MAIS RECENTE da conta. Compra perto do
+      fechamento entra na fatura seguinte, que ainda nao foi importada - some
+      sozinho quando o proximo PDF chegar. Nao e' duplicidade.
+    - revisar: o resto, que precisa de olho humano.
+
+    Agrupar parcelamento por (lojista + numero de parcelas) NAO serve: o mesmo
+    lojista pode ter varios parcelamentos de 6x com valores diferentes (caso
+    real: MECANICA HOCHIOVE tem 6x R$583,33 e 6x R$1.316,66). O valor da
+    parcela entra na chave.
+    """
+    cur.execute(
+        "SELECT fl.descricao_base, fl.parcela_total, fl.titular, fl.valor, "
+        "bool_and(COALESCE(t.somente_conciliacao,false)) AS todo_agregado, "
+        "COUNT(DISTINCT fl.id) AS linhas "
+        "FROM cartao.fatura_linha fl "
+        "JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
+        "JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
+        "WHERE fl.parcela_total >= 2 AND COALESCE(t.somente_conciliacao,false) "
+        "GROUP BY fl.descricao_base, fl.parcela_total, fl.titular, fl.valor;"
+    )
+    cobertos = []
+    for r in cur.fetchall():
+        cobertos.append({
+            "base": _normalizar_desc(r["descricao_base"]),
+            "parcela_total": r["parcela_total"],
+            "valor": round(float(r["valor"]), 2),
+            "linhas": r["linhas"],
+        })
+
+    # ciclo da fatura mais recente por conta (compra perto do fechamento entra
+    # na fatura seguinte, que ainda nao existe no sistema)
+    cur.execute(
+        "SELECT DISTINCT ON (account_id) account_id, periodo_inicio, periodo_fim, "
+        "mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "WHERE periodo_fim IS NOT NULL "
+        "ORDER BY account_id, ano_referencia DESC, mes_referencia DESC;"
+    )
+    ultima_por_conta = {str(r["account_id"]): dict(r) for r in cur.fetchall()}
+
+    cur.execute(
+        f"SELECT t.transacao_id, t.account_id, t.descricao, "
+        f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"({DATA_LOCAL_SQL})::date AS data_local, t.categoria "
+        f"FROM cartao.transacao t "
+        f"JOIN cartao.fatura_importada fi ON fi.account_id = t.account_id "
+        f"AND ({DATA_LOCAL_SQL})::date BETWEEN fi.periodo_inicio AND fi.periodo_fim "
+        f"WHERE COALESCE(t.duplicada,false) = false "
+        f"AND COALESCE(t.somente_conciliacao,false) = false "
+        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+        f"WHERE v.transacao_id = t.transacao_id) "
+        f"GROUP BY t.transacao_id, t.account_id, t.descricao, t.valor_brl, t.valor_original, "
+        f"t.data_transacao, t.categoria "
+        f"ORDER BY 5, 3;"
+    )
+    inequivocos, aguardando, revisar = [], [], []
+    for r in cur.fetchall():
+        valor = round(float(r["valor"] or 0), 2)
+        item = {
+            "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
+            "valor": valor, "data": r["data_local"], "categoria": r["categoria"],
+        }
+        # Pagamento da fatura nunca e' duplicidade - e' a fatura anterior sendo
+        # quitada (natureza transferencia). Fica de fora de qualquer balde.
+        desc = _normalizar_desc(r["descricao"])
+        if valor <= 0 or "PAGAMENTO RECEBIDO" in desc or "PAG DE FATURA" in desc:
+            continue
+
+        casado = next(
+            (c for c in cobertos
+             if abs(c["valor"] - valor) <= 0.02 and c["base"] and c["base"] in desc),
+            None,
+        )
+        if casado:
+            item["motivo"] = (
+                f"Repete uma parcela de {casado['base']} ({casado['parcela_total']}x de "
+                f"R$ {casado['valor']:,.2f}). A compra inteira já está lançada e fora do "
+                f"resultado, e a fatura já cobre {casado['linhas']} parcela(s) desse "
+                f"parcelamento — essa cobrança a mais não existe na fatura."
+            )
+            inequivocos.append(item)
+            continue
+
+        ultima = ultima_por_conta.get(str(r["account_id"]))
+        if ultima and ultima["periodo_inicio"] <= r["data_local"] <= ultima["periodo_fim"]:
+            item["motivo"] = (
+                f"Está no ciclo da fatura mais recente ({ultima['mes_referencia']:02d}/"
+                f"{ultima['ano_referencia']}). Compra perto do fechamento entra na fatura "
+                f"seguinte — deve se resolver quando o próximo PDF for importado."
+            )
+            aguardando.append(item)
+        else:
+            item["motivo"] = "Sem vínculo com nenhuma linha de fatura e sem padrão claro."
+            revisar.append(item)
+    return {"inequivocos": inequivocos, "aguardando": aguardando, "revisar": revisar}
+
+
 def _sincronizar_parcelas_de_agregado(cur, usuario):
     """Regime de caixa para parcelamento (decisão do usuário, 29/08/2026).
 
@@ -1308,6 +1416,74 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         criadas += 1
 
     return {"agregados": len(agregados), "marcados_agora": marcados, "parcelas_criadas": criadas}
+
+
+@bp.route("/relatorios/duplicidades-fatura")
+@requer("relatorios")
+def duplicidades_fatura():
+    """Revisao das cobrancas que o Pluggy trouxe e a fatura nao reconhece.
+    A fatura e' a autoridade: toda linha dela ja tem a cobranca contabilizada
+    (por casamento 1:1 ou pela parcela gerada), entao o que sobra sem vinculo
+    ou e' duplicidade, ou e' compra que cai na fatura seguinte."""
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    baldes = _classificar_orfaos(cur)
+    cur.close()
+    conn.close()
+    return render_template(
+        "duplicidades_fatura.html",
+        titulo="Duplicidades da fatura",
+        topbar=topbar_html("Duplicidades da fatura", "duplicidades-fatura"),
+        **baldes,
+    )
+
+
+@bp.route("/api/duplicidades/marcar", methods=["POST"])
+@requer("lancamentos_editar")
+def marcar_duplicidades():
+    """Marca lancamentos como duplicados. `apenas_inequivocos` roda em cima da
+    classificacao do servidor; a lista explicita vem da revisao do usuario.
+    Marcar duplicidade tira dos totais e do DRE, mas nunca apaga o lancamento
+    nem toca no OK."""
+    data = request.get_json(force=True) or {}
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        if data.get("apenas_inequivocos"):
+            ids = [i["transacao_id"] for i in _classificar_orfaos(cur)["inequivocos"]]
+        else:
+            ids = [str(i) for i in (data.get("ids") or [])]
+        if not ids:
+            return jsonify({"ok": True, "marcados": 0})
+
+        cur.execute(
+            "SELECT transacao_id, descricao, COALESCE(valor_brl, valor_original) AS valor "
+            "FROM cartao.transacao WHERE transacao_id = ANY(%s::uuid[]) "
+            "AND COALESCE(duplicada,false) = false;",
+            (ids,),
+        )
+        alvo = [dict(r) for r in cur.fetchall()]
+        cur.execute(
+            "UPDATE cartao.transacao SET duplicada = true, atualizado_em = now() "
+            "WHERE transacao_id = ANY(%s::uuid[]);",
+            ([a["transacao_id"] for a in alvo],),
+        )
+        marcados = cur.rowcount or 0
+        conn.commit()
+        if marcados:
+            registrar_mudanca_auditoria(
+                "Duplicidade marcada (cobrança que a fatura não reconhece)",
+                None,
+                [{"transacao_id": str(a["transacao_id"]), "descricao": a["descricao"],
+                  "valor": float(a["valor"] or 0)} for a in alvo],
+            )
+        return jsonify({"ok": True, "marcados": marcados})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui marcar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
 
 
 @bp.route("/api/faturas/sincronizar-parcelas", methods=["POST"])
