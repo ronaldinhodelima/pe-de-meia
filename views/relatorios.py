@@ -519,6 +519,17 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         c["_usado"] = False
         c["_data_local"] = c["data_local"]
 
+    # Ciclo real desta fatura - calculado aqui (nao so mais embaixo, perto de
+    # "sem_fatura") porque o fallback de parcela por mes tambem precisa dele:
+    # a data impressa numa linha de parcela e' a da COMPRA ORIGINAL, nao da
+    # cobranca atual, entao filtrar candidato por proximidade dessa data (como
+    # se faz com avulsa) nunca acha nada - o filtro certo e' "aconteceu dentro
+    # do ciclo desta fatura", nao "perto da data impressa".
+    ciclo_inicio = max(datas) - timedelta(days=35)
+    if ciclo_inicio_min and ciclo_inicio_min > ciclo_inicio:
+        ciclo_inicio = ciclo_inicio_min
+    ciclo_fim = max(datas)
+
     # A fatura lista cada parcela mensal numa linha (ex: "Parc.9/12 R$129,00");
     # o Pluggy grava o parcelamento inteiro como UMA transacao so, no valor
     # cheio, na data da compra original. Sem agrupar por parcela_total, toda
@@ -596,15 +607,17 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
             # transacao separada). Sem achar o valor cheio, tenta casar cada
             # linha do grupo individualmente por data+valor, igual as avulsas.
             for l in linhas_grupo:
-                melhor_linha, melhor_dist = None, None
+                melhor_linha = None
                 for c in candidatos:
                     if c["_usado"] or round(float(c["valor"]), 2) != l["valor"]:
                         continue
-                    dist = abs((c["_data_local"] - l["data"]).days)
-                    if dist > 3:
+                    if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
                         continue
-                    if melhor_linha is None or dist < melhor_dist:
-                        melhor_linha, melhor_dist = c, dist
+                    # varios candidatos com o mesmo valor dentro do ciclo (ex:
+                    # duas parcelas iguais de compras diferentes) - fica com o
+                    # mais recente, sem motivo melhor pra escolher
+                    if melhor_linha is None or c["_data_local"] > melhor_linha["_data_local"]:
+                        melhor_linha = c
                 if melhor_linha:
                     melhor_linha["_usado"] = True
                     batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),
@@ -613,17 +626,12 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
                     sem_sistema.append({**l, "valor_esperado_parcelamento": valor_esperado,
                                          "titular": titular, "fatura_linha_id": fatura_linha_ids.get(id(l))})
 
-    # "sem_fatura" so faz sentido dentro do ciclo desta fatura - o intervalo de
-    # busca acima e largo (cobre ate um ano, por causa de parcelas antigas que
-    # ainda aparecem cobradas), mas listar TODA sobra desse intervalo encheria
-    # a tela de lancamentos de faturas passadas que nunca deveriam bater com
-    # esta mesmo. Quando ha fatura anterior salva desta mesma conta,
-    # ciclo_inicio_min (dia seguinte ao fim daquele ciclo) e' mais preciso que
-    # o palpite generico de 35 dias, que sobra pra dentro do ciclo anterior e
-    # fazia lancamento ja coberto por outra fatura aparecer aqui de novo.
-    ciclo_inicio = max(datas) - timedelta(days=35)
-    if ciclo_inicio_min and ciclo_inicio_min > ciclo_inicio:
-        ciclo_inicio = ciclo_inicio_min
+    # ciclo_inicio/ciclo_fim ja calculados mais acima (o fallback de parcela
+    # tambem usa). "sem_fatura" so faz sentido dentro desse ciclo - o intervalo
+    # de busca dos candidatos e' largo (cobre ate um ano, por causa de parcela
+    # antiga que ainda aparece cobrada), mas listar TODA sobra desse intervalo
+    # encheria a tela de lancamentos de faturas passadas que nunca deveriam
+    # bater com esta mesmo.
     sem_fatura = [
         {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
          "transacao_id": str(c["transacao_id"])}
