@@ -1,9 +1,8 @@
 """Relatorios, DRE e investimentos."""
-import calendar
 import io
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import psycopg2
 import psycopg2.extras
@@ -465,29 +464,6 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
-def _data_fechamento_mes(dia_fechamento, ano, mes):
-    """Data de fechamento da fatura NESTE mes, a partir do dia fixo que o
-    Pluggy informa por conta (cartao.conta.fechamento_fatura.day) - mes com
-    menos dias que esse numero usa o ultimo dia disponivel (ex: fechamento
-    dia 31 num fevereiro vira 28/29)."""
-    ultimo_dia = calendar.monthrange(ano, mes)[1]
-    return date(ano, mes, min(dia_fechamento, ultimo_dia))
-
-
-def _ciclo_fatura(dia_fechamento, mes_referencia, ano_referencia):
-    """Inicio/fim reais do ciclo desta fatura, a partir do dia de fechamento
-    fixo da conta (Pluggy) - muito mais preciso que adivinhar pela data das
-    proprias linhas extraidas do PDF (usado so como fallback quando a conta
-    nao tem fechamento_fatura, ex: conta manual)."""
-    fim = _data_fechamento_mes(dia_fechamento, ano_referencia, mes_referencia)
-    if mes_referencia == 1:
-        mes_anterior, ano_anterior = 12, ano_referencia - 1
-    else:
-        mes_anterior, ano_anterior = mes_referencia - 1, ano_referencia
-    inicio = _data_fechamento_mes(dia_fechamento, ano_anterior, mes_anterior) + timedelta(days=1)
-    return inicio, fim
-
-
 def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatura_linha_ids=None,
                        ciclo_inicio_min=None):
     """Casa as linhas de uma fatura (do parser ou ja salvas no banco) contra os
@@ -768,42 +744,29 @@ def conciliar_fatura():
                 erro = f"Não consegui ler esse PDF: {exc}"
 
             if not erro:
-                # O dia de fechamento real da conta (Pluggy, cartao.conta.
-                # fechamento_fatura) da o inicio/fim exatos do ciclo - muito
-                # mais preciso que adivinhar. NA PRATICA nenhuma das contas
-                # tem esse dado hoje (Pluggy so manda vencimento, "fechamento
-                # nao informado pelo banco" em /contas) - fica pronto pro dia
-                # que o banco passar a mandar, mas o caminho que roda de
-                # verdade e' o fallback: periodo_fim ja e' confiavel (e' a
-                # data do ultimo lancamento REAL da propria fatura, extraida
-                # do PDF); so periodo_inicio usa o fim da fatura do mes
-                # anterior desta mesma conta, quando ela ja foi importada -
-                # muito mais preciso que o palpite fixo de 35 dias, que so
-                # entra em ultimo caso (primeira fatura desta conta no app).
+                # As datas do ciclo vem inteiramente das proprias faturas
+                # importadas, nunca de cadastro manual em /contas. periodo_fim
+                # ja e' confiavel (e' a data do ultimo lancamento REAL desta
+                # fatura, extraida do PDF); periodo_inicio usa o fim da fatura
+                # do MES ANTERIOR desta mesma conta, quando ela ja foi
+                # importada - so cai no palpite fixo de 35 dias (calculado no
+                # parser) quando e' a primeira fatura desta conta no app, sem
+                # nada pra comparar. (cartao.conta.fechamento_fatura foi
+                # tentado antes e removido: o Pluggy nunca preenche essa
+                # coluna pra nenhuma conta real, so vencimento_fatura.)
                 periodo_fim = fatura["periodo_fim"]
                 cur.execute(
-                    "SELECT fechamento_fatura FROM cartao.conta WHERE account_id=%s;",
-                    (account_id,),
+                    "SELECT periodo_fim FROM cartao.fatura_importada "
+                    "WHERE account_id=%s AND (ano_referencia, mes_referencia) < (%s, %s) "
+                    "AND periodo_fim IS NOT NULL "
+                    "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
+                    (account_id, fatura["ano_referencia"], fatura["mes_referencia"]),
                 )
-                conta_row = cur.fetchone()
-                dia_fechamento = conta_row["fechamento_fatura"].day if conta_row and conta_row["fechamento_fatura"] else None
-                if dia_fechamento:
-                    periodo_inicio, periodo_fim = _ciclo_fatura(
-                        dia_fechamento, fatura["mes_referencia"], fatura["ano_referencia"]
-                    )
-                else:
-                    cur.execute(
-                        "SELECT periodo_fim FROM cartao.fatura_importada "
-                        "WHERE account_id=%s AND (ano_referencia, mes_referencia) < (%s, %s) "
-                        "AND periodo_fim IS NOT NULL "
-                        "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
-                        (account_id, fatura["ano_referencia"], fatura["mes_referencia"]),
-                    )
-                    fatura_anterior = cur.fetchone()
-                    periodo_inicio = (
-                        fatura_anterior["periodo_fim"] + timedelta(days=1)
-                        if fatura_anterior else fatura["periodo_inicio"]
-                    )
+                fatura_anterior = cur.fetchone()
+                periodo_inicio = (
+                    fatura_anterior["periodo_fim"] + timedelta(days=1)
+                    if fatura_anterior else fatura["periodo_inicio"]
+                )
 
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
@@ -830,14 +793,38 @@ def conciliar_fatura():
                      psycopg2.Binary(pdf_bytes)),
                 )
                 fatura_id = cur.fetchone()["id"]
+                # Reenviar o mesmo PDF (ex: corrigir algo, ou so pra recalcular
+                # periodo_inicio depois que a fatura anterior passou a existir)
+                # apagava tudo e recriava do zero - perdendo silenciosamente o
+                # "conferido" de cobranca repetida e o lancamento manual ja
+                # criado a partir de uma linha "so na fatura". Guarda esse
+                # estado antes de apagar, casando por chave natural (a fatura
+                # nao tem id estavel entre envios), e devolve pra linha nova
+                # que bater exatamente igual.
+                cur.execute(
+                    "SELECT data, descricao, valor, titular, transacao_id_criado, "
+                    "conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em "
+                    "FROM cartao.fatura_linha WHERE fatura_id=%s;",
+                    (fatura_id,),
+                )
+                estado_anterior = {
+                    (r["data"], r["descricao"], round(float(r["valor"]), 2), r["titular"]): r
+                    for r in cur.fetchall()
+                }
                 cur.execute("DELETE FROM cartao.fatura_linha WHERE fatura_id=%s;", (fatura_id,))
                 for l in fatura["linhas"]:
+                    anterior = estado_anterior.get((l["data"], l["descricao"], l["valor"], l["titular"]))
                     cur.execute(
                         "INSERT INTO cartao.fatura_linha "
-                        "(fatura_id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular) "
-                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s);",
+                        "(fatura_id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
+                        "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);",
                         (fatura_id, l["data"], l["descricao"], l["descricao_base"],
-                         l["parcela_atual"], l["parcela_total"], l["valor"], l["titular"]),
+                         l["parcela_atual"], l["parcela_total"], l["valor"], l["titular"],
+                         anterior["transacao_id_criado"] if anterior else None,
+                         anterior["conferida_repeticao"] if anterior else False,
+                         anterior["conferida_repeticao_por"] if anterior else None,
+                         anterior["conferida_repeticao_em"] if anterior else None),
                     )
                 conn.commit()
                 registrar_auditoria(
@@ -882,11 +869,11 @@ def conciliar_fatura():
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
                 "vencimento": fatura_row["vencimento"],
             }
-            # periodo_inicio ja e' o piso real do ciclo quando veio do dia de
-            # fechamento da conta (Pluggy) - ver _ciclo_fatura(). So cai no
-            # palpite generico de 35 dias (dentro de _conciliar_linhas) pra
-            # fatura antiga, importada antes dessa conta ter fechamento_fatura
-            # conhecido.
+            # periodo_inicio ja e' o piso real do ciclo (fim da fatura do mes
+            # anterior + 1 dia, calculado no import - ver mais acima). So cai
+            # no palpite generico de 35 dias (dentro de _conciliar_linhas)
+            # quando foi a primeira fatura desta conta, sem anterior pra
+            # comparar na hora que foi importada.
             ciclo_inicio_min = fatura_row["periodo_inicio"]
             resultado = _conciliar_linhas(
                 cur, account_id, linhas, ids_por_linha, todos_ids_por_linha, ciclo_inicio_min,
