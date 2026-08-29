@@ -1767,6 +1767,93 @@ def marcar_duplicidades():
         conn.close()
 
 
+# Cobrancas que a fatura tem e o Pluggy nao sincroniza. A fatura e' a
+# autoridade: se ela cobrou, o dinheiro saiu - e a despesa (ou o credito)
+# precisa existir no resultado. Cada padrao aponta a categoria correta.
+# So entram tipos CONFERIDOS um a um contra o PDF; nao generalizar sozinho.
+COBRANCAS_SO_NA_FATURA = [
+    ("Unicred TAG%", "Tolls and in vehicle payment", "pedágio"),
+    ("Anuidade - bonifica%", "Credit card fees", "bonificação da anuidade"),
+    ("IOF compra internacional%", "Tax on financial operations", "IOF de compra internacional"),
+]
+
+
+@bp.route("/api/faturas/criar-cobrancas-sem-pluggy", methods=["POST"])
+@requer("lancamentos_manual")
+def criar_cobrancas_sem_pluggy():
+    """Cria, a partir da fatura, as cobrancas que o Pluggy nunca mandou.
+
+    Sao tipos que a operadora lanca e o Pluggy nao repassa de forma
+    confiavel: pedagio (Unicred TAG), a bonificacao que estorna a anuidade e o
+    IOF de compra internacional. Ficavam como "linha sem vinculo" para sempre,
+    e a despesa (ou o credito) simplesmente nao existia no DRE.
+
+    Idempotente por `fatura_linha.transacao_id_criado`. Nasce sem OK - a
+    conferencia continua sendo humana.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        resumo, criadas = {}, 0
+        for padrao, categoria, rotulo in COBRANCAS_SO_NA_FATURA:
+            cur.execute(
+                "SELECT fl.id, fl.data, fl.descricao, fl.valor, fi.account_id, "
+                "fi.mes_referencia, fi.ano_referencia "
+                "FROM cartao.fatura_linha fl "
+                "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+                "WHERE fl.descricao ILIKE %s AND fl.transacao_id_criado IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+                "                WHERE v.fatura_linha_id = fl.id) "
+                "ORDER BY fl.data;",
+                (padrao,),
+            )
+            linhas = [dict(r) for r in cur.fetchall()]
+            for l in linhas:
+                novo_id = str(uuid.uuid4())
+                valor = float(l["valor"])
+                cur.execute(
+                    "INSERT INTO cartao.transacao ("
+                    "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
+                    "moeda_original, valor_brl, data_transacao, categoria, categoria_manual, "
+                    "status, tipo, observacao, criado_em, atualizado_em, sincronizado_em, "
+                    "primeiro_sincronizado_em) "
+                    "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,'POSTED',%s,%s, now(), now(), now(), now());",
+                    (novo_id, l["account_id"], l["descricao"], l["descricao"], valor, valor,
+                     f"{l['data']} 12:00:00-03:00", categoria,
+                     "CREDIT" if valor < 0 else "DEBIT",
+                     f"Criado a partir da fatura {l['mes_referencia']:02d}/{l['ano_referencia']} — "
+                     f"a operadora cobrou e o Pluggy não sincronizou."),
+                )
+                cur.execute(
+                    "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
+                    (novo_id, l["id"]),
+                )
+                cur.execute(
+                    "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
+                    "VALUES (%s, %s, 'fatura', %s) ON CONFLICT DO NOTHING;",
+                    (l["id"], novo_id, session.get("user")),
+                )
+                criadas += 1
+            if linhas:
+                resumo[rotulo] = {
+                    "linhas": len(linhas),
+                    "total": round(sum(float(l["valor"]) for l in linhas), 2),
+                }
+        conn.commit()
+        if criadas:
+            registrar_auditoria(
+                "alteracao", "relatorios.criar_cobrancas_sem_pluggy", sucesso=True,
+                detalhes={"criadas": criadas, "por_tipo": resumo},
+            )
+        return jsonify({"ok": True, "criadas": criadas, "por_tipo": resumo})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui criar: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/api/faturas/sincronizar-parcelas", methods=["POST"])
 @requer("relatorios")
 def sincronizar_parcelas():
