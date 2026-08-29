@@ -319,6 +319,23 @@
 
 {% block scripts %}
 <script>
+// Trocar de mes recarrega a pagina; sem isto a leitura volta para o topo e
+// perde-se o ponto em que se estava conferindo. Guarda a posicao no clique e
+// devolve depois que a nova fatura renderiza.
+document.addEventListener('click', function (e) {
+  const link = e.target.closest('[data-nav-mes]');
+  if (link) {
+    try { sessionStorage.setItem('conciliar_scroll', String(window.scrollY)); } catch (err) {}
+  }
+});
+window.addEventListener('DOMContentLoaded', function () {
+  let y = null;
+  try { y = sessionStorage.getItem('conciliar_scroll'); } catch (err) {}
+  if (y === null) return;
+  try { sessionStorage.removeItem('conciliar_scroll'); } catch (err) {}
+  requestAnimationFrame(() => window.scrollTo(0, parseInt(y, 10) || 0));
+});
+
 function marcarRepetidaConferida(chk) {
   const ids = chk.dataset.ids.split(',').map(Number);
   const conferida = chk.checked;

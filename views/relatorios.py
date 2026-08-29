@@ -1746,6 +1746,29 @@ def marcar_duplicidades():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
+        # alvo explicito: o usuario aponta os dois lados na mao. Serve para o
+        # caso que nenhuma regra alcanca - inclusive quando o lancamento ja foi
+        # marcado como duplicado por engano e precisa virar "mesmo evento".
+        substituto_manual = (data.get("substituto_id") or "").strip()
+        if substituto_manual and data.get("ids"):
+            marcados = 0
+            for tid in [str(i) for i in data["ids"]]:
+                if tid == substituto_manual:
+                    continue
+                cur.execute(
+                    "UPDATE cartao.transacao SET substituido_por = %s, duplicada = false, "
+                    "atualizado_em = now() WHERE transacao_id = %s;",
+                    (substituto_manual, tid),
+                )
+                marcados += cur.rowcount or 0
+            conn.commit()
+            if marcados:
+                registrar_mudanca_auditoria(
+                    "Mesmo evento apontado manualmente", None,
+                    {"ids": data["ids"], "substituido_por": substituto_manual},
+                )
+            return jsonify({"ok": True, "marcados": marcados})
+
         baldes = _classificar_orfaos(cur, incluir_duplicadas=True)
         alvo = data.get("alvo")
         if alvo in ("repetidas", "ecos"):
