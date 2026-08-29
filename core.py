@@ -1817,6 +1817,63 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (24);")
             conn.commit()
 
+        if versao_atual < 25:
+            # "Substituido por": este lancamento e' o MESMO evento real que
+            # outro; so o outro conta. Guarda o vinculo 1-para-1, entao da pra
+            # navegar entre os dois e entender o que aconteceu.
+            #
+            # Existe porque `duplicada` tinha virado um balaio de tres coisas
+            # com causas diferentes. Agora cada estado significa uma coisa so:
+            #   somente_conciliacao -> registro de conciliacao, nao e' caixa
+            #                          (a compra parcelada agregada);
+            #   substituido_por     -> mesmo evento que outro lancamento:
+            #                          o pending que virou posted, e a parcela
+            #                          mensal que o Pluggy mandou por cima da
+            #                          parcela que a fatura ja cobra;
+            #   duplicada           -> sobra: mesma cobranca duas vezes, sem
+            #                          estorno e sem par identificavel.
+            #
+            # Cobranca dupla REAL da operadora nao entra em nenhum deles: ela
+            # vem com cobranca + estorno, os dois legitimos, que se anulam
+            # sozinhos. Aparece so na conciliacao do PDF ("cobrancas repetidas
+            # na propria fatura"), onde o estorno fica visivel.
+            cur.execute(
+                "ALTER TABLE cartao.transacao "
+                "ADD COLUMN IF NOT EXISTS substituido_por uuid "
+                "REFERENCES cartao.transacao(transacao_id) ON DELETE SET NULL;"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_transacao_substituido_por "
+                "ON cartao.transacao(substituido_por) WHERE substituido_por IS NOT NULL;"
+            )
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS "
+                "SELECT t.transacao_id::text AS linha_id, NULL::bigint AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+                "t.valor_brl, t.valor_original, t.moeda_original, t.status, t.tipo, "
+                "t.numero_cartao_final, t.conferida, COALESCE(t.duplicada,false) AS duplicada, "
+                "t.natureza, t.observacao "
+                "FROM cartao.transacao t "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false) "
+                "AND t.substituido_por IS NULL AND NOT EXISTS ("
+                "SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id=t.transacao_id) "
+                "UNION ALL "
+                "SELECT t.transacao_id::text || ':' || r.id::text AS linha_id, r.id AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, r.categoria, "
+                "r.valor_brl, r.valor_brl AS valor_original, 'BRL'::text AS moeda_original, "
+                "t.status, t.tipo, t.numero_cartao_final, t.conferida, "
+                "COALESCE(t.duplicada,false) AS duplicada, NULL::text AS natureza, r.observacao "
+                "FROM cartao.transacao t JOIN cartao.transacao_rateio r ON r.transacao_id=t.transacao_id "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false) AND t.substituido_por IS NULL;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Vinculo substituido_por entre lancamentos',"
+                "jsonb_build_object('versao',25));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (25);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

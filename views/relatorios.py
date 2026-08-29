@@ -1220,7 +1220,7 @@ def _normalizar_desc(texto):
     return re.sub(r"\s+", " ", (texto or "")).strip().upper()
 
 
-def _classificar_orfaos(cur):
+def _classificar_orfaos(cur, incluir_duplicadas=False):
     """Separa os lancamentos sem vinculo em tres baldes, usando o modelo de
     dados (nao heuristica de lojista):
 
@@ -1241,7 +1241,8 @@ def _classificar_orfaos(cur):
     cur.execute(
         f"SELECT fl.descricao_base, fl.parcela_total, fl.titular, fl.valor, "
         f"COUNT(DISTINCT fl.id) AS linhas, "
-        f"MIN(({DATA_LOCAL_SQL})::date) AS data_agregado "
+        f"MIN(({DATA_LOCAL_SQL})::date) AS data_agregado, "
+        f"MIN(t.transacao_id::text) AS agregado_id "
         f"FROM cartao.fatura_linha fl "
         f"JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
         f"JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
@@ -1256,6 +1257,9 @@ def _classificar_orfaos(cur):
             "valor": round(float(r["valor"]), 2),
             "linhas": r["linhas"],
             "data_agregado": r["data_agregado"],
+            "agregado_id": r["agregado_id"],
+            "titular": r["titular"],
+            "descricao_base": r["descricao_base"],
         })
 
     # ciclo da fatura mais recente por conta (compra perto do fechamento entra
@@ -1275,8 +1279,9 @@ def _classificar_orfaos(cur):
         f"FROM cartao.transacao t "
         f"JOIN cartao.fatura_importada fi ON fi.account_id = t.account_id "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN fi.periodo_inicio AND fi.periodo_fim "
-        f"WHERE COALESCE(t.duplicada,false) = false "
+        f"WHERE ({'TRUE' if incluir_duplicadas else 'COALESCE(t.duplicada,false) = false'}) "
         f"AND COALESCE(t.somente_conciliacao,false) = false "
+        f"AND t.substituido_por IS NULL "
         f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
         f"WHERE v.transacao_id = t.transacao_id) "
         f"GROUP BY t.transacao_id, t.account_id, t.descricao, t.valor_brl, t.valor_original, "
@@ -1327,6 +1332,8 @@ def _classificar_orfaos(cur):
                     f"é a mesma compra gravada duas vezes pelo Pluggy, na autorização e "
                     f"depois já consolidada como parcelamento."
                 )
+                # o que substituiu o eco e' a compra ja consolidada
+                item["substituto_id"] = casado["agregado_id"]
                 ecos.append(item)
             else:
                 item["motivo"] = (
@@ -1334,6 +1341,23 @@ def _classificar_orfaos(cur):
                     f"R$ {casado['valor']:,.2f}), cobrada {dias} dias depois da compra. A compra "
                     f"inteira já está lançada e fora do resultado, e a fatura já cobre "
                     f"{casado['linhas']} parcela(s) — essa cobrança a mais não existe na fatura."
+                )
+                # o que vale e' a parcela que a fatura gerou para o mes em
+                # que essa cobranca caiu; sem ela, aponta para a compra inteira
+                cur.execute(
+                    "SELECT fl.transacao_id_criado FROM cartao.fatura_linha fl "
+                    "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
+                    "WHERE fl.descricao_base = %s AND fl.parcela_total = %s "
+                    "AND fl.titular = %s AND fl.valor = %s "
+                    "AND %s BETWEEN fi.periodo_inicio AND fi.periodo_fim "
+                    "AND fl.transacao_id_criado IS NOT NULL LIMIT 1;",
+                    (casado["descricao_base"], casado["parcela_total"], casado["titular"],
+                     casado["valor"], item["data"]),
+                )
+                alvo = cur.fetchone()
+                item["substituto_id"] = (
+                    str(alvo["transacao_id_criado"]) if alvo and alvo["transacao_id_criado"]
+                    else casado["agregado_id"]
                 )
                 repetidas.append(item)
             continue
@@ -1470,41 +1494,50 @@ def duplicidades_fatura():
 @bp.route("/api/duplicidades/marcar", methods=["POST"])
 @requer("lancamentos_editar")
 def marcar_duplicidades():
-    """Marca lancamentos como duplicados. `apenas_inequivocos` roda em cima da
-    classificacao do servidor; a lista explicita vem da revisao do usuario.
-    Marcar duplicidade tira dos totais e do DRE, mas nunca apaga o lancamento
-    nem toca no OK."""
+    """Registra que um lancamento e' o MESMO evento real que outro
+    (`substituido_por`), com o vinculo 1-para-1 entre os dois - em vez de
+    chama-lo de duplicado, que e' outra coisa.
+
+    `alvo` escolhe o balde: 'repetidas' (parcela mensal por cima da parcela que
+    a fatura ja cobra) ou 'ecos' (pending -> posted). Uma lista explicita de
+    ids vem da revisao manual, e usa o substituto que a classificacao apontou.
+
+    Nao apaga nada: o lancamento sai do resultado e continua consultavel, com
+    o vinculo dizendo qual registro o substituiu.
+    """
     data = request.get_json(force=True) or {}
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        if data.get("apenas_repetidas"):
-            ids = [i["transacao_id"] for i in _classificar_orfaos(cur)["repetidas"]]
+        baldes = _classificar_orfaos(cur, incluir_duplicadas=True)
+        alvo = data.get("alvo")
+        if alvo in ("repetidas", "ecos"):
+            itens = baldes[alvo]
         else:
-            ids = [str(i) for i in (data.get("ids") or [])]
-        if not ids:
+            pedidos = {str(i) for i in (data.get("ids") or [])}
+            itens = [i for b in ("repetidas", "ecos", "revisar")
+                     for i in baldes[b] if i["transacao_id"] in pedidos]
+        itens = [i for i in itens if i.get("substituto_id")]
+        if not itens:
             return jsonify({"ok": True, "marcados": 0})
 
-        cur.execute(
-            "SELECT transacao_id, descricao, COALESCE(valor_brl, valor_original) AS valor "
-            "FROM cartao.transacao WHERE transacao_id = ANY(%s::uuid[]) "
-            "AND COALESCE(duplicada,false) = false;",
-            (ids,),
-        )
-        alvo = [dict(r) for r in cur.fetchall()]
-        cur.execute(
-            "UPDATE cartao.transacao SET duplicada = true, atualizado_em = now() "
-            "WHERE transacao_id = ANY(%s::uuid[]);",
-            ([a["transacao_id"] for a in alvo],),
-        )
-        marcados = cur.rowcount or 0
+        marcados = 0
+        for i in itens:
+            if i["substituto_id"] == i["transacao_id"]:
+                continue  # nunca apontar para si mesmo
+            cur.execute(
+                "UPDATE cartao.transacao SET substituido_por = %s, duplicada = false, "
+                "atualizado_em = now() WHERE transacao_id = %s AND substituido_por IS NULL;",
+                (i["substituto_id"], i["transacao_id"]),
+            )
+            marcados += cur.rowcount or 0
         conn.commit()
         if marcados:
             registrar_mudanca_auditoria(
-                "Duplicidade marcada (cobrança que a fatura não reconhece)",
+                "Lançamento marcado como mesmo evento que outro (substituido_por)",
                 None,
-                [{"transacao_id": str(a["transacao_id"]), "descricao": a["descricao"],
-                  "valor": float(a["valor"] or 0)} for a in alvo],
+                [{"transacao_id": i["transacao_id"], "descricao": i["descricao"],
+                  "valor": i["valor"], "substituido_por": i["substituto_id"]} for i in itens],
             )
         return jsonify({"ok": True, "marcados": marcados})
     except Exception as exc:
