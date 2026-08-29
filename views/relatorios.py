@@ -517,6 +517,13 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     fim_busca = ciclo_fim_real or max(datas)
     if fim_busca < max(datas):
         fim_busca = max(datas)
+    # A busca vai alguns dias alem do fim do ciclo porque o Pluggy as vezes
+    # data a compra um ou dois dias depois do que a fatura imprime (caso real:
+    # D MORI, fatura imprime 11/02 e o Pluggy grava 12/02). Sem essa folga a
+    # transacao nem entrava como candidata e a compra ficava orfa dos dois
+    # lados. So a avulsa aproveita: os caminhos de parcela filtram por
+    # ciclo_inicio..ciclo_fim, que continuam sendo o ciclo real.
+    fim_busca_sql = fim_busca + timedelta(days=3)
     cur.execute(
         f"SELECT t.transacao_id, t.data_transacao, t.descricao, t.parcela_total, "
         f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
@@ -526,7 +533,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # cobrar dela um par na fatura, ela ja foi resolvida.
         f"FROM cartao.transacao t WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
-        (account_id, min(datas), fim_busca),
+        (account_id, min(datas), fim_busca_sql),
     )
     candidatos = [dict(r) for r in cur.fetchall()]
     # Transacao ja vinculada a alguma linha de fatura (ver cartao.fatura_vinculo)
@@ -560,7 +567,14 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     avulsas = []
     for linha in linhas:
         if linha["parcela_total"]:
-            chave = (linha["titular"], linha["descricao_base"].upper(), linha["parcela_total"])
+            # O VALOR entra na chave: o mesmo lojista pode ter dois
+            # parcelamentos com o mesmo numero de parcelas e valores
+            # diferentes (caso real: MECANICA HOCHIOVE com 2x R$135,00 e
+            # 2x R$233,50 na mesma fatura). Sem o valor os dois colapsam numa
+            # chave so, o valor da parcela vira a media e nenhum dos dois
+            # agregados e' encontrado - os dois viravam orfaos.
+            chave = (linha["titular"], linha["descricao_base"].upper(),
+                     linha["parcela_total"], round(linha["valor"], 2))
             grupos_parcela.setdefault(chave, []).append(linha)
         else:
             avulsas.append(linha)
@@ -585,7 +599,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         else:
             sem_sistema.append({**linha, "fatura_linha_id": fatura_linha_ids.get(id(linha))})
 
-    for (titular, desc_norm, parcela_total), linhas_grupo in grupos_parcela.items():
+    for (titular, desc_norm, parcela_total, _v), linhas_grupo in grupos_parcela.items():
         valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
         valor_esperado = round(valor_mensal * parcela_total, 2)
 

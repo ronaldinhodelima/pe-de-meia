@@ -234,3 +234,42 @@ def test_parcela_unica_nao_e_confundida_com_agregado():
     )
     assert [b["transacao_id"] for b in r["batidos"]] == ["t1"]
     assert "valor_esperado_parcelamento" not in r["batidos"][0]
+
+
+def test_dois_parcelamentos_do_mesmo_lojista_com_mesmo_numero_de_parcelas():
+    """Caso real: na fatura 09/2025 havia MECANICA HOCHIOVE Parc.2/2 de R$135,00
+    E Parc.2/2 de R$233,50 - dois parcelamentos diferentes, mesmo lojista, mesmo
+    numero de parcelas. Agrupando so por (titular, lojista, parcelas) os dois
+    colapsam numa chave: o valor da parcela vira a media (R$184,25), o valor
+    cheio esperado vira R$368,50 e NENHUM dos dois agregados (R$270 e R$467)
+    e' encontrado. Os dois viravam orfaos. O valor da parcela tem que entrar
+    na chave do grupo."""
+    candidatos = [
+        _transacao("ag270", date(2025, 8, 13), "Parcelado Lojista - Visa - MECANICA HOCHIOVE", 270.00),
+        _transacao("ag467", date(2025, 8, 13), "Parcelado Lojista - Visa - MECANICA HOCHIOVE", 467.00),
+    ]
+    linhas = [
+        _linha(date(2025, 8, 11), "MECANICA HOCHIOVE Parc.2/2", 135.00, 2, 2),
+        _linha(date(2025, 8, 11), "MECANICA HOCHIOVE Parc.2/2", 233.50, 2, 2),
+    ]
+    r = _conciliar_linhas(
+        CursorFake(candidatos), "conta-1", linhas,
+        ciclo_inicio_min=date(2025, 8, 12), ciclo_fim_real=date(2025, 9, 11),
+    )
+    achados = {b["valor"]: b["transacao_id"] for b in r["batidos"]}
+    assert achados == {135.00: "ag270", 233.50: "ag467"}, f"casou errado: {achados}"
+    assert r["sem_fatura"] == [], "nenhum agregado pode sobrar como orfao"
+
+
+def test_avulsa_um_dia_depois_do_fim_do_ciclo_ainda_casa():
+    """Caso real D MORI: a fatura 02/2026 imprime a compra em 11/02 (dentro do
+    ciclo) e o Pluggy datou 12/02 - um dia depois do fim do ciclo. A janela de
+    busca terminava exatamente no fim do ciclo, entao a transacao nem entrava
+    como candidata e a compra ficava orfa dos dois lados."""
+    candidatos = [_transacao("t1", date(2026, 2, 12), "A vista sem juros - Visa - D MORI", 73.10)]
+    linhas = [_linha(date(2026, 2, 11), "D MORI COZINHA AUTORAL", 73.10)]
+    r = _conciliar_linhas(
+        CursorFake(candidatos), "conta-1", linhas,
+        ciclo_inicio_min=date(2026, 1, 26), ciclo_fim_real=date(2026, 2, 11),
+    )
+    assert [b["transacao_id"] for b in r["batidos"]] == ["t1"]
