@@ -895,6 +895,13 @@ def _estado_fatura(cur, fatura_row):
         f"({DATA_LOCAL_SQL})::date AS data_local "
         f"FROM cartao.transacao t "
         f"WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
+        # Lancamento ja resolvido nao e' orfao: `substituido_por` diz que ele e'
+        # o mesmo evento que outro (que esta vinculado a fatura), e
+        # `somente_conciliacao` e' registro de compra, nao cobranca. Sem esses
+        # dois filtros a tela repetia como "sem vinculo" tudo o que a tela de
+        # duplicidades ja tinha resolvido.
+        f"AND t.substituido_por IS NULL "
+        f"AND COALESCE(t.somente_conciliacao, false) = false "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s "
         f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id) "
         f"ORDER BY 4, 2;",
