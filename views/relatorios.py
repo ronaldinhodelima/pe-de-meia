@@ -1295,11 +1295,19 @@ def _classificar_orfaos(cur):
         if valor <= 0 or "PAGAMENTO RECEBIDO" in desc or "PAG DE FATURA" in desc:
             continue
 
+        # Só a forma MENSAL entra em "inequívoco". Nesse cartão as duas formas
+        # são distinguíveis pela descrição e significam coisas diferentes:
+        #   "Parcelado Lojista - Visa - X"  = o parcelamento inteiro (agregado)
+        #   "Parcela Lojista Visa - X"      = a cobrança de UMA parcela
+        # Um agregado sem vínculo costuma ser parcelamento novo, cujas parcelas
+        # ainda vão aparecer em faturas futuras - marcar como duplicidade
+        # apagaria uma compra real. Ele vai para "revisar".
+        e_mensal = desc.startswith("PARCELA LOJISTA")
         casado = next(
             (c for c in cobertos
              if abs(c["valor"] - valor) <= 0.02 and c["base"] and c["base"] in desc),
             None,
-        )
+        ) if e_mensal else None
         if casado:
             item["motivo"] = (
                 f"Repete uma parcela de {casado['base']} ({casado['parcela_total']}x de "
