@@ -580,10 +580,11 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     # A linha continua em `linhas` para casar com o lancamento correspondente
     # no Pluggy (a propria fatura de cartao sendo paga) e nao sobrar como
     # "sem_fatura" - so sai da soma usada na comparacao.
-    soma_fatura = round(
-        sum(l["valor"] for l in linhas if l["descricao"].strip().lower() != "pagamento recebido"), 2
-    )
-    soma_batida = round(sum(l["valor"] for l in batidos), 2)
+    def _nao_e_pagamento_recebido(l):
+        return l["descricao"].strip().lower() != "pagamento recebido"
+
+    soma_fatura = round(sum(l["valor"] for l in linhas if _nao_e_pagamento_recebido(l)), 2)
+    soma_batida = round(sum(l["valor"] for l in batidos if _nao_e_pagamento_recebido(l)), 2)
     return {
         "soma_fatura": soma_fatura,
         "batidos": sorted(batidos, key=lambda l: l["data"]),
