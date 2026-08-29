@@ -775,7 +775,19 @@ tudo o que a tela de duplicidades já tinha resolvido: 57 falsos pendentes em 08
 outra tela dizia "nada pendente". Ao criar um estado novo, procurar TODAS as consultas que
 listam pendência.
 
-**11. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
+**11. Eco de parcelamento NOVO precisa de regra própria.** Enquanto o agregado atende UMA linha
+só, ele não é reconhecido como agregado (isso exige 2+) e o eco escapa das outras regras. A regra
+que resolve: existe linha de fatura do mesmo estabelecimento **já vinculada**, e o órfão vale ou
+a parcela dela ou o parcelamento inteiro, dentro de 5 dias. A comparação usa a `descricao_base`
+da **linha**, não a do agregado — `"PARC=106ANJOS DE QUINTA"` não casa com `"ANJOS DE QUINTAL"`.
+
+**12. Valor negativo não casa por descrição.** O Pluggy chama o mesmo pagamento de
+`"Pagamento recebido"` e de `"Pag de Fatura Via Deb Aut"` — zero palavras em comum, então tokens
+não servem. Para negativo o par é **valor idêntico no MESMO dia**, com a outra gravação já
+vinculada à fatura; exige dia exato justamente por não ter o reforço da descrição. Como o par tem
+o mesmo sinal, um estorno (sinal oposto ao da cobrança) nunca casa por aqui.
+
+**13. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
 lançamentos são legítimos e se anulam sozinhos. Marcar um deixaria o estorno negativo solto.
 
 ## Lições da sessão de 29/08/2026 (incidente real — não repetir)
@@ -888,7 +900,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **196 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **198 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
