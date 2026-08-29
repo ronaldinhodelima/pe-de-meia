@@ -1159,10 +1159,28 @@ def conciliar_fatura():
             resultado["fatura"] = fatura_meta
 
     # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
+    # `fecha_100` por fatura, no proprio SELECT: linha sem vinculo E lancamento
+    # do Pluggy sem vinculo, ambos zerados. O inicio do ciclo e' o encadeado
+    # (fim da anterior + 1 dia), o mesmo que a tela mostra - nao o congelado.
     cur.execute(
-        "SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
-        "f.periodo_inicio, f.periodo_fim, f.vencimento "
-        "FROM cartao.fatura_importada f ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
+        f"SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
+        f"f.periodo_inicio, f.periodo_fim, f.vencimento, "
+        f"(SELECT COUNT(*) FROM cartao.fatura_linha fl WHERE fl.fatura_id = f.id "
+        f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id)"
+        f") AS linhas_sem_vinculo, "
+        f"(SELECT COUNT(*) FROM cartao.transacao t WHERE t.account_id = f.account_id "
+        f" AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
+        f" AND COALESCE(t.somente_conciliacao,false) = false "
+        f" AND ({DATA_LOCAL_SQL})::date BETWEEN COALESCE(("
+        f"   SELECT ant.periodo_fim + 1 FROM cartao.fatura_importada ant "
+        f"   WHERE ant.account_id = f.account_id AND ant.periodo_fim IS NOT NULL "
+        f"   AND (ant.ano_referencia, ant.mes_referencia) < (f.ano_referencia, f.mes_referencia) "
+        f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) "
+        f" AND f.periodo_fim "
+        f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
+        f") AS orfaos "
+        f"FROM cartao.fatura_importada f "
+        f"ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
     )
     historico = []
     linhas_historico = cur.fetchall()
@@ -1175,6 +1193,7 @@ def conciliar_fatura():
             **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
             "periodo_inicio": _ciclo_inicio_encadeado(cur, r),
+            "fecha_100": not r["linhas_sem_vinculo"] and not r["orfaos"],
         })
 
     cur.close()
@@ -1394,10 +1413,29 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
             "valor": valor, "data": r["data_local"], "categoria": r["categoria"],
         }
-        # Pagamento da fatura nunca e' duplicidade - e' a fatura anterior sendo
-        # quitada (natureza transferencia). Fica de fora de qualquer balde.
         desc = _normalizar_desc(r["descricao"])
-        if valor <= 0 or "PAGAMENTO RECEBIDO" in desc or "PAG DE FATURA" in desc:
+        tokens = _tokens_significativos(r["descricao"])
+        # Valor negativo (pagamento de fatura, credito) nao entra nas regras de
+        # parcelamento nem de estorno, mas PODE ser o mesmo evento gravado duas
+        # vezes: o Pluggy manda o pagamento como "Pag de Fatura Via Deb Aut" e
+        # de novo como "Pagamento recebido", mesmo dia e mesmo valor. Como o
+        # par tem o MESMO sinal, um estorno (que tem sinal oposto ao da
+        # cobranca) nunca casa aqui.
+        if valor <= 0:
+            par_neg = next(
+                (v for v in vinculadas
+                 if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
+                 and abs((v["data"] - r["data_local"]).days) <= 5
+                 and len(tokens & v["tokens"]) >= 1),
+                None,
+            ) if tokens else None
+            if par_neg:
+                item["motivo"] = (
+                    f"O Pluggy gravou este mesmo lançamento duas vezes. A outra gravação "
+                    f"(\"{par_neg['descricao'][:60]}\") é a que está vinculada à fatura."
+                )
+                item["substituto_id"] = par_neg["transacao_id"]
+                ecos.append(item)
             continue
 
         # Só a forma MENSAL entra em "inequívoco". Nesse cartão as duas formas
@@ -1476,7 +1514,6 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         # diferentes (pending -> posted): existe uma transacao JA VINCULADA a
         # fatura, mesma conta, mesmo valor, mesmo dia (ou um de diferenca), e
         # com os mesmos tokens de estabelecimento.
-        tokens = _tokens_significativos(r["descricao"])
         par = next(
             (v for v in vinculadas
              if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02

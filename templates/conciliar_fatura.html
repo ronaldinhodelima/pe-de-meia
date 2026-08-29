@@ -43,8 +43,10 @@
       <th>Início</th><th>Fim</th><th>Vencimento</th></tr></thead>
     <tbody>
       {% for h in historico %}
-        <tr style="{{ 'background:var(--bg)' if h.id == fatura_id }}">
-          <td><a href="/relatorios/conciliar-fatura?fatura_id={{ h.id }}">{{ '%02d'|format(h.mes_referencia) }}/{{ h.ano_referencia }}</a></td>
+        <tr style="{{ 'background:var(--good-soft);' if h.fecha_100 }}{{ 'outline:2px solid var(--ink-faint);outline-offset:-2px' if h.id == fatura_id }}"
+            title="{{ 'Fecha 100%: toda linha da fatura tem vínculo e nada sobrou no sistema' if h.fecha_100 else 'Ainda há linha da fatura ou lançamento do Pluggy sem vínculo' }}">
+          <td><a href="/relatorios/conciliar-fatura?fatura_id={{ h.id }}">{{ '%02d'|format(h.mes_referencia) }}/{{ h.ano_referencia }}</a>
+            {%- if h.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}</td>
           <td>{{ h.conta_label }}</td>
           <td class="valor">{{ h.total|moeda }}</td>
           <td>{{ h.importado_em.strftime('%d/%m/%Y %H:%M') }}</td>
@@ -55,6 +57,8 @@
       {% endfor %}
     </tbody></table>
     <div style="font-size:11.5px;color:var(--ink-faint);margin-top:8px">
+      Linha em verde com ✓ = a fatura fecha 100%: toda linha dela tem vínculo e nenhum lançamento
+      do Pluggy sobrou no ciclo.
       Essas datas vêm direto do PDF, não são editáveis aqui. O PDF original de cada fatura fica salvo e pode ser
       baixado ou apagado em <a href="/configuracoes/faturas-pdf">Configurações → Faturas em PDF</a>.
     </div>
