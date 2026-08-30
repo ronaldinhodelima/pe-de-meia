@@ -7,6 +7,7 @@ depois, mas a licao fica: testar com dado inventado nao pega esse tipo de erro -
 formato usado aqui tem que espelhar o que a view realmente entrega.
 """
 from pathlib import Path
+from datetime import date
 
 import pytest
 
@@ -73,6 +74,48 @@ class TestDRE:
         assert '<form action="/dre" method="get">' in html
         assert 'name="ano"' in html
         assert "window.location" not in html
+
+
+class TestConciliacaoFatura:
+    def test_cabecalho_usa_nome_do_mes_sem_linha_do_ciclo(self, ctx):
+        template = (
+            Path(__file__).parent.parent / "templates" / "conciliar_fatura.html"
+        ).read_text(encoding="utf-8")
+
+        assert "Fatura {{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}" in template
+        assert "ciclo {{ resultado.periodo_inicio" not in template
+
+        resultado = {
+            "fatura": {"id": 8, "mes_referencia": 8, "ano_referencia": 2026, "total": 100},
+            "fecha_100": True,
+            "periodo_inicio": date(2026, 7, 10),
+            "periodo_fim": date(2026, 8, 12),
+            "soma_fatura": 100,
+            "soma_vinculada": 100,
+            "diferenca": 0,
+            "linhas": [],
+            "sem_vinculo": [],
+            "orfas": [],
+            "repetidas_na_fatura": [],
+        }
+        html = render_template(
+            "conciliar_fatura.html", titulo="Conciliar fatura", topbar="",
+            resultado=resultado, historico=[], erro=None, contas_credito=[], categorias=[],
+            account_id="conta", fatura_id=8,
+            fatura_mais_antiga={"id": 7}, fatura_mais_nova={"id": 9},
+            pode_editar_conciliacao=False, pode_criar_lancamento=False,
+        )
+        assert "Fatura Agosto de 2026" in html
+        assert "ciclo 10/07/2026" not in html
+
+    def test_setas_de_mes_guardam_a_posicao_da_pagina(self):
+        template = (
+            Path(__file__).parent.parent / "templates" / "conciliar_fatura.html"
+        ).read_text(encoding="utf-8")
+
+        assert template.count("data-nav-mes") == 3  # duas setas + seletor do listener
+        assert "sessionStorage.setItem('conciliar_scroll'" in template
+        assert "window.scrollTo(0, parseInt(y, 10) || 0)" in template
 
 
 class TestLogs:

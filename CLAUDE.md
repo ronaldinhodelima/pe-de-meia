@@ -395,6 +395,11 @@ de permissões, robustez do import de PDF e conciliação/classificação das ou
 Tela `/relatorios/conciliar-fatura`. Confere a fatura oficial da Unicred (PDF) contra o que o
 Pluggy sincronizou. **A fatura é a autoridade**: ela é a prova do que a operadora cobrou.
 
+No cabeçalho da fatura aberta, a referência aparece por extenso (`Agosto de 2026`). A linha
+visual com início/fim do ciclo foi removida a pedido do usuário, mas essas datas **continuam no
+banco e em toda a lógica de conciliação**. As setas anterior/seguinte usam `data-nav-mes` para
+guardar e restaurar a rolagem; não remover esse atributo, ou a página volta ao topo na troca.
+
 ### O erro de arquitetura que foi corrigido
 
 Até 29/08/2026 a conciliação era **sem memória**: recalculava tudo por heurística a cada
@@ -670,7 +675,7 @@ futuras a partir do número de parcelas impresso na fatura.
 ## Revisão técnica do conjunto publicado — 29/08/2026
 
 Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões, upload e precisão
-monetária, com suíte local de **214 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
+monetária, com suíte local de **216 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
 preservados:
 
 - a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
@@ -1019,7 +1024,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **214 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **216 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 

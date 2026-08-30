@@ -73,26 +73,24 @@
 
 {% if resultado %}
   {% set f = resultado.fatura %}
+  {% set meses_nome = ('Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro') %}
   <div class="cat-breakdown" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     {% if fatura_mais_antiga %}
       <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura_mais_antiga.id }}" class="ver-btn"
-         style="text-decoration:none" title="Mês anterior">‹</a>
+         style="text-decoration:none" title="Mês anterior" data-nav-mes>‹</a>
     {% else %}
       <span class="ver-btn" style="opacity:.35;cursor:default">‹</span>
     {% endif %}
     <div>
       <div style="font-size:20px;font-weight:600;line-height:1.2">
-        Fatura {{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}
+        Fatura {{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}
         {%- if resultado.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}
-      </div>
-      <div style="font-size:12px;color:var(--ink-faint)">
-        ciclo {{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}
-        {%- if f.vencimento %} · vence {{ f.vencimento.strftime('%d/%m/%Y') }}{% endif %}
       </div>
     </div>
     {% if fatura_mais_nova %}
       <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura_mais_nova.id }}" class="ver-btn"
-         style="text-decoration:none" title="Mês seguinte">›</a>
+         style="text-decoration:none" title="Mês seguinte" data-nav-mes>›</a>
     {% else %}
       <span class="ver-btn" style="opacity:.35;cursor:default">›</span>
     {% endif %}
@@ -111,7 +109,7 @@
     </h3>
     <div class="cards" style="margin-top:12px">
       <div class="card"><div class="label" title="Referência da fatura">Referência</div>
-        <div class="val">{{ '%02d'|format(f.mes_referencia) }}/{{ f.ano_referencia }}</div></div>
+        <div class="val">{{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}</div></div>
       <div class="card"><div class="label" title="SALDO TOTAL impresso no PDF da fatura">Total impresso no PDF</div>
         <div class="val">{{ f.total|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas que o sistema leu do PDF (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura do PDF está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
