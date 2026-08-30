@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS cartao.transacao (
     parcela_total                INTEGER,
     conferida                    BOOLEAN NOT NULL DEFAULT false,
     observacao                   TEXT,
+    observacao_sistema           TEXT,
     conferida_por                TEXT,
     conferida_em                 TIMESTAMPTZ,
     criado_em                     TIMESTAMPTZ,

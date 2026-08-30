@@ -14,7 +14,6 @@ from core import (
     CATEGORIA_PT_DB,
     CONTA_MANUAL_ID,
     DATA_LOCAL_SQL,
-    DUPLICADA_OBS_PADRAO,
     FINANCEIRO_DIM_TABELA,
     FINANCEIRO_TABELA,
     JOIN_NATUREZA,
@@ -274,7 +273,7 @@ def index():
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
         "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
         "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
-        "t.conferida, t.observacao, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
+        "t.conferida, t.observacao, t.observacao_sistema, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
         "t.substituido_por, COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
         "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, t.primeiro_sincronizado_em, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
@@ -574,6 +573,7 @@ def index():
             "valor_sort": valor_sort,
             "cor_valor": cor_valor,
             "observacao": r["observacao"] or "",
+            "observacao_sistema": r["observacao_sistema"] or "",
             "conferida": r["conferida"],
             "duplicada": r["duplicada"],
             "suspeita_duplicidade": str(rid) in ids_suspeitos,
@@ -598,6 +598,7 @@ def index():
             "conferida": "Sim" if r["conferida"] else "Não",
             "conferida_por": r["conferida_por"] or "-",
             "observacao": r["observacao"] or "-",
+            "observacao_sistema": r["observacao_sistema"] or "",
             "sincronizado_em": data_hora_local(r["sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["sincronizado_em"] else "-",
             "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
             "_conferida": bool(r["conferida"]),
@@ -643,7 +644,6 @@ def index():
             aid for aid, _curto, _completo, _texto, _selo in origem_opcoes
             if contas_by_id[aid]["tipo"] == "CREDIT"
         ],
-        "duplicada_obs": DUPLICADA_OBS_PADRAO,
         "dimensoes_cadastro_rapido": {
             str(d["id"]): d["nome"] for d in dimensoes
             if chave_alfa(d["nome"]) in {"projeto", "portfolio"}
@@ -743,6 +743,18 @@ def lancamentos_por_fatura():
     """
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    # Regras sao do lancamento, nao da tela. Abrir diretamente a visao
+    # detalhada precisa aplicar exatamente as mesmas regras da resumida.
+    regras_resultado = aplicar_regras(cur)
+    conn.commit()
+    if (
+        regras_resultado["lancamentos"] or regras_resultado["dimensoes"]
+        or regras_resultado["erro"] or regras_resultado["duplicatas_ignoradas"]
+    ):
+        registrar_auditoria(
+            "regra_automatica", "classificacao",
+            sucesso=not bool(regras_resultado["erro"]), detalhes=regras_resultado,
+        )
     contas_by_id, origem_opcoes = carregar_origens(cur)
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
     account_id = request.args.get("account_id") or ""
@@ -799,9 +811,11 @@ def lancamentos_por_fatura():
 
     cur.execute(
         f"SELECT v.fatura_linha_id, v.transacao_id, v.origem, v.criado_por, "
-        f"t.descricao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
-        f"t.data_transacao, t.categoria, t.observacao, t.conferida, t.conferida_por, "
-        f"t.numero_cartao_final, "
+        f"t.descricao, t.descricao_bruta, COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        f"t.valor_original, t.moeda_original, t.data_transacao, t.categoria, "
+        f"t.observacao, t.observacao_sistema, t.conferida, t.conferida_por, t.conferida_em, "
+        f"t.numero_cartao_final, t.parcela_atual, t.parcela_total, t.status, t.tipo, "
+        f"t.sincronizado_em, t.primeiro_sincronizado_em, "
         f"COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
         f"COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
@@ -818,6 +832,9 @@ def lancamentos_por_fatura():
         transacao_uuid = item["transacao_id"]
         item["transacao_id"] = str(item["transacao_id"])
         item["data_local"] = data_hora_local(item.pop("data_transacao"))
+        item["conferida_local"] = data_hora_local(item.pop("conferida_em"))
+        item["sincronizado_local"] = data_hora_local(item.pop("sincronizado_em"))
+        item["primeiro_sincronizado_local"] = data_hora_local(item.pop("primeiro_sincronizado_em"))
         item["elegivel"] = not (
             item["duplicada"] or item["substituido_por"] or item["somente_conciliacao"]
         )
@@ -828,6 +845,7 @@ def lancamentos_por_fatura():
     dimensoes = cur.fetchall()
     obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
     nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
+    ids_dimensoes = {chave_alfa(d["nome"]): d["id"] for d in dimensoes}
     cur.execute(
         "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
         "FROM cartao.dimensao_valor ORDER BY nome;"
@@ -924,6 +942,8 @@ def lancamentos_por_fatura():
         for v in vinculos:
             v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
             v["tecnico"] = not v["principal"]
+            v["fonte"] = "F" if v["transacao_id"] == criado else "P"
+            v["fonte_nome"] = "Fatura em PDF" if v["fonte"] == "F" else "Pluggy"
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1
@@ -1052,6 +1072,9 @@ def lancamentos_por_fatura():
         "pode_editar": pode("lancamentos_editar"),
         "pode_conferir": pode("lancamentos_conferir"),
         "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
+        "projeto_portfolio_map": projeto_portfolio_map,
+        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
+        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
     }
     conta = contas_by_id.get(account_id)
     cur.close()
@@ -1177,7 +1200,7 @@ def detalhes_transacao(transacao_id):
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
         "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
         "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
-        "t.conferida, t.observacao, t.conferida_por, t.natureza, "
+        "t.conferida, t.observacao, t.observacao_sistema, t.conferida_por, t.natureza, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE t.transacao_id = %s;",
         (transacao_id,),
@@ -1226,6 +1249,7 @@ def detalhes_transacao(transacao_id):
         "conferida": "Sim" if r["conferida"] else "Não",
         "conferida_por": r["conferida_por"] or "-",
         "observacao": r["observacao"] or "-",
+        "observacao_sistema": r["observacao_sistema"] or "-",
         "natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
     })
 
@@ -1513,6 +1537,11 @@ def update_transacao(transacao_id):
             (transacao_id,),
         )
         faltando = [r[0] for r in cur.fetchall()]
+        categoria_final = (
+            (data.get("categoria") or None) if "categoria" in data else transacao[3]
+        )
+        if not categoria_final:
+            faltando.append("categoria")
     conferida_atual = bool(transacao[0])
     # PENDING e um status provisorio do banco - o Pluggy pode ainda alterar
     # valor/data, ou ate substituir a transacao por outra com id diferente,

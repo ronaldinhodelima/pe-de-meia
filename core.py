@@ -2266,6 +2266,37 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (31);")
             conn.commit()
 
+        if versao_atual < 32:
+            # Observacao e' o caderno pessoal do usuario. Mensagens tecnicas
+            # geradas pelo aplicativo ficam separadas e ocultas por padrao.
+            # A migracao e' propositalmente conservadora: so move textos
+            # completos e conhecidos, nunca procura por palavras soltas como
+            # "fatura" ou "Pluggy", que tambem podem existir numa nota humana.
+            cur.execute(
+                "ALTER TABLE cartao.transacao ADD COLUMN IF NOT EXISTS "
+                "observacao_sistema text;"
+            )
+            cur.execute(
+                "UPDATE cartao.transacao SET observacao_sistema=observacao, "
+                "observacao=NULL, atualizado_em=now() WHERE observacao_sistema IS NULL AND ("
+                "observacao = 'Criado a partir da fatura em PDF - não veio do Pluggy.' OR "
+                "observacao = %s OR "
+                "observacao ~ '^Parcela gerada pela fatura [0-9]{2}/[0-9]{4} "
+                "\\(a compra inteira está em outro lançamento, fora do resultado\\)\\.$' OR "
+                "observacao ~ '^Criado a partir da fatura [0-9]{2}/[0-9]{4} — "
+                "a operadora cobrou e o Pluggy não sincronizou\\.$');",
+                (DUPLICADA_OBS_PADRAO,),
+            )
+            movidas = max(getattr(cur, "rowcount", 0) or 0, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Separacao de observacoes internas',"
+                "jsonb_build_object('versao',32,'movidas',%s));",
+                (movidas,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (32);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

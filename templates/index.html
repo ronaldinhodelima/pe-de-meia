@@ -221,6 +221,10 @@
       <span><input id="modalObservacao" type="text" placeholder="Observação"
                    onchange="salvarObservacaoModal()" {{ 'disabled' if not pode_editar }}></span>
     </div>
+    <details id="modalInfoSistema" class="detalhes-tecnicos" hidden>
+      <summary>Informações internas do sistema</summary>
+      <div id="modalObservacaoSistema" class="nota-sistema" style="margin-top:8px"></div>
+    </details>
     <div class="row">
       <span>Conferida</span>
       <span class="modal-conferencia"><small id="modalConferidaPor" hidden></small><select id="modalConferida" onchange="alterarConferidaModal()"

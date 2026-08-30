@@ -1348,7 +1348,7 @@ def criar_lancamento_de_fatura(linha_id):
             "INSERT INTO cartao.transacao ("
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
             "valor_brl, data_transacao, categoria, categoria_manual, status, tipo, "
-            "observacao, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
+            "observacao_sistema, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
             ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,'POSTED','DEBIT',%s, now(), now(), now(), now());",
             (
                 str(transacao_id), linha["account_id"], linha["descricao"], linha["descricao"],
@@ -1782,7 +1782,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
             "INSERT INTO cartao.transacao ("
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
             "valor_brl, data_transacao, categoria, categoria_manual, natureza, status, tipo, "
-            "observacao, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
+            "observacao_sistema, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
             ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,%s,'POSTED','DEBIT',%s, now(), now(), now(), now());",
             (
                 novo_id, linha["account_id"], linha["descricao"], linha["descricao"],
@@ -1953,7 +1953,7 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
         "INSERT INTO cartao.transacao ("
         "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
         "moeda_original, valor_brl, data_transacao, categoria, categoria_manual, "
-        "status, tipo, observacao, criado_em, atualizado_em, sincronizado_em, "
+        "status, tipo, observacao_sistema, criado_em, atualizado_em, sincronizado_em, "
         "primeiro_sincronizado_em) "
         "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s,%s, now(), now(), now(), now());",
         (novo_id, linha["account_id"], linha["descricao"], linha["descricao"], valor, valor,

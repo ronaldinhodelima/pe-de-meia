@@ -210,6 +210,61 @@ def test_compra_agregada_nao_vira_falsa_divergencia_de_valor():
     assert _diferenca_valor_linha_fatura("100.00", None, "102.00") == 2
 
 
+def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    relatorios = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    resumo = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+    assert "if versao_atual < 32:" in core
+    assert "observacao_sistema=observacao" in core
+    assert "observacao=NULL" in core
+    assert "observacao_sistema" in relatorios
+    assert "t.observacao_sistema" in view
+    assert "modalInfoSistema" in resumo
+    assert "Informação interna do sistema" in detalhada
+    assert "obsInput.value = DUPLICADA_OBS_PADRAO" not in js
+    assert "payload.observacao = tr.querySelector('.obs-input').value" not in js
+
+
+def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    trecho = view.split("def lancamentos_por_fatura", 1)[1].split('@bp.route("/api/lancamento-manual"', 1)[0]
+
+    assert "aplicar_regras(cur)" in trecho
+    assert '"projeto_portfolio_map": projeto_portfolio_map' in trecho
+    assert '"dim_id_projeto"' in trecho and '"dim_id_portfolio"' in trecho
+    assert "data-salvar" not in template
+    assert "Salvar</button>" not in template
+    assert "Salvo automaticamente" in js
+    assert "setTimeout(() => salvarEditor(editor, campo), 650)" in js
+    assert "config.projeto_portfolio_map" in js
+    assert "/regras?transacao=" in template
+    assert "+ Cadastrar novo..." in template
+    assert "window.location.reload()" not in js
+
+
+def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert "Ciclo {{ fatura.periodo_inicio.strftime" in template
+    assert "vence {{ fatura.vencimento.strftime" in template
+    assert 'title="{{ v.fonte_nome }}"' in template
+    assert "Mais informações da transação" in template
+    assert 'v["fonte"] = "F"' in view
+    assert 'v["fonte_nome"]' in view
+
+
+def test_categoria_tambem_e_obrigatoria_para_novo_ok():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = view.split("def update_transacao", 1)[1]
+    assert 'faltando.append("categoria")' in trecho
+
+
 def test_tojson_nunca_dentro_de_atributo_html():
     """|tojson e o escape certo para dentro de <script>, e errado dentro de atributo.
 

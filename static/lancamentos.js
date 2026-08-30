@@ -337,6 +337,13 @@ function sincronizarControlesModal() {
   conferidaPor.hidden = !d._conferida || !usuarioConferencia;
   const observacao = document.getElementById('modalObservacao');
   observacao.value = d.observacao && d.observacao !== '-' ? d.observacao : '';
+  const infoSistema = document.getElementById('modalInfoSistema');
+  const observacaoSistema = document.getElementById('modalObservacaoSistema');
+  if (infoSistema && observacaoSistema) {
+    observacaoSistema.textContent = d.observacao_sistema || '';
+    infoSistema.hidden = !d.observacao_sistema;
+    infoSistema.open = false;
+  }
 }
 
 function verDetalhes(id) {
@@ -565,9 +572,7 @@ function confirmarAcaoModal() {
     salvar(idAtualModal, confCheck, {confirmarDesmarcacao: true}).then(sincronizarControlesModal);
   } else if (acao === 'duplicar') {
     const dupCheck = tr.querySelector('.dup-check');
-    const obsInput = tr.querySelector('.obs-input');
     dupCheck.checked = true;
-    if (!obsInput.value.trim()) obsInput.value = DUPLICADA_OBS_PADRAO;
     salvar(idAtualModal, dupCheck, {confirmarDuplicada: true}).then(sincronizarControlesModal);
   }
 }
@@ -890,7 +895,6 @@ document.addEventListener('focusout', function (e) {
   const id = idDaLinha(e.target);
   if (id) salvar(id, e.target);
 });
-const DUPLICADA_OBS_PADRAO = window.configLancamentos.duplicada_obs || '';
 const filaSalvar = {};
 function salvar(id, el, opcoes) {
   opcoes = opcoes || {};
@@ -904,8 +908,6 @@ function salvar(id, el, opcoes) {
   else if (el.matches('.obs-input')) payload.observacao = el.value;
   else if (el.matches('.dup-check')) {
     payload.duplicada = el.checked;
-    // Ao marcar duplicidade o modal pode ter preenchido a observação padrão.
-    payload.observacao = tr.querySelector('.obs-input').value;
   } else return;
   if (opcoes.confirmarDesmarcacao) payload.confirmar_desmarcacao = true;
   if (opcoes.confirmarDuplicada) payload.confirmar_duplicada = true;

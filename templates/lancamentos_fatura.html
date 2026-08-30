@@ -14,6 +14,9 @@
   .vinculos-detalhe{background:#fafaf8}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-grid{display:grid;grid-template-columns:minmax(190px,1.6fr) 120px 120px 1fr;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}
   .vinculo-grid.principal{background:var(--good-soft);border-radius:7px}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid small{display:block;color:var(--ink-faint)}
   .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px}.editor-financeiro select,.editor-financeiro input{width:100%}
+  .fonte-badge{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:11px;font-weight:700;background:#eef2ff;color:#4058a8;border:1px solid #cad3f6}.fonte-badge.fatura{background:#f2eefe;color:#694ea4;border-color:#d7ccef}
+  .status-salvamento{align-self:end;min-height:20px;font-size:12px;color:var(--ink-faint)}.status-salvamento.erro{color:var(--bad)}
+  .detalhes-tecnicos{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px}.detalhes-tecnicos summary{cursor:pointer;color:var(--ink-soft);font-size:12px}.detalhes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px 14px;margin-top:8px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.nota-sistema{grid-column:1/-1;background:#f5f5f3;border-radius:6px;padding:8px;color:var(--ink-soft)}
   .ok-lancamento{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0 14px}
   @media(max-width:800px){.vinculo-grid{grid-template-columns:1fr}.vinculos-detalhe>td{padding-left:12px!important}}
 </style>
@@ -27,6 +30,7 @@
   <div>
     <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}</h2>
     <div style="font-size:12px;color:var(--ink-faint)">{{ conta.label if conta else account_id }} · PDF oficial</div>
+    {% if fatura.periodo_inicio and fatura.periodo_fim %}<div style="font-size:12px;color:var(--ink-faint)">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% endif %}</div>{% endif %}
   </div>
   {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
   <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn" style="margin-left:auto;text-decoration:none">Ver conciliação do PDF</a>
@@ -82,13 +86,13 @@
     <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
-    <td>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
+    <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
     <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir }} title="OK do lançamento{% if linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
   </tr>
   {% if linha.vinculos %}<tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="8">
     {% for v in linha.vinculos %}
       <div class="vinculo-grid {{ 'principal' if v.principal else 'tecnico' }}">
-        <div><b>{{ v.descricao }}</b><small>{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% endif %} · {{ v.transacao_id }}</small></div>
+        <div><span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" title="{{ v.fonte_nome }}">{{ v.fonte }}</span><b style="display:inline">{{ v.descricao }}</b><small>{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% endif %} · {{ v.transacao_id }}</small></div>
         <div>{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</div>
         <div class="valor">{{ v.valor|moeda }}</div>
         <div>{% if v.principal %}<span class="estado ok">contabilizado e editável</span>{% else %}<span class="estado">registro técnico · somente leitura</span>{% endif %}</div>
@@ -96,11 +100,22 @@
       {% if v.principal %}
       <div class="editor-financeiro" data-editor="{{ v.transacao_id }}">
         {% if v.rateado %}<div style="grid-column:1/-1;color:var(--ink-soft);font-size:12px">Este lançamento possui rateio. As partes continuam agrupadas e devem ser ajustadas nos detalhes do lançamento.</div>{% else %}
-        <div><label>Categoria</label><select data-campo="categoria" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==v.categoria }}>{{ c.nome }}</option>{% endfor %}</select></div>
-        {% for d in dimensoes %}<div><label>{{ d.nome }}</label><select data-dimensao="{{ d.id }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}" {{ 'selected' if v.get('dims', {}).get(d.id)==val.id }}>{{ rotulo_dim(val) }}</option>{% endfor %}</select></div>{% endfor %}
+        <div><label>Categoria *</label><select data-campo="categoria" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==v.categoria }}>{{ c.nome }}</option>{% endfor %}</select></div>
+        {% for d in dimensoes %}<div><label>{{ d.nome }}{{ ' *' if d.obrigatoria }}</label><select data-dimensao="{{ d.id }}" data-dimensao-nome="{{ d.nome }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}" {{ 'selected' if v.get('dims', {}).get(d.id)==val.id }}>{{ rotulo_dim(val) }}</option>{% endfor %}{% if d.nome|lower in ['projeto','portfólio','portfolio'] %}<option value="__novo__">+ Cadastrar novo...</option>{% endif %}</select></div>{% endfor %}
         <div><label>Observação</label><input type="text" data-campo="observacao" value="{{ v.observacao or '' }}" {{ 'disabled' if not pode_editar }}></div>
         <div><label>Natureza no DRE</label><div class="estado {{ 'dre' if v.natureza_efetiva=='despesa' else 'fora' }}">{{ v.natureza_efetiva }}</div></div>
-        <div style="display:flex;align-items:flex-end"><button type="button" data-salvar="{{ v.transacao_id }}" {{ 'disabled' if not pode_editar }}>Salvar</button><span class="status" data-status="{{ v.transacao_id }}"></span></div>
+        <div><label>Regra automática</label><a class="ver-btn" href="/regras?transacao={{ v.transacao_id }}" style="display:inline-block;text-decoration:none">+ Criar regra</a></div>
+        <div class="status-salvamento" data-status="{{ v.transacao_id }}" aria-live="polite"></div>
+        <details class="detalhes-tecnicos"><summary>Mais informações da transação{% if v.observacao_sistema %} · contém informação interna{% endif %}</summary><div class="detalhes-grid">
+          <div><b>Fonte</b>{{ v.fonte_nome }}</div><div><b>ID</b>{{ v.transacao_id }}</div>
+          <div><b>Status</b>{{ v.status or '-' }}</div><div><b>Tipo</b>{{ v.tipo or '-' }}</div>
+          <div><b>Valor original</b>{{ v.valor_original if v.valor_original is not none else '-' }} {{ v.moeda_original or '' }}</div>
+          <div><b>Parcela</b>{{ (v.parcela_atual|string ~ '/' ~ v.parcela_total|string) if v.parcela_total else 'À vista' }}</div>
+          <div><b>Primeira sincronização</b>{{ v.primeiro_sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.primeiro_sincronizado_local else '-' }}</div>
+          <div><b>Última sincronização</b>{{ v.sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.sincronizado_local else '-' }}</div>
+          {% if v.conferida %}<div><b>OK por</b>{{ v.conferida_por or '-' }}{% if v.conferida_local %} · {{ v.conferida_local.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>{% endif %}
+          {% if v.observacao_sistema %}<div class="nota-sistema"><b>Informação interna do sistema</b>{{ v.observacao_sistema }}</div>{% endif %}
+        </div></details>
         {% endif %}
       </div>
       {% endif %}

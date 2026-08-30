@@ -1261,3 +1261,54 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Compra parcelada agregada não é divergência: o Pluggy pode guardar o valor total enquanto o PDF
   mostra uma parcela. Quando o total equivale a `valor da parcela × número de parcelas`, com até
   R$ 1,00 de tolerância de arredondamento, o card não deve ficar vermelho.
+
+# Observação pessoal e informação interna (30/08/2026)
+
+- `transacao.observacao` pertence exclusivamente ao usuário: lembretes, explicações e informações
+  pessoais da classificação. Nenhuma rotina de importação, conciliação, parcelamento ou marcação
+  de duplicidade pode escrever mensagem técnica nesse campo.
+- Mensagens geradas pelo aplicativo usam `transacao.observacao_sistema`. Elas ficam ocultas por
+  padrão e aparecem somente em “Informações internas do sistema” nos detalhes. Esse campo é de
+  auditoria, não é editável nas telas de classificação e nunca aparece na coluna Observação.
+- A migração 32 move apenas textos completos reconhecidos: parcela gerada pela fatura, lançamento
+  criado a partir do PDF/operadora e a antiga mensagem automática de duplicidade. Não usar busca
+  aproximada, `LIKE '%fatura%'` ou palavras soltas: isso poderia apagar uma nota pessoal.
+- A limpeza preserva todas as observações manuais, incluindo as registradas em julho e agosto.
+  Se uma anotação não for uma correspondência exata dos modelos técnicos documentados, ela fica
+  em `observacao`, mesmo que mencione fatura ou Pluggy.
+- Novos lançamentos criados a partir do PDF e novas parcelas já nascem com a explicação em
+  `observacao_sistema`. Marcar como duplicado registra a ação no campo booleano/auditoria e não
+  preenche nem reenvia a observação pessoal.
+
+# Edição unificada na visão detalhada (30/08/2026)
+
+- A visão detalhada aplica as mesmas regras automáticas ao abrir. Regras são globais e gravadas
+  sobre a transação; o botão “+ Criar regra” apenas abre o cadastro já preenchido com aquele
+  lançamento, portanto uma regra criada em qualquer visualização vale para ambas.
+- Categoria, dimensões e observação salvam automaticamente. Selects salvam na mudança; observação
+  usa espera curta durante a digitação e salva também ao sair do campo. Não recarregar a página:
+  atualizar cards, estado da linha e classificação em segundo plano, preservando linha aberta,
+  rolagem e foco do usuário.
+- Projeto com Portfólio padrão deve preencher o Portfólio antes do único salvamento, igual à tela
+  resumida. Projeto e Portfólio podem ser cadastrados diretamente no seletor e o novo valor é
+  aplicado à transação sem redirecionamento.
+- Categoria e todas as dimensões marcadas como obrigatórias precisam estar preenchidas para um
+  novo OK. Rateio exige ao menos duas partes, categorias/dimensões completas e soma exata. Editar
+  um lançamento que já estava OK nunca o desmarca automaticamente.
+- Cada registro agregado mostra sua fonte: `F` significa transação criada pela fatura em PDF e
+  `P` significa registro trazido pelo Pluggy; o tooltip escreve o nome completo. A linha principal
+  continua sendo a única classificada. Registros técnicos são leitura/auditoria.
+- O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
+  transação”, mostrar ID, fonte, status, tipo, valor/moeda original, parcela, horários de
+  sincronização, assinatura do OK e, se existir, a informação interna do sistema.
+- O salvamento automático não elimina concorrência segura: a API recebe campos atuais, serializa
+  alterações do mesmo lançamento e continua preservando OK, duplicidade e ajustes humanos.
+
+# Regra permanente de publicação
+
+- Em todo deploy, atualizar este `CLAUDE.md` com decisões, comportamento entregue, migrações,
+  validações realizadas e pendências. Não publicar quando o documento estiver desatualizado.
+- As correções desta seção e a correção de falsa divergência de compra parcelada devem permanecer
+  locais até aprovação explícita do usuário. Antes da aprovação: suíte completa, sintaxe Python e
+  JavaScript, templates, `git diff --check` e revisão visual local; depois do deploy, validar a
+  fatura Unicred mais recente sem alterar OK real apenas para teste.
