@@ -997,6 +997,14 @@ def conciliar_fatura():
     batem 100% com a fatura em PDF da Unicred. O Pluggy pode classificar
     diferente ou duplicar - mas o valor que sai da conta pagando a fatura tem
     que fechar com o que a operadora cobrou, e isso so a fatura oficial prova."""
+    if request.method == "POST" and not pode("conciliacao_editar"):
+        return render_template(
+            "sem_permissao.html",
+            titulo="Sem permissão",
+            topbar=topbar_html("Sem permissão"),
+            permissao="Editar conciliação",
+        ), 403
+
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     contas_by_id, origem_opcoes = carregar_origens(cur)
@@ -1227,6 +1235,8 @@ def conciliar_fatura():
         resultado=resultado,
         historico=historico,
         fatura_id=fatura_id,
+        pode_editar_conciliacao=pode("conciliacao_editar"),
+        pode_criar_lancamento=pode("lancamentos_manual"),
     )
 
 
@@ -1730,6 +1740,7 @@ def duplicidades_fatura():
         "duplicidades_fatura.html",
         titulo="Duplicidades da fatura",
         topbar=topbar_html("Duplicidades da fatura", "duplicidades-fatura"),
+        pode_editar_duplicidades=pode("lancamentos_editar"),
         **baldes,
     )
 
@@ -1975,7 +1986,7 @@ def criar_cobrancas_sem_pluggy():
 
 
 @bp.route("/api/faturas/sincronizar-parcelas", methods=["POST"])
-@requer("relatorios")
+@requer("conciliacao_editar")
 def sincronizar_parcelas():
     """Aplica o regime de caixa nos parcelamentos agregados (ver
     _sincronizar_parcelas_de_agregado). Muda numero do DRE de proposito:
@@ -1999,7 +2010,7 @@ def sincronizar_parcelas():
 
 
 @bp.route("/api/fatura/<int:fatura_id>/vincular-automatico", methods=["POST"])
-@requer("relatorios")
+@requer("conciliacao_editar")
 def vincular_automatico_fatura(fatura_id):
     """Roda o casamento automatico nas linhas que ainda nao tem vinculo.
     Nao mexe em vinculo existente - nem no manual, nem no automatico ja
@@ -2043,7 +2054,7 @@ def vincular_automatico_fatura(fatura_id):
 
 
 @bp.route("/api/fatura-linha/<int:linha_id>/vincular", methods=["POST"])
-@requer("relatorios")
+@requer("conciliacao_editar")
 def vincular_linha_fatura(linha_id):
     """Vincula manualmente um lancamento do Pluggy a uma linha da fatura.
     Vinculo manual e' decisao humana: o automatico nunca sobrescreve."""
@@ -2097,7 +2108,7 @@ def vincular_linha_fatura(linha_id):
 
 
 @bp.route("/api/fatura-linha/<int:linha_id>/desvincular", methods=["POST"])
-@requer("relatorios")
+@requer("conciliacao_editar")
 def desvincular_linha_fatura(linha_id):
     """Desfaz um vinculo (automatico ou manual) entre linha da fatura e
     lancamento. Nao apaga nem altera o lancamento em si."""
@@ -2131,7 +2142,7 @@ def desvincular_linha_fatura(linha_id):
 
 
 @bp.route("/api/fatura-linha/marcar-conferida-repeticao", methods=["POST"])
-@requer("relatorios")
+@requer("conciliacao_editar")
 def marcar_repeticao_conferida():
     """Marca (ou desmarca) como revisado um grupo de cobranca repetida na
     fatura (ver _repetidas_na_fatura). E' so o registro de quem ja olhou

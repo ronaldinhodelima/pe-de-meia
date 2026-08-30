@@ -2,6 +2,8 @@
 import pathlib
 from datetime import timedelta
 
+import pytest
+
 import app
 import core
 from views import auth, lancamentos, sistema
@@ -39,6 +41,45 @@ def test_respostas_recebem_cabecalhos_de_seguranca():
 def test_paginas_financeiras_nao_podem_ser_guardadas_em_cache():
     resposta = app.app.test_client().get("/login")
     assert resposta.headers["Cache-Control"] == "no-store, private"
+
+
+@pytest.mark.parametrize("caminho, corpo", [
+    ("/api/faturas/sincronizar-parcelas", {}),
+    ("/api/fatura/1/vincular-automatico", {}),
+    ("/api/fatura-linha/1/vincular", {"transacao_id": "qualquer"}),
+    ("/api/fatura-linha/1/desvincular", {"transacao_id": "qualquer"}),
+    ("/api/fatura-linha/marcar-conferida-repeticao", {"ids": [1], "conferida": True}),
+])
+def test_somente_leitura_nao_altera_conciliacao(monkeypatch, caminho, corpo):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "leitor"
+        sessao["permissoes"] = ["lancamentos_ver", "relatorios"]
+
+    resposta = cliente.post(
+        caminho,
+        json=corpo,
+        headers={"Origin": "http://localhost"},
+    )
+    assert resposta.status_code == 403
+    assert "Editar conciliação" in resposta.get_json()["erro"]
+
+
+def test_somente_leitura_nao_importa_fatura(monkeypatch):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "leitor"
+        sessao["permissoes"] = ["lancamentos_ver", "relatorios"]
+
+    resposta = cliente.post(
+        "/relatorios/conciliar-fatura",
+        data={},
+        headers={"Origin": "http://localhost"},
+    )
+    assert resposta.status_code == 403
+    assert b"Editar concilia" in resposta.data
 
 
 def test_favicon_existe_no_endereco_padrao_e_tem_cache_versionado():

@@ -52,7 +52,8 @@
       A compra inteira já está lançada (e fora do resultado) e a fatura já cobre as parcelas.
       Estas chegaram meses depois, por cima — o dinheiro está sendo contado duas vezes.
     </div>
-    {{ tabela(repetidas, true) }}
+    {{ tabela(repetidas, pode_editar_duplicidades) }}
+    {% if pode_editar_duplicidades %}
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Vincular selecionadas</button>
       <button type="button" class="ver-btn" onclick="marcarTodasRepetidas(this)">
@@ -60,6 +61,7 @@
       </button>
       <span id="dup-status" style="font-size:12px;color:var(--ink-faint)"></span>
     </div>
+    {% endif %}
   </div>
 {% endif %}
 
@@ -75,7 +77,8 @@
       <strong>Não é a operadora cobrando duas vezes</strong> — é o mesmo registro em dois
       estados. Vincular aqui aponta o eco para a compra já consolidada que o substituiu.
     </div>
-    {{ tabela(ecos, true) }}
+    {{ tabela(ecos, pode_editar_duplicidades) }}
+    {% if pode_editar_duplicidades %}
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Vincular selecionadas</button>
       <button type="button" class="ver-btn" onclick="marcarTodosEcos(this)">
@@ -83,6 +86,7 @@
       </button>
       <span id="eco-status" style="font-size:12px;color:var(--ink-faint)"></span>
     </div>
+    {% endif %}
   </div>
 {% endif %}
 
@@ -105,10 +109,12 @@
       cobrança que a fatura daquele mês realmente não trouxe, parcelamento que o Pluggy
       representou de outro jeito, ou duplicidade da operadora. Confira contra o PDF antes de marcar.
     </div>
-    {{ tabela(revisar, true) }}
+    {{ tabela(revisar, pode_editar_duplicidades) }}
+    {% if pode_editar_duplicidades %}
     <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
       <button type="button" class="ver-btn" onclick="marcarSelecionadas(this)">Vincular selecionadas</button>
     </div>
+    {% endif %}
   </div>
 {% endif %}
 

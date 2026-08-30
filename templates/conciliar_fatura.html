@@ -11,6 +11,7 @@
 
 <div class="cat-breakdown">
   <h3>Nova conciliação</h3>
+  {% if pode_editar_conciliacao %}
   <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
       <label style="font-size:12px;color:#888;display:block">Cartão (origem)</label>
@@ -30,6 +31,11 @@
       Conciliar
     </button>
   </form>
+  {% else %}
+    <div style="font-size:12px;color:var(--ink-soft)">
+      Seu acesso permite consultar as faturas já importadas, mas não importar nem alterar a conciliação.
+    </div>
+  {% endif %}
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
 </div>
 
@@ -125,10 +131,12 @@
          style="font-size:12px">
         Ver esse período inteiro em Lançamentos ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}) →
       </a>
-      <button type="button" class="ver-btn" style="font-size:12px" onclick="vincularAutomatico({{ f.id }}, this)">
-        Vincular automaticamente o que sobrou
-      </button>
-      <span id="vinculo-status" style="font-size:12px;color:var(--ink-faint)"></span>
+      {% if pode_editar_conciliacao %}
+        <button type="button" class="ver-btn" style="font-size:12px" onclick="vincularAutomatico({{ f.id }}, this)">
+          Vincular automaticamente o que sobrou
+        </button>
+        <span id="vinculo-status" style="font-size:12px;color:var(--ink-faint)"></span>
+      {% endif %}
     </div>
     <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px">
       A fatura em PDF é a autoridade. Cada linha dela guarda o vínculo com o lançamento que o Pluggy trouxe —
@@ -166,12 +174,16 @@
               {% endif %}
             </td>
             <td style="text-align:right">
-              {% if r.linha_ids %}
+              {% if r.linha_ids and pode_editar_conciliacao %}
                 <input type="checkbox" class="fatura-repetida-conferida"
                        data-ids="{{ r.linha_ids|join(',') }}"
                        {{ 'checked' if r.conferida }}
                        title="{{ 'Conferido por ' + r.conferida_por + ' em ' + r.conferida_em.strftime('%d/%m/%Y %H:%M') if r.conferida and r.conferida_por else '' }}"
                        onchange="marcarRepetidaConferida(this)">
+              {% elif r.conferida %}
+                <span title="{{ 'Conferido por ' + r.conferida_por if r.conferida_por else 'Conferido' }}">Sim</span>
+              {% else %}
+                Não
               {% endif %}
             </td>
           </tr>
@@ -205,7 +217,9 @@
             <td>{{ l.titular or '-' }}</td>
             <td class="valor">{{ l.valor|moeda }}</td>
             <td>
+              {% if pode_editar_conciliacao or pode_criar_lancamento %}
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                {% if pode_editar_conciliacao %}
                 <select class="vincular-orfa" style="padding:5px 7px;font-size:12px;max-width:320px">
                   <option value="">escolha o lançamento…</option>
                   {% for o in resultado.orfas %}
@@ -213,12 +227,18 @@
                   {% endfor %}
                 </select>
                 <button type="button" class="ver-btn" onclick="vincularLinha(this)">Vincular</button>
+                {% endif %}
+                {% if pode_criar_lancamento %}
                 <select class="fatura-categoria" style="padding:5px 7px;font-size:12px">
                   {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
                 </select>
                 <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
+                {% endif %}
               </div>
               <span class="fatura-status" style="font-size:11px;color:var(--ink-faint)"></span>
+              {% else %}
+                <span style="font-size:11px;color:var(--ink-faint)">Somente consulta</span>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -245,6 +265,7 @@
             <td>{{ o.descricao }}</td>
             <td class="valor">{{ o.valor|moeda }}</td>
             <td>
+              {% if pode_editar_conciliacao %}
               <div style="display:flex;gap:6px;align-items:center">
                 <select class="vincular-linha-alvo" style="padding:5px 7px;font-size:12px;max-width:340px">
                   <option value="">escolha a linha da fatura…</option>
@@ -255,6 +276,9 @@
                 <button type="button" class="ver-btn" onclick="vincularOrfa(this)">Vincular</button>
               </div>
               <span class="orfa-status" style="font-size:11px;color:var(--ink-faint)"></span>
+              {% else %}
+                <span style="font-size:11px;color:var(--ink-faint)">Somente consulta</span>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -303,9 +327,11 @@
             <td class="valor">{{ v.valor|moeda }}</td>
             <td style="font-size:11.5px">
               {{ 'manual' if v.origem == 'manual' else 'automático' }}
-              <button type="button" class="ver-btn" style="margin-left:6px"
-                      data-linha-id="{{ l.id }}" data-transacao-id="{{ v.transacao_id }}"
-                      onclick="desvincular(this)">desvincular</button>
+              {% if pode_editar_conciliacao %}
+                <button type="button" class="ver-btn" style="margin-left:6px"
+                        data-linha-id="{{ l.id }}" data-transacao-id="{{ v.transacao_id }}"
+                        onclick="desvincular(this)">desvincular</button>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

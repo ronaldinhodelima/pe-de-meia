@@ -1,9 +1,9 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 29/08/2026. Estado funcional de referência: commit `75fc4e7`,
-documentação consolidada até `7c1ce99` e schema esperado na migração **25**. O histórico registra
-esse conjunto como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy
-ativo no Coolify e `cartao.schema_version` antes de qualquer nova intervenção.
+**Última atualização:** 29/08/2026. Estado funcional de referência: branch `main`, documentação
+consolidada após `7c1ce99` e schema esperado na migração **26**. O histórico registra o conjunto
+anterior como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo
+no Coolify e `cartao.schema_version` antes de qualquer nova intervenção.
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
@@ -149,11 +149,17 @@ As três neutras (`investimento`, `bem`, `transferencia`) ficam fora do resultad
 
 ## Sistema de permissões
 
-Perfis: `admin` (tudo), `operador` (lançamentos + relatórios + sincronizar, sem
-cadastros/usuários), `leitura` (só ver lançamentos e relatórios). As 8 permissões granulares:
+Perfis: `admin` (tudo), `operador` (lançamentos + relatórios + conciliação + sincronizar, sem
+cadastros/usuários), `leitura` (só ver lançamentos e relatórios). As 9 permissões granulares:
 `lancamentos_ver`, `lancamentos_editar`, `lancamentos_conferir`, `lancamentos_manual`,
-`relatorios`, `cadastros`, `sincronizar`, `usuarios`. Decorator `@requer(permissao)`
+`relatorios`, `conciliacao_editar`, `cadastros`, `sincronizar`, `usuarios`. Decorator `@requer(permissao)`
 protege cada rota; `pode(permissao)` controla o que aparece na interface.
+
+`relatorios` é somente consulta. Importar/reimportar PDF, sincronizar parcelas, refazer vínculos,
+vincular/desvincular linhas e registrar revisão de cobrança repetida exigem
+`conciliacao_editar`. A migração 26 concede a nova permissão aos Administradores e Operadores já
+existentes, preservando seu acesso; o perfil Somente leitura continua vendo as telas sem controles
+de gravação.
 
 Usuários atuais: `ronaldo` (admin), `andrea` (admin, herdado do sistema antigo), `amanda`
 (operador, criada nesta sessão).
@@ -292,7 +298,7 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 ## Estado registrado em produção — 29/08/2026
 
 Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O código espera schema na migração **25**. Entre `cfa183e` e `7c1ce99` foram publicados 75
+O código espera schema na migração **26**. Entre `cfa183e` e `7c1ce99` foram publicados 75
 commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
 primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
 regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
@@ -660,8 +666,9 @@ futuras a partir do número de parcelas impresso na fatura.
 
 ## Revisão técnica do conjunto publicado — 29/08/2026
 
-Revisão feita sobre `cfa183e..7c1ce99`: 75 commits, 23 arquivos alterados e suíte local com
-**198 testes aprovados e 6 ignorados**. Pontos positivos que devem ser preservados:
+Revisão feita sobre `cfa183e..7c1ce99`, seguida da correção de permissões: 75 commits, 23 arquivos
+alterados e suíte local com **205 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
+preservados:
 
 - a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
 - import, criação de parcelas e reenvio do mesmo PDF têm travas de idempotência;
@@ -675,11 +682,9 @@ Revisão feita sobre `cfa183e..7c1ce99`: 75 commits, 23 arquivos alterados e su�
 
 Pontos de atenção encontrados, por prioridade:
 
-1. **Alta — separar “ver relatório” de “editar conciliação”.** O perfil `leitura` recebe a
-   permissão `relatorios`, descrita como “Ver relatórios”, mas essa mesma permissão hoje autoriza
-   importar/reimportar PDF, sincronizar parcelas, refazer vínculos, vincular/desvincular linhas e
-   marcar revisão de cobrança repetida. Algumas dessas ações alteram diretamente o DRE. Criar
-   uma permissão própria, por exemplo `conciliacao_editar`, mantendo GET/consulta em `relatorios`.
+1. **Resolvido — “ver relatório” foi separado de “editar conciliação”.** A migração 26 criou
+   `conciliacao_editar`, preservou o acesso de Administradores/Operadores e retirou as ações de
+   gravação do perfil Somente leitura. Há testes cobrindo todas as rotas mutáveis dessa tela.
 2. **Média — limitar e validar o PDF antes de processar.** O upload usa `arquivo.read()` sem
    limite explícito e sem conferir assinatura/tipo real do arquivo. Definir tamanho máximo,
    validar `%PDF`, quantidade razoável de páginas e rejeitar cedo arquivos fora do padrão; isso
@@ -1007,7 +1012,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **198 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **205 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 

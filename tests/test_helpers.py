@@ -119,6 +119,10 @@ class TestPermissoesDoPerfil:
         perms = set(core.permissoes_do_perfil("leitura"))
         assert perms == {"lancamentos_ver", "relatorios"}
 
+    def test_operador_pode_editar_conciliacao(self):
+        perms = set(core.permissoes_do_perfil("operador"))
+        assert "conciliacao_editar" in perms
+
     def test_perfil_desconhecido_cai_em_leitura(self):
         assert set(core.permissoes_do_perfil("perfil-que-nao-existe")) == {"lancamentos_ver", "relatorios"}
 

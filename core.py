@@ -51,6 +51,10 @@ PERMISSOES = {
     "lancamentos_conferir": ("Conferir lançamentos", "Marcar um lançamento como conferido."),
     "lancamentos_manual": ("Lançar dinheiro manual", "Criar e excluir lançamentos em espécie."),
     "relatorios": ("Ver relatórios", "Relatórios, DRE e investimentos."),
+    "conciliacao_editar": (
+        "Editar conciliação",
+        "Importar faturas, criar ou refazer vínculos e sincronizar parcelas.",
+    ),
     "cadastros": ("Gerenciar cadastros", "Grupos de custo, dimensões, regras automáticas, cartões e naturezas."),
     "sincronizar": ("Sincronizar com o banco", "Usar o botão Atualizar agora."),
     "usuarios": ("Gerenciar usuários", "Criar usuários, trocar senhas e definir permissões."),
@@ -61,7 +65,7 @@ PERFIS = {
     "admin": ("Administrador", list(PERMISSOES.keys())),
     "operador": ("Operador", [
         "lancamentos_ver", "lancamentos_editar", "lancamentos_conferir",
-        "lancamentos_manual", "relatorios", "sincronizar",
+        "lancamentos_manual", "relatorios", "conciliacao_editar", "sincronizar",
     ]),
     "leitura": ("Somente leitura", ["lancamentos_ver", "relatorios"]),
 }
@@ -1872,6 +1876,30 @@ def migrate():
                 "jsonb_build_object('versao',25));"
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (25);")
+            conn.commit()
+
+        if versao_atual < 26:
+            # A conciliacao nasceu dentro de Relatorios e, por isso, as acoes
+            # mutaveis usavam a permissao `relatorios`. Isso permitia que o
+            # perfil Somente leitura importasse PDF, refizesse vinculos e
+            # sincronizasse parcelas — operacoes que podem alterar o DRE.
+            #
+            # A nova permissao separa consultar de editar. Admin e Operador ja
+            # podiam executar essas acoes antes; o backfill preserva esse acesso
+            # nos usuarios existentes. Leitura continua vendo as telas, sem
+            # poder gravar.
+            cur.execute(
+                "UPDATE cartao.usuario SET permissoes = array_append("
+                "COALESCE(permissoes, ARRAY[]::text[]), 'conciliacao_editar') "
+                "WHERE perfil IN ('admin', 'operador') "
+                "AND NOT ('conciliacao_editar' = ANY(COALESCE(permissoes, ARRAY[]::text[])));"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Permissao separada para editar conciliacao',"
+                "jsonb_build_object('versao',26));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (26);")
             conn.commit()
 
         cur.close()
