@@ -1298,6 +1298,9 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Cada registro agregado mostra sua fonte: `F` significa transação criada pela fatura em PDF e
   `P` significa registro trazido pelo Pluggy; o tooltip escreve o nome completo. A linha principal
   continua sendo a única classificada. Registros técnicos são leitura/auditoria.
+- “Mais informações da transação” existe em todo registro agregado, inclusive registro técnico ou
+  lançamento rateado. Informação interna não pode ficar inacessível só porque aquele registro não
+  é o principal editável.
 - O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
   transação”, mostrar ID, fonte, status, tipo, valor/moeda original, parcela, horários de
   sincronização, assinatura do OK e, se existir, a informação interna do sistema.

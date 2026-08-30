@@ -255,6 +255,7 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     assert "vence {{ fatura.vencimento.strftime" in template
     assert 'title="{{ v.fonte_nome }}"' in template
     assert "Mais informações da transação" in template
+    assert template.index('{% endif %}\n      <details class="detalhes-tecnicos registro-detalhes"') > template.index("data-editor=")
     assert 'v["fonte"] = "F"' in view
     assert 'v["fonte_nome"]' in view
 
