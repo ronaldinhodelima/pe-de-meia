@@ -6,6 +6,7 @@
   .fatura-cabecalho h2{margin:0;font-size:20px}.fatura-cabecalho .nav{font-size:18px;text-decoration:none;padding:5px 11px;border:1px solid var(--line);border-radius:7px;color:var(--ink)}
   .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}
   .fatura-cards .card{cursor:pointer}.fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
+  .fatura-cards .card-ok .val{color:var(--good)}.fatura-cards .card-aviso .val{color:#a36b0b}.fatura-cards .card-erro .val{color:var(--bad)}.fatura-cards .card-fora .val{color:#665b88}
   .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
   .fatura-tabela tr.fatura-ok{background:#f1f2f3}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 #d9a441}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}.fatura-tabela tr[data-toggle-linha]{cursor:pointer}
   .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;line-height:1}
@@ -31,6 +32,11 @@
   <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn" style="margin-left:auto;text-decoration:none">Ver conciliação do PDF</a>
 </div>
 
+<div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
+  <a href="{{ url_resumida }}">Resumida</a>
+  <a href="/lancamentos/fatura?fatura_id={{ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
+</div>
+
 <div class="fatura-filtros">
   <label>Cartão</label>
   <select id="faturaConta">
@@ -48,22 +54,21 @@
     <option value="dre" {{ 'selected' if status=='dre' }}>Despesas no DRE</option>
     <option value="fora" {{ 'selected' if status=='fora' }}>Fora do DRE</option>
     <option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
+    <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
     <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>
   </select>
 </div>
 
 <div class="cards fatura-cards">
-  <div class="card"><div class="label">Total da fatura</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">linhas cobradas no PDF</div></div>
-  <div class="card" data-filtro="dre"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
-  <div class="card" data-filtro="fora"><div class="label">Fora do DRE</div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
-  <div class="card" data-filtro="pendente_classificacao"><div class="label">Classificação pendente</div><div class="val" style="color:{{ 'var(--good)' if totais.pendente==0 else 'var(--bad)' }}">{{ totais.pendente|moeda }}</div><div class="card-explicacao">já segue a natureza atual; ainda requer revisão</div></div>
-  <div class="card" data-filtro="sem_vinculo"><div class="label">Diferença sem vínculo</div><div class="val" style="color:{{ 'var(--good)' if totais.sem_vinculo==0 else 'var(--bad)' }}">{{ totais.sem_vinculo|moeda }}</div><div class="card-explicacao">cobranças sem lançamento contabilizado</div></div>
+  <div class="card" data-filtro="todas"><div class="label">Total oficial</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} linhas cobradas no PDF</div></div>
+  <div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div></div>
+  <div class="card" data-filtro="dre"><div class="label">Despesas no DRE</div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
+  <div class="card card-fora" data-filtro="fora"><div class="label">Fora do DRE</div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
 </div>
 <div class="cards fatura-cards" style="margin-top:10px">
-  <div class="card"><div class="label">Linhas oficiais</div><div class="val">{{ contagens.linhas }}</div></div>
-  <div class="card"><div class="label">Vinculadas</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div></div>
-  <div class="card"><div class="label">Classificadas</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div></div>
-  <div class="card" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div></div>
+  <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="label">Classificação</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div></div>
+  <div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div></div>
+  <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
 </div>
 <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
@@ -71,13 +76,13 @@
 <div class="tabela-scroll">
 <table class="compacta fatura-tabela"><thead><tr><th></th><th>Data</th><th>Descrição no PDF</th><th>Titular / cartão</th><th>Parcela</th><th>Valor PDF</th><th>Classificação</th><th>OK</th></tr></thead><tbody>
 {% for linha in linhas %}
-  <tr class="{{ 'fatura-ok' if linha.conferida else ('fatura-erro' if linha.estado in ('sem_vinculo','classificar') else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
+  <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
     <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
     <td>{{ linha.data.strftime('%d/%m/%Y') }}</td>
     <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
-    <td>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.estado=='sem_vinculo' %}<span class="estado" style="color:var(--bad)">Falta: vínculo</span>{% else %}{% if linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}{% endif %}</td>
+    <td>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
     <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir }} title="OK do lançamento{% if linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
   </tr>
   {% if linha.vinculos %}<tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="8">

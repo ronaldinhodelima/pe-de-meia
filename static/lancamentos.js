@@ -205,6 +205,26 @@ function coletarQuery() {
   document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked').forEach(cb => params.append(cb.name, cb.value));
   return params;
 }
+function atualizarBotaoDetalhado() {
+  const botao = document.getElementById('abrirVisaoDetalhada');
+  if (!botao) return;
+  const origens = Array.from(document.querySelectorAll('.chipfilter input[name="origem"]:checked')).map(cb => cb.value);
+  const cartoes = window.configLancamentos.origens_credito || [];
+  const disponivel = origens.length === 1 && cartoes.includes(origens[0]);
+  botao.disabled = !disponivel;
+  botao.title = disponivel
+    ? 'Abrir a fatura mais recente deste cartão'
+    : 'Selecione uma única origem de cartão de crédito';
+}
+function abrirVisualizacaoDetalhada() {
+  const origens = Array.from(document.querySelectorAll('.chipfilter input[name="origem"]:checked')).map(cb => cb.value);
+  const cartoes = window.configLancamentos.origens_credito || [];
+  if (origens.length !== 1 || !cartoes.includes(origens[0])) {
+    atualizarBotaoDetalhado();
+    return;
+  }
+  window.location.assign('/lancamentos/fatura?account_id=' + encodeURIComponent(origens[0]));
+}
 function filtrarSituacao(status) {
   const campo = document.getElementById('statusInput');
   if (!campo) return;
@@ -247,15 +267,7 @@ function mudarMes(delta) {
 function aplicarFiltros(recarregarPagina) {
   atualizarChipLabels();
   const params = coletarQuery();
-  const origens = params.getAll('origem');
-  const cartoes = window.configLancamentos.origens_credito || [];
-  // Uma unica origem de cartao muda a pergunta: em vez de mes civil, o
-  // usuario quer conferir a fatura oficial. A tela dedicada abre a fatura
-  // importada mais recente e mantem os registros agregados no sinal +.
-  if (origens.length === 1 && cartoes.includes(origens[0])) {
-    window.location.assign('/lancamentos/fatura?account_id=' + encodeURIComponent(origens[0]));
-    return;
-  }
+  atualizarBotaoDetalhado();
   const novaUrl = '/?' + params.toString();
   if (recarregarPagina) {
     guardarPosicaoAtual();
@@ -997,3 +1009,4 @@ function salvarManual(e) {
   return false;
 }
 atualizarChipLabels();
+atualizarBotaoDetalhado();

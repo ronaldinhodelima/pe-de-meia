@@ -52,6 +52,12 @@
   {% endif %}
 </div>
 
+<div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
+  <button type="button" class="ativo" aria-pressed="true">Resumida</button>
+  <button type="button" id="abrirVisaoDetalhada" onclick="abrirVisualizacaoDetalhada()"
+          title="Selecione uma única origem de cartão de crédito">Detalhada</button>
+</div>
+
 <div id="formManual" class="cat-breakdown" style="display:none" {{ 'hidden' if not pode_manual }}>
   <h3>Novo lançamento manual (dinheiro)</h3>
   <form onsubmit="return salvarManual(event)" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">

@@ -834,6 +834,7 @@ def lancamentos_por_fatura():
     proporcao_dre = {}
     rateados = set()
     rateio_valido = {}
+    resumo_rateios = {}
     if todos_ids:
         cur.execute(
             f"SELECT t.transacao_id, COALESCE(SUM(CASE WHEN {NATUREZA_SQL}='despesa' "
@@ -854,7 +855,6 @@ def lancamentos_por_fatura():
             "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
             (tuple(set(todos_ids)),),
         )
-        resumo_rateios = {}
         for r in cur.fetchall():
             tid = str(r["transacao_id"])
             item = resumo_rateios.setdefault(tid, {
@@ -881,8 +881,15 @@ def lancamentos_por_fatura():
     total_dre = Decimal("0")
     total_fora = Decimal("0")
     total_pendente = Decimal("0")
+    total_pendente_ok = Decimal("0")
     total_sem_vinculo = Decimal("0")
-    contagens = {"linhas": 0, "vinculadas": 0, "classificadas": 0, "conferidas": 0, "multiplos": 0}
+    total_divergencia = Decimal("0")
+    contagens = {
+        "linhas": 0, "vinculadas": 0, "classificadas": 0,
+        "conferidas": 0, "multiplos": 0, "pendente_classificacao": 0,
+        "pendente_ok": 0, "divergencias": 0,
+    }
+    tolerancia_valor = Decimal("0.01")
     for linha in linhas:
         linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
         vinculos = vinculos_por_linha.get(linha["id"], [])
@@ -903,6 +910,14 @@ def lancamentos_por_fatura():
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1
+        linha["ambigua"] = bool(
+            len(elegiveis) > 1 and not (
+                criado and any(v["transacao_id"] == criado for v in elegiveis)
+            )
+        )
+        linha["requer_validacao"] = False
+        linha["validacao_motivos"] = []
+        linha["diferenca_valor"] = Decimal("0")
         final_cartao = next(
             (v["numero_cartao_final"] for v in ([principal] if principal else []) + vinculos
              if v and v.get("numero_cartao_final")),
@@ -956,25 +971,51 @@ def lancamentos_por_fatura():
             linha["natureza_rotulo"] = NATUREZAS.get(
                 principal["natureza_efetiva"], principal["natureza_efetiva"]
             )
+            valor_base = (
+                resumo_rateios[tid]["soma"] if principal["rateado"]
+                else abs(Decimal(str(principal["valor"] or 0)))
+            )
+            linha["diferenca_valor"] = abs(abs(valor_pdf) - valor_base)
+            if linha["ambigua"]:
+                linha["validacao_motivos"].append("mais de um lançamento possível")
+            if linha["diferenca_valor"] > tolerancia_valor:
+                linha["validacao_motivos"].append(
+                    "valor difere em " + str(linha["diferenca_valor"].quantize(Decimal("0.01")))
+                )
+            linha["requer_validacao"] = bool(linha["validacao_motivos"])
             if completa:
                 contagens["classificadas"] += 1
                 linha["estado"] = linha["natureza_estado"]
             else:
-                total_pendente += valor_pdf
+                total_pendente += abs(valor_pdf)
+                contagens["pendente_classificacao"] += 1
                 linha["estado"] = "classificar"
         else:
             linha["classificada"] = False
             linha["conferida"] = False
             linha["faltando"] = ["Vínculo"]
-            total_pendente += valor_pdf
-            total_sem_vinculo += valor_pdf
+            total_pendente += abs(valor_pdf)
+            contagens["pendente_classificacao"] += 1
+            total_sem_vinculo += abs(valor_pdf)
             linha["natureza_estado"] = "pendente"
             linha["estado"] = "sem_vinculo"
+            linha["diferenca_valor"] = abs(valor_pdf)
+            linha["validacao_motivos"] = ["falta vínculo"]
+            linha["requer_validacao"] = True
+        if linha["requer_validacao"]:
+            contagens["divergencias"] += 1
+            total_divergencia += linha["diferenca_valor"]
         if linha["conferida"]:
             contagens["conferidas"] += 1
+        else:
+            contagens["pendente_ok"] += 1
+            total_pendente_ok += abs(valor_pdf)
 
     status = request.args.get("status", "todas")
-    filtros_validos = {"todas", "pendente_classificacao", "pendente_ok", "dre", "fora", "sem_vinculo", "multiplos"}
+    filtros_validos = {
+        "todas", "pendente_classificacao", "pendente_ok", "dre", "fora",
+        "sem_vinculo", "requer_validacao", "multiplos",
+    }
     if status not in filtros_validos:
         status = "todas"
     linhas_visiveis = [l for l in linhas if (
@@ -984,6 +1025,7 @@ def lancamentos_por_fatura():
         (status == "dre" and l.get("natureza_estado") in {"dre", "misto"}) or
         (status == "fora" and l.get("natureza_estado") in {"fora", "misto"}) or
         (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
+        (status == "requer_validacao" and l["requer_validacao"]) or
         (status == "multiplos" and l["multiplos"])
     )]
 
@@ -995,6 +1037,17 @@ def lancamentos_por_fatura():
     conta = contas_by_id.get(account_id)
     cur.close()
     conn.close()
+    if fatura.get("periodo_inicio") and fatura.get("periodo_fim"):
+        url_resumida = (
+            "/?periodo=intervalo&data_inicio=" + fatura["periodo_inicio"].isoformat()
+            + "&data_fim=" + fatura["periodo_fim"].isoformat()
+            + "&origem=" + account_id + "&status=todas"
+        )
+    else:
+        url_resumida = (
+            f"/?mes={fatura['ano_referencia']}-{fatura['mes_referencia']:02d}"
+            f"&periodo=mes&origem={account_id}&status=todas"
+        )
     return render_template(
         "lancamentos_fatura.html", titulo="Lançamentos por fatura",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
@@ -1004,10 +1057,12 @@ def lancamentos_por_fatura():
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
         totais={
             "pdf": total_pdf, "dre": total_dre, "fora": total_fora,
-            "pendente": total_pendente, "sem_vinculo": total_sem_vinculo,
+            "pendente": total_pendente, "pendente_ok": total_pendente_ok,
+            "sem_vinculo": total_sem_vinculo, "divergencia": total_divergencia,
         },
         contagens=contagens, config_json=json_script(config),
         projeto_portfolio_map=projeto_portfolio_map,
+        url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
     )
 

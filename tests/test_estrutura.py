@@ -169,14 +169,36 @@ def test_visao_por_fatura_reutiliza_ok_do_lancamento_e_mantem_agregados():
     assert "dataset.okLancamento" in js
 
 
-def test_origem_unica_de_cartao_abre_fatura_mais_recente():
+def test_visualizacoes_resumida_e_detalhada_sao_escolha_explicita():
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    resumo = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    detalhe = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert '"origens_credito"' in view
     assert "/lancamentos/fatura?account_id=" in js
+    assert "abrirVisualizacaoDetalhada" in js
+    assert "abrirVisaoDetalhada" in resumo
+    assert ">Resumida<" in resumo and ">Detalhada<" in resumo
+    assert ">Resumida<" in detalhe and ">Detalhada<" in detalhe
     trecho = view.split('def lancamentos_por_fatura', 1)[1].split('@bp.route("/api/fatura-linha', 1)[0]
     assert "ORDER BY f.ano_referencia DESC, f.mes_referencia DESC" in trecho
     assert "LIMIT 1" in trecho
+
+
+def test_cards_da_fatura_explicam_valores_e_filtram_divergencias():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    for rotulo in (
+        "Total oficial", "Conciliação", "Despesas no DRE", "Fora do DRE",
+        "Classificação", "OK dos lançamentos", "Divergências", "Com agregados",
+    ):
+        assert rotulo in template
+    assert 'data-filtro="requer_validacao"' in template
+    assert 'value="requer_validacao"' in template
+    assert 'status == "requer_validacao" and l["requer_validacao"]' in view
+    assert 'linha["ambigua"]' in view
+    assert 'linha["diferenca_valor"]' in view
+    assert 'total_pendente_ok' in view
 
 
 def test_tojson_nunca_dentro_de_atributo_html():

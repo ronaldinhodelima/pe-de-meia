@@ -1233,3 +1233,28 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   garante a recuperação restante.
 - Validar após o deploy: schema 31, ausência de aviso de migração e redução dos “Pendentes de OK”
   na visão detalhada. A contagem exata deve vir do audit log da migração 31; não inferir números.
+
+# Visualizações Resumida e Detalhada (30/08/2026)
+
+- A tela principal oferece uma escolha explícita entre **Resumida** e **Detalhada**. Selecionar
+  uma única origem de cartão não muda mais a visualização sozinho; o usuário decide pelo botão.
+  A visão detalhada exige uma única origem de cartão e abre a fatura importada mais recente. O
+  botão Resumida volta ao intervalo oficial daquela fatura, preservando a origem.
+- As duas visualizações continuam lendo e alterando o mesmo lançamento. Não duplicar categoria,
+  Responsável, Projeto, Portfólio, observação ou OK em tabela específica da interface.
+- Auditoria de julho/2026 na Unicred: 176 OK da tela antiga foram explicados entre as duas
+  faturas que atravessam o mês civil. Vinte e três pertencem à fatura de julho, 152 à fatura de
+  agosto e um é o pagamento informativo. Excluído o pagamento, os 175 registros financeiros
+  estavam todos vinculados, com zero diferença de categoria, dimensões, observação e OK. Não
+  criar migração quando os dados já são a mesma transação.
+- Expandir primeiro a visão detalhada para **cartões de crédito**. Contas correntes ficam para uma
+  segunda fase, pois exigem conciliação de extrato e não possuem ciclo de fatura.
+- Casos ambíguos nunca são resolvidos sobrescrevendo dados. Mostrar em **Requer validação** quando
+  faltar vínculo, houver mais de um lançamento financeiro possível sem principal oficial ou o
+  valor contabilizado/rateado não fechar com a linha do PDF.
+- Os cards detalhados ficam em dois grupos: financeiro (Total oficial, Conciliação, DRE e Fora do
+  DRE) e fluxo de trabalho (Classificação, OK, Divergências e Agregados). Todo card clicável aplica
+  o filtro correspondente e mostra, em texto reduzido, quantidade e valor que falta.
+- Semântica de cores: verde apenas para fechado/completo; amarelo para revisão humana pendente;
+  vermelho para divergência real; roxo para investimento ou outra natureza fora do DRE; neutro
+  para totais informativos. Despesa normal não deve parecer erro apenas por ser despesa.

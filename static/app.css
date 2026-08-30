@@ -287,6 +287,15 @@
   .card .val { font-size: 21px; font-weight: 650; margin-top: 5px; letter-spacing: -0.015em; white-space: nowrap; }
   .card .sub { font-size: 11px; color: var(--ink-faint); margin-top: 3px; white-space: nowrap; }
 
+  .visao-lancamentos { display:flex;justify-content:flex-end;gap:4px;margin:-7px 0 14px; }
+  .visao-lancamentos button,.visao-lancamentos a {
+    border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);
+    border-radius:18px;padding:6px 12px;font-family:inherit;font-size:12px;font-weight:600;
+    line-height:1;text-decoration:none;cursor:pointer;
+  }
+  .visao-lancamentos .ativo { background:var(--accent-soft);border-color:var(--accent);color:var(--accent); }
+  .visao-lancamentos button:disabled { opacity:.45;cursor:not-allowed; }
+
   .cat-breakdown { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; }
   .cat-breakdown h3 { margin: 0 0 12px 0; font-size: 13px; color: var(--ink-soft); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   /* bloco recolhivel (ex: Gasto por categoria) */
