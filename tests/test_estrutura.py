@@ -348,7 +348,7 @@ def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas()
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     trecho = core.split("def propagar_classificacao_familia_parcelas", 1)[1].split(
-        "def calcular_totais_dre_fatura", 1
+        "def importar_legado_para_parcelas_fatura", 1
     )[0]
 
     assert "fatura_vinculo" in trecho
@@ -358,6 +358,22 @@ def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas()
     assert "data_transacao" not in trecho
     assert "SET conferida" not in trecho and "SET observacao" not in trecho
     assert "propagar_classificacao_familia_parcelas(" in view
+
+
+def test_importacao_legada_unicred_preserva_ajustes_da_nova_tela():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = core.split("def importar_legado_para_parcelas_fatura", 1)[1].split(
+        "def calcular_totais_dre_fatura", 1
+    )[0]
+
+    assert "fi.account_id=%s" in trecho
+    assert "somente_conciliacao" in trecho
+    assert "transacao_id_criado" in trecho
+    assert "destino.categoria IS NULL OR destino.categoria=''" in trecho
+    assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+    assert "Parcela gerada pela fatura %%" in trecho
+    assert "COALESCE(destino.conferida,false)=false" in trecho
+    assert "duplicada=" not in trecho
 
 
 def test_resumo_conta_transacao_rateada_uma_vez_e_status_tem_filtros_explicitos():

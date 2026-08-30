@@ -1008,6 +1008,90 @@ def propagar_classificacao_familia_parcelas(
     }
 
 
+def importar_legado_para_parcelas_fatura(cur, account_id):
+    """Preserva ajustes feitos no agregado antes da visao mensal da fatura.
+
+    E uma importacao unica e conservadora para uma origem de cartao: o
+    agregado tecnico era o lancamento que o usuario classificava na tela
+    antiga; a fatura passou a contabilizar uma transacao propria por parcela.
+    Somente vazios/placeholders recebem dados. Ajustes ja feitos diretamente
+    na parcela mensal nunca sao substituidos.
+    """
+    rel = (
+        " SELECT DISTINCT fv.transacao_id AS agregado_id, fl.transacao_id_criado AS parcela_id "
+        " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+        " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
+        " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
+        " WHERE fi.account_id=%s AND fl.transacao_id_criado IS NOT NULL "
+        " AND COALESCE(a.somente_conciliacao,false)=true"
+    )
+
+    cur.execute(
+        "WITH rel AS (" + rel + "), escolha AS ("
+        " SELECT r.parcela_id, MIN(a.categoria) AS categoria "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " WHERE a.categoria IS NOT NULL AND a.categoria<>'' GROUP BY r.parcela_id "
+        " HAVING COUNT(DISTINCT a.categoria)=1"
+        ") UPDATE cartao.transacao destino SET categoria=e.categoria, "
+        "categoria_manual=true, regra_aplicada_id=NULL, atualizado_em=now() "
+        "FROM escolha e WHERE destino.transacao_id=e.parcela_id "
+        "AND (destino.categoria IS NULL OR destino.categoria='');",
+        (account_id,),
+    )
+    categorias = max(getattr(cur, "rowcount", 0) or 0, 0)
+
+    cur.execute(
+        "WITH rel AS (" + rel + "), escolha AS ("
+        " SELECT r.parcela_id, td.dimensao_id, MIN(td.valor_id) AS valor_id "
+        " FROM rel r JOIN cartao.transacao_dimensao td ON td.transacao_id=r.agregado_id "
+        " WHERE td.valor_id IS NOT NULL GROUP BY r.parcela_id,td.dimensao_id "
+        " HAVING COUNT(DISTINCT td.valor_id)=1"
+        ") INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+        "SELECT parcela_id,dimensao_id,valor_id FROM escolha "
+        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;",
+        (account_id,),
+    )
+    dimensoes = max(getattr(cur, "rowcount", 0) or 0, 0)
+
+    cur.execute(
+        "WITH rel AS (" + rel + "), escolha AS ("
+        " SELECT r.parcela_id, MIN(a.observacao) AS observacao "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " WHERE a.observacao IS NOT NULL AND trim(a.observacao)<>'' GROUP BY r.parcela_id "
+        " HAVING COUNT(DISTINCT a.observacao)=1"
+        ") UPDATE cartao.transacao destino SET observacao=e.observacao, atualizado_em=now() "
+        "FROM escolha e WHERE destino.transacao_id=e.parcela_id AND ("
+        "destino.observacao IS NULL OR trim(destino.observacao)='' "
+        "OR destino.observacao LIKE 'Parcela gerada pela fatura %%');",
+        (account_id,),
+    )
+    observacoes = max(getattr(cur, "rowcount", 0) or 0, 0)
+
+    cur.execute(
+        "WITH rel AS (" + rel + "), assinaturas AS ("
+        " SELECT r.parcela_id, a.conferida_por, a.conferida_em "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " WHERE COALESCE(a.conferida,false)=true"
+        "), escolha AS ("
+        " SELECT DISTINCT ON (parcela_id) parcela_id,conferida_por,conferida_em "
+        " FROM assinaturas ORDER BY parcela_id,conferida_em DESC NULLS LAST"
+        ") UPDATE cartao.transacao destino SET conferida=true, "
+        "conferida_por=COALESCE(e.conferida_por,destino.conferida_por), "
+        "conferida_em=COALESCE(e.conferida_em,destino.conferida_em), atualizado_em=now() "
+        "FROM escolha e WHERE destino.transacao_id=e.parcela_id "
+        "AND COALESCE(destino.conferida,false)=false;",
+        (account_id,),
+    )
+    conferidas = max(getattr(cur, "rowcount", 0) or 0, 0)
+    return {
+        "categorias": categorias,
+        "dimensoes": dimensoes,
+        "observacoes": observacoes,
+        "conferidas": conferidas,
+    }
+
+
 def calcular_totais_dre_fatura(cur, fatura_id):
     """Aplica a natureza do DRE sobre os valores oficiais das linhas do PDF.
 
@@ -2138,6 +2222,26 @@ def migrate():
                 (preservados,),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (29);")
+            conn.commit()
+
+        if versao_atual < 30:
+            # A classificacao feita antes da visao mensal ficou no agregado
+            # tecnico do cartao Unicred. Importa apenas campos ainda vazios e
+            # preserva a assinatura humana original nas parcelas ja criadas.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            importados = importar_legado_para_parcelas_fatura(cur, conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Importacao dos ajustes legados para parcelas Unicred',"
+                "jsonb_build_object('versao',30,'account_id',%s,'categorias',%s,'dimensoes',%s,"
+                "'observacoes',%s,'conferidas',%s));",
+                (
+                    conta_unicred,
+                    importados["categorias"], importados["dimensoes"],
+                    importados["observacoes"], importados["conferidas"],
+                ),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (30);")
             conn.commit()
 
         cur.close()

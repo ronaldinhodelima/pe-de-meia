@@ -1,7 +1,7 @@
 # Pé de Meia — contexto do projeto
 
 **Última atualização:** 30/08/2026. Estado funcional de referência: branch `main`, tela detalhada
-de fatura Unicred e schema esperado na migração **29**. O histórico registra o conjunto anterior
+de fatura Unicred e schema esperado na migração **30**. O histórico registra o conjunto anterior
 como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo no Coolify
 e `cartao.schema_version` antes de qualquer nova intervenção.
 
@@ -302,7 +302,7 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 ## Estado registrado em produção — 29/08/2026
 
 Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O código espera schema na migração **28**. Entre `cfa183e` e `7c1ce99` foram publicados 75
+O código espera schema na migração **30**. Entre `cfa183e` e `7c1ce99` foram publicados 75
 commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
 primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
 regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
@@ -1200,3 +1200,24 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   o favicon. Não marcar/desmarcar OK real apenas para teste.
 - Escopo pendente: aplicar esse modelo a outros cartões ou contas somente após finalizar e validar
   a Unicred. Não generalizar automaticamente agora.
+
+# Importação dos ajustes antigos para a nova tela Unicred (30/08/2026)
+
+- Antes da visão por fatura, o usuário classificava e conferia o registro original do Pluggy. No
+  regime de caixa dos parcelamentos, esse registro virou agregado técnico
+  (`somente_conciliacao`) e cada cobrança mensal passou a ter uma transação própria. Por isso os
+  dados podiam existir na tela resumida e parecer vazios na nova tela detalhada.
+- A migração 30 faz uma importação única e limitada à conta Unicred
+  `b6243125-dca2-42b2-8c20-0825782c6d8d`. Para cada parcela já criada e explicitamente ligada ao
+  agregado por `fatura_vinculo`, copia categoria, dimensões, observação e assinatura do OK.
+- A importação nunca sobrescreve classificação já preenchida na parcela. Observação só é copiada
+  quando vazia ou quando contém exclusivamente o texto técnico “Parcela gerada pela fatura”. OK
+  só muda de falso para verdadeiro e preserva usuário/horário quando existirem. Duplicidade,
+  valor, data e os demais campos bancários não são alterados.
+- Esta cópia de OK é apenas recuperação do trabalho humano já realizado. Depois da migração, o OK
+  e a observação continuam individuais por parcela; novas parcelas futuras não recebem OK
+  automaticamente do agregado.
+- Arquivos alterados nesta entrega: `core.py`, `tests/test_estrutura.py` e este `CLAUDE.md`.
+- Antes de publicar: executar a suíte completa, sintaxe e `git diff --check`. Depois do deploy,
+  conferir o registro da migração 30 nos logs e comparar os totais/quantidades da origem Unicred;
+  não alterar manualmente nenhum OK apenas para testar.
