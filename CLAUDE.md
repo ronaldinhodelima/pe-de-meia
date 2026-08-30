@@ -1072,8 +1072,11 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   estado. Para marcar, deve existir lançamento financeiro vinculado e a classificação/rateio
   precisa estar completa; para retirar, pedir confirmação explícita.
 - **Cards da fatura separam a diferença.** Mostrar total oficial do PDF, despesas no DRE, fora
-  do DRE (investimentos e outras naturezas) e valor ainda sem classificação/vínculo. A igualdade
-  esperada é `PDF = DRE + fora do DRE + pendente`, sempre usando o valor da linha oficial.
+  do DRE (investimentos e outras naturezas), classificação pendente e diferença sem vínculo.
+  Classificação incompleta continua sinalizada, mas não retira sozinha um lançamento do DRE:
+  vale a natureza efetiva atual. A igualdade monetária é `PDF = DRE + fora do DRE + sem vínculo`;
+  “classificação pendente” é indicador de qualidade que pode se sobrepor ao DRE. Estornos usam
+  o sinal do PDF e reduzem os totais; nunca aplicar `abs()` à soma oficial.
 - **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
   classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
   abaixo dele com botão `+`/`−`, descritas como `<descrição original> — Parte N`. As partes

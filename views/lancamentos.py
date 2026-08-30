@@ -877,6 +877,7 @@ def lancamentos_por_fatura():
     total_dre = Decimal("0")
     total_fora = Decimal("0")
     total_pendente = Decimal("0")
+    total_sem_vinculo = Decimal("0")
     contagens = {"linhas": 0, "vinculadas": 0, "classificadas": 0, "conferidas": 0, "multiplos": 0}
     for linha in linhas:
         linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
@@ -900,7 +901,9 @@ def lancamentos_por_fatura():
         linha["multiplos"] = len(vinculos) > 1
         if linha["multiplos"]:
             contagens["multiplos"] += 1
-        valor_pdf = abs(Decimal(str(linha["valor"] or 0)))
+        # Estorno vem negativo no PDF e precisa reduzir tanto a fatura quanto
+        # o DRE. `abs` aqui inflaria o total em duas vezes o estorno.
+        valor_pdf = Decimal(str(linha["valor"] or 0))
         if linha["pagamento"]:
             linha["estado"] = "pagamento"
             linha["classificada"] = False
@@ -917,20 +920,23 @@ def lancamentos_por_fatura():
                 bool(principal["categoria"]) and obrigatorias.issubset({k for k, v in principal["dims"].items() if v})
             )
             linha["classificada"] = completa
+            proporcao = proporcao_dre.get(tid, Decimal("0"))
+            linha["valor_dre"] = valor_pdf * proporcao
+            linha["valor_fora"] = valor_pdf - linha["valor_dre"]
+            total_dre += linha["valor_dre"]
+            total_fora += linha["valor_fora"]
+            linha["natureza_estado"] = "dre" if proporcao == 1 else ("fora" if proporcao == 0 else "misto")
             if completa:
                 contagens["classificadas"] += 1
-                proporcao = proporcao_dre.get(tid, Decimal("0"))
-                linha["valor_dre"] = valor_pdf * proporcao
-                linha["valor_fora"] = valor_pdf - linha["valor_dre"]
-                total_dre += linha["valor_dre"]
-                total_fora += linha["valor_fora"]
-                linha["estado"] = "dre" if proporcao == 1 else ("fora" if proporcao == 0 else "misto")
+                linha["estado"] = linha["natureza_estado"]
             else:
                 total_pendente += valor_pdf
                 linha["estado"] = "classificar"
         else:
             linha["classificada"] = False
             total_pendente += valor_pdf
+            total_sem_vinculo += valor_pdf
+            linha["natureza_estado"] = "pendente"
             linha["estado"] = "sem_vinculo"
         if linha["conferida_fatura"]:
             contagens["conferidas"] += 1
@@ -943,8 +949,8 @@ def lancamentos_por_fatura():
         status == "todas" or
         (status == "pendente_classificacao" and not l["pagamento"] and not l["classificada"]) or
         (status == "pendente_ok" and not l["pagamento"] and not l["conferida_fatura"]) or
-        (status == "dre" and l["estado"] in {"dre", "misto"}) or
-        (status == "fora" and l["estado"] in {"fora", "misto"}) or
+        (status == "dre" and l.get("natureza_estado") in {"dre", "misto"}) or
+        (status == "fora" and l.get("natureza_estado") in {"fora", "misto"}) or
         (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
         (status == "multiplos" and l["multiplos"])
     )]
@@ -964,7 +970,10 @@ def lancamentos_por_fatura():
         faturas=faturas, conta=conta, contas_credito=contas_credito,
         account_id=account_id, linhas=linhas_visiveis, categorias=categorias_template,
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
-        totais={"pdf": total_pdf, "dre": total_dre, "fora": total_fora, "pendente": total_pendente},
+        totais={
+            "pdf": total_pdf, "dre": total_dre, "fora": total_fora,
+            "pendente": total_pendente, "sem_vinculo": total_sem_vinculo,
+        },
         contagens=contagens, config_json=json_script(config),
         projeto_portfolio_map=projeto_portfolio_map,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
