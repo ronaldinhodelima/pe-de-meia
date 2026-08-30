@@ -1331,3 +1331,25 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   locais até aprovação explícita do usuário. Antes da aprovação: suíte completa, sintaxe Python e
   JavaScript, templates, `git diff --check` e revisão visual local; depois do deploy, validar a
   fatura Unicred mais recente sem alterar OK real apenas para teste.
+
+# Compra completa do Pluggy versus parcela da fatura (30/08/2026)
+
+- Um parcelamento pode aparecer primeiro como um único registro do Pluggy pelo valor total da
+  compra e ainda estar ligado a apenas uma fatura importada. Não esperar duas faturas para
+  reconhecê-lo: quando `valor do Pluggy = valor do PDF × total de parcelas` (tolerância de um
+  centavo), o registro do Pluggy vira `somente_conciliacao` e a cobrança mensal do PDF passa a ser
+  o único lançamento financeiro.
+- Exemplo validado: ANJOS DE QUINTAL, compra total de R$ 2.160,00 em 6 parcelas. A fatura e o DRE
+  devem contabilizar R$ 360,00 por mês; R$ 2.160,00 permanece apenas como registro técnico da
+  compra e nunca pode ser somado novamente ao DRE.
+- Na primeira conversão de um agregado que ainda tinha somente uma linha oficial, preservar na
+  nova parcela a categoria, dimensões, observação pessoal e assinatura do OK já preenchidas pelo
+  usuário. Parcelas futuras permanecem independentes e não herdam automaticamente observação/OK.
+- Os selos `P` e `F` usam exclusivamente o tooltip global rápido de `topbar.js`; não criar um
+  segundo balão CSS local. Na classificação detalhada, atualizar imediatamente o texto
+  `Faltam: ...` a cada seleção, inclusive quando Projeto preencher Portfólio automaticamente,
+  mantendo a atualização do servidor como confirmação posterior.
+- Arquivos desta entrega: `views/relatorios.py`, `templates/lancamentos_fatura.html`,
+  `static/lancamentos_fatura.js`, testes estruturais e este documento. Após publicar, executar a
+  sincronização de parcelas autenticada e confirmar no ANJOS DE QUINTAL que `F` de R$ 360,00 é o
+  contabilizado/editável e `P` de R$ 2.160,00 é técnico/somente leitura.

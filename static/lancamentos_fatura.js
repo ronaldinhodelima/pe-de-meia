@@ -108,6 +108,32 @@
     });
   }
 
+  function atualizarAvisoClassificacao(editor) {
+    const detalhe = editor.closest('tr.vinculos-detalhe');
+    const linha = detalhe && detalhe.previousElementSibling;
+    const destino = linha && linha.querySelector('[data-classificacao]');
+    if (!destino) return;
+
+    const faltando = [];
+    const categoria = editor.querySelector('[data-campo="categoria"]');
+    if (categoria && !categoria.value) faltando.push('Categoria');
+    const obrigatorias = new Set((config.dimensoes_obrigatorias || []).map(String));
+    editor.querySelectorAll('[data-dimensao]').forEach(campo => {
+      if (!obrigatorias.has(String(campo.dataset.dimensao)) || campo.value) return;
+      faltando.push(campo.dataset.dimensaoNome || 'Classificação');
+    });
+
+    if (faltando.length) {
+      const aviso = document.createElement('span');
+      aviso.className = 'estado';
+      aviso.style.color = '#9a6a12';
+      aviso.textContent = 'Faltam: ' + faltando.join(', ');
+      destino.replaceChildren(aviso);
+    } else if (destino.textContent.trim().startsWith('Faltam:')) {
+      destino.replaceChildren();
+    }
+  }
+
   async function atualizarResumoPagina() {
     const resp = await fetch(window.location.href, {headers: {'X-Parcial': '1'}, cache: 'no-store'});
     if (!resp.ok) return;
@@ -150,6 +176,7 @@
     const aviso = editor.querySelector('[data-status]');
     const payload = payloadEditor(editor, alterado);
     atualizarDestaquesObrigatorios(editor);
+    atualizarAvisoClassificacao(editor);
     const versao = String((Number(editor.dataset.versaoSalva || 0) + 1));
     editor.dataset.versaoSalva = versao;
     const anterior = filaSalvar[id] || Promise.resolve();
@@ -204,6 +231,7 @@
   const temporizadores = new WeakMap();
   document.querySelectorAll('[data-editor]').forEach(editor => {
     atualizarDestaquesObrigatorios(editor);
+    atualizarAvisoClassificacao(editor);
     editor.querySelectorAll('select[data-campo],select[data-dimensao]').forEach(campo => {
       campo.addEventListener('focus', () => { campo.dataset.valorAnterior = campo.value; });
       campo.addEventListener('change', () => {

@@ -1738,10 +1738,20 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     """
     _revincular_lancamentos_da_fatura(cur, usuario)
     cur.execute(
-        "SELECT v.transacao_id, COUNT(*) AS linhas FROM cartao.fatura_vinculo v "
-        "GROUP BY v.transacao_id HAVING COUNT(*) >= 2;"
+        "SELECT v.transacao_id, COUNT(DISTINCT v.fatura_linha_id) AS linhas, "
+        "COALESCE(bool_or(t.somente_conciliacao),false) AS era_tecnico "
+        "FROM cartao.fatura_vinculo v "
+        "JOIN cartao.transacao t ON t.transacao_id=v.transacao_id "
+        "JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
+        "WHERE NOT EXISTS (SELECT 1 FROM cartao.fatura_linha criada "
+        " WHERE criada.transacao_id_criado=v.transacao_id) "
+        "GROUP BY v.transacao_id "
+        "HAVING COUNT(DISTINCT v.fatura_linha_id) >= 2 OR bool_or("
+        " fl.parcela_total >= 2 AND ABS(ABS(COALESCE(t.valor_brl,t.valor_original)) "
+        " - ABS(fl.valor * fl.parcela_total)) <= 0.01);"
     )
-    agregados = [str(r["transacao_id"]) for r in cur.fetchall()]
+    agregados_info = {str(r["transacao_id"]): dict(r) for r in cur.fetchall()}
+    agregados = list(agregados_info)
     if not agregados:
         return {"agregados": 0, "parcelas_criadas": 0}
 
@@ -1770,10 +1780,19 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     criadas = 0
     for linha in pendentes:
         cur.execute(
-            "SELECT categoria, natureza FROM cartao.transacao WHERE transacao_id = %s;",
+            "SELECT categoria, natureza, observacao, conferida, conferida_por, conferida_em "
+            "FROM cartao.transacao WHERE transacao_id = %s;",
             (str(linha["agregado_id"]),),
         )
         origem = cur.fetchone()
+        info_agregado = agregados_info.get(str(linha["agregado_id"]), {})
+        # Quando o PDF revelou pela primeira vez que um registro do Pluggy e'
+        # a compra inteira, esta linha mensal assume o trabalho humano que ja'
+        # estava nela. Parcelas futuras continuam independentes.
+        transferir_trabalho = bool(
+            origem and int(info_agregado.get("linhas") or 0) == 1
+            and not info_agregado.get("era_tecnico")
+        )
         novo_id = str(uuid.uuid4())
         # data = fim do ciclo da fatura que cobrou esta parcela. Nao da' pra
         # usar a data impressa na linha: numa parcela ela e' a da COMPRA
@@ -1782,14 +1801,20 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
             "INSERT INTO cartao.transacao ("
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
             "valor_brl, data_transacao, categoria, categoria_manual, natureza, status, tipo, "
-            "observacao_sistema, criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
-            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,%s,'POSTED','DEBIT',%s, now(), now(), now(), now());",
+            "observacao, conferida, conferida_por, conferida_em, observacao_sistema, "
+            "criado_em, atualizado_em, sincronizado_em, primeiro_sincronizado_em"
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,true,%s,'POSTED','DEBIT',"
+            "%s,%s,%s,%s,%s,now(),now(),now(),now());",
             (
                 novo_id, linha["account_id"], linha["descricao"], linha["descricao"],
                 linha["valor"], linha["valor"],
                 f"{linha['periodo_fim']} 12:00:00-03:00",
                 origem["categoria"] if origem else None,
                 origem["natureza"] if origem else None,
+                origem["observacao"] if transferir_trabalho else None,
+                bool(origem["conferida"]) if transferir_trabalho else False,
+                origem["conferida_por"] if transferir_trabalho else None,
+                origem["conferida_em"] if transferir_trabalho else None,
                 f"Parcela gerada pela fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} "
                 f"(a compra inteira está em outro lançamento, fora do resultado).",
             ),

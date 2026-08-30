@@ -253,6 +253,7 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
 def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     assert "Ciclo {{ fatura.periodo_inicio.strftime" in template
     assert "vence {{ fatura.vencimento.strftime" in template
     assert 'data-tip="{{ v.fonte_nome }}"' in template
@@ -262,9 +263,23 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     trecho_registro = template.split('<div class="vinculo-bloco">', 1)[1].split('{% endfor %}', 1)[0]
     assert trecho_registro.index('class="transacao-info"') < trecho_registro.index('class="editor-financeiro"')
     assert "detalhe-id" in template and "overflow-wrap:anywhere" in template
-    assert "fonte-badge:hover::after" in template and 'data-tip="{{ v.fonte_nome }}"' in template
+    assert "fonte-badge:hover::after" not in template
+    assert 'data-tip="{{ v.fonte_nome }}"' in template
+    assert "atualizarAvisoClassificacao(editor)" in js
+    assert "destino.replaceChildren(aviso)" in js
     assert 'v["fonte"] = "F"' in view
     assert 'v["fonte_nome"]' in view
+
+
+def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    trecho = view.split("def _sincronizar_parcelas_de_agregado", 1)[1].split(
+        '@bp.route("/relatorios/duplicidades-fatura")', 1
+    )[0]
+    assert "fl.parcela_total >= 2" in trecho
+    assert "fl.valor * fl.parcela_total" in trecho
+    assert "transferir_trabalho" in trecho
+    assert 'origem["observacao"] if transferir_trabalho else None' in trecho
 
 
 def test_categoria_tambem_e_obrigatoria_para_novo_ok():
