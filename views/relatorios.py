@@ -26,6 +26,7 @@ from core import (
     carregar_origens,
     rotulo_valor_dimensao,
     cat_pt_puro,
+    calcular_totais_dre_fatura,
     chave_alfa,
     chip_filter_html,
     data_hora_local,
@@ -977,17 +978,11 @@ def _estado_fatura(cur, fatura_row):
     )
     soma_fatura = _reais(soma_fatura_centavos)
     soma_vinculada = _reais(soma_vinculada_centavos)
-    # A fatura prova o valor cobrado; o DRE responde outra pergunta: quanto
-    # disso e' despesa. Investimentos e outras naturezas nao operacionais
-    # continuam conciliados com o PDF, mas ficam fora do DRE.
-    cur.execute(
-        f"SELECT COALESCE(SUM(CASE WHEN {NATUREZA_SQL}='despesa' THEN {VAL_DESPESA} ELSE 0 END),0) AS despesas_dre "
-        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
-        f"WHERE t.account_id=%s AND COALESCE(t.duplicada,false)=false "
-        f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
-        (account_id, periodo_inicio, periodo_fim),
-    )
-    despesas_dre_centavos = _centavos(cur.fetchone()["despesas_dre"])
+    # A fatura prova o valor cobrado; o DRE responde quanto disso e' despesa.
+    # A classificacao vem dos lancamentos vinculados, mas o valor vem de cada
+    # linha do PDF (ver core.calcular_totais_dre_fatura).
+    totais_dre = calcular_totais_dre_fatura(cur, fatura_id)
+    despesas_dre_centavos = _centavos(totais_dre["despesas_dre"])
     # "Pagamento Recebido" e' a fatura ANTERIOR sendo quitada: nao e' cobranca
     # deste ciclo, ja fica fora das duas somas e nunca vira lancamento. Cobrar
     # vinculo dela travaria o "fecha 100%" para sempre nos meses em que o

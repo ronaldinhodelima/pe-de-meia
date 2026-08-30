@@ -330,6 +330,16 @@ def test_resumo_conta_transacao_rateada_uma_vez_e_status_tem_filtros_explicitos(
         assert f'value="{status}"' in template
 
 
+def test_dre_da_fatura_usa_valor_do_pdf_e_classificacao_do_vinculo():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = core.split("def calcular_totais_dre_fatura", 1)[1].split("def migrate", 1)[0]
+
+    assert "cartao.fatura_linha" in trecho
+    assert "cartao.fatura_vinculo" in trecho
+    assert "valor*proporcao" in trecho
+    assert "v.transacao_id=l.transacao_id_criado" in trecho
+
+
 def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
     """Cada bloco 'if versao_atual < N' precisa ter o seu 'INSERT ... VALUES (N)'.
 

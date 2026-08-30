@@ -26,6 +26,7 @@ from core import (
     rotulo_valor_dimensao,
     cat_pt,
     cat_pt_puro,
+    calcular_totais_dre_fatura,
     chave_alfa,
     chip_filter_html,
     data_hora_local,
@@ -313,6 +314,20 @@ def index():
         params_resumo,
     )
     resumo.update(dict(cur.fetchone()))
+
+    # Ao abrir exatamente o ciclo de uma fatura de uma unica origem, o PDF e'
+    # a autoridade do periodo. Data da compra nao serve para decidir em qual
+    # fatura uma parcela caiu; recalcula a despesa sobre as linhas conciliadas.
+    if periodo == "intervalo" and len(origem_sel) == 1:
+        cur.execute(
+            "SELECT id FROM cartao.fatura_importada WHERE account_id=%s "
+            "AND periodo_inicio=%s AND periodo_fim=%s ORDER BY id DESC LIMIT 1;",
+            (origem_sel[0], inicio_mes.date(), (fim_mes - timedelta(days=1)).date()),
+        )
+        fatura_do_periodo = cur.fetchone()
+        if fatura_do_periodo:
+            total_fatura_dre = calcular_totais_dre_fatura(cur, fatura_do_periodo["id"])
+            resumo["gasto_real"] = total_fatura_dre["despesas_dre"]
 
     where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
                  "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]

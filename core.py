@@ -947,6 +947,53 @@ def preencher_classificacao_vazia_parcelas(cur):
     return {"categorias": categorias, "dimensoes": dimensoes}
 
 
+def calcular_totais_dre_fatura(cur, fatura_id):
+    """Aplica a natureza do DRE sobre os valores oficiais das linhas do PDF.
+
+    Data de compra nao define ciclo de cartao: uma compra parcelada conserva a
+    data original em varias faturas. Por isso, somar transacoes por intervalo
+    de datas nao prova quanto daquela fatura vai ao DRE. Esta consulta escolhe
+    um unico lancamento financeiro vinculado por linha (prioriza o gerado pela
+    propria fatura) e usa a proporcao de suas classificacoes/rateios. O valor
+    monetario continua sendo o da linha do PDF, que e' a autoridade.
+    """
+    cur.execute(
+        f"WITH linhas AS ("
+        f" SELECT fl.id, fl.valor, fl.transacao_id_criado FROM cartao.fatura_linha fl "
+        f" WHERE fl.fatura_id=%s "
+        f" AND upper(trim(fl.descricao)) NOT LIKE 'PAGAMENTO RECEBIDO%%' "
+        f" AND upper(trim(fl.descricao)) NOT LIKE 'PAG DE FATURA%%'"
+        f"), escolhidas AS ("
+        f" SELECT l.id, l.valor, e.transacao_id FROM linhas l "
+        f" LEFT JOIN LATERAL ("
+        f"  SELECT v.transacao_id FROM cartao.fatura_vinculo v "
+        f"  JOIN cartao.transacao tx ON tx.transacao_id=v.transacao_id "
+        f"  WHERE v.fatura_linha_id=l.id AND COALESCE(tx.duplicada,false)=false "
+        f"  AND tx.substituido_por IS NULL AND COALESCE(tx.somente_conciliacao,false)=false "
+        f"  ORDER BY (v.transacao_id=l.transacao_id_criado) DESC, "
+        f"  ABS(ABS(COALESCE(tx.valor_brl,tx.valor_original))-ABS(l.valor)), v.id LIMIT 1"
+        f" ) e ON true"
+        f"), proporcoes AS ("
+        f" SELECT e.id, e.valor, COALESCE(p.proporcao,0) AS proporcao FROM escolhidas e "
+        f" LEFT JOIN LATERAL ("
+        f"  SELECT COALESCE("
+        f"   SUM(CASE WHEN {NATUREZA_SQL}='despesa' "
+        f"       THEN ABS(COALESCE(t.valor_brl,t.valor_original)) ELSE 0 END) "
+        f"   / NULLIF(SUM(ABS(COALESCE(t.valor_brl,t.valor_original))),0), 0"
+        f"  ) AS proporcao FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        f"  WHERE t.transacao_id=e.transacao_id AND COALESCE(t.duplicada,false)=false"
+        f" ) p ON true"
+        f") SELECT COALESCE(SUM(valor),0) AS total_pdf, "
+        f"COALESCE(SUM(valor*proporcao),0) AS despesas_dre FROM proporcoes;",
+        (fatura_id,),
+    )
+    row = cur.fetchone()
+    return {
+        "total_pdf": row["total_pdf"] if isinstance(row, dict) else row[0],
+        "despesas_dre": row["despesas_dre"] if isinstance(row, dict) else row[1],
+    }
+
+
 def migrate():
     try:
         conn = get_conn()
