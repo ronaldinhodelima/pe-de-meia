@@ -947,6 +947,67 @@ def preencher_classificacao_vazia_parcelas(cur):
     return {"categorias": categorias, "dimensoes": dimensoes}
 
 
+def propagar_classificacao_familia_parcelas(
+    cur, transacao_id, *, categoria_enviada=False, categoria=None, dimensoes=None
+):
+    """Compartilha classificacao entre parcelas ligadas ao mesmo agregado.
+
+    A familia nasce exclusivamente de ``fatura_vinculo``: agregado tecnico e
+    parcelas mensais geradas a partir das linhas que apontam para ele. Nunca
+    agrupa por descricao, data ou valor. Categoria e dimensoes sao comuns;
+    observacao e OK continuam individuais em cada cobranca mensal.
+    """
+    cur.execute(
+        "WITH agregados AS ("
+        " SELECT DISTINCT fv.transacao_id AS agregado_id "
+        " FROM cartao.fatura_vinculo fv "
+        " JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+        " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
+        " WHERE COALESCE(a.somente_conciliacao,false)=true "
+        " AND (fl.transacao_id_criado=%s OR fv.transacao_id=%s)"
+        "), familia AS ("
+        " SELECT agregado_id AS transacao_id FROM agregados "
+        " UNION SELECT fl.transacao_id_criado FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
+        " JOIN agregados a ON a.agregado_id=fv.transacao_id "
+        " WHERE fl.transacao_id_criado IS NOT NULL"
+        ") SELECT DISTINCT transacao_id FROM familia;",
+        (transacao_id, transacao_id),
+    )
+    familia = [r[0] for r in cur.fetchall()]
+    if not familia:
+        return {"membros": 0, "categorias": 0, "dimensoes": 0}
+
+    categorias = 0
+    if categoria_enviada:
+        cur.execute(
+            "UPDATE cartao.transacao SET categoria=%s, categoria_manual=true, "
+            "regra_aplicada_id=NULL, atualizado_em=now() WHERE transacao_id IN %s;",
+            (categoria, tuple(familia)),
+        )
+        categorias = max(getattr(cur, "rowcount", 0) or 0, 0)
+
+    dimensoes_atualizadas = 0
+    for dimensao_id, valor_id in (dimensoes or {}).items():
+        if valor_id is None:
+            cur.execute(
+                "DELETE FROM cartao.transacao_dimensao WHERE transacao_id IN %s AND dimensao_id=%s;",
+                (tuple(familia), dimensao_id),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                "SELECT membro,%s,%s FROM unnest(%s::uuid[]) AS membro "
+                "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                (dimensao_id, valor_id, [str(x) for x in familia]),
+            )
+        dimensoes_atualizadas += max(getattr(cur, "rowcount", 0) or 0, 0)
+    return {
+        "membros": len(familia), "categorias": categorias,
+        "dimensoes": dimensoes_atualizadas,
+    }
+
+
 def calcular_totais_dre_fatura(cur, fatura_id):
     """Aplica a natureza do DRE sobre os valores oficiais das linhas do PDF.
 
@@ -2041,6 +2102,42 @@ def migrate():
                 "jsonb_build_object('versao',28));"
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (28);")
+            conn.commit()
+
+        if versao_atual < 29:
+            # A revisao por fatura passou a usar o mesmo OK do lancamento. Se
+            # alguem marcou o campo temporario da versao 28, preserva a
+            # assinatura no lancamento mensal antes de aposenta-lo na UI.
+            cur.execute(
+                "WITH assinaturas AS ("
+                " SELECT escolhido.transacao_id, fl.conferida_fatura_por, fl.conferida_fatura_em "
+                " FROM cartao.fatura_linha fl "
+                " JOIN LATERAL ("
+                "  SELECT v.transacao_id FROM cartao.fatura_vinculo v "
+                "  JOIN cartao.transacao tx ON tx.transacao_id=v.transacao_id "
+                "  WHERE v.fatura_linha_id=fl.id AND COALESCE(tx.duplicada,false)=false "
+                "  AND tx.substituido_por IS NULL AND COALESCE(tx.somente_conciliacao,false)=false "
+                "  ORDER BY (v.transacao_id=fl.transacao_id_criado) DESC, "
+                "  ABS(ABS(COALESCE(tx.valor_brl,tx.valor_original))-ABS(fl.valor)), v.id LIMIT 1"
+                " ) escolhido ON true WHERE fl.conferida_fatura=true"
+                "), escolhidas AS ("
+                " SELECT DISTINCT ON (transacao_id) transacao_id, conferida_fatura_por, "
+                " conferida_fatura_em FROM assinaturas "
+                " ORDER BY transacao_id, conferida_fatura_em DESC NULLS LAST"
+                ") UPDATE cartao.transacao t SET conferida=true, "
+                "conferida_por=COALESCE(e.conferida_fatura_por,t.conferida_por), "
+                "conferida_em=COALESCE(e.conferida_fatura_em,t.conferida_em) "
+                "FROM escolhidas e WHERE e.transacao_id=t.transacao_id "
+                "AND COALESCE(t.conferida,false)=false;"
+            )
+            preservados = max(getattr(cur, "rowcount", 0) or 0, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','OK da fatura unificado ao lançamento',"
+                "jsonb_build_object('versao',29,'preservados',%s));",
+                (preservados,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (29);")
             conn.commit()
 
         cur.close()

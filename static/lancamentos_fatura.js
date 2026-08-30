@@ -16,24 +16,36 @@
   if (status) status.addEventListener('change', () => ir({status: status.value}));
   document.querySelectorAll('[data-filtro]').forEach(card => card.addEventListener('click', () => ir({status: card.dataset.filtro})));
 
-  document.querySelectorAll('[data-expande]').forEach(botao => botao.addEventListener('click', () => {
-    const detalhe = document.getElementById('vinculos-' + botao.dataset.expande);
+  function alternarLinha(id) {
+    const botao = document.querySelector('[data-expande="' + CSS.escape(id) + '"]');
+    const detalhe = document.getElementById('vinculos-' + id);
     if (!detalhe) return;
     detalhe.hidden = !detalhe.hidden;
-    botao.textContent = detalhe.hidden ? '+' : '−';
-    botao.setAttribute('aria-expanded', detalhe.hidden ? 'false' : 'true');
+    if (botao) {
+      botao.textContent = detalhe.hidden ? '+' : '−';
+      botao.setAttribute('aria-expanded', detalhe.hidden ? 'false' : 'true');
+    }
+  }
+
+  document.querySelectorAll('[data-expande]').forEach(botao => botao.addEventListener('click', evento => {
+    evento.stopPropagation();
+    alternarLinha(botao.dataset.expande);
+  }));
+  document.querySelectorAll('[data-toggle-linha]').forEach(linha => linha.addEventListener('click', evento => {
+    if (evento.target.closest('button,input,select,textarea,a,label')) return;
+    alternarLinha(linha.dataset.toggleLinha);
   }));
 
-  document.querySelectorAll('[data-ok-fatura]').forEach(campo => campo.addEventListener('change', async () => {
+  document.querySelectorAll('[data-ok-lancamento]').forEach(campo => campo.addEventListener('change', async () => {
     const novo = campo.checked;
     let confirmar = false;
     if (!novo) {
-      confirmar = window.confirm('Confirma retirar o OK desta linha da fatura?');
+      confirmar = window.confirm('Confirma desmarcar o OK deste lançamento?');
       if (!confirmar) { campo.checked = true; return; }
     }
     campo.disabled = true;
     try {
-      const resp = await fetch('/api/fatura-linha/' + campo.dataset.okFatura + '/conferida', {
+      const resp = await fetch('/api/transacao/' + encodeURIComponent(campo.dataset.okLancamento), {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({conferida: novo, confirmar_desmarcacao: confirmar})
       });
@@ -70,6 +82,6 @@
   if (reabrir) {
     sessionStorage.removeItem('faturaAbrirLinha');
     const botao = document.querySelector('[data-expande="' + CSS.escape(reabrir) + '"]');
-    if (botao) { botao.click(); botao.scrollIntoView({block: 'center'}); }
+    if (botao) { alternarLinha(reabrir); botao.scrollIntoView({block: 'center'}); }
   }
 })();

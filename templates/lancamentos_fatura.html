@@ -7,13 +7,13 @@
   .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}
   .fatura-cards .card{cursor:pointer}.fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
   .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
-  .fatura-tabela tr.fatura-ok{background:#f1f2f3}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 #d9a441}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
+  .fatura-tabela tr.fatura-ok{background:#f1f2f3}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 #d9a441}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}.fatura-tabela tr[data-toggle-linha]{cursor:pointer}
   .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;line-height:1}
   .estado{display:inline-flex;padding:3px 7px;border-radius:12px;font-size:11px;background:var(--bg);border:1px solid var(--line)}.estado.dre{color:var(--bad)}.estado.fora{color:#665b88}.estado.ok{color:var(--good)}
   .vinculos-detalhe{background:#fafaf8}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-grid{display:grid;grid-template-columns:minmax(190px,1.6fr) 120px 120px 1fr;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--line)}
   .vinculo-grid.principal{background:var(--good-soft);border-radius:7px}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid small{display:block;color:var(--ink-faint)}
   .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px}.editor-financeiro select,.editor-financeiro input{width:100%}
-  .ok-fatura{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0 14px}
+  .ok-lancamento{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0 14px}
   @media(max-width:800px){.vinculo-grid{grid-template-columns:1fr}.vinculos-detalhe>td{padding-left:12px!important}}
 </style>
 {% endblock %}
@@ -44,7 +44,7 @@
   <select id="faturaStatus">
     <option value="todas" {{ 'selected' if status=='todas' }}>Todas as linhas</option>
     <option value="pendente_classificacao" {{ 'selected' if status=='pendente_classificacao' }}>Pendentes de classificação</option>
-    <option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK da fatura</option>
+    <option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>
     <option value="dre" {{ 'selected' if status=='dre' }}>Despesas no DRE</option>
     <option value="fora" {{ 'selected' if status=='fora' }}>Fora do DRE</option>
     <option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
@@ -63,28 +63,27 @@
   <div class="card"><div class="label">Linhas oficiais</div><div class="val">{{ contagens.linhas }}</div></div>
   <div class="card"><div class="label">Vinculadas</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div></div>
   <div class="card"><div class="label">Classificadas</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div></div>
-  <div class="card" data-filtro="pendente_ok"><div class="label">OK da fatura</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div></div>
+  <div class="card" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div></div>
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
 </div>
 <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
 
 <div class="tabela-scroll">
-<table class="compacta fatura-tabela"><thead><tr><th></th><th>Data</th><th>Descrição no PDF</th><th>Titular</th><th>Parcela</th><th>Valor PDF</th><th>Classificação</th><th>OK fatura</th></tr></thead><tbody>
+<table class="compacta fatura-tabela"><thead><tr><th></th><th>Data</th><th>Descrição no PDF</th><th>Titular / cartão</th><th>Parcela</th><th>Valor PDF</th><th>Classificação</th><th>OK</th></tr></thead><tbody>
 {% for linha in linhas %}
-  <tr class="{{ 'fatura-ok' if linha.conferida_fatura else ('fatura-erro' if linha.estado in ('sem_vinculo','classificar') else 'fatura-pendente') }}" data-linha="{{ linha.id }}">
+  <tr class="{{ 'fatura-ok' if linha.conferida else ('fatura-erro' if linha.estado in ('sem_vinculo','classificar') else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
     <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
     <td>{{ linha.data.strftime('%d/%m/%Y') }}</td>
-    <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}</td>
+    <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
-    <td>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.estado=='sem_vinculo' %}<span class="estado" style="color:var(--bad)">sem vínculo</span>{% else %}{% if linha.natureza_estado=='dre' %}<span class="estado dre">DRE</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">fora do DRE</span>{% else %}<span class="estado">rateio misto</span>{% endif %}{% if not linha.classificada %} <span class="estado" style="color:#9a6a12">classificar</span>{% endif %}{% endif %}</td>
-    <td style="text-align:center">{% if not linha.pagamento %}<input class="ok-fatura" type="checkbox" data-ok-fatura="{{ linha.id }}" {{ 'checked' if linha.conferida_fatura }} {{ 'disabled' if not pode_conferir }} title="OK exclusivo desta linha da fatura{% if linha.conferida_fatura_por %}, por {{ linha.conferida_fatura_por }}{% endif %}">{% endif %}</td>
+    <td>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.estado=='sem_vinculo' %}<span class="estado" style="color:var(--bad)">Falta: vínculo</span>{% else %}{% if linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}{% endif %}</td>
+    <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir }} title="OK do lançamento{% if linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
   </tr>
   {% if linha.vinculos %}<tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="8">
-    <div style="font-size:12px;font-weight:600;margin-bottom:6px">Lançamentos agregados a esta linha</div>
     {% for v in linha.vinculos %}
       <div class="vinculo-grid {{ 'principal' if v.principal else 'tecnico' }}">
-        <div><b>{{ v.descricao }}</b><small>{{ v.transacao_id }}</small></div>
+        <div><b>{{ v.descricao }}</b><small>{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% endif %} · {{ v.transacao_id }}</small></div>
         <div>{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</div>
         <div class="valor">{{ v.valor|moeda }}</div>
         <div>{% if v.principal %}<span class="estado ok">contabilizado e editável</span>{% else %}<span class="estado">registro técnico · somente leitura</span>{% endif %}</div>

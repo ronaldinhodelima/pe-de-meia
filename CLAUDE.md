@@ -1,9 +1,9 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 29/08/2026. Estado funcional de referência: branch `main`, documentação
-consolidada após `7c1ce99` e schema esperado na migração **26**. O histórico registra o conjunto
-anterior como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo
-no Coolify e `cartao.schema_version` antes de qualquer nova intervenção.
+**Última atualização:** 30/08/2026. Estado funcional de referência: branch `main`, tela detalhada
+de fatura Unicred e schema esperado na migração **29**. O histórico registra o conjunto anterior
+como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo no Coolify
+e `cartao.schema_version` antes de qualquer nova intervenção.
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
@@ -104,6 +104,10 @@ Na prática:
   ```
   O token do Coolify e as credenciais de banco ficam nas variáveis de ambiente do próprio
   Coolify (aba Environment de cada app) — nunca no código nem no repositório git.
+- **Regra obrigatória de documentação em todo deploy:** o mesmo commit que será publicado deve
+  atualizar este `CLAUDE.md`, sem exceção. Registrar decisões funcionais, arquivos/áreas alteradas,
+  migração de banco, testes executados, pendências e o que precisa ser validado em produção. Um
+  deploy sem essa atualização documental é incompleto e não deve ser enviado à `main`.
 
 ## Banco de dados — tabelas principais (schema `cartao`)
 
@@ -1066,11 +1070,12 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   Somente o lançamento financeiro identificado como **contabilizado** pode ser editado e entrar
   no DRE. Registros `somente_conciliacao`, substituídos e duplicados permanecem visíveis para
   auditoria, mas são somente leitura e não somam outra vez.
-- **OK da fatura é independente do OK do lançamento.** A migração 28 adiciona
-  `fatura_linha.conferida_fatura`, usuário e horário. Esse OK confirma uma cobrança específica
-  do PDF e não pode marcar/desmarcar `transacao.conferida`. Reimportar o mesmo PDF preserva o
-  estado. Para marcar, deve existir lançamento financeiro vinculado e a classificação/rateio
-  precisa estar completa; para retirar, pedir confirmação explícita.
+- **Existe um único OK do lançamento em todas as telas.** A tela resumida e a tela detalhada da
+  fatura leem e alteram o mesmo `transacao.conferida`; não existe “OK da fatura” separado para o
+  usuário. A migração 29 copia para o lançamento qualquer assinatura feita no campo temporário
+  criado pela migração 28, preservando usuário e horário, e a interface deixa de usar esse campo
+  legado. Para marcar, a classificação/rateio precisa estar completa; para retirar, pedir
+  confirmação explícita. O OK continua individual por cobrança/parcela mensal.
 - **Cards da fatura separam a diferença.** Mostrar total oficial do PDF, despesas no DRE, fora
   do DRE (investimentos e outras naturezas), classificação pendente e diferença sem vínculo.
   Classificação incompleta continua sinalizada, mas não retira sozinha um lançamento do DRE:
@@ -1162,3 +1167,36 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - O total do PDF e o total conciliado precisam fechar entre si. “Despesas no DRE” é um subconjunto explicado por natureza; exibir também “Fora do DRE” em vez de forçar os dois números a serem iguais.
 - Em Lançamentos, distinguir “recebidos” (todos os registros do banco) de “contabilizados” (transações que efetivamente participam do resultado, contando um lançamento rateado apenas uma vez).
 - Cores nunca devem ser a única explicação de estado: mostrar pontos no início da linha, tooltip com todas as situações, legenda e filtros equivalentes.
+
+# Unificação da classificação e da conferência Unicred (30/08/2026)
+
+- A tela `/lancamentos/fatura` é a visão detalhada e a tela principal de Lançamentos é a visão
+  resumida dos mesmos registros. Categoria, Responsável, Projeto, Portfólio, observação e OK
+  exibidos nas duas telas devem ler a mesma fonte; não criar cópias desses campos.
+- Parcelas mensais da mesma compra explicitamente ligadas ao mesmo agregado técnico pela tabela
+  `fatura_vinculo` compartilham **categoria e dimensões**. Alterar uma delas aplica a classificação
+  às demais parcelas da família. Nunca inferir família por descrição, data ou valor. Observação e
+  OK permanecem individuais por parcela, porque documentam e assinam a cobrança daquele mês.
+- Uma linha do PDF pode mostrar vários registros técnicos agregados, todos preservados para
+  auditoria. Apenas o lançamento financeiro principal é editável e contabilizado. Clicar em
+  qualquer área não interativa da linha principal deve abrir/recolher os detalhes, igual ao botão
+  `+`; não mostrar o título redundante “Lançamentos agregados a esta linha”.
+- Titular/nome do cartão identifica quem realizou a compra e deve permanecer separado da dimensão
+  financeira Responsável. Mostrar titular e apelido/final do cartão na linha e nos detalhes.
+- A coluna de classificação deve ser silenciosa quando uma despesa comum estiver completa. Quando
+  faltar dado, listar `Faltam: ...`; investimento/bem/transferência deve explicar que fica fora do
+  DRE; rateio com naturezas diferentes deve informar que é misto.
+- A migração 29 unifica o OK temporário da fatura em `transacao.conferida`. As colunas legadas da
+  migração 28 permanecem por compatibilidade, mas não são mais lidas nem escritas pela interface.
+- O favicon continua em `static/favicon.png`. Se desaparecer no navegador após deploy, verificar
+  primeiro a referência versionada em `templates/base.html` e renovar o parâmetro de cache; não
+  recriar ou substituir a imagem sem necessidade.
+- Arquivos alterados nesta entrega: `core.py`, `views/lancamentos.py`,
+  `templates/lancamentos_fatura.html`, `static/lancamentos_fatura.js`, `templates/base.html`,
+  testes estruturais e este documento.
+- Validação obrigatória antes de publicar: suíte pytest completa, sintaxe Python/JavaScript,
+  compilação dos templates e `git diff --check`. Depois do deploy, abrir a fatura Unicred mais
+  recente, conferir um OK já existente sem alterá-lo, abrir uma linha clicando no corpo e validar
+  o favicon. Não marcar/desmarcar OK real apenas para teste.
+- Escopo pendente: aplicar esse modelo a outros cartões ou contas somente após finalizar e validar
+  a Unicred. Não generalizar automaticamente agora.

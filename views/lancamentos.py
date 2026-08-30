@@ -38,7 +38,7 @@ from core import (
     intervalo_mes_local,
     json_script,
     pode,
-    preencher_classificacao_vazia_parcelas,
+    propagar_classificacao_familia_parcelas,
     registrar_auditoria,
     registrar_e_calcular_crescimento,
     registrar_mudanca_auditoria,
@@ -783,7 +783,8 @@ def lancamentos_por_fatura():
     cur.execute(
         f"SELECT v.fatura_linha_id, v.transacao_id, v.origem, v.criado_por, "
         f"t.descricao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
-        f"t.data_transacao, t.categoria, t.observacao, t.conferida, "
+        f"t.data_transacao, t.categoria, t.observacao, t.conferida, t.conferida_por, "
+        f"t.numero_cartao_final, "
         f"COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
         f"COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
@@ -809,6 +810,7 @@ def lancamentos_por_fatura():
     cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
     dimensoes = cur.fetchall()
     obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
+    nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
     cur.execute(
         "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
         "FROM cartao.dimensao_valor ORDER BY nome;"
@@ -872,6 +874,8 @@ def lancamentos_por_fatura():
         key=lambda c: chave_alfa(cat_pt_puro(c)),
     )
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
+    cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
+    nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
 
     total_pdf = Decimal("0")
     total_dre = Decimal("0")
@@ -899,6 +903,15 @@ def lancamentos_por_fatura():
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1
+        final_cartao = next(
+            (v["numero_cartao_final"] for v in ([principal] if principal else []) + vinculos
+             if v and v.get("numero_cartao_final")),
+            None,
+        )
+        linha["cartao_final"] = final_cartao
+        linha["cartao_nome"] = (
+            nomes_cartao.get(final_cartao) or (f"final {final_cartao}" if final_cartao else None)
+        )
         if linha["multiplos"]:
             contagens["multiplos"] += 1
         # Estorno vem negativo no PDF e precisa reduzir tanto a fatura quanto
@@ -907,6 +920,7 @@ def lancamentos_por_fatura():
         if linha["pagamento"]:
             linha["estado"] = "pagamento"
             linha["classificada"] = False
+            linha["conferida"] = False
             continue
         contagens["linhas"] += 1
         total_pdf += valor_pdf
@@ -920,12 +934,28 @@ def lancamentos_por_fatura():
                 bool(principal["categoria"]) and obrigatorias.issubset({k for k, v in principal["dims"].items() if v})
             )
             linha["classificada"] = completa
+            linha["conferida"] = bool(principal["conferida"])
+            faltando = []
+            if principal["rateado"]:
+                if not rateio_valido.get(tid, False):
+                    faltando.append("Rateio")
+            else:
+                if not principal["categoria"]:
+                    faltando.append("Categoria")
+                faltando.extend(
+                    nomes_dimensoes[dim_id] for dim_id in obrigatorias
+                    if not principal["dims"].get(dim_id)
+                )
+            linha["faltando"] = faltando
             proporcao = proporcao_dre.get(tid, Decimal("0"))
             linha["valor_dre"] = valor_pdf * proporcao
             linha["valor_fora"] = valor_pdf - linha["valor_dre"]
             total_dre += linha["valor_dre"]
             total_fora += linha["valor_fora"]
             linha["natureza_estado"] = "dre" if proporcao == 1 else ("fora" if proporcao == 0 else "misto")
+            linha["natureza_rotulo"] = NATUREZAS.get(
+                principal["natureza_efetiva"], principal["natureza_efetiva"]
+            )
             if completa:
                 contagens["classificadas"] += 1
                 linha["estado"] = linha["natureza_estado"]
@@ -934,11 +964,13 @@ def lancamentos_por_fatura():
                 linha["estado"] = "classificar"
         else:
             linha["classificada"] = False
+            linha["conferida"] = False
+            linha["faltando"] = ["Vínculo"]
             total_pendente += valor_pdf
             total_sem_vinculo += valor_pdf
             linha["natureza_estado"] = "pendente"
             linha["estado"] = "sem_vinculo"
-        if linha["conferida_fatura"]:
+        if linha["conferida"]:
             contagens["conferidas"] += 1
 
     status = request.args.get("status", "todas")
@@ -948,7 +980,7 @@ def lancamentos_por_fatura():
     linhas_visiveis = [l for l in linhas if (
         status == "todas" or
         (status == "pendente_classificacao" and not l["pagamento"] and not l["classificada"]) or
-        (status == "pendente_ok" and not l["pagamento"] and not l["conferida_fatura"]) or
+        (status == "pendente_ok" and not l["pagamento"] and not l["conferida"]) or
         (status == "dre" and l.get("natureza_estado") in {"dre", "misto"}) or
         (status == "fora" and l.get("natureza_estado") in {"fora", "misto"}) or
         (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
@@ -978,83 +1010,6 @@ def lancamentos_por_fatura():
         projeto_portfolio_map=projeto_portfolio_map,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
     )
-
-
-@bp.route("/api/fatura-linha/<int:linha_id>/conferida", methods=["POST"])
-@requer("lancamentos_conferir")
-def conferir_linha_fatura(linha_id):
-    data = request.get_json(force=True) or {}
-    conferir = bool(data.get("conferida"))
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        cur.execute(
-            "SELECT id, descricao, conferida_fatura FROM cartao.fatura_linha WHERE id=%s FOR UPDATE;",
-            (linha_id,),
-        )
-        linha = cur.fetchone()
-        if not linha:
-            return jsonify({"ok": False, "erro": "Linha da fatura não encontrada."}), 404
-        if _eh_pagamento_fatura(linha["descricao"]):
-            return jsonify({"ok": False, "erro": "Pagamento anterior é informativo e não recebe OK."}), 400
-        if linha["conferida_fatura"] and not conferir and data.get("confirmar_desmarcacao") is not True:
-            return jsonify({"ok": False, "erro": "Confirme a retirada do OK da fatura."}), 409
-        if conferir:
-            cur.execute(
-                "SELECT t.transacao_id, t.categoria, COALESCE(t.valor_brl,t.valor_original) AS valor "
-                "FROM cartao.fatura_vinculo v JOIN cartao.transacao t ON t.transacao_id=v.transacao_id "
-                "JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
-                "WHERE v.fatura_linha_id=%s AND COALESCE(t.duplicada,false)=false "
-                "AND t.substituido_por IS NULL AND COALESCE(t.somente_conciliacao,false)=false "
-                "ORDER BY (v.transacao_id=fl.transacao_id_criado) DESC, "
-                "ABS(ABS(COALESCE(t.valor_brl,t.valor_original))-ABS(fl.valor)), v.id LIMIT 1;",
-                (linha_id,),
-            )
-            principal = cur.fetchone()
-            if not principal:
-                return jsonify({"ok": False, "erro": "Vincule um lançamento contabilizado antes de marcar OK."}), 400
-            cur.execute(
-                "SELECT id, valor_brl, categoria FROM cartao.transacao_rateio WHERE transacao_id=%s ORDER BY ordem,id;",
-                (principal["transacao_id"],),
-            )
-            partes = cur.fetchall()
-            if partes:
-                soma = sum((abs(Decimal(str(p["valor_brl"] or 0))) for p in partes), Decimal("0"))
-                ids_partes = [p["id"] for p in partes]
-                cur.execute(
-                    "SELECT 1 FROM cartao.transacao_rateio r CROSS JOIN cartao.dimensao d "
-                    "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
-                    "WHERE r.id IN %s AND d.obrigatoria=true AND rd.valor_id IS NULL LIMIT 1;",
-                    (tuple(ids_partes),),
-                )
-                incompleto = (
-                    len(partes) < 2 or soma != abs(Decimal(str(principal["valor"] or 0)))
-                    or any(not p["categoria"] for p in partes) or bool(cur.fetchone())
-                )
-            else:
-                cur.execute(
-                    "SELECT 1 FROM cartao.dimensao d LEFT JOIN cartao.transacao_dimensao td "
-                    "ON td.dimensao_id=d.id AND td.transacao_id=%s "
-                    "WHERE d.obrigatoria=true AND td.valor_id IS NULL LIMIT 1;",
-                    (principal["transacao_id"],),
-                )
-                incompleto = not principal["categoria"] or bool(cur.fetchone())
-            if incompleto:
-                return jsonify({"ok": False, "erro": "Complete categoria e campos obrigatórios antes do OK da fatura."}), 400
-        cur.execute(
-            "UPDATE cartao.fatura_linha SET conferida_fatura=%s, "
-            "conferida_fatura_por=CASE WHEN %s THEN %s ELSE NULL END, "
-            "conferida_fatura_em=CASE WHEN %s THEN now() ELSE NULL END WHERE id=%s;",
-            (conferir, conferir, session.get("user"), conferir, linha_id),
-        )
-        conn.commit()
-        registrar_auditoria(
-            "alteracao", "fatura_linha.conferida", sucesso=True,
-            detalhes={"linha_id": linha_id, "conferida": conferir},
-        )
-        return jsonify({"ok": True, "conferida": conferir, "usuario": session.get("user")})
-    finally:
-        fechar_recursos_banco(conn, cur)
 
 
 @bp.route("/api/lancamento-manual", methods=["POST"])
@@ -1542,9 +1497,15 @@ def update_transacao(transacao_id):
             f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s;",
             valores + [transacao_id],
         )
-    classificacoes_herdadas = {"categorias": 0, "dimensoes": 0}
-    if data.get("categoria") or any(item[1] is not None for item in dimensoes_validadas):
-        classificacoes_herdadas = preencher_classificacao_vazia_parcelas(cur)
+    classificacoes_compartilhadas = {"membros": 0, "categorias": 0, "dimensoes": 0}
+    if "categoria" in data or dimensoes_validadas:
+        classificacoes_compartilhadas = propagar_classificacao_familia_parcelas(
+            cur,
+            transacao_id,
+            categoria_enviada="categoria" in data,
+            categoria=data.get("categoria") or None,
+            dimensoes={item[0]: item[1] for item in dimensoes_validadas},
+        )
     conn.commit()
     cur.close()
     conn.close()
@@ -1574,11 +1535,14 @@ def update_transacao(transacao_id):
             {"id": valor_id_antigo, "nome": valor_antigo} if valor_id_antigo else None,
             {"id": valor_id, "nome": valor_novo} if valor_id else None,
         )
-    if classificacoes_herdadas["categorias"] or classificacoes_herdadas["dimensoes"]:
+    if (
+        classificacoes_compartilhadas["categorias"]
+        or classificacoes_compartilhadas["dimensoes"]
+    ):
         registrar_mudanca_auditoria(
-            "Classificações herdadas por parcelas vinculadas",
+            "Classificação compartilhada entre parcelas vinculadas",
             None,
-            classificacoes_herdadas,
+            classificacoes_compartilhadas,
         )
     return jsonify({
         "ok": True,

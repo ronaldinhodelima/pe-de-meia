@@ -137,7 +137,6 @@ def test_todas_as_rotas_continuam_registradas():
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/lancamentos/fatura",
         "/api/fatura-linha/<int:linha_id>/criar-lancamento",
-        "/api/fatura-linha/<int:linha_id>/conferida",
         "/api/fatura-linha/marcar-conferida-repeticao", "/relatorios/fatura/<int:fatura_id>/pdf",
         "/api/fatura/<int:fatura_id>/vincular-automatico",
         "/api/faturas/sincronizar-parcelas",
@@ -154,19 +153,20 @@ def test_todas_as_rotas_continuam_registradas():
     assert rotas == esperadas
 
 
-def test_visao_por_fatura_separa_ok_e_mantem_agregados():
-    """A conferencia contabil nao pode reutilizar o OK do registro do Pluggy,
-    nem esconder os registros tecnicos que explicam uma linha do PDF."""
+def test_visao_por_fatura_reutiliza_ok_do_lancamento_e_mantem_agregados():
+    """As duas telas assinam o mesmo lancamento, sem esconder a auditoria."""
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-    assert 'conferida_fatura' in view
+    assert 'linha["conferida"] = bool(principal["conferida"])' in view
     assert 'data-expande="{{ linha.id }}"' in template
-    assert "Lançamentos agregados a esta linha" in template
+    assert "Lançamentos agregados a esta linha" not in template
     assert "contabilizado e editável" in template
     assert "registro técnico · somente leitura" in template
-    assert "data-ok-fatura" in template
-    assert "/api/fatura-linha/" in js and "/conferida" in js
+    assert "data-ok-lancamento" in template
+    assert "data-toggle-linha" in template
+    assert "/api/transacao/" in js
+    assert "dataset.okLancamento" in js
 
 
 def test_origem_unica_de_cartao_abre_fatura_mais_recente():
@@ -342,6 +342,22 @@ def test_classificacao_de_parcela_so_preenche_vazios_e_exige_consenso():
     assert "destino.categoria IS NULL" in trecho
     assert "HAVING COUNT(DISTINCT td.valor_id)=1" in trecho
     assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+
+
+def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = core.split("def propagar_classificacao_familia_parcelas", 1)[1].split(
+        "def calcular_totais_dre_fatura", 1
+    )[0]
+
+    assert "fatura_vinculo" in trecho
+    assert "somente_conciliacao" in trecho
+    assert "transacao_id_criado" in trecho
+    assert "t.descricao" not in trecho and "fl.descricao" not in trecho
+    assert "data_transacao" not in trecho
+    assert "SET conferida" not in trecho and "SET observacao" not in trecho
+    assert "propagar_classificacao_familia_parcelas(" in view
 
 
 def test_resumo_conta_transacao_rateada_uma_vez_e_status_tem_filtros_explicitos():
