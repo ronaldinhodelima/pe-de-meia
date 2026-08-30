@@ -670,7 +670,7 @@ futuras a partir do número de parcelas impresso na fatura.
 ## Revisão técnica do conjunto publicado — 29/08/2026
 
 Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões, upload e precisão
-monetária, com suíte local de **212 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
+monetária, com suíte local de **214 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
 preservados:
 
 - a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
@@ -691,10 +691,10 @@ Pontos de atenção encontrados, por prioridade:
 2. **Resolvido — PDF limitado e validado antes de processar.** O servidor recusa acima de 10 MB,
    conteúdo sem assinatura `%PDF-` e documentos acima de 50 páginas. Há mensagem clara e testes
    inclusive para o caminho 413; o original continua armazenado somente após o parser aceitar.
-3. **Parcialmente resolvido — ampliar testes automatizados do parser.** Já há teste sintético de
-   referência, vencimento, titular, parcela, valor e estorno, além das travas de entrada. Ainda
-   faltam casos de moeda estrangeira e variações de múltiplas páginas; a validação dos PDFs reais
-   continua necessária. Alteração de layout da Unicred deve falhar no CI.
+3. **Resolvido no alcance atual — testes automatizados do parser ampliados.** Há casos sintéticos
+   de referência, vencimento, titular, parcela, valor, estorno, compra internacional com conversão
+   em três linhas e lançamentos atravessando várias páginas/virada de ano, além das travas de
+   entrada. A validação dos PDFs reais continua necessária sempre que a Unicred mudar o layout.
 4. **Resolvido — conciliação usa `Decimal`/centavos exatos.** O parser preserva `Decimal` até o
    banco; matcher, tolerâncias, estornos e totais trabalham com inteiros em centavos. `float` só
    aparece na saída para manter o contrato numérico das telas/APIs. Há testes de erro binário,
@@ -1019,7 +1019,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **212 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **214 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
@@ -1027,8 +1027,10 @@ auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com Pos
 Postgres), os casos reais que quebraram a conciliação: parcela 1:1 dentro do ciclo, transação já
 vinculada que não pode ser roubada, parcelamento agregado que PODE ser reusado, "Pagamento
 Recebido" fora das duas somas, encadeamento das datas e precisão monetária em centavos. **Foi
-escrevendo esses testes que dois
-bugs latentes apareceram** — ver "Lições da sessão de 29/08/2026".
+escrevendo esses testes que dois bugs latentes apareceram** — ver "Lições da sessão de 29/08/2026".
+
+`tests/test_fatura_parser.py` cobre também compra internacional com detalhes em três linhas e
+PDF com lançamentos distribuídos em páginas diferentes, mantendo titular, valor em BRL e ano.
 
 Validação do parser contra dado real (fazer de novo se mexer em `fatura_unicred.py`): parsear os
 PDFs e conferir que a soma das linhas, sem "Pagamento Recebido", bate com o total impresso. Em

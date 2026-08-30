@@ -14,6 +14,33 @@ import fatura_unicred
 from fatura_unicred import FaturaInvalida, MAX_PAGINAS_FATURA, extrair_fatura
 
 
+class PaginaFake:
+    def __init__(self, texto="", palavras=None):
+        self._texto = texto
+        self._palavras = palavras or []
+
+    def extract_text(self):
+        return self._texto
+
+    def extract_words(self, **_kwargs):
+        return self._palavras
+
+
+class PDFFake:
+    def __init__(self, paginas):
+        self.pages = paginas
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+def palavra(texto, x0, top):
+    return {"text": texto, "x0": x0, "top": top}
+
+
 def test_upload_global_tem_limite_de_10_mb():
     assert app.app.config["MAX_CONTENT_LENGTH"] == 10 * 1024 * 1024
 
@@ -40,20 +67,6 @@ def test_recusa_pdf_com_paginas_demais(monkeypatch):
 
 
 def test_extrai_layout_unicred_sintetico(monkeypatch):
-    class Pagina:
-        def __init__(self, texto="", palavras=None):
-            self._texto = texto
-            self._palavras = palavras or []
-
-        def extract_text(self):
-            return self._texto
-
-        def extract_words(self, **_kwargs):
-            return self._palavras
-
-    def palavra(texto, x0, top):
-        return {"text": texto, "x0": x0, "top": top}
-
     palavras = [
         palavra("1234**.****.5678", 150, 20),
         palavra("RONALDO", 150, 130),
@@ -69,20 +82,12 @@ def test_extrai_layout_unicred_sintetico(monkeypatch):
         palavra("-10,00", 500, 200),
     ]
 
-    class PDF:
-        pages = [
-            Pagina("REF.: ago/2026"),
-            Pagina("SALDO TOTAL = R$ 113,45\nVENCIMENTO: 24 AGO 2026"),
-            Pagina(palavras=palavras),
-        ]
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-    monkeypatch.setattr(fatura_unicred.pdfplumber, "open", lambda _arquivo: PDF())
+    pdf = PDFFake([
+        PaginaFake("REF.: ago/2026"),
+        PaginaFake("SALDO TOTAL = R$ 113,45\nVENCIMENTO: 24 AGO 2026"),
+        PaginaFake(palavras=palavras),
+    ])
+    monkeypatch.setattr(fatura_unicred.pdfplumber, "open", lambda _arquivo: pdf)
 
     resultado = extrair_fatura(io.BytesIO(b"%PDF-conteudo-sintetico"))
     assert resultado["mes_referencia"] == 8
@@ -110,6 +115,92 @@ def test_extrai_layout_unicred_sintetico(monkeypatch):
             "valor": Decimal("-10.00"),
             "titular": "Ronaldo De Lima",
         },
+    ]
+
+
+def test_compra_internacional_em_tres_linhas_usa_so_o_valor_em_reais(monkeypatch):
+    """A conversão vem como detalhes abaixo da compra, mas forma uma só linha.
+
+    O valor que entra no sistema é o da coluna direita, já convertido em BRL;
+    moeda, valor estrangeiro e cotação permanecem apenas na descrição.
+    """
+    palavras = [
+        palavra("RONALDO", 150, 130),
+        palavra("DE", 225, 130),
+        palavra("LIMA", 255, 130),
+        palavra("DATA", 20, 150),
+        palavra("18/ago", 20, 180),
+        palavra("ANTHROPIC*", 150, 180),
+        palavra("CLAUDE", 235, 180),
+        palavra("SUB", 295, 180),
+        palavra("123,45", 500, 180),
+        palavra("MOEDA:", 150, 186),
+        palavra("USD", 215, 186),
+        palavra("20.00", 260, 186),
+        palavra("COTACAO:", 150, 192),
+        palavra("6,1725", 230, 192),
+    ]
+    pdf = PDFFake([
+        PaginaFake("REF.: ago/2026"),
+        PaginaFake("SALDO TOTAL = R$ 123,45\nVENCIMENTO: 24 AGO 2026"),
+        PaginaFake(palavras=palavras),
+    ])
+    monkeypatch.setattr(fatura_unicred.pdfplumber, "open", lambda _arquivo: pdf)
+
+    resultado = extrair_fatura(io.BytesIO(b"%PDF-internacional"))
+
+    assert len(resultado["linhas"]) == 1
+    linha = resultado["linhas"][0]
+    assert linha["valor"] == Decimal("123.45")
+    assert sum(l["valor"] for l in resultado["linhas"]) == resultado["total"]
+    assert linha["descricao"] == (
+        "ANTHROPIC* CLAUDE SUB MOEDA: USD 20.00 COTACAO: 6,1725"
+    )
+
+
+def test_extrai_lancamentos_de_varias_paginas_e_mantem_titular(monkeypatch):
+    """Cada página de lançamentos precisa ser lida, sem repetir ou perder linhas."""
+    pagina_ronaldo = [
+        palavra("1234**.****.5678", 150, 20),
+        palavra("RONALDO", 150, 130),
+        palavra("DE", 225, 130),
+        palavra("LIMA", 255, 130),
+        palavra("DATA", 20, 150),
+        palavra("30/dez", 20, 180),
+        palavra("LOJA", 150, 180),
+        palavra("A", 205, 180),
+        palavra("10,01", 500, 180),
+    ]
+    # A página seguinte não repete o nome do titular: o leitor deve manter o
+    # último titular identificado, como ocorre em continuações do mesmo cartão.
+    pagina_continuacao = [
+        palavra("DATA", 20, 150),
+        palavra("02/jan", 20, 180),
+        palavra("LOJA", 150, 180),
+        palavra("B", 205, 180),
+        palavra("20,02", 500, 180),
+        palavra("03/jan", 20, 200),
+        palavra("LOJA", 150, 200),
+        palavra("C", 205, 200),
+        palavra("30,03", 500, 200),
+    ]
+    pdf = PDFFake([
+        PaginaFake("REF.: jan/2026"),
+        PaginaFake("SALDO TOTAL = R$ 60,06\nVENCIMENTO: 22 JAN 2026"),
+        PaginaFake(palavras=pagina_ronaldo),
+        PaginaFake(palavras=pagina_continuacao),
+    ])
+    monkeypatch.setattr(fatura_unicred.pdfplumber, "open", lambda _arquivo: pdf)
+
+    resultado = extrair_fatura(io.BytesIO(b"%PDF-multiplas-paginas"))
+
+    assert resultado["cartao_final4"] == "5678"
+    assert sum(l["valor"] for l in resultado["linhas"]) == resultado["total"]
+    assert [(l["data"].isoformat(), l["descricao"], l["valor"], l["titular"])
+            for l in resultado["linhas"]] == [
+        ("2025-12-30", "LOJA A", Decimal("10.01"), "Ronaldo De Lima"),
+        ("2026-01-02", "LOJA B", Decimal("20.02"), "Ronaldo De Lima"),
+        ("2026-01-03", "LOJA C", Decimal("30.03"), "Ronaldo De Lima"),
     ]
 
 
