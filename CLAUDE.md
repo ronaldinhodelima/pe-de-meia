@@ -1,7 +1,9 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 29/08/2026. Estado funcional de referência: migração **24** (regime de
-caixa para parcelamento). Confirmar `git log` e produção ao retomar.
+**Última atualização:** 29/08/2026. Estado funcional de referência: commit `75fc4e7`,
+documentação consolidada até `7c1ce99` e schema esperado na migração **25**. O histórico registra
+esse conjunto como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy
+ativo no Coolify e `cartao.schema_version` antes de qualquer nova intervenção.
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
 crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
@@ -109,6 +111,8 @@ Na prática:
 - `conta` — contas dentro de cada item (conta corrente, cartão de crédito, "manual"/dinheiro).
 - `transacao` — lançamentos (chave: `transacao_id` do Pluggy, evita duplicidade).
 - `sync_log` — auditoria das rodadas de sincronização.
+- `metrica_diaria` — fotografia diária da quantidade total e conferida de lançamentos, usada
+  pelo card de crescimento da tela principal.
 - `categoria_natureza` — natureza contábil de cada categoria (despesa/receita/investimento/
   bem/transferência/fluxo) — base do DRE.
 - `categoria` — overrides de nome (renomeações feitas pelo usuário em `/categorias`).
@@ -124,11 +128,16 @@ Na prática:
 - `regra_classificacao` / `regra_dimensao_valor` — regras automáticas de categorização.
 - `dimensao` / `dimensao_valor` / `transacao_dimensao` — dimensões livres (ex: Responsável:
   Ronaldo/Andrea/Amanda/Compartilhado, Projeto, etc.) além da categoria.
-  `dimensao_valor` também guarda `teto_mensal` / `teto_anual` (teto de gasto por valor).
+  `dimensao_valor` também guarda `teto_mensal` / `teto_anual` (teto de gasto por valor) e o
+  vínculo opcional de um Projeto com seu Portfólio padrão.
 - `transacao_rateio` / `transacao_rateio_dimensao` — partes internas de um lançamento bancário
   que pertence a mais de uma classificação. O lançamento original do Pluggy é preservado;
   as partes precisam fechar exatamente o seu valor e o substituem somente nos totais e
   relatórios, por meio das views `lancamento_financeiro*`.
+- `fatura_importada` / `fatura_linha` — histórico das faturas Unicred importadas, linhas
+  extraídas e PDF original armazenado no PostgreSQL.
+- `fatura_vinculo` — relação persistente N:N entre linha da fatura e lançamento. Guarda origem
+  automática, manual ou criada da própria fatura e impede que a conciliação mude sozinha.
 - `schema_version` — controle de migração (ver `migrate()`). Cada bloco `if versao_atual < N`
   roda uma vez só; **não reescrever migração já aplicada** — criaria divergência de schema.
 
@@ -280,13 +289,15 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 4. Em tela com número (DRE, relatórios), **anotar os valores em produção antes do deploy** e
    comparar depois. Migração de tela não pode mexer em número.
 
-## Estado atual em produção — 25/08/2026
+## Estado registrado em produção — 29/08/2026
 
 Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O schema está na migração **15**. A última sequência funcional entregue cobre auditoria,
-regras por valor, edição completa dos detalhes, histórico do navegador e rateio financeiro.
-Não há implementação de código conhecida aguardando commit; as pendências atuais são sobretudo
-conciliação/classificação de dados e decisões operacionais listadas abaixo.
+O código espera schema na migração **25**. Entre `cfa183e` e `7c1ce99` foram publicados 75
+commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
+primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
+regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
+Não há implementação versionada conhecida aguardando commit; as pendências atuais são revisão
+de permissões, robustez do import de PDF e conciliação/classificação das outras origens.
 
 ### Lançamentos e experiência de uso
 
@@ -306,6 +317,14 @@ conciliação/classificação de dados e decisões operacionais listadas abaixo.
 - Menu Colunas permanece aberto enquanto marca/desmarca itens e fecha ao clicar fora. Projeto e
   Portfólio permitem cadastro rápido sem sair da tela. Trocar mês por digitação, calendário ou
   setas recarrega a lista. Filtros/meses criam histórico real para o botão Voltar do navegador.
+- O período de Lançamentos aceita consultar o ano inteiro. O card antes chamado **Conferidas**
+  agora se chama **Lançamentos** e usa `metrica_diaria` para mostrar crescimento do total.
+- Os detalhes mostram quando o lançamento apareceu pela primeira vez e a última sincronização.
+  Se o Pluggy mudar valor ou data de uma linha já conferida, o worker preserva o OK e grava um
+  alerta de auditoria; ele não desfaz silenciosamente a assinatura humana.
+- Dimensões e seus valores não podem ser excluídos enquanto houver lançamentos vinculados. A
+  tela informa a quantidade e permite abrir a lista dos lançamentos que precisam ser
+  reclassificados primeiro.
 - Favicon correto é a meia com fundo transparente; o arquivo HTML local cru mostra Jinja sem
   processar e **não serve como teste do site**. Sempre validar pela URL Flask/produção.
 
@@ -544,12 +563,13 @@ ainda vão aparecer, e marcá-lo apagaria compra real.
 74 parcelas repetidas + 35 ecos vinculados via `substituido_por`. Despesa de 2026 caiu de
 R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 não mudou: o fenômeno só existe a
 partir de **abril/2026**, quando o Pluggy mudou o comportamento nessa conta e passou a mandar as
-mensais além do agregado. Sobraram 11 lançamentos para revisão humana (R$ 1.678,72) e 7
-aguardando a próxima fatura (R$ 1.232,52).
+mensais além do agregado. Naquele estágio intermediário sobraram 11 lançamentos para revisão
+humana (R$ 1.678,72) e 7 aguardando a próxima fatura (R$ 1.232,52); as etapas posteriores
+resolveram o restante e encerraram a tela de duplicidades sem pendência conhecida.
 
-## Descoberta de 29/08/2026: R$ 9.907,69 contados em dobro (a decidir)
+## Incidente de parcelamentos contados em dobro — identificado e resolvido em 29/08/2026
 
-Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estão no Pluggy
+Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estavam no Pluggy
 com as duas representações ao mesmo tempo**: a compra inteira (valor cheio) E as cobranças
 mensais. Como o agregado já cobre todas as parcelas, cada mensal por cima entra duas vezes na
 despesa e **infla o DRE**.
@@ -572,14 +592,16 @@ Caso exemplar rastreado ponta a ponta — **OTICA CALLIARI, Ronaldo, 10× R$316 
 comprado em 02/11/2025. A fatura cobrou as 10 parcelas certinho. O Pluggy mandou o agregado de
 R$3.160 **mais** R$316 em 12/06, 12/07 e 12/08. Total no sistema: R$4.108. Sobrando R$948.
 
-**Anomalia separada, precisa do olho do Ronaldo:** FARM GEREMIAS (Andrea) 3× R$63,30 tem **dois
-agregados** (26/11/2025 e 10/07/2026, ambos R$189,90) e linhas duplicadas nas faturas. Pode ser
-duas compras iguais de verdade ou duplicidade da operadora.
+**Anomalia separada revisada durante a conciliação:** FARM GEREMIAS (Andrea) 3× R$63,30 tinha
+**dois agregados** (26/11/2025 e 10/07/2026, ambos R$189,90) e linhas duplicadas nas faturas.
+Foi um dos casos que exigiram decisão humana; consultar o vínculo e o log, não refazer por
+heurística se o mesmo padrão reaparecer.
 
-**Nada foi marcado como duplicado.** Marcação de duplicidade é decisão do usuário — regra do
-projeto. O caminho contabilmente correto discutido: **manter o agregado e marcar as mensais/ecos
-como duplicados**, porque o agregado é o valor total real; manter as mensais deixaria a despesa
-incompleta (só existem 1 a 3 mensais de parcelamentos de 6, 10, 15 parcelas).
+O primeiro levantamento encontrou R$ 9.907,69, mas estava incompleto: parcelamentos diferentes
+do mesmo lojista e com o mesmo número de parcelas colidiam na chave. Depois de incluir o valor da
+parcela, o excesso real ficou em **R$ 18.915,71**. A solução final não usa `duplicada`: 74 parcelas
+repetidas e 35 ecos foram ligados ao lançamento que os substitui por `substituido_por`. Assim o
+mesmo evento conta uma vez, continua visível e mantém uma relação auditável e reversível.
 
 **Matcher já corrigido (commit `87a664b`):** quando o parcelamento TEM agregado, todas as linhas
 do grupo apontam para ele (`_melhor_agregado` roda antes do casamento 1:1). Antes algumas
@@ -589,9 +611,10 @@ duplicata atrás de um vínculo. Com a correção os órfãos de agosto/2026 sub
 existente: `POST /api/fatura/<id>/vincular-automatico` com `{"refazer": true}` — apaga só
 `origem='automatico'`, nunca o manual.
 
-**Por que o regime de caixa não mudou esse valor:** as parcelas geradas pela fatura substituem o
-agregado (que saiu do resultado), então o total do parcelamento continua correto; as mensais e
-ecos continuam por cima. O excesso segue exatamente R$ 9.907,69 até o usuário marcar.
+**Por que o regime de caixa sozinho não resolvia:** as parcelas geradas pela fatura substituem o
+agregado (que saiu do resultado), mas as mensais e ecos do Pluggy continuavam por cima. Foi o
+vínculo `substituido_por`, e não uma exclusão ou marca genérica de duplicidade, que retirou os
+R$ 18.915,71 excedentes do resultado.
 
 ## Cobranças que só existem na fatura (aplicado em 29/08/2026)
 
@@ -635,6 +658,44 @@ Exemplo: `08/08/2026 Parcelado Lojista - SESI FARMACIA R$ 235,48` (6× R$ 39,25)
 em agosto. Se algum dia incomodar no fechamento mensal, dá para antecipar gerando as parcelas
 futuras a partir do número de parcelas impresso na fatura.
 
+## Revisão técnica do conjunto publicado — 29/08/2026
+
+Revisão feita sobre `cfa183e..7c1ce99`: 75 commits, 23 arquivos alterados e suíte local com
+**198 testes aprovados e 6 ignorados**. Pontos positivos que devem ser preservados:
+
+- a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
+- import, criação de parcelas e reenvio do mesmo PDF têm travas de idempotência;
+- `somente_conciliacao`, `substituido_por` e `duplicada` representam causas diferentes, em vez
+  de esconder tudo sob uma única marca;
+- a view financeira centraliza o que entra no DRE, reduzindo o risco de cada relatório calcular
+  um número diferente;
+- o Pluggy continua sem autoridade para sobrescrever classificação e OK humanos;
+- houve melhoria de auditoria, testes sintéticos dos casos reais e proteção contra exclusão de
+  dimensões ainda em uso.
+
+Pontos de atenção encontrados, por prioridade:
+
+1. **Alta — separar “ver relatório” de “editar conciliação”.** O perfil `leitura` recebe a
+   permissão `relatorios`, descrita como “Ver relatórios”, mas essa mesma permissão hoje autoriza
+   importar/reimportar PDF, sincronizar parcelas, refazer vínculos, vincular/desvincular linhas e
+   marcar revisão de cobrança repetida. Algumas dessas ações alteram diretamente o DRE. Criar
+   uma permissão própria, por exemplo `conciliacao_editar`, mantendo GET/consulta em `relatorios`.
+2. **Média — limitar e validar o PDF antes de processar.** O upload usa `arquivo.read()` sem
+   limite explícito e sem conferir assinatura/tipo real do arquivo. Definir tamanho máximo,
+   validar `%PDF`, quantidade razoável de páginas e rejeitar cedo arquivos fora do padrão; isso
+   também evita crescimento acidental do PostgreSQL, onde o original fica guardado.
+3. **Média — criar testes automatizados do parser.** Os testes novos cobrem muito bem o matcher,
+   mas `extrair_fatura()` ainda depende da validação manual dos PDFs reais. Manter amostras
+   sintéticas/anonimizadas de layout e testes de referência, vencimento, parcelas, estorno,
+   moeda estrangeira e soma centavo a centavo. Alteração de layout da Unicred deve falhar no CI.
+4. **Média — trocar `float` por `Decimal`/centavos na conciliação.** PostgreSQL já usa `numeric`,
+   mas parser e matcher convertem valores para `float` em vários pontos. Os `round(..., 2)`
+   reduzem o risco, porém uma rotina financeira deve comparar e somar em centavos exatos.
+5. **Operacional — manter validação pós-deploy e planejar staging.** A suíte está saudável, mas
+   `main` publica direto no sistema familiar. Até existir staging, qualquer mudança em matcher,
+   migração ou view financeira precisa registrar os totais antes/depois e validar as telas
+   logadas após a troca do container.
+
 ## Pendências conhecidas
 
 ### Ação do usuário (nada disso o Claude pode fazer sozinho)
@@ -659,8 +720,8 @@ Levantado em 22/08/2026, a ajustar depois.
 Lúcia, 21/11/2025 — conferido na conta, ocorreu uma vez só). A tela de
 Lançamentos agora avisa quando encontra repetição no mês aberto, mas **os meses
 anteriores nunca foram varridos**. Vale uma passada mês a mês.
-Ver também a descoberta de 29/08/2026 (R$ 9.907,69 em parcelamento contado em dobro), que é
-um caso de duplicidade sistemática, com padrão identificado, esperando decisão.
+O caso sistemático dos parcelamentos Unicred de 2026 foi resolvido separadamente com
+`substituido_por`; não confundir com estas suspeitas históricas ainda não revisadas.
 
 **Horários 00:00 e diferença de três horas.** Em Conta Corrente Ronaldo/Andrea há movimentos
 que chegam às 00:00 e, em agosto, suspeitas com diferença de 3h. Não usar horário isoladamente
@@ -691,8 +752,6 @@ Próximas frentes, nesta ordem:
 4. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria (fora os
    tipos com padrão conferido) e passaram por `aplicar_regras()`. O que sobrou sem categoria
    entra no DRE como despesa por padrão — revisar.
-
-Conciliação/classificação de lançamento (independente do acima):
 
 ### Ideias guardadas (decidir quando fizer sentido)
 
