@@ -2324,6 +2324,25 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (33);")
             conn.commit()
 
+        if versao_atual < 34:
+            # A classificacao financeira so esta completa com a cadeia inteira:
+            # Responsavel -> Projeto -> Portfolio, alem da Categoria. OK novo
+            # continua bloqueado enquanto qualquer elo estiver vazio.
+            cur.execute(
+                "UPDATE cartao.dimensao SET obrigatoria=true WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio') "
+                "AND COALESCE(obrigatoria,false)=false;"
+            )
+            obrigatorias_ativadas = max(getattr(cur, "rowcount", 0) or 0, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Classificacao completa obrigatoria',"
+                "jsonb_build_object('versao',34,'dimensoes_ativadas',%s));",
+                (obrigatorias_ativadas,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (34);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

@@ -1299,12 +1299,19 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Categoria e todas as dimensões marcadas como obrigatórias precisam estar preenchidas para um
   novo OK. Rateio exige ao menos duas partes, categorias/dimensões completas e soma exata. Editar
   um lançamento que já estava OK nunca o desmarca automaticamente.
+- Categoria, Responsável, Projeto e Portfólio formam a classificação mínima obrigatória. Campo
+  ausente recebe a mesma borda/fundo de alerta e aparece nominalmente em `Faltam: ...`; um novo OK
+  fica bloqueado até completar os quatro.
 - Cada registro agregado mostra sua fonte: `F` significa transação criada pela fatura em PDF e
   `P` significa registro trazido pelo Pluggy; o tooltip escreve o nome completo. A linha principal
   continua sendo a única classificada. Registros técnicos são leitura/auditoria.
 - “Mais informações da transação” existe em todo registro agregado, inclusive registro técnico ou
   lançamento rateado. Informação interna não pode ficar inacessível só porque aquele registro não
   é o principal editável.
+- Não repetir uma linha textual “Mais informações...” sob cada registro. Usar uma seta discreta no
+  fim da descrição; ela abre o painel anexado àquele mesmo registro. O ID deve quebrar linha dentro
+  de uma área própria e nunca sobrepor Status, Tipo ou Valor. Os selos `P` e `F` usam tooltip CSS
+  imediato no mouse/foco, sem depender da demora do atributo nativo `title`.
 - O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
   transação”, mostrar ID, fonte, status, tipo, valor/moeda original, parcela, horários de
   sincronização, assinatura do OK e, se existir, a informação interna do sistema.

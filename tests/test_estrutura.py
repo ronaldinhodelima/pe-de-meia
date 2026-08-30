@@ -255,9 +255,11 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     assert "Ciclo {{ fatura.periodo_inicio.strftime" in template
     assert "vence {{ fatura.vencimento.strftime" in template
-    assert 'title="{{ v.fonte_nome }}"' in template
-    assert "Mais informações da transação" in template
-    assert template.index('{% endif %}\n      <details class="detalhes-tecnicos registro-detalhes"') > template.index("data-editor=")
+    assert 'data-tip="{{ v.fonte_nome }}"' in template
+    assert "Mais informações da transação" not in template
+    assert "data-info-target" in template and "transacao-info" in template
+    assert "detalhe-id" in template and "overflow-wrap:anywhere" in template
+    assert "fonte-badge:hover::after" in template and 'data-tip="{{ v.fonte_nome }}"' in template
     assert 'v["fonte"] = "F"' in view
     assert 'v["fonte_nome"]' in view
 
@@ -266,6 +268,10 @@ def test_categoria_tambem_e_obrigatoria_para_novo_ok():
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     trecho = view.split("def update_transacao", 1)[1]
     assert 'faltando.append("categoria")' in trecho
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "if versao_atual < 34:" in core
+    assert "Classificacao completa obrigatoria" in core
+    assert "'responsável','responsavel','projeto','portfólio','portfolio'" in core
 
 
 def test_tojson_nunca_dentro_de_atributo_html():

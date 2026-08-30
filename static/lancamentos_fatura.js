@@ -42,6 +42,16 @@
     if (evento.target.closest('button,input,select,textarea,a,label')) return;
     alternarLinha(linha.dataset.toggleLinha);
   }));
+  document.addEventListener('click', evento => {
+    const botao = evento.target.closest('[data-info-target]');
+    if (!botao) return;
+    evento.stopPropagation();
+    const painel = document.getElementById(botao.dataset.infoTarget);
+    if (!painel) return;
+    painel.hidden = !painel.hidden;
+    botao.setAttribute('aria-expanded', painel.hidden ? 'false' : 'true');
+    botao.title = painel.hidden ? 'Abrir detalhes da transação' : 'Fechar detalhes da transação';
+  });
 
   document.querySelectorAll('[data-ok-lancamento]').forEach(campo => campo.addEventListener('change', async () => {
     const novo = campo.checked;
@@ -87,6 +97,17 @@
     return payload;
   }
 
+  function atualizarDestaquesObrigatorios(editor) {
+    const categoria = editor.querySelector('[data-campo="categoria"]');
+    if (categoria) categoria.classList.toggle('classificacao-faltando', !categoria.value);
+    const obrigatorias = new Set((config.dimensoes_obrigatorias || []).map(String));
+    editor.querySelectorAll('[data-dimensao]').forEach(campo => {
+      campo.classList.toggle(
+        'classificacao-faltando', obrigatorias.has(String(campo.dataset.dimensao)) && !campo.value
+      );
+    });
+  }
+
   async function atualizarResumoPagina() {
     const resp = await fetch(window.location.href, {headers: {'X-Parcial': '1'}, cache: 'no-store'});
     if (!resp.ok) return;
@@ -128,6 +149,7 @@
     const id = editor.dataset.editor;
     const aviso = editor.querySelector('[data-status]');
     const payload = payloadEditor(editor, alterado);
+    atualizarDestaquesObrigatorios(editor);
     const versao = String((Number(editor.dataset.versaoSalva || 0) + 1));
     editor.dataset.versaoSalva = versao;
     const anterior = filaSalvar[id] || Promise.resolve();
@@ -181,6 +203,7 @@
 
   const temporizadores = new WeakMap();
   document.querySelectorAll('[data-editor]').forEach(editor => {
+    atualizarDestaquesObrigatorios(editor);
     editor.querySelectorAll('select[data-campo],select[data-dimensao]').forEach(campo => {
       campo.addEventListener('focus', () => { campo.dataset.valorAnterior = campo.value; });
       campo.addEventListener('change', () => {
