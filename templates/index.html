@@ -33,10 +33,15 @@
     <label>Status</label>
     <select id="statusInput" onchange="aplicarFiltros()">
       <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
-      <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes</option>
+      <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes de conferência</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
+      <option value="pendente_banco" {{ 'selected' if status == 'pendente_banco' }}>Pendentes no banco</option>
       <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
-      <option value="duplicada" {{ 'selected' if status == 'duplicada' }}>Duplicados</option>
+      <option value="duplicada" {{ 'selected' if status == 'duplicada' }}>Duplicados confirmados</option>
+      <option value="fora_resultado" {{ 'selected' if status == 'fora_resultado' }}>Fora do resultado</option>
+      <option value="somente_conciliacao" {{ 'selected' if status == 'somente_conciliacao' }}>Somente conciliação</option>
+      <option value="substituido" {{ 'selected' if status == 'substituido' }}>Substituídos por outro</option>
+      <option value="rateio_incompleto" {{ 'selected' if status == 'rateio_incompleto' }}>Rateio incompleto</option>
     </select>
   </div>
   {# HTML montado por chip_filter_html(), que ja escapa o que vem do banco #}
@@ -66,26 +71,14 @@
 </div>
 
 <div class="cards">
-  <div class="card"><div class="label" title="Receitas {{ periodo_rotulo }}">Receitas {{ periodo_rotulo }}</div><div class="val" style="color:#1f8a53">{{ receita_mes|moeda }}</div></div>
-  <div class="card"><div class="label" title="Despesas {{ periodo_rotulo }}">Despesas {{ periodo_rotulo }}</div><div class="val" style="color:#c23c34">{{ gasto_real|moeda }}</div></div>
-  <div class="card"><div class="label" title="Resultado {{ periodo_rotulo }} (receitas menos despesas)">Resultado {{ periodo_rotulo }}</div><div class="val" style="color:{{ '#1f8a53' if resultado_mes >= 0 else '#c23c34' }}">{{ resultado_mes|moeda }}</div></div>
+  <div class="card"><div class="label" title="Somente receitas contabilizadas no DRE">Receitas no DRE</div><div class="val" style="color:#1f8a53">{{ receita_mes|moeda }}</div></div>
+  <div class="card"><div class="label" title="Somente despesas contabilizadas no DRE; investimentos continuam fora">Despesas no DRE</div><div class="val" style="color:#c23c34">{{ gasto_real|moeda }}</div></div>
+  <div class="card"><div class="label" title="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ '#1f8a53' if resultado_mes >= 0 else '#c23c34' }}">{{ resultado_mes|moeda }}</div></div>
   <div class="card">
-    <div class="label" title="Lançamentos conferidos / total no filtro atual">Lançamentos</div>
-    <div class="val">{{ conf }} / {{ total }}</div>
-    {% set crescimento = crescimento|default({'total': total, 'deltas': {'ontem': none, 'semana': none, 'mes': none}}, true) %}
-    {% set d = crescimento.deltas %}
-    {% if d.ontem is not none or d.semana is not none or d.mes is not none %}
-      <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;line-height:1.5">
-        {{ crescimento.total }} no banco todo
-        {%- if d.ontem is not none %} · {{ '+%d'|format(d.ontem) if d.ontem >= 0 else d.ontem }} desde ontem{% endif -%}
-        {%- if d.semana is not none %} · {{ '+%d'|format(d.semana) if d.semana >= 0 else d.semana }} em 7 dias{% endif -%}
-        {%- if d.mes is not none %} · {{ '+%d'|format(d.mes) if d.mes >= 0 else d.mes }} em 30 dias{% endif -%}
-      </div>
-    {% else %}
-      <div style="font-size:11px;color:var(--ink-faint);margin-top:2px" title="O histórico começa a contar a partir de hoje">
-        {{ crescimento.total }} no banco todo · histórico começando agora
-      </div>
-    {% endif %}
+    <div class="label" title="Contabilizados / todos os registros recebidos no período">Lançamentos do período</div>
+    <div class="val">{{ total_reais }} / {{ total_recebidos }}</div>
+    <div class="card-explicacao">contabilizados / recebidos</div>
+    <div class="card-explicacao">{{ conf_reais }} conferidos · {{ total_fora }} fora do resultado</div>
   </div>
 </div>
 
@@ -100,6 +93,19 @@
   </div>
 </details>
 
+<details class="legenda-lancamentos">
+  <summary>Legenda das linhas</summary>
+  <div class="legenda-itens">
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')"><i class="linha-ponto conferida"></i>Conferido</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')"><i class="linha-ponto pendente-banco"></i>Pendente no banco</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')"><i class="linha-ponto suspeita"></i>Possível duplicidade</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicada')"><i class="linha-ponto duplicada"></i>Duplicado confirmado</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')"><i class="linha-ponto fora"></i>Fora do resultado</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')"><i class="linha-ponto rateio"></i>Rateio incompleto</button>
+  </div>
+  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
+</details>
+
 <table class="compacta ajustavel" id="tabela-lancamentos" data-tabela="lancamentos">
   <thead><tr>
     <th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra">Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
@@ -108,7 +114,7 @@
     {% for r in linhas %}
       <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
-        <td class="cel-data" data-col="data" data-tip="{{ r.data_full }}" data-sort="{{ r.data_sort }}">{{ r.data_dia }}<br>{{ r.data_hora }}</td>
+        <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
           {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
           {% if r.registros_tecnicos %}<button type="button" class="tecnico-toggle" data-tecnico-id="{{ r.id }}" aria-label="Exibir {{ r.registros_tecnicos|length }} registro técnico vinculado" aria-expanded="false">+</button>{% endif %}

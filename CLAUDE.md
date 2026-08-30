@@ -1138,3 +1138,10 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Parcelas geradas de uma compra agregada podem herdar categoria e dimensões que estejam vazias. A origem da família é exclusivamente o vínculo persistente da fatura.
 - Só preencher automaticamente quando houver um único valor não vazio e inequívoco na família. Em caso de conflito, deixar vazio para revisão humana.
 - Nunca sobrescrever categoria ou dimensão já preenchida, inclusive quando tenha sido ajustada manualmente.
+
+# Conferência visual e totais (30/08/2026)
+
+- Investimentos continuam fora do DRE, mesmo quando aparecem e fecham corretamente na fatura do cartão.
+- O total do PDF e o total conciliado precisam fechar entre si. “Despesas no DRE” é um subconjunto explicado por natureza; exibir também “Fora do DRE” em vez de forçar os dois números a serem iguais.
+- Em Lançamentos, distinguir “recebidos” (todos os registros do banco) de “contabilizados” (transações que efetivamente participam do resultado, contando um lançamento rateado apenas uma vez).
+- Cores nunca devem ser a única explicação de estado: mostrar pontos no início da linha, tooltip com todas as situações, legenda e filtros equivalentes.

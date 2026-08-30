@@ -171,7 +171,11 @@ def index():
         periodo = "mes"
         inicio_mes, fim_mes = intervalo_mes_local(mes)
     status = request.args.get("status", "todas")
-    if status not in ("todas", "pendente", "conferida", "duplicidade", "duplicada"):
+    if status not in (
+        "todas", "pendente", "conferida", "pendente_banco", "duplicidade",
+        "duplicada", "fora_resultado", "somente_conciliacao", "substituido",
+        "rateio_incompleto",
+    ):
         status = "todas"
     origem_sel = request.args.getlist("origem")
 
@@ -244,6 +248,26 @@ def index():
             where.append("false")
     elif status == "duplicada":
         where.append("COALESCE(t.duplicada, false) = true")
+    elif status == "pendente_banco":
+        where.append("upper(COALESCE(t.status,'')) = 'PENDING'")
+    elif status == "fora_resultado":
+        where.append("(t.substituido_por IS NOT NULL OR COALESCE(t.somente_conciliacao,false))")
+    elif status == "somente_conciliacao":
+        where.append("COALESCE(t.somente_conciliacao,false)")
+    elif status == "substituido":
+        where.append("t.substituido_por IS NOT NULL")
+    elif status == "rateio_incompleto":
+        where.append(
+            "EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) "
+            "AND ((SELECT COUNT(*) FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) < 2 "
+            "OR (SELECT COALESCE(SUM(rx.valor_brl),0) FROM cartao.transacao_rateio rx "
+            "WHERE rx.transacao_id=t.transacao_id) <> COALESCE(t.valor_brl,t.valor_original) "
+            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id "
+            "AND (rx.categoria IS NULL OR rx.categoria='')) "
+            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx CROSS JOIN cartao.dimensao dx "
+            "LEFT JOIN cartao.transacao_rateio_dimensao rdx ON rdx.rateio_id=rx.id AND rdx.dimensao_id=dx.id "
+            "WHERE rx.transacao_id=t.transacao_id AND dx.obrigatoria=true AND rdx.valor_id IS NULL))"
+        )
 
     cur.execute(
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
@@ -258,7 +282,21 @@ def index():
     )
     rows = cur.fetchall()
 
-    # resumo do mes (nao filtrado por status, sempre do mes inteiro; duplicadas nao contam)
+    # Resumo do periodo, independente do filtro de Status. "Recebidos" conta
+    # tudo que chegou ao banco; "reais" conta cada transacao financeira uma
+    # vez, mesmo quando o rateio cria varias linhas no DRE.
+    where_recebidos = ["t.data_transacao >= %s", "t.data_transacao < %s"]
+    params_recebidos = [inicio_mes, fim_mes]
+    if origem_sel:
+        where_recebidos.append("t.account_id IN %s")
+        params_recebidos.append(tuple(origem_sel))
+    cur.execute(
+        "SELECT COUNT(*) AS total_recebidos FROM cartao.transacao t WHERE "
+        + " AND ".join(where_recebidos) + ";",
+        params_recebidos,
+    )
+    resumo = dict(cur.fetchone())
+
     where_resumo = ["t.data_transacao >= %s", "t.data_transacao < %s", "COALESCE(t.duplicada, false) = false"]
     params_resumo = [inicio_mes, fim_mes]
     if origem_sel:
@@ -267,13 +305,9 @@ def index():
     # gasto real = so o que tem natureza de despesa (fatura, transferencia,
     # investimento e compra de bem nao sao gasto - ver NATUREZAS)
     cur.execute(
-        "SELECT COUNT(*) total, SUM(CASE WHEN t.conferida THEN 1 ELSE 0 END) conferidas "
-        "FROM cartao.transacao t WHERE " + " AND ".join(where_resumo) + ";",
-        params_resumo,
-    )
-    resumo = dict(cur.fetchone())
-    cur.execute(
-        f"SELECT SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
+        f"SELECT COUNT(DISTINCT t.transacao_id) AS total_reais, "
+        f"COUNT(DISTINCT t.transacao_id) FILTER (WHERE t.conferida) AS conferidos_reais, "
+        f"SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
         f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
         f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
         params_resumo,
@@ -469,6 +503,21 @@ def index():
 
         pendente_banco = (r["status"] or "").upper() == "PENDING"
         pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
+        situacoes = []
+        if r["conferida"]:
+            situacoes.append({"classe": "conferida", "rotulo": "Conferido"})
+        if r["duplicada"]:
+            situacoes.append({"classe": "duplicada", "rotulo": "Duplicado confirmado — não contabilizado"})
+        if str(rid) in ids_suspeitos:
+            situacoes.append({"classe": "suspeita", "rotulo": "Possível duplicidade — revisar"})
+        if pendente_banco:
+            situacoes.append({"classe": "pendente-banco", "rotulo": "Pendente no banco"})
+        if r["substituido_por"]:
+            situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — substituído por outro lançamento"})
+        elif r["somente_conciliacao"]:
+            situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — somente conciliação"})
+        if rateios_ui and not rateio_valido:
+            situacoes.append({"classe": "rateio", "rotulo": "Rateio incompleto"})
         linhas_tabela.append({
             "id": str(rid),
             "substituido_por": str(r["substituido_por"]) if r["substituido_por"] else None,
@@ -517,6 +566,8 @@ def index():
             "rateio_valido": rateio_valido,
             "valor_rateio": float(abs(valor_pai_rateio)),
             "registros_tecnicos": [],
+            "situacoes": situacoes,
+            "situacoes_texto": " · ".join(s["rotulo"] for s in situacoes) or "Lançamento contabilizado",
         })
 
         detalhes = {
@@ -628,8 +679,12 @@ def index():
         receita_mes=receita_mes,
         gasto_real=gasto_real,
         resultado_mes=receita_mes - gasto_real,
-        conf=resumo["conferidas"] or 0,
-        total=resumo["total"] or 0,
+        conf=resumo["conferidos_reais"] or 0,
+        total=resumo["total_reais"] or 0,
+        conf_reais=resumo["conferidos_reais"] or 0,
+        total_reais=resumo["total_reais"] or 0,
+        total_recebidos=resumo["total_recebidos"] or 0,
+        total_fora=max((resumo["total_recebidos"] or 0) - (resumo["total_reais"] or 0), 0),
         crescimento=crescimento,
         detalhes_json=json_script(detalhes_js),
         config_json=json_script(config_lancamentos),

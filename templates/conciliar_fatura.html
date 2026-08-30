@@ -118,6 +118,10 @@
         <div class="val">{{ resultado.soma_vinculada|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas da fatura que ainda não têm vínculo com nenhum lançamento do Pluggy. Não é 'total menos soma' - é o quanto da fatura ainda não foi conciliado.">Falta vincular</div>
         <div class="val" style="color:{{ 'var(--good)' if resultado.diferenca == 0 else 'var(--bad)' }}">{{ resultado.diferenca|moeda }}</div></div>
+      <div class="card"><div class="label" title="Somente lançamentos deste ciclo classificados com natureza de despesa e contabilizados no DRE">Despesas no DRE</div>
+        <div class="val">{{ resultado.despesas_dre|moeda }}</div></div>
+      <div class="card"><div class="label" title="Diferença explicável entre o PDF e o DRE: investimentos e outras naturezas que continuam conciliadas, mas não são despesas">Fora do DRE</div>
+        <div class="val">{{ resultado.fora_dre|moeda }}</div></div>
     </div>
     <div style="font-size:12px;color:var(--ink-faint);margin-top:10px">
       {{ resultado.linhas|length }} linha(s) na fatura ·

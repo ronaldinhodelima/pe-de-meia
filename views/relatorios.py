@@ -941,6 +941,7 @@ def _estado_fatura(cur, fatura_row):
         return {
             "linhas": linhas, "sem_vinculo": linhas, "orfas": [],
             "soma_fatura": 0.0, "soma_vinculada": 0.0, "diferenca": 0.0,
+            "despesas_dre": 0.0, "fora_dre": 0.0,
             "fecha_100": False, "periodo_inicio": periodo_inicio, "periodo_fim": periodo_fim,
             "repetidas_na_fatura": [],
         }
@@ -976,6 +977,17 @@ def _estado_fatura(cur, fatura_row):
     )
     soma_fatura = _reais(soma_fatura_centavos)
     soma_vinculada = _reais(soma_vinculada_centavos)
+    # A fatura prova o valor cobrado; o DRE responde outra pergunta: quanto
+    # disso e' despesa. Investimentos e outras naturezas nao operacionais
+    # continuam conciliados com o PDF, mas ficam fora do DRE.
+    cur.execute(
+        f"SELECT COALESCE(SUM(CASE WHEN {NATUREZA_SQL}='despesa' THEN {VAL_DESPESA} ELSE 0 END),0) AS despesas_dre "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        f"WHERE t.account_id=%s AND COALESCE(t.duplicada,false)=false "
+        f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
+        (account_id, periodo_inicio, periodo_fim),
+    )
+    despesas_dre_centavos = _centavos(cur.fetchone()["despesas_dre"])
     # "Pagamento Recebido" e' a fatura ANTERIOR sendo quitada: nao e' cobranca
     # deste ciclo, ja fica fora das duas somas e nunca vira lancamento. Cobrar
     # vinculo dela travaria o "fecha 100%" para sempre nos meses em que o
@@ -989,6 +1001,8 @@ def _estado_fatura(cur, fatura_row):
         "soma_fatura": soma_fatura,
         "soma_vinculada": soma_vinculada,
         "diferenca": _reais(soma_fatura_centavos - soma_vinculada_centavos),
+        "despesas_dre": _reais(despesas_dre_centavos),
+        "fora_dre": _reais(soma_fatura_centavos - despesas_dre_centavos),
         "fecha_100": not sem_vinculo and not orfas,
         "periodo_inicio": periodo_inicio,
         "periodo_fim": periodo_fim,

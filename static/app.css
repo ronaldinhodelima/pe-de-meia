@@ -91,7 +91,6 @@
      enquanto durar (ver checkbox conf-check em index.html) */
   tr.pendente-banco { background: #fdf6e8; }
   tr.pendente-banco:hover { background: #faecd0; }
-  tr.pendente-banco > td:first-child { box-shadow: inset 3px 0 0 #d9a441; }
   .valor { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 500; }
 
   .obs-input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--ink); }
@@ -105,6 +104,19 @@
   table.compacta th { padding: 8px 8px; font-size: 10px; }
   table.compacta td { padding: 5px 8px; font-size: 12.5px; }
   table.compacta .cel-data { width: 78px; color: var(--ink-soft); font-size: 11.5px; line-height: 1.25; }
+  table.compacta .cel-data { position:relative;padding-left:14px; }
+  .linha-indicadores { position:absolute;left:3px;top:5px;bottom:5px;width:7px;display:flex;flex-direction:column;justify-content:center;gap:2px; }
+  .linha-ponto { display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 7px;background:#9ca3ad; }
+  .linha-ponto.conferida { background:#8b929a; }
+  .linha-ponto.pendente-banco { background:#d9a441; }
+  .linha-ponto.suspeita,.linha-ponto.rateio { background:var(--bad); }
+  .linha-ponto.duplicada { background:#b58a43; }
+  .linha-ponto.fora { background:#7c7696; }
+  .legenda-lancamentos { background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;margin:0 0 10px; }
+  .legenda-lancamentos summary { cursor:pointer;color:var(--ink-soft);font-size:12px;font-weight:600; }
+  .legenda-itens { display:flex;gap:7px;flex-wrap:wrap;margin-top:9px; }
+  .legenda-item { display:inline-flex;align-items:center;gap:6px;background:var(--bg);color:var(--ink-soft);border:1px solid var(--line);border-radius:16px;padding:4px 9px;font-size:11.5px; }
+  .legenda-ajuda,.card-explicacao { font-size:10.5px;color:var(--ink-faint);margin-top:3px;line-height:1.35; }
   table.compacta .cel-desc { width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   table.compacta .cel-origem { width: 158px; overflow: hidden; color: var(--ink-soft); font-size: 11.5px; }
   table.compacta .cel-valor { width: 96px; }
@@ -322,7 +334,6 @@
   /* possivel duplicidade: mesma conta, dia, valor e descricao. Marca discreta na
      borda esquerda - nao pode competir com a linha 'duplicada' ja confirmada,
      que fica riscada */
-  tr.suspeita-dup > td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 
   .cartao-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

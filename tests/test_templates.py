@@ -93,6 +93,8 @@ class TestConciliacaoFatura:
             "soma_fatura": 100,
             "soma_vinculada": 100,
             "diferenca": 0,
+            "despesas_dre": 80,
+            "fora_dre": 20,
             "linhas": [],
             "sem_vinculo": [],
             "orfas": [],
@@ -107,6 +109,9 @@ class TestConciliacaoFatura:
         )
         assert "Fatura Agosto de 2026" in html
         assert "ciclo 10/07/2026" not in html
+        assert "Despesas no DRE" in html
+        assert "Fora do DRE" in html
+        assert "R$ 80.00" in html and "R$ 20.00" in html
 
     def test_setas_de_mes_guardam_a_posicao_da_pagina(self):
         template = (
@@ -230,6 +235,29 @@ class TestIndex:
     def test_dimensao_obrigatoria_preenchida_nao_destaca(self, ctx):
         html = self.render([self.linha(dims={1: 10})])
         assert "#c23c34;background:#fbeceb" not in html
+
+    def test_cards_separam_recebidos_contabilizados_e_conferidos(self, ctx):
+        html = self.render(
+            [], total_reais=245, total_recebidos=273, conf_reais=185, total_fora=28,
+        )
+        assert "Receitas no DRE" in html
+        assert "Despesas no DRE" in html
+        assert "245 / 273" in html
+        assert "contabilizados / recebidos" in html
+        assert "185 conferidos · 28 fora do resultado" in html
+
+    def test_linha_exibe_todas_as_situacoes_sem_depender_so_da_cor(self, ctx):
+        situacoes = [
+            {"classe": "conferida", "rotulo": "Conferido"},
+            {"classe": "fora", "rotulo": "Fora do resultado"},
+        ]
+        html = self.render([
+            self.linha(situacoes=situacoes, situacoes_texto="Conferido · Fora do resultado")
+        ])
+        assert "Legenda das linhas" in html
+        assert 'class="linha-ponto conferida"' in html
+        assert 'class="linha-ponto fora"' in html
+        assert 'data-tip="Conferido · Fora do resultado"' in html
 
     def test_oferece_filtro_de_possiveis_duplicidades(self, ctx):
         html = self.render([self.linha()])

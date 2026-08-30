@@ -205,6 +205,12 @@ function coletarQuery() {
   document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked').forEach(cb => params.append(cb.name, cb.value));
   return params;
 }
+function filtrarSituacao(status) {
+  const campo = document.getElementById('statusInput');
+  if (!campo) return;
+  campo.value = status;
+  aplicarFiltros();
+}
 // "Periodo customizado" e "Ano inteiro" sao mutuamente exclusivos - ligar um
 // desliga o outro, senao os dois brigam pelo mesmo par mes/periodo na URL.
 function alternarPeriodoAno() {

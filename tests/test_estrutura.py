@@ -317,6 +317,19 @@ def test_classificacao_de_parcela_so_preenche_vazios_e_exige_consenso():
     assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
 
 
+def test_resumo_conta_transacao_rateada_uma_vez_e_status_tem_filtros_explicitos():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert "COUNT(DISTINCT t.transacao_id) AS total_reais" in view
+    assert "total_recebidos" in view
+    for status in (
+        "pendente_banco", "fora_resultado", "somente_conciliacao",
+        "substituido", "rateio_incompleto",
+    ):
+        assert f'value="{status}"' in template
+
+
 def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
     """Cada bloco 'if versao_atual < N' precisa ter o seu 'INSERT ... VALUES (N)'.
 
