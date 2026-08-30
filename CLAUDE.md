@@ -608,9 +608,32 @@ mandava só a cobrança), `IOF compra internacional` → IOF, `ESTORNO` → sem 
 O resto nasce sem categoria e passa por `aplicar_regras()`.
 
 **Resultado:** 1.135 lançamentos criados (80 + 15 em 2026 + 1.040 em 2025), R$ 159.464,93.
-**As 20 faturas (01/2025 a 08/2026) fecham 100%.** DRE: 2025 de R$ 167.590,71 para
-R$ 309.144,60; 2026 de R$ 475.022,75 para R$ 487.279,16; e R$ 6.106,42 caíram em 2024 (o ciclo
-da fatura 01/2025 começa em 17/12/2024).
+**As 20 faturas (01/2025 a 08/2026) fecham 100%** — nenhuma linha sem vínculo, nenhum órfão do
+Pluggy. DRE: 2025 de R$ 167.590,71 para R$ 309.144,60; 2026 de R$ 475.022,75 para
+R$ 487.279,16; e R$ 6.106,42 caíram em 2024 (o ciclo da fatura 01/2025 começa em 17/12/2024).
+O salto de 2025 é o número real: antes o ano estava subestimado em quase metade, porque o
+Pluggy só passou a sincronizar esse cartão em **22/07/2025**.
+
+## Lançamento "fora do resultado" e como a tela mostra isso
+
+A tela de Lançamentos lê `cartao.transacao` **direto**, então mostra também o que a view
+financeira exclui: `substituido_por` (mesmo evento que outro) e `somente_conciliacao` (a compra
+parcelada inteira). Sem marca visual, dois lançamentos de mesmo valor e data aparecem lado a lado
+sem pista de que só um conta — e quem revisa conclui que há duplicidade no DRE. Aconteceu:
+SESI FARMACIA 12/08/2026, a parcela gerada pela fatura e a cobrança do Pluggy, ambas R$ 41,23.
+
+Hoje a linha fica esmaecida, com a descrição riscada e um selo **"fora do resultado"** cujo
+tooltip diz o motivo (classe `fora-resultado` + `.selo-fora` no `app.css`). **Ao criar um estado
+novo que tire lançamento do resultado, marcar aqui também** — senão a tela mente por omissão.
+
+### Defasagem de um mês no parcelamento recém-comprado (comportamento esperado)
+
+Enquanto o agregado atende **uma única** linha de fatura, ele não é reconhecido como agregado
+(isso exige 2+), não vira `somente_conciliacao` e **o valor cheio conta no mês da compra** — o
+oposto do regime de caixa. Corrige-se sozinho quando a fatura do mês seguinte traz a Parc.2/N.
+Exemplo: `08/08/2026 Parcelado Lojista - SESI FARMACIA R$ 235,48` (6× R$ 39,25) contando inteiro
+em agosto. Se algum dia incomodar no fechamento mensal, dá para antecipar gerando as parcelas
+futuras a partir do número de parcelas impresso na fatura.
 
 ## Pendências conhecidas
 
@@ -650,37 +673,26 @@ tem 32 lançamentos; os maiores em 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,0
 receita**. Ronaldo não soube dizer a origem de cabeça (22/08/2026) — precisa ser
 caso a caso. Enquanto não for, esses valores podem estar inflando a receita.
 
-### Retomada recomendada (atualizada em 29/08/2026)
+### Retomada recomendada (atualizada em 29/08/2026, fim da sessão)
 
-**Onde a sessão parou:** a conciliação de fatura foi reescrita, está em produção e validada; as
-14 faturas (set/2025 a ago/2026) estão importadas, com datas encadeadas e 1.502 vínculos criados.
-A análise de duplicidade de parcelamento está concluída, com padrão identificado e valor apurado.
+**O cartão de crédito Unicred está fechado ponta a ponta.** As 20 faturas (01/2025 a 08/2026)
+fecham 100%, a tela de duplicidades está limpa e a sincronização do Pluggy foi validada como
+não-destrutiva. Não há pendência conhecida nessa frente.
 
-Próximo passo imediato, já acordado e não executado: **ajustar o matcher para dar prioridade ao
-agregado** quando ele existe, para que as 34 mensais da Família 2 e os 21 ecos da Família 1
-apareçam todos como órfãos — a lista completa de candidatos a duplicidade, pronta para o Ronaldo
-revisar e marcar. Depois disso, ele marca as duplicidades (só ele pode).
+Próximas frentes, nesta ordem:
 
-Retrato das faturas em 29/08/2026 (linhas sem vínculo caem conforme avança no tempo, porque o
-Pluggy não cobria o período antigo — é ausência de dado histórico, não erro):
-`07/2025: 149 sem vínculo · ... · 06/2026: 2 · 07/2026: 1 · 08/2026: 0`.
-Agosto/2026 fecha 100% pelo lado da fatura.
-
-Fatura 01/2026 tem `periodo_fim` = 25/01 mas vencimento 22/01 — fim depois do vencimento, o que
-é impossível. Ela foi importada antes da trava de sanidade entrar. **Reenviar esse PDF corrige.**
+1. **Cartão Nubank.** Avaliar se os mesmos fenômenos existem (parcelamento agregado, eco
+   pending→posted, cobrança só na fatura). O parser de PDF é específico da Unicred — se o Nubank
+   for conciliado por fatura, precisa de parser próprio; se não, a hierarquia de fontes muda.
+2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do
+   Pluggy vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos
+   (PIX, transferência entre contas próprias, depósito em espécie).
+3. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
+4. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria (fora os
+   tipos com padrão conferido) e passaram por `aplicar_regras()`. O que sobrou sem categoria
+   entra no DRE como despesa por padrão — revisar.
 
 Conciliação/classificação de lançamento (independente do acima):
-
-1. Voltar à revisão **um lançamento por vez**, mês **julho/2026**, filtrando por Origem.
-   Conta Corrente Ronaldo começou a ser revisada; depois houve avanço parcial em Conta Corrente
-   Conjunta. Não assumir que o restante do mês ou outras origens já está conciliado.
-2. Para cada linha decidir a cadeia completa: Categoria + natureza contábil + Responsável +
-   Projeto + Portfólio + observação. Só Ronaldo marca OK depois de conferir o extrato.
-3. Se um débito mistura pessoas/finalidades, usar Rateio; nunca criar duas transações bancárias
-   independentes nem alterar o valor do pai.
-4. Em paralelo, resolver `/pendencias`, porque natureza ausente afeta diretamente o DRE.
-5. Depois revisar depósitos `Transfer - Cash`, receita de aluguel BRDrive e duplicidades antigas.
-6. Por último decidir se vale implementar lançamentos recorrentes/projeções.
 
 ### Ideias guardadas (decidir quando fizer sentido)
 
@@ -1000,6 +1012,19 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   retornar ao estado anterior dentro do sistema. Troca de mês em Lançamentos faz recarga completa.
 
 ### Decisões da sessão de 29/08/2026 (conciliação de fatura)
+
+- **A fatura é a fonte quando o Pluggy não sincroniza.** Se a operadora cobrou, o dinheiro saiu:
+  a linha vira lançamento. Vale para os dois sentidos — pedágio e IOF **aumentam** a despesa, a
+  bonificação da anuidade **reduz** (é o crédito que o Pluggy nunca mandava, deixando só a
+  cobrança).
+- **Criar pela fatura só é seguro com o outro lado zerado.** A rota recusa enquanto houver
+  lançamento do Pluggy sem vínculo esperando decisão — sem órfão do outro lado, não há como
+  duplicar.
+- **2026 tem que fechar 100%; 2025 é histórico.** As faturas de 2025 foram importadas para dar
+  contexto. Ambos os anos acabaram fechando, mas a prioridade declarada é 2026.
+- **Vínculo manual de "mesmo evento"**: o usuário pode apontar os dois lados na mão quando
+  nenhuma regra alcança, inclusive para desfazer um "duplicado" marcado por engano.
+
 
 - **A fatura em PDF é a autoridade.** Se está no Pluggy, tem que bater com a fatura de alguma
   forma — não basta "fechar o valor", cada lançamento precisa de vínculo ou de explicação.
