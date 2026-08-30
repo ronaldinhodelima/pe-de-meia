@@ -219,6 +219,7 @@ def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
 
     assert "if versao_atual < 32:" in core
+    assert "if versao_atual < 33:" in core
     assert "observacao_sistema=observacao" in core
     assert "observacao=NULL" in core
     assert "observacao_sistema" in relatorios
@@ -227,6 +228,7 @@ def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():
     assert "Informação interna do sistema" in detalhada
     assert "obsInput.value = DUPLICADA_OBS_PADRAO" not in js
     assert "payload.observacao = tr.querySelector('.obs-input').value" not in js
+    assert "Reconstrucao da procedencia interna das faturas" in core
 
 
 def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():

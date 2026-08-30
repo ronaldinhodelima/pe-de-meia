@@ -2297,6 +2297,33 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (32);")
             conn.commit()
 
+        if versao_atual < 33:
+            # Algumas parcelas antigas receberam uma nota pessoal herdada do
+            # agregado antes da v32. A nota pessoal esta correta e permanece;
+            # reconstruimos apenas a procedencia interna pelo vinculo oficial.
+            cur.execute(
+                "UPDATE cartao.transacao t SET observacao_sistema = CASE WHEN EXISTS ("
+                " SELECT 1 FROM cartao.fatura_vinculo fv "
+                " JOIN cartao.transacao agregado ON agregado.transacao_id=fv.transacao_id "
+                " WHERE fv.fatura_linha_id=fl.id AND fv.transacao_id<>fl.transacao_id_criado "
+                " AND COALESCE(agregado.somente_conciliacao,false)=true"
+                ") THEN format('Parcela gerada a partir da fatura %s/%s; o registro agregado permanece para conciliação.', "
+                "lpad(fi.mes_referencia::text,2,'0'),fi.ano_referencia) "
+                "ELSE format('Criado a partir da fatura %s/%s; fonte PDF oficial, não veio do Pluggy.', "
+                "lpad(fi.mes_referencia::text,2,'0'),fi.ano_referencia) END, atualizado_em=now() "
+                "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                "WHERE fl.transacao_id_criado=t.transacao_id AND t.observacao_sistema IS NULL;"
+            )
+            reconstruidas = max(getattr(cur, "rowcount", 0) or 0, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Reconstrucao da procedencia interna das faturas',"
+                "jsonb_build_object('versao',33,'reconstruidas',%s));",
+                (reconstruidas,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (33);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

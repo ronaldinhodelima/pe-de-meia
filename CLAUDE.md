@@ -1279,6 +1279,10 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Novos lançamentos criados a partir do PDF e novas parcelas já nascem com a explicação em
   `observacao_sistema`. Marcar como duplicado registra a ação no campo booleano/auditoria e não
   preenche nem reenvia a observação pessoal.
+- A migração 33 recompõe a procedência interna de transações apontadas por
+  `fatura_linha.transacao_id_criado` quando uma importação histórica já havia substituído a antiga
+  mensagem técnica por uma observação pessoal. Ela não altera a observação pessoal: usa os
+  vínculos oficiais para distinguir parcela derivada de agregado e cobrança criada pelo PDF.
 
 # Edição unificada na visão detalhada (30/08/2026)
 
