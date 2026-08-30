@@ -201,6 +201,15 @@ def test_cards_da_fatura_explicam_valores_e_filtram_divergencias():
     assert 'total_pendente_ok' in view
 
 
+def test_compra_agregada_nao_vira_falsa_divergencia_de_valor():
+    from views.lancamentos import _diferenca_valor_linha_fatura
+
+    assert _diferenca_valor_linha_fatura("360.00", 6, "2160.00") == 0
+    assert _diferenca_valor_linha_fatura("1416.70", 6, "8500.00") == 0
+    assert _diferenca_valor_linha_fatura("91.15", 3, "273.41") == 0
+    assert _diferenca_valor_linha_fatura("100.00", None, "102.00") == 2
+
+
 def test_tojson_nunca_dentro_de_atributo_html():
     """|tojson e o escape certo para dentro de <script>, e errado dentro de atributo.
 

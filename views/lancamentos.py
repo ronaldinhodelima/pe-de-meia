@@ -715,6 +715,23 @@ def _eh_pagamento_fatura(descricao):
     return texto.startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
 
 
+def _diferenca_valor_linha_fatura(valor_pdf, parcela_total, valor_lancamento):
+    """Diferenca real entre a cobranca e o registro financeiro vinculado.
+
+    Na primeira aparicao de um parcelamento, o Pluggy pode guardar a compra
+    inteira enquanto o PDF mostra somente a parcela. Isso e uma representacao
+    agregada valida, nao uma divergencia. Pequenas diferencas de centavos vêm
+    do arredondamento das parcelas; a conciliacao ja adota tolerancia de R$ 1.
+    """
+    pdf = abs(Decimal(str(valor_pdf or 0)))
+    lancamento = abs(Decimal(str(valor_lancamento or 0)))
+    if parcela_total and int(parcela_total) > 1:
+        esperado_agregado = pdf * int(parcela_total)
+        if abs(lancamento - esperado_agregado) <= Decimal("1.00"):
+            return Decimal("0")
+    return abs(pdf - lancamento)
+
+
 @bp.route("/lancamentos/fatura")
 @requer("lancamentos_ver")
 def lancamentos_por_fatura():
@@ -975,7 +992,9 @@ def lancamentos_por_fatura():
                 resumo_rateios[tid]["soma"] if principal["rateado"]
                 else abs(Decimal(str(principal["valor"] or 0)))
             )
-            linha["diferenca_valor"] = abs(abs(valor_pdf) - valor_base)
+            linha["diferenca_valor"] = _diferenca_valor_linha_fatura(
+                valor_pdf, linha.get("parcela_total"), valor_base
+            )
             if linha["ambigua"]:
                 linha["validacao_motivos"].append("mais de um lançamento possível")
             if linha["diferenca_valor"] > tolerancia_valor:

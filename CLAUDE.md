@@ -1258,3 +1258,6 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Semântica de cores: verde apenas para fechado/completo; amarelo para revisão humana pendente;
   vermelho para divergência real; roxo para investimento ou outra natureza fora do DRE; neutro
   para totais informativos. Despesa normal não deve parecer erro apenas por ser despesa.
+- Compra parcelada agregada não é divergência: o Pluggy pode guardar o valor total enquanto o PDF
+  mostra uma parcela. Quando o total equivale a `valor da parcela × número de parcelas`, com até
+  R$ 1,00 de tolerância de arredondamento, o card não deve ficar vermelho.
