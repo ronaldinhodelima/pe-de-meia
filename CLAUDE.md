@@ -704,6 +704,10 @@ Pontos de atenção encontrados, por prioridade:
    migração ou view financeira precisa registrar os totais antes/depois e validar as telas
    logadas após a troca do container.
 
+Validação do deploy `5e12938` (precisão monetária): as **20 faturas** de 01/2025 a 08/2026
+continuaram com ✓/100%. O DRE 2026 ficou idêntico antes e depois: receitas **R$ 458.242,64**,
+despesas **R$ 487.279,16**, resultado **R$ -29.036,52** e investido/bens **R$ 16.080,86**.
+
 ## Pendências conhecidas
 
 ### Ação do usuário (nada disso o Claude pode fazer sozinho)
