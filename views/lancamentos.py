@@ -888,6 +888,10 @@ def lancamentos_por_fatura():
             abs(abs(Decimal(str(v["valor"] or 0))) - abs(Decimal(str(linha["valor"] or 0)))),
         ))
         principal = elegiveis[0] if elegiveis else None
+        if linha["pagamento"]:
+            # Pagamento recebido quita a fatura anterior; nesta fatura e' uma
+            # linha apenas informativa e nenhum vinculo deve virar editavel.
+            principal = None
         for v in vinculos:
             v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
             v["tecnico"] = not v["principal"]
