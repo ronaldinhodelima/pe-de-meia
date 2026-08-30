@@ -258,6 +258,7 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     assert 'data-tip="{{ v.fonte_nome }}"' in template
     assert "Mais informações da transação" not in template
     assert "data-info-target" in template and "transacao-info" in template
+    assert 'lancamentos_fatura.js?v=' in template
     assert "detalhe-id" in template and "overflow-wrap:anywhere" in template
     assert "fonte-badge:hover::after" in template and 'data-tip="{{ v.fonte_nome }}"' in template
     assert 'v["fonte"] = "F"' in view

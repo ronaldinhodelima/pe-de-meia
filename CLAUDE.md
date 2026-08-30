@@ -1312,6 +1312,8 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   fim da descrição; ela abre o painel anexado àquele mesmo registro. O ID deve quebrar linha dentro
   de uma área própria e nunca sobrepor Status, Tipo ou Valor. Os selos `P` e `F` usam tooltip CSS
   imediato no mouse/foco, sem depender da demora do atributo nativo `title`.
+- O JavaScript da visão detalhada usa parâmetro de versão no `src`. Sempre renovar esse parâmetro
+  quando o comportamento do arquivo mudar, evitando HTML novo com script antigo no cache.
 - O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
   transação”, mostrar ID, fonte, status, tipo, valor/moeda original, parcela, horários de
   sincronização, assinatura do OK e, se existir, a informação interna do sistema.
