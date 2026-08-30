@@ -593,6 +593,25 @@ existente: `POST /api/fatura/<id>/vincular-automatico` com `{"refazer": true}` �
 agregado (que saiu do resultado), então o total do parcelamento continua correto; as mensais e
 ecos continuam por cima. O excesso segue exatamente R$ 9.907,69 até o usuário marcar.
 
+## Cobranças que só existem na fatura (aplicado em 29/08/2026)
+
+Terceiro tipo de pendência, ao lado das duplicidades: **a operadora cobrou e o Pluggy nunca
+sincronizou**. A despesa (ou o crédito) simplesmente não existia no resultado.
+
+Rota `POST /api/faturas/criar-cobrancas-sem-pluggy` (`preview: true` levanta sem gravar; `ano`
+limita o alcance). **Trava de segurança:** recusa (409) se ainda houver lançamento do Pluggy sem
+vínculo esperando decisão — sem órfão do outro lado, criar pela fatura não pode duplicar.
+
+Tipos com categoria fixa, conferidos um a um contra o PDF: `Unicred TAG` → Pedágio,
+`Anuidade - bonificação` → Tarifas do Cartão (é o crédito que estorna a anuidade, e o Pluggy
+mandava só a cobrança), `IOF compra internacional` → IOF, `ESTORNO` → sem categoria fixa.
+O resto nasce sem categoria e passa por `aplicar_regras()`.
+
+**Resultado:** 1.135 lançamentos criados (80 + 15 em 2026 + 1.040 em 2025), R$ 159.464,93.
+**As 20 faturas (01/2025 a 08/2026) fecham 100%.** DRE: 2025 de R$ 167.590,71 para
+R$ 309.144,60; 2026 de R$ 475.022,75 para R$ 487.279,16; e R$ 6.106,42 caíram em 2024 (o ciclo
+da fatura 01/2025 começa em 17/12/2024).
+
 ## Pendências conhecidas
 
 ### Ação do usuário (nada disso o Claude pode fazer sozinho)
@@ -787,7 +806,24 @@ não servem. Para negativo o par é **valor idêntico no MESMO dia**, com a outr
 vinculada à fatura; exige dia exato justamente por não ter o reforço da descrição. Como o par tem
 o mesmo sinal, um estorno (sinal oposto ao da cobrança) nunca casa por aqui.
 
-**13. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
+**13. Lançamento criado pela fatura: parcela usa o MÊS COBRADO.** Datar pela data impressa joga
+a despesa no mês da compra — o oposto do regime de caixa. Errei nisso: criar as linhas de faturas
+de 2026 mandou R$ 11.027,44 para 2025. Parcela usa `periodo_fim` da fatura; compra avulsa usa a
+data impressa, que ali é a da própria cobrança.
+
+**14. Commit também quando só houve correção.** O `UPDATE` que conserta datas só era commitado
+quando havia linha nova criada. Sem linha nova, a rota respondia "11 datas corrigidas" e **nada
+era gravado** — em silêncio, com sucesso na resposta.
+
+**15. "Pagamento Recebido" nunca vira lançamento nem trava o fecha 100%.** É a fatura anterior
+sendo quitada; já fica fora das duas somas. Cobrar vínculo dela travava as 7 faturas do início de
+2025, onde era a única linha pendente e o Pluggy não tinha o pagamento.
+
+**16. Estorno só anula quando os dois lados ainda contam.** Se o negativo já foi excluído
+(duplicada, substituido_por, somente_conciliacao), o par deixou de se anular e a cobrança positiva
+ficou sozinha no resultado — ela tem que seguir para as outras regras, não ser dada como resolvida.
+
+**17. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
 lançamentos são legítimos e se anulam sozinhos. Marcar um deixaria o estorno negativo solto.
 
 ## Lições da sessão de 29/08/2026 (incidente real — não repetir)
