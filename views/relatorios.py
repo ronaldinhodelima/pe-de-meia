@@ -913,12 +913,16 @@ def _estado_fatura(cur, fatura_row):
     } for r in cur.fetchall()]
 
     def _nao_e_pagamento_recebido(l):
-        return l["descricao"].strip().lower() != "pagamento recebido"
+        return not _normalizar_desc(l["descricao"]).startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
 
     consideradas = [l for l in linhas if _nao_e_pagamento_recebido(l)]
     soma_fatura = round(sum(l["valor"] for l in consideradas), 2)
     soma_vinculada = round(sum(l["valor"] for l in consideradas if l["tem_vinculo"]), 2)
-    sem_vinculo = [l for l in linhas if not l["tem_vinculo"]]
+    # "Pagamento Recebido" e' a fatura ANTERIOR sendo quitada: nao e' cobranca
+    # deste ciclo, ja fica fora das duas somas e nunca vira lancamento. Cobrar
+    # vinculo dela travaria o "fecha 100%" para sempre nos meses em que o
+    # Pluggy nao tem o pagamento (todo o inicio de 2025).
+    sem_vinculo = [l for l in linhas if not l["tem_vinculo"] and _nao_e_pagamento_recebido(l)]
 
     return {
         "linhas": linhas,
@@ -1166,6 +1170,8 @@ def conciliar_fatura():
         f"SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
         f"f.periodo_inicio, f.periodo_fim, f.vencimento, "
         f"(SELECT COUNT(*) FROM cartao.fatura_linha fl WHERE fl.fatura_id = f.id "
+        f" AND fl.descricao NOT ILIKE 'Pagamento Recebido%%' "
+        f" AND fl.descricao NOT ILIKE 'Pag de Fatura%%' "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id)"
         f") AS linhas_sem_vinculo, "
         f"(SELECT COUNT(*) FROM cartao.transacao t WHERE t.account_id = f.account_id "
