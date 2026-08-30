@@ -249,6 +249,7 @@ def index():
         "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
         "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
         "t.conferida, t.observacao, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
+        "t.substituido_por, COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
         "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, t.primeiro_sincronizado_em, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) + " ORDER BY t.data_transacao DESC;",
@@ -444,11 +445,22 @@ def index():
         pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
         linhas_tabela.append({
             "id": str(rid),
+            # fora_do_resultado: o lancamento existe e continua consultavel, mas
+            # nao entra no DRE. Sem marcar isso na tela, dois lancamentos de
+            # mesmo valor e data aparecem lado a lado sem nenhuma pista de que
+            # so um conta - e quem revisa conclui que ha duplicidade.
             "classes": " ".join(c for c in [
                 "conferida" if r["conferida"] else "",
                 "duplicada" if r["duplicada"] else "",
+                "fora-resultado" if (r["substituido_por"] or r["somente_conciliacao"]) else "",
                 "pendente-banco" if pendente_banco else "",
             ] if c),
+            "fora_do_resultado": (
+                "Mesmo evento que outro lançamento — só o outro conta no resultado."
+                if r["substituido_por"] else
+                ("Registro de conciliação (compra parcelada inteira) — as parcelas é que contam."
+                 if r["somente_conciliacao"] else "")
+            ),
             "pendente_banco": pendente_banco,
             "pendente_bloqueia_ok": pendente_bloqueia_ok,
             "data_dia": data_local.strftime("%d/%m/%y"),

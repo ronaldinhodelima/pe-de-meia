@@ -412,3 +412,16 @@
   }
   .sync-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
   .sync-btn:disabled { opacity: .6; cursor: default; }
+
+/* Lancamento que existe e continua consultavel, mas nao entra no DRE:
+   "mesmo evento que outro" (substituido_por) e a compra parcelada inteira
+   (somente_conciliacao). Sem essa marca, dois lancamentos de mesmo valor
+   aparecem lado a lado sem pista de que so um conta. */
+tr.fora-resultado { opacity: .62; }
+tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-color: #bbb; }
+.selo-fora {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .3px;
+  background: #eceff3; color: #667; border: 1px solid #dde1e7;
+  border-radius: 4px; padding: 1px 5px; margin-left: 6px;
+  white-space: nowrap; text-decoration: none; display: inline-block;
+}

@@ -112,6 +112,7 @@
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
           {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
           {{ r.descricao }}
+          {%- if r.fora_do_resultado %} <span class="selo-fora" title="{{ r.fora_do_resultado }}">fora do resultado</span>{% endif %}
         </td>
         {# o selo e HTML gerado pelo app; o texto vem do apelido do cartao, digitado
            pelo usuario, entao vai escapado #}
