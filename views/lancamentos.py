@@ -319,6 +319,7 @@ def index():
             mapa_dim_transacao[(str(m["transacao_id"]), m["dimensao_id"])] = m["valor_id"]
 
     rateios_por_transacao = {}
+    principal_por_registro_conciliacao = {}
     if ids_visiveis:
         cur.execute(
             "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
@@ -338,6 +339,30 @@ def index():
                 item["dims"][rr["dimensao_id"]] = rr["valor_id"]
         for item in rateios_por_id.values():
             rateios_por_transacao.setdefault(item["transacao_id"], []).append(item)
+
+        # Uma compra marcada como somente_conciliacao pode estar ligada a uma
+        # ou mais parcelas geradas pela fatura. Recolhe sob a parcela somente
+        # quando ha UM unico destino visivel no filtro atual; em caso ambiguo,
+        # mantem a linha separada para revisao humana.
+        ids_conciliacao = [r["transacao_id"] for r in rows if r["somente_conciliacao"]]
+        if ids_conciliacao:
+            cur.execute(
+                "SELECT DISTINCT fv.transacao_id, fl.transacao_id_criado "
+                "FROM cartao.fatura_vinculo fv "
+                "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+                "WHERE fv.transacao_id IN %s AND fl.transacao_id_criado IN %s "
+                "AND fl.transacao_id_criado<>fv.transacao_id;",
+                (tuple(ids_conciliacao), tuple(ids_visiveis)),
+            )
+            destinos = {}
+            for vinculo in cur.fetchall():
+                destinos.setdefault(str(vinculo["transacao_id"]), set()).add(
+                    str(vinculo["transacao_id_criado"])
+                )
+            principal_por_registro_conciliacao = {
+                tecnico_id: next(iter(alvos))
+                for tecnico_id, alvos in destinos.items() if len(alvos) == 1
+            }
 
     cur.close()
     conn.close()
@@ -447,6 +472,7 @@ def index():
         linhas_tabela.append({
             "id": str(rid),
             "substituido_por": str(r["substituido_por"]) if r["substituido_por"] else None,
+            "principal_conciliacao": principal_por_registro_conciliacao.get(str(rid)),
             # fora_do_resultado: o lancamento existe e continua consultavel, mas
             # nao entra no DRE. Sem marcar isso na tela, dois lancamentos de
             # mesmo valor e data aparecem lado a lado sem nenhuma pista de que
@@ -530,13 +556,15 @@ def index():
     linhas_por_id = {linha["id"]: linha for linha in linhas_tabela}
     linhas_principais = []
     for linha in linhas_tabela:
-        alvo = linhas_por_id.get(linha["substituido_por"])
+        alvo_id = linha["substituido_por"] or linha["principal_conciliacao"]
+        alvo = linhas_por_id.get(alvo_id)
         if alvo is not None and alvo is not linha:
             alvo["registros_tecnicos"].append(linha)
         else:
             linhas_principais.append(linha)
     for linha in linhas_tabela:
         linha.pop("substituido_por", None)
+        linha.pop("principal_conciliacao", None)
     linhas_tabela = linhas_principais
 
     gasto_real = resumo["gasto_real"] or 0

@@ -298,7 +298,9 @@ def test_registro_substituido_fica_agrupado_sem_heuristica_e_acompanha_ordenacao
     template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
 
-    assert 'linhas_por_id.get(linha["substituido_por"])' in view
+    assert "alvo = linhas_por_id.get(alvo_id)" in view
+    assert 'len(alvos) == 1' in view
+    assert 'linha["substituido_por"] or linha["principal_conciliacao"]' in view
     assert 'data-tecnico-parent="{{ r.id }}"' in template
     assert 'class="tecnico-toggle"' in template
     assert "filha.dataset.tecnicoParent === id" in js

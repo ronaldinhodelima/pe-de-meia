@@ -1133,7 +1133,7 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   própria. Ambas são despesas do centro de custo Moradia & Utilidades / Casa.
 # Registros técnicos e parcelas vinculadas (30/08/2026)
 
-- Em Lançamentos, um registro com `substituido_por` só é recolhido sob o lançamento que conta quando o vínculo explícito estiver presente e ambos estiverem no filtro atual. Nunca agrupar por semelhança de descrição, data ou valor.
+- Em Lançamentos, um registro com `substituido_por` só é recolhido sob o lançamento que conta quando o vínculo explícito estiver presente e ambos estiverem no filtro atual. O mesmo vale para `somente_conciliacao` ligado pela fatura, mas apenas quando houver um único destino visível e inequívoco. Nunca agrupar por semelhança de descrição, data ou valor.
 - O registro recolhido continua acessível para auditoria pelo botão `+` e pelos detalhes; ele não entra novamente nos totais.
 - Parcelas geradas de uma compra agregada podem herdar categoria e dimensões que estejam vazias. A origem da família é exclusivamente o vínculo persistente da fatura.
 - Só preencher automaticamente quando houver um único valor não vazio e inequívoco na família. Em caso de conflito, deixar vazio para revisão humana.
