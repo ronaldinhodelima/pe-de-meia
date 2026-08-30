@@ -114,7 +114,7 @@
   table.compacta .cel-dim { width: 116px; }
   table.compacta select { width: 100%; max-width: 100%; padding: 4px 5px; font-size: 11.5px; border-radius: 5px; box-sizing: border-box; }
   table.compacta .obs-input { padding: 4px 6px; font-size: 11.5px; }
-  .rateio-toggle { width:22px;height:22px;margin-right:6px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--accent);font-weight:700;cursor:pointer; }
+  .rateio-toggle,.tecnico-toggle { width:22px;height:22px;margin-right:6px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--accent);font-weight:700;cursor:pointer; }
   .rateio-row { background:#f7f8fa; cursor:default; }
   .rateio-row:hover { background:#f7f8fa; }
   .rateio-row td { color:var(--ink-soft); border-top-style:dashed; }
@@ -131,6 +131,9 @@
   .rateio-resumo:empty { display:none; }
   .rateio-resumo.invalido { color:#c23c34;font-weight:600; }
   .rateio-seta { color:var(--accent);font-weight:700;margin-right:5px; }
+  .tecnico-row,.tecnico-row:hover { background:#f7f8fa; }
+  .tecnico-row td { color:var(--ink-soft);border-top-style:dashed; }
+  .tecnico-row .cel-desc { text-decoration:none; }
   .modal-rateio { margin:3px 0 0;padding:10px 0 0;border:0;border-top:1px solid var(--line-soft);background:transparent; }
   .modal-rateio-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:var(--ink-soft);font-size:12px; }
   .modal-rateio-topo .ver-btn { padding:4px 8px;font-size:11px;color:var(--ink-soft); }

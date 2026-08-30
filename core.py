@@ -886,6 +886,67 @@ def login_required(view):
     return wrapped
 
 
+def preencher_classificacao_vazia_parcelas(cur):
+    """Completa apenas campos vazios de parcelas ligadas ao mesmo agregado.
+
+    A familia vem exclusivamente dos vinculos persistentes da fatura: uma
+    transacao marcada como ``somente_conciliacao`` e os lancamentos gerados
+    pelas linhas ligadas a ela. Nao compara descricao, data nem valor.
+
+    Uma categoria/dimensao so e propagada quando existe um unico valor nao
+    vazio em toda a familia. Se houver conflito entre classificacoes manuais,
+    nada e escolhido automaticamente. ``IS NULL`` e ``ON CONFLICT DO NOTHING``
+    garantem que nenhum ajuste existente seja sobrescrito.
+    """
+    cur.execute(
+        "WITH rel AS ("
+        " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
+        " fl.transacao_id_criado::text AS parcela_id "
+        " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
+        " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
+        " WHERE fl.transacao_id_criado IS NOT NULL "
+        " AND COALESCE(a.somente_conciliacao,false)=true"
+        "), membros AS ("
+        " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
+        " UNION SELECT agregado_id, parcela_id FROM rel"
+        "), escolha AS ("
+        " SELECT m.agregado_id, MIN(t.categoria) AS categoria "
+        " FROM membros m JOIN cartao.transacao t ON t.transacao_id::text=m.transacao_id "
+        " WHERE t.categoria IS NOT NULL AND t.categoria<>'' "
+        " GROUP BY m.agregado_id HAVING COUNT(DISTINCT t.categoria)=1"
+        ") UPDATE cartao.transacao destino SET categoria=e.categoria, atualizado_em=now() "
+        "FROM rel r JOIN escolha e ON e.agregado_id=r.agregado_id "
+        "WHERE destino.transacao_id::text=r.parcela_id AND destino.categoria IS NULL;"
+    )
+    categorias = max(getattr(cur, "rowcount", 0) or 0, 0)
+
+    cur.execute(
+        "WITH rel AS ("
+        " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
+        " fl.transacao_id_criado::text AS parcela_id "
+        " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
+        " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
+        " WHERE fl.transacao_id_criado IS NOT NULL "
+        " AND COALESCE(a.somente_conciliacao,false)=true"
+        "), membros AS ("
+        " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
+        " UNION SELECT agregado_id, parcela_id FROM rel"
+        "), escolha AS ("
+        " SELECT m.agregado_id, td.dimensao_id, MIN(td.valor_id) AS valor_id "
+        " FROM membros m JOIN cartao.transacao_dimensao td ON td.transacao_id=m.transacao_id "
+        " WHERE td.valor_id IS NOT NULL GROUP BY m.agregado_id, td.dimensao_id "
+        " HAVING COUNT(DISTINCT td.valor_id)=1"
+        ") INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+        "SELECT r.parcela_id,e.dimensao_id,e.valor_id FROM rel r "
+        "JOIN escolha e ON e.agregado_id=r.agregado_id "
+        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;"
+    )
+    dimensoes = max(getattr(cur, "rowcount", 0) or 0, 0)
+    return {"categorias": categorias, "dimensoes": dimensoes}
+
+
 def migrate():
     try:
         conn = get_conn()
@@ -1900,6 +1961,21 @@ def migrate():
                 "jsonb_build_object('versao',26));"
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (26);")
+            conn.commit()
+
+        if versao_atual < 27:
+            # Parcelas geradas antes da classificacao manual do agregado ou de
+            # outra parcela da mesma compra podiam ficar vazias para sempre.
+            # O preenchimento usa somente vinculos persistentes e somente uma
+            # escolha inequivoca; nunca substitui categoria/dimensao existente.
+            preenchidas = preencher_classificacao_vazia_parcelas(cur)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Classificacao vazia de parcelas vinculadas',"
+                "jsonb_build_object('versao',27,'categorias',%s,'dimensoes',%s));",
+                (preenchidas["categorias"], preenchidas["dimensoes"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (27);")
             conn.commit()
 
         cur.close()

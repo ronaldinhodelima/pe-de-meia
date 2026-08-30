@@ -293,6 +293,28 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert "linha.classList.toggle('rateio-invalido', !estado.valido)" in js
 
 
+def test_registro_substituido_fica_agrupado_sem_heuristica_e_acompanha_ordenacao():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+
+    assert 'linhas_por_id.get(linha["substituido_por"])' in view
+    assert 'data-tecnico-parent="{{ r.id }}"' in template
+    assert 'class="tecnico-toggle"' in template
+    assert "filha.dataset.tecnicoParent === id" in js
+
+
+def test_classificacao_de_parcela_so_preenche_vazios_e_exige_consenso():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = core.split("def preencher_classificacao_vazia_parcelas", 1)[1].split("def migrate", 1)[0]
+
+    assert "somente_conciliacao" in trecho
+    assert "HAVING COUNT(DISTINCT t.categoria)=1" in trecho
+    assert "destino.categoria IS NULL" in trecho
+    assert "HAVING COUNT(DISTINCT td.valor_id)=1" in trecho
+    assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+
+
 def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
     """Cada bloco 'if versao_atual < N' precisa ter o seu 'INSERT ... VALUES (N)'.
 

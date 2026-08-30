@@ -33,6 +33,7 @@ from core import (
     intervalo_ano_local,
     levantar_pendencias,
     pode,
+    preencher_classificacao_vazia_parcelas,
     registrar_auditoria,
     registrar_mudanca_auditoria,
     requer,
@@ -1796,7 +1797,11 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         )
         criadas += 1
 
-    return {"agregados": len(agregados), "marcados_agora": marcados, "parcelas_criadas": criadas}
+    preenchidas = preencher_classificacao_vazia_parcelas(cur)
+    return {
+        "agregados": len(agregados), "marcados_agora": marcados,
+        "parcelas_criadas": criadas, "classificacoes_preenchidas": preenchidas,
+    }
 
 
 @bp.route("/relatorios/duplicidades-fatura")

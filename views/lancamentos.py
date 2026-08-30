@@ -37,6 +37,7 @@ from core import (
     intervalo_mes_local,
     json_script,
     pode,
+    preencher_classificacao_vazia_parcelas,
     registrar_auditoria,
     registrar_e_calcular_crescimento,
     registrar_mudanca_auditoria,
@@ -445,6 +446,7 @@ def index():
         pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
         linhas_tabela.append({
             "id": str(rid),
+            "substituido_por": str(r["substituido_por"]) if r["substituido_por"] else None,
             # fora_do_resultado: o lancamento existe e continua consultavel, mas
             # nao entra no DRE. Sem marcar isso na tela, dois lancamentos de
             # mesmo valor e data aparecem lado a lado sem nenhuma pista de que
@@ -488,6 +490,7 @@ def index():
             "rateios": rateios_ui,
             "rateio_valido": rateio_valido,
             "valor_rateio": float(abs(valor_pai_rateio)),
+            "registros_tecnicos": [],
         })
 
         detalhes = {
@@ -519,6 +522,22 @@ def index():
         for d in dimensoes:
             detalhes[d["nome"]] = nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
         detalhes_js[str(rid)] = detalhes
+
+    # Um registro que foi substituido continua disponivel para auditoria, mas
+    # fica recolhido logo abaixo do lancamento que realmente conta. O vinculo
+    # vem do banco (`substituido_por`): nunca agrupamos so porque data,
+    # descricao ou valor parecem iguais.
+    linhas_por_id = {linha["id"]: linha for linha in linhas_tabela}
+    linhas_principais = []
+    for linha in linhas_tabela:
+        alvo = linhas_por_id.get(linha["substituido_por"])
+        if alvo is not None and alvo is not linha:
+            alvo["registros_tecnicos"].append(linha)
+        else:
+            linhas_principais.append(linha)
+    for linha in linhas_tabela:
+        linha.pop("substituido_por", None)
+    linhas_tabela = linhas_principais
 
     gasto_real = resumo["gasto_real"] or 0
     receita_mes = resumo["receita_mes"] or 0
@@ -1074,6 +1093,9 @@ def update_transacao(transacao_id):
             f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s;",
             valores + [transacao_id],
         )
+    classificacoes_herdadas = {"categorias": 0, "dimensoes": 0}
+    if data.get("categoria") or any(item[1] is not None for item in dimensoes_validadas):
+        classificacoes_herdadas = preencher_classificacao_vazia_parcelas(cur)
     conn.commit()
     cur.close()
     conn.close()
@@ -1102,6 +1124,12 @@ def update_transacao(transacao_id):
             nome_dimensao,
             {"id": valor_id_antigo, "nome": valor_antigo} if valor_id_antigo else None,
             {"id": valor_id, "nome": valor_novo} if valor_id else None,
+        )
+    if classificacoes_herdadas["categorias"] or classificacoes_herdadas["dimensoes"]:
+        registrar_mudanca_auditoria(
+            "Classificações herdadas por parcelas vinculadas",
+            None,
+            classificacoes_herdadas,
         )
     return jsonify({
         "ok": True,

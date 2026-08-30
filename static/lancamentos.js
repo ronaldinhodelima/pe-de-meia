@@ -780,6 +780,15 @@ document.addEventListener('click', function (e) {
     rateio.setAttribute('aria-expanded', abrir ? 'true' : 'false');
     return;
   }
+  const tecnico = e.target.closest('.tecnico-toggle');
+  if (tecnico) {
+    const id = tecnico.dataset.tecnicoId;
+    const abrir = tecnico.getAttribute('aria-expanded') !== 'true';
+    document.querySelectorAll('tr[data-tecnico-parent="' + id + '"]').forEach(linha => { linha.hidden = !abrir; });
+    tecnico.textContent = abrir ? '−' : '+';
+    tecnico.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    return;
+  }
   const regra = e.target.closest('.regra-btn');
   if (regra) {
     const id = idDaLinha(regra);

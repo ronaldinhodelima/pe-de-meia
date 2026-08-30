@@ -111,6 +111,7 @@
         <td class="cel-data" data-col="data" data-tip="{{ r.data_full }}" data-sort="{{ r.data_sort }}">{{ r.data_dia }}<br>{{ r.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
           {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          {% if r.registros_tecnicos %}<button type="button" class="tecnico-toggle" data-tecnico-id="{{ r.id }}" aria-label="Exibir {{ r.registros_tecnicos|length }} registro técnico vinculado" aria-expanded="false">+</button>{% endif %}
           {{ r.descricao }}
           {%- if r.fora_do_resultado %} <span class="selo-fora" title="{{ r.fora_do_resultado }}">fora do resultado</span>{% endif %}
         </td>
@@ -151,6 +152,20 @@
         <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar }}></td>
         {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
         <td class="cel-check" data-col="check"><button type="button" class="rateio-salvar-inline" title="Salvar rateio" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or not r.rateio_valido }}>✓</button></td>
+        <td class="cel-status" data-col="status"></td>
+      </tr>
+      {% endfor %}
+      {% for tecnico in r.registros_tecnicos %}
+      <tr class="tecnico-row" data-tecnico-parent="{{ r.id }}" data-id="{{ tecnico.id }}" hidden>
+        <td class="cel-data" data-col="data" data-tip="{{ tecnico.data_full }}" data-sort="{{ tecnico.data_sort }}">{{ tecnico.data_dia }}<br>{{ tecnico.data_hora }}</td>
+        <td class="cel-desc" data-col="desc" data-tip="{{ tecnico.descricao }}"><span class="rateio-seta">↳</span> {{ tecnico.descricao }} <span class="selo-fora" title="{{ tecnico.fora_do_resultado }}">registro técnico</span></td>
+        <td class="cel-origem" data-col="origem" data-tip="{{ tecnico.origem_completa }}">{{ tecnico.origem_selo|safe }}<span>{{ tecnico.origem_texto }}</span></td>
+        <td class="cel-dim" data-col="categoria">{{ tecnico.categoria_nome }}</td>
+        {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}">{{ tecnico.dims_rotulos.get(d.id) }}</td>{% endfor %}
+        <td class="valor cel-valor" data-col="valor" style="{{ tecnico.cor_valor }}" data-sort="{{ tecnico.valor_sort }}">{{ tecnico.valor_fmt }}</td>
+        <td class="cel-obs" data-col="obs">{{ tecnico.observacao or '—' }}</td>
+        {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
+        <td class="cel-check" data-col="check"><input type="checkbox" {{ 'checked' if tecnico.conferida }} disabled aria-label="Estado de conferência do registro técnico"></td>
         <td class="cel-status" data-col="status"></td>
       </tr>
       {% endfor %}

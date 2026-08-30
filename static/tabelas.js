@@ -317,14 +317,26 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     function ordenarLinhas(col, dir) {
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
-      const linhas = [...tbody.querySelectorAll('tr')];
+      const todas = [...tbody.querySelectorAll('tr')];
+      const linhas = todas.filter(function (tr) {
+        return !tr.dataset.rateioParent && !tr.dataset.tecnicoParent;
+      });
       linhas.sort(function (a, b) {
         const va = valorOrdenavel(a.querySelector('td[data-col="' + col + '"]'));
         const vb = valorOrdenavel(b.querySelector('td[data-col="' + col + '"]'));
         const cmp = (typeof va === 'number' && typeof vb === 'number') ? va - vb : String(va).localeCompare(String(vb));
         return dir === 'asc' ? cmp : -cmp;
       });
-      linhas.forEach(tr => tbody.appendChild(tr));
+      // Filhos de rateio e registros tecnicos permanecem imediatamente abaixo
+      // do seu lancamento principal, mesmo depois de ordenar a tabela.
+      linhas.forEach(function (tr) {
+        tbody.appendChild(tr);
+        const id = tr.dataset.id;
+        if (!id) return;
+        todas.filter(function (filha) {
+          return filha.dataset.rateioParent === id || filha.dataset.tecnicoParent === id;
+        }).forEach(function (filha) { tbody.appendChild(filha); });
+      });
     }
     function atualizarIndicadores() {
       thead.querySelectorAll('th[data-col]').forEach(th => {
