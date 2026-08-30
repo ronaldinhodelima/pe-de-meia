@@ -15,7 +15,30 @@ o teste roda sem PostgreSQL.
 """
 from datetime import date
 
-from views.relatorios import _conciliar_linhas
+from decimal import Decimal
+
+from views.relatorios import (
+    _centavos,
+    _conciliar_linhas,
+    _decimal_monetario,
+    _melhor_agregado,
+    _reais,
+)
+
+
+def test_dinheiro_da_conciliacao_usa_centavos_exatos():
+    assert _centavos(0.1 + 0.2) == 30
+    assert _reais(sum(_centavos(Decimal("0.01")) for _ in range(1000))) == 10.0
+    assert _decimal_monetario(Decimal("1.005")) == Decimal("1.01")
+
+
+def test_tolerancia_do_agregado_termina_exatamente_em_um_real():
+    base = {"_usado": False, "parcela_total": 2, "descricao": "LOJA"}
+    dentro = {**base, "_valor_centavos": 10100}
+    fora = {**base, "_valor_centavos": 10101}
+
+    assert _melhor_agregado([dentro], 10000, 2, "LOJA") is dentro
+    assert _melhor_agregado([fora], 10000, 2, "LOJA") is None
 
 
 class CursorFake:

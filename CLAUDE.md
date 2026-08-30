@@ -669,8 +669,8 @@ futuras a partir do número de parcelas impresso na fatura.
 
 ## Revisão técnica do conjunto publicado — 29/08/2026
 
-Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões e upload: 75 commits,
-23 arquivos alterados e suíte local com **210 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
+Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões, upload e precisão
+monetária, com suíte local de **212 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
 preservados:
 
 - a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
@@ -695,9 +695,10 @@ Pontos de atenção encontrados, por prioridade:
    referência, vencimento, titular, parcela, valor e estorno, além das travas de entrada. Ainda
    faltam casos de moeda estrangeira e variações de múltiplas páginas; a validação dos PDFs reais
    continua necessária. Alteração de layout da Unicred deve falhar no CI.
-4. **Média — trocar `float` por `Decimal`/centavos na conciliação.** PostgreSQL já usa `numeric`,
-   mas parser e matcher convertem valores para `float` em vários pontos. Os `round(..., 2)`
-   reduzem o risco, porém uma rotina financeira deve comparar e somar em centavos exatos.
+4. **Resolvido — conciliação usa `Decimal`/centavos exatos.** O parser preserva `Decimal` até o
+   banco; matcher, tolerâncias, estornos e totais trabalham com inteiros em centavos. `float` só
+   aparece na saída para manter o contrato numérico das telas/APIs. Há testes de erro binário,
+   soma de mil centavos, arredondamento `ROUND_HALF_UP` e limite exato da tolerância de R$ 1,00.
 5. **Operacional — manter validação pós-deploy e planejar staging.** A suíte está saudável, mas
    `main` publica direto no sistema familiar. Até existir staging, qualquer mudança em matcher,
    migração ou view financeira precisa registrar os totais antes/depois e validar as telas
@@ -1014,14 +1015,15 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **210 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **212 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
 `tests/test_fatura_vinculo.py` reproduz, com dados sintéticos e cursor dublado (roda sem
 Postgres), os casos reais que quebraram a conciliação: parcela 1:1 dentro do ciclo, transação já
 vinculada que não pode ser roubada, parcelamento agregado que PODE ser reusado, "Pagamento
-Recebido" fora das duas somas, e o encadeamento das datas. **Foi escrevendo esses testes que dois
+Recebido" fora das duas somas, encadeamento das datas e precisão monetária em centavos. **Foi
+escrevendo esses testes que dois
 bugs latentes apareceram** — ver "Lições da sessão de 29/08/2026".
 
 Validação do parser contra dado real (fazer de novo se mexer em `fatura_unicred.py`): parsear os

@@ -5,6 +5,7 @@ as validacoes que precisam acontecer antes de qualquer dado do PDF chegar ao
 banco ou ao matcher.
 """
 import io
+from decimal import Decimal
 
 import pytest
 
@@ -86,7 +87,7 @@ def test_extrai_layout_unicred_sintetico(monkeypatch):
     resultado = extrair_fatura(io.BytesIO(b"%PDF-conteudo-sintetico"))
     assert resultado["mes_referencia"] == 8
     assert resultado["ano_referencia"] == 2026
-    assert resultado["total"] == 113.45
+    assert resultado["total"] == Decimal("113.45")
     assert resultado["cartao_final4"] == "5678"
     assert resultado["vencimento"].isoformat() == "2026-08-24"
     assert resultado["periodo_fim"].isoformat() == "2026-08-22"
@@ -97,7 +98,7 @@ def test_extrai_layout_unicred_sintetico(monkeypatch):
             "descricao_base": "LOJA",
             "parcela_atual": 2,
             "parcela_total": 3,
-            "valor": 123.45,
+            "valor": Decimal("123.45"),
             "titular": "Ronaldo De Lima",
         },
         {
@@ -106,7 +107,7 @@ def test_extrai_layout_unicred_sintetico(monkeypatch):
             "descricao_base": "ESTORNO",
             "parcela_atual": None,
             "parcela_total": None,
-            "valor": -10.0,
+            "valor": Decimal("-10.00"),
             "titular": "Ronaldo De Lima",
         },
     ]

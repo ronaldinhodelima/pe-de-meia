@@ -9,6 +9,7 @@ devolver numero errado quando nao acha o total ou a referencia.
 """
 import re
 from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 import pdfplumber
 
@@ -20,6 +21,7 @@ DATA_RE = re.compile(r"^(\d{2})/([a-zç]{3})$", re.IGNORECASE)
 TITULAR_RE = re.compile(r"^[A-ZÀ-Ú][A-ZÀ-Ú ]+$")
 PARC_RE = re.compile(r"Parc\.\d+/\d+", re.IGNORECASE)
 MAX_PAGINAS_FATURA = 50
+CENTAVO = Decimal("0.01")
 
 
 class FaturaInvalida(ValueError):
@@ -45,7 +47,9 @@ FECHAMENTOS_CONHECIDOS = {
 
 
 def _num_valor(txt):
-    return float(txt.replace(".", "").replace(",", "."))
+    return Decimal(txt.replace(".", "").replace(",", ".")).quantize(
+        CENTAVO, rounding=ROUND_HALF_UP
+    )
 
 
 def extrair_fatura(arquivo):
@@ -187,7 +191,7 @@ def extrair_fatura(arquivo):
                     "descricao_base": descricao_base,
                     "parcela_atual": parcela_atual,
                     "parcela_total": parcela_total,
-                    "valor": round(valor, 2),
+                    "valor": valor.quantize(CENTAVO, rounding=ROUND_HALF_UP),
                     "titular": titular_atual,
                 })
 

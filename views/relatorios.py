@@ -3,6 +3,7 @@ import io
 import re
 import uuid
 from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 import psycopg2
 import psycopg2.extras
@@ -39,6 +40,32 @@ from core import (
 )
 
 bp = Blueprint("relatorios", __name__)
+
+CENTAVO = Decimal("0.01")
+
+
+def _decimal_monetario(valor):
+    """Normaliza dinheiro sem carregar o erro binario de ``float``.
+
+    O banco entrega ``Decimal`` e alguns testes/integrações ainda entregam
+    ``float``. Converter pelo texto preserva o valor humano e arredondar uma
+    unica vez, com meio centavo para cima, deixa a regra explicita.
+    """
+    if valor is None or valor == "":
+        valor = 0
+    if not isinstance(valor, Decimal):
+        valor = Decimal(str(valor))
+    return valor.quantize(CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def _centavos(valor):
+    """Representacao inteira usada em somas, comparacoes e tolerancias."""
+    return int(_decimal_monetario(valor) * 100)
+
+
+def _reais(valor_centavos):
+    """Mantem o contrato atual das telas/APIs, que recebem numeros JSON."""
+    return float(Decimal(valor_centavos) / 100)
 
 
 def _montar_historico_investimentos(historico):
@@ -464,7 +491,7 @@ def relatorios_lancamentos():
     return jsonify({"lancamentos": lancamentos, "total": len(lancamentos)})
 
 
-def _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm):
+def _melhor_agregado(candidatos, valor_esperado_centavos, parcela_total, desc_norm):
     """Procura a transacao que representa o parcelamento INTEIRO (valor cheio,
     data da compra). O Pluggy nem sempre preenche parcela_total nesse
     lancamento agregado (esse cartao chega a mostrar "Parcela: A vista" num
@@ -478,10 +505,11 @@ def _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm):
     Nao filtra por _bloqueado de proposito: a mesma transacao agregada atende
     uma linha por mes, em faturas diferentes - e' o unico caso em que reusar
     transacao ja vinculada e' correto."""
-    tolerancia = 1.00
+    tolerancia_centavos = 100
     candidatos_valor = [
         c for c in candidatos
-        if not c["_usado"] and abs(round(float(c["valor"]), 2) - valor_esperado) <= tolerancia
+        if not c["_usado"]
+        and abs(c["_valor_centavos"] - valor_esperado_centavos) <= tolerancia_centavos
     ]
     if not candidatos_valor:
         return None
@@ -491,7 +519,7 @@ def _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm):
     opcoes = com_parcela or candidatos_valor
     return min(opcoes, key=lambda c: (
         desc_norm.split()[0] not in (c["descricao"] or "").upper(),
-        abs(round(float(c["valor"]), 2) - valor_esperado),
+        abs(c["_valor_centavos"] - valor_esperado_centavos),
     ))
 
 
@@ -551,6 +579,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     for c in candidatos:
         c["_usado"] = False
         c["_data_local"] = c["data_local"]
+        c["_valor_centavos"] = _centavos(c["valor"])
         c["_bloqueado"] = str(c["transacao_id"]) in transacoes_bloqueadas
 
     # Ciclo real desta fatura - calculado aqui (nao so mais embaixo, perto de
@@ -572,6 +601,10 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     grupos_parcela = {}
     avulsas = []
     for linha in linhas:
+        linha["_valor_centavos"] = _centavos(linha["valor"])
+        # A camada visual continua recebendo numero comum; apenas o calculo
+        # interno usa centavos inteiros.
+        linha["valor"] = _reais(linha["_valor_centavos"])
         if linha["parcela_total"]:
             # O VALOR entra na chave: o mesmo lojista pode ter dois
             # parcelamentos com o mesmo numero de parcelas e valores
@@ -580,7 +613,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
             # chave so, o valor da parcela vira a media e nenhum dos dois
             # agregados e' encontrado - os dois viravam orfaos.
             chave = (linha["titular"], linha["descricao_base"].upper(),
-                     linha["parcela_total"], round(linha["valor"], 2))
+                     linha["parcela_total"], linha["_valor_centavos"])
             grupos_parcela.setdefault(chave, []).append(linha)
         else:
             avulsas.append(linha)
@@ -590,7 +623,8 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     for linha in avulsas:
         melhor, melhor_dist = None, None
         for c in candidatos:
-            if c["_usado"] or c["_bloqueado"] or round(float(c["valor"]), 2) != linha["valor"]:
+            if (c["_usado"] or c["_bloqueado"]
+                    or c["_valor_centavos"] != linha["_valor_centavos"]):
                 continue
             dist = abs((c["_data_local"] - linha["data"]).days)
             if dist > 3:
@@ -605,9 +639,11 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         else:
             sem_sistema.append({**linha, "fatura_linha_id": fatura_linha_ids.get(id(linha))})
 
-    for (titular, desc_norm, parcela_total, _v), linhas_grupo in grupos_parcela.items():
-        valor_mensal = sum(l["valor"] for l in linhas_grupo) / len(linhas_grupo)
-        valor_esperado = round(valor_mensal * parcela_total, 2)
+    for (titular, desc_norm, parcela_total, valor_mensal_centavos), linhas_grupo in grupos_parcela.items():
+        # O valor faz parte da chave do grupo; logo todas as linhas têm os
+        # mesmos centavos e não há média em ponto flutuante a calcular.
+        valor_esperado_centavos = valor_mensal_centavos * parcela_total
+        valor_esperado = _reais(valor_esperado_centavos)
 
         # PRIORIDADE 1: parcelamento agregado, quando existe.
         # O Pluggy as vezes grava o parcelamento inteiro como UMA transacao, no
@@ -622,7 +658,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # 02/11/2025, mais mensais de R$316 em 12/06, 12/07 e 12/08 de 2026.
         # So vale com 2+ parcelas: com parcela_total=1 o "valor cheio" e' igual
         # ao da parcela e qualquer cobranca normal pareceria um agregado.
-        agregado = _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm) \
+        agregado = _melhor_agregado(candidatos, valor_esperado_centavos, parcela_total, desc_norm) \
             if parcela_total >= 2 else None
         if agregado:
             agregado["_usado"] = True
@@ -644,7 +680,8 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         for l in linhas_grupo:
             melhor_linha = None
             for c in candidatos:
-                if c["_usado"] or c["_bloqueado"] or round(float(c["valor"]), 2) != l["valor"]:
+                if (c["_usado"] or c["_bloqueado"]
+                        or c["_valor_centavos"] != l["_valor_centavos"]):
                     continue
                 if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
                     continue
@@ -674,7 +711,9 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # fatura e' arredondado por mes: multiplicado pelo numero de parcelas
         # pode nao bater centavo a centavo com o valor cheio real (ex: fatura
         # mostra R$198,05 x12=R$2.376,60, o lancamento real e R$2.376,70).
-        melhor = _melhor_agregado(candidatos, valor_esperado, parcela_total, desc_norm)
+        melhor = _melhor_agregado(
+            candidatos, valor_esperado_centavos, parcela_total, desc_norm
+        )
         if melhor:
             melhor["_usado"] = True
             for l in pendentes:
@@ -694,7 +733,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     # encheria a tela de lancamentos de faturas passadas que nunca deveriam
     # bater com esta mesmo.
     sem_fatura = [
-        {"data": c["_data_local"], "descricao": c["descricao"], "valor": round(float(c["valor"]), 2),
+        {"data": c["_data_local"], "descricao": c["descricao"], "valor": _reais(c["_valor_centavos"]),
          "transacao_id": str(c["transacao_id"])}
         for c in candidatos if not c["_usado"] and c["_data_local"] >= ciclo_inicio
     ]
@@ -711,15 +750,26 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
     def _nao_e_pagamento_recebido(l):
         return l["descricao"].strip().lower() != "pagamento recebido"
 
-    soma_fatura = round(sum(l["valor"] for l in linhas if _nao_e_pagamento_recebido(l)), 2)
-    soma_batida = round(sum(l["valor"] for l in batidos if _nao_e_pagamento_recebido(l)), 2)
+    soma_fatura_centavos = sum(
+        l["_valor_centavos"] for l in linhas if _nao_e_pagamento_recebido(l)
+    )
+    soma_batida_centavos = sum(
+        l["_valor_centavos"] for l in batidos if _nao_e_pagamento_recebido(l)
+    )
+    soma_fatura = _reais(soma_fatura_centavos)
+
+    def _linha_publica(linha):
+        return {chave: valor for chave, valor in linha.items() if not chave.startswith("_")}
+
     return {
         "soma_fatura": soma_fatura,
-        "batidos": sorted(batidos, key=lambda l: l["data"]),
-        "sem_sistema": sorted(sem_sistema, key=lambda l: l["data"]),
+        "batidos": sorted((_linha_publica(l) for l in batidos), key=lambda l: l["data"]),
+        "sem_sistema": sorted(
+            (_linha_publica(l) for l in sem_sistema), key=lambda l: l["data"]
+        ),
         "sem_fatura": sorted(sem_fatura, key=lambda l: l["data"]),
         "fecha_100": not sem_sistema and not sem_fatura,
-        "diferenca": round(soma_fatura - soma_batida, 2),
+        "diferenca": _reais(soma_fatura_centavos - soma_batida_centavos),
         # min(datas) fica errado quando ha parcela antiga na fatura: a data
         # impressa dela e' a da COMPRA ORIGINAL (pode ser quase um ano atras),
         # nao deste ciclo - ja vimos isso mostrar "periodo" de 10 meses. Usar
@@ -752,15 +802,17 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
     fatura_linha_ids = fatura_linha_ids or {}
     grupos = {}
     for l in linhas:
-        if l["valor"] <= 0 or l["parcela_total"]:
+        valor_centavos = _centavos(l["valor"])
+        if valor_centavos <= 0 or l["parcela_total"]:
             continue  # estorno/pagamento e parcelamento nao entram
-        chave = (l["titular"], (l["descricao_base"] or l["descricao"]).upper(), l["valor"], l["data"])
+        chave = (l["titular"], (l["descricao_base"] or l["descricao"]).upper(),
+                 valor_centavos, l["data"])
         grupos.setdefault(chave, []).append(l)
 
-    estornos = [l for l in linhas if l["valor"] < 0]
+    estornos = [l for l in linhas if _centavos(l["valor"]) < 0]
     usados = set()
     repetidas = []
-    for (titular, desc, valor, data), grupo in grupos.items():
+    for (titular, desc, valor_centavos, data), grupo in grupos.items():
         if len(grupo) < 2:
             continue
         # procura um estorno de mesmo valor/titular que ainda nao foi atribuido
@@ -768,18 +820,19 @@ def _repetidas_na_fatura(linhas, fatura_linha_ids=None):
         for e in estornos:
             if id(e) in usados or e["titular"] != titular:
                 continue
-            if abs(abs(e["valor"]) - valor) > 0.01 or e["data"] < data:
+            if abs(abs(_centavos(e["valor"])) - valor_centavos) > 1 or e["data"] < data:
                 continue
             estorno = e
             usados.add(id(e))
             break
         linha_ids = [fatura_linha_ids[id(l)] for l in grupo if id(l) in fatura_linha_ids]
         repetidas.append({
-            "titular": titular, "descricao": grupo[0]["descricao"], "valor": valor,
+            "titular": titular, "descricao": grupo[0]["descricao"],
+            "valor": _reais(valor_centavos),
             "data": data, "vezes": len(grupo),
-            "total_cobrado": round(valor * len(grupo), 2),
+            "total_cobrado": _reais(valor_centavos * len(grupo)),
             "estorno_data": estorno["data"] if estorno else None,
-            "estorno_valor": estorno["valor"] if estorno else None,
+            "estorno_valor": _reais(_centavos(estorno["valor"])) if estorno else None,
             "linha_ids": linha_ids,
             "conferida": bool(linha_ids) and all(l.get("conferida_repeticao") for l in grupo),
             "conferida_por": grupo[0].get("conferida_repeticao_por"),
@@ -798,7 +851,7 @@ def _linhas_da_fatura(cur, fatura_id):
     )
     linhas_db = [dict(r) for r in cur.fetchall()]
     for l in linhas_db:
-        l["valor"] = float(l["valor"])
+        l["valor"] = _reais(_centavos(l["valor"]))
     return linhas_db
 
 
@@ -866,7 +919,7 @@ def _estado_fatura(cur, fatura_row):
         vinculos_por_linha.setdefault(r["fatura_linha_id"], []).append({
             "transacao_id": str(r["transacao_id"]),
             "descricao": r["descricao"],
-            "valor": round(float(r["valor"] or 0), 2),
+            "valor": _reais(_centavos(r["valor"])),
             "data": r["data_local"],
             "origem": r["origem"],
             "criado_por": r["criado_por"],
@@ -909,15 +962,19 @@ def _estado_fatura(cur, fatura_row):
     )
     orfas = [{
         "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
-        "valor": round(float(r["valor"] or 0), 2), "data": r["data_local"],
+        "valor": _reais(_centavos(r["valor"])), "data": r["data_local"],
     } for r in cur.fetchall()]
 
     def _nao_e_pagamento_recebido(l):
         return not _normalizar_desc(l["descricao"]).startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
 
     consideradas = [l for l in linhas if _nao_e_pagamento_recebido(l)]
-    soma_fatura = round(sum(l["valor"] for l in consideradas), 2)
-    soma_vinculada = round(sum(l["valor"] for l in consideradas if l["tem_vinculo"]), 2)
+    soma_fatura_centavos = sum(_centavos(l["valor"]) for l in consideradas)
+    soma_vinculada_centavos = sum(
+        _centavos(l["valor"]) for l in consideradas if l["tem_vinculo"]
+    )
+    soma_fatura = _reais(soma_fatura_centavos)
+    soma_vinculada = _reais(soma_vinculada_centavos)
     # "Pagamento Recebido" e' a fatura ANTERIOR sendo quitada: nao e' cobranca
     # deste ciclo, ja fica fora das duas somas e nunca vira lancamento. Cobrar
     # vinculo dela travaria o "fecha 100%" para sempre nos meses em que o
@@ -930,7 +987,7 @@ def _estado_fatura(cur, fatura_row):
         "orfas": orfas,
         "soma_fatura": soma_fatura,
         "soma_vinculada": soma_vinculada,
-        "diferenca": round(soma_fatura - soma_vinculada, 2),
+        "diferenca": _reais(soma_fatura_centavos - soma_vinculada_centavos),
         "fecha_100": not sem_vinculo and not orfas,
         "periodo_inicio": periodo_inicio,
         "periodo_fim": periodo_fim,
@@ -1103,12 +1160,14 @@ def conciliar_fatura():
                     (fatura_id,),
                 )
                 estado_anterior = {
-                    (r["data"], r["descricao"], round(float(r["valor"]), 2), r["titular"]): r
+                    (r["data"], r["descricao"], _centavos(r["valor"]), r["titular"]): r
                     for r in cur.fetchall()
                 }
                 cur.execute("DELETE FROM cartao.fatura_linha WHERE fatura_id=%s;", (fatura_id,))
                 for l in fatura["linhas"]:
-                    anterior = estado_anterior.get((l["data"], l["descricao"], l["valor"], l["titular"]))
+                    anterior = estado_anterior.get(
+                        (l["data"], l["descricao"], _centavos(l["valor"]), l["titular"])
+                    )
                     cur.execute(
                         "INSERT INTO cartao.fatura_linha "
                         "(fatura_id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
@@ -1157,7 +1216,8 @@ def conciliar_fatura():
             account_id = str(fatura_row["account_id"])
             fatura_meta = {
                 "id": fatura_id, "mes_referencia": fatura_row["mes_referencia"],
-                "ano_referencia": fatura_row["ano_referencia"], "total": float(fatura_row["total"]),
+                "ano_referencia": fatura_row["ano_referencia"],
+                "total": _reais(_centavos(fatura_row["total"])),
                 "cartao_final4": fatura_row["cartao_final4"], "arquivo_nome": fatura_row["arquivo_nome"],
                 "importado_em": data_hora_local(fatura_row["importado_em"]),
                 "periodo_inicio": fatura_row["periodo_inicio"], "periodo_fim": fatura_row["periodo_fim"],
@@ -1353,10 +1413,12 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     )
     cobertos = []
     for r in cur.fetchall():
+        valor_centavos = _centavos(r["valor"])
         cobertos.append({
             "base": _normalizar_desc(r["descricao_base"]),
             "parcela_total": r["parcela_total"],
-            "valor": round(float(r["valor"]), 2),
+            "valor": _reais(valor_centavos),
+            "valor_centavos": valor_centavos,
             "linhas": r["linhas"],
             "data_agregado": r["data_agregado"],
             "agregado_id": r["agregado_id"],
@@ -1383,11 +1445,15 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         f"WHERE EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
         f"WHERE v.transacao_id = t.transacao_id);"
     )
-    vinculadas = [{
-        "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
-        "descricao": r["descricao"], "valor": round(float(r["valor"] or 0), 2),
-        "data": r["data_local"], "tokens": _tokens_significativos(r["descricao"]),
-    } for r in cur.fetchall()]
+    vinculadas = []
+    for r in cur.fetchall():
+        valor_centavos = _centavos(r["valor"])
+        vinculadas.append({
+            "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
+            "descricao": r["descricao"], "valor": _reais(valor_centavos),
+            "valor_centavos": valor_centavos,
+            "data": r["data_local"], "tokens": _tokens_significativos(r["descricao"]),
+        })
 
     # linhas de fatura que ja tem vinculo, com o valor da parcela e a descricao
     # impressa: cobrem o eco de parcelamento NOVO, em que o agregado ainda
@@ -1401,13 +1467,17 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         f"JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
         f"WHERE fl.parcela_total >= 2 AND fl.descricao_base IS NOT NULL;"
     )
-    linhas_vinculadas = [{
-        "tokens": _tokens_significativos(r["descricao_base"]),
-        "valor_parcela": round(float(r["valor_parcela"] or 0), 2),
-        "parcela_total": r["parcela_total"],
-        "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
-        "descricao_base": r["descricao_base"], "data": r["data_vinculada"],
-    } for r in cur.fetchall()]
+    linhas_vinculadas = []
+    for r in cur.fetchall():
+        valor_centavos = _centavos(r["valor_parcela"])
+        linhas_vinculadas.append({
+            "tokens": _tokens_significativos(r["descricao_base"]),
+            "valor_parcela": _reais(valor_centavos),
+            "valor_parcela_centavos": valor_centavos,
+            "parcela_total": r["parcela_total"],
+            "transacao_id": str(r["transacao_id"]), "account_id": str(r["account_id"]),
+            "descricao_base": r["descricao_base"], "data": r["data_vinculada"],
+        })
 
     # estornos/cancelamentos: anulam uma cobranca do mesmo dia e valor
     # So conta como estorno o negativo que AINDA ESTA no resultado. Se ele ja
@@ -1421,7 +1491,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         f"AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
         f"AND COALESCE(t.somente_conciliacao,false) = false;"
     )
-    estornos = {(str(r["account_id"]), r["data_local"], round(abs(float(r["valor"] or 0)), 2))
+    estornos = {(str(r["account_id"]), r["data_local"], abs(_centavos(r["valor"])))
                 for r in cur.fetchall()}
 
     cur.execute(
@@ -1442,7 +1512,8 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     )
     repetidas, ecos, estornadas, aguardando, revisar = [], [], [], [], []
     for r in cur.fetchall():
-        valor = round(float(r["valor"] or 0), 2)
+        valor_centavos = _centavos(r["valor"])
+        valor = _reais(valor_centavos)
         item = {
             "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
             "valor": valor, "data": r["data_local"], "categoria": r["categoria"],
@@ -1464,7 +1535,8 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             # da descricao.
             par_neg = next(
                 (v for v in vinculadas
-                 if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
+                 if v["account_id"] == str(r["account_id"])
+                 and abs(v["valor_centavos"] - valor_centavos) <= 2
                  and v["data"] == r["data_local"]),
                 None,
             )
@@ -1487,7 +1559,8 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         e_mensal = desc.startswith("PARCELA LOJISTA")
         casado = next(
             (c for c in cobertos
-             if abs(c["valor"] - valor) <= 0.02 and c["base"] and c["base"] in desc),
+             if abs(c["valor_centavos"] - valor_centavos) <= 2
+             and c["base"] and c["base"] in desc),
             None,
         ) if e_mensal else None
         if casado:
@@ -1528,7 +1601,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
                     "AND %s BETWEEN fi.periodo_inicio AND fi.periodo_fim "
                     "AND fl.transacao_id_criado IS NOT NULL LIMIT 1;",
                     (casado["descricao_base"], casado["parcela_total"], casado["titular"],
-                     casado["valor"], item["data"]),
+                     _decimal_monetario(casado["valor"]), item["data"]),
                 )
                 alvo = cur.fetchone()
                 item["substituto_id"] = (
@@ -1541,7 +1614,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         # cobranca que a operadora estornou: os dois lancamentos sao legitimos
         # e se anulam sozinhos no resultado. Marcar um deles deixaria o estorno
         # negativo solto - por isso fica so informativo, sem acao.
-        if (str(r["account_id"]), r["data_local"], valor) in estornos:
+        if (str(r["account_id"]), r["data_local"], valor_centavos) in estornos:
             item["motivo"] = (
                 "Existe um estorno de mesmo valor no mesmo dia. Os dois lançamentos são "
                 "legítimos e se anulam sozinhos — não há nada a marcar."
@@ -1555,7 +1628,8 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         # com os mesmos tokens de estabelecimento.
         par = next(
             (v for v in vinculadas
-             if v["account_id"] == str(r["account_id"]) and abs(v["valor"] - valor) <= 0.02
+             if v["account_id"] == str(r["account_id"])
+             and abs(v["valor_centavos"] - valor_centavos) <= 2
              and abs((v["data"] - r["data_local"]).days) <= 5
              and len(tokens & v["tokens"]) >= 2),
             None,
@@ -1579,8 +1653,9 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
              if l["account_id"] == str(r["account_id"])
              and l["data"] and abs((l["data"] - r["data_local"]).days) <= 5
              and len(tokens & l["tokens"]) >= 2
-             and (abs(l["valor_parcela"] - valor) <= 0.05
-                  or abs(round(l["valor_parcela"] * l["parcela_total"], 2) - valor) <= 1.00)),
+             and (abs(l["valor_parcela_centavos"] - valor_centavos) <= 5
+                  or abs(l["valor_parcela_centavos"] * l["parcela_total"]
+                         - valor_centavos) <= 100)),
             None,
         ) if tokens else None
         if alvo:
@@ -1848,7 +1923,7 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
     conferido; sem categoria, as regras automaticas ainda podem classificar.
     """
     novo_id = str(uuid.uuid4())
-    valor = float(linha["valor"])
+    valor = _decimal_monetario(linha["valor"])
     # Numa linha de PARCELA a data impressa e' a da COMPRA ORIGINAL, fixa em
     # toda reimpressao mensal - usa-la jogaria a despesa no mes da compra, que
     # e' o oposto do regime de caixa. Vale o fim do ciclo da fatura que cobrou.
@@ -1864,7 +1939,7 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
         "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s,%s, now(), now(), now(), now());",
         (novo_id, linha["account_id"], linha["descricao"], linha["descricao"], valor, valor,
          f"{data_evento} 12:00:00-03:00", categoria, bool(categoria),
-         "CREDIT" if valor < 0 else "DEBIT",
+            "CREDIT" if valor < Decimal("0") else "DEBIT",
          f"Criado a partir da fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} — "
          f"a operadora cobrou e o Pluggy não sincronizou."),
     )
@@ -1952,12 +2027,15 @@ def criar_cobrancas_sem_pluggy():
                 None,
             )
             chave = f"{l['mes_referencia']:02d}/{l['ano_referencia']}"
-            resumo = por_mes.setdefault(chave, {"linhas": 0, "total": 0.0})
+            resumo = por_mes.setdefault(chave, {"linhas": 0, "total_centavos": 0})
             resumo["linhas"] += 1
-            resumo["total"] = round(resumo["total"] + float(l["valor"]), 2)
+            resumo["total_centavos"] += _centavos(l["valor"])
             if not preview:
                 _criar_lancamento_da_linha(cur, l, categoria, session.get("user"))
                 criadas += 1
+
+        for resumo in por_mes.values():
+            resumo["total"] = _reais(resumo.pop("total_centavos"))
 
         # commita tambem quando so houve correcao de data: antes o UPDATE ficava
         # sem commit quando nenhuma linha nova era criada, e a correcao se perdia
@@ -1974,7 +2052,7 @@ def criar_cobrancas_sem_pluggy():
         return jsonify({
             "ok": True, "preview": preview,
             "linhas": len(linhas), "criadas": criadas, "datas_corrigidas": datas_corrigidas,
-            "total": round(sum(float(l["valor"]) for l in linhas), 2),
+            "total": _reais(sum(_centavos(l["valor"]) for l in linhas)),
             "por_mes": por_mes,
         })
     except Exception as exc:
