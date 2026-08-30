@@ -369,6 +369,10 @@ def test_importacao_legada_unicred_preserva_ajustes_da_nova_tela():
     assert "fi.account_id=%s" in trecho
     assert "somente_conciliacao" in trecho
     assert "transacao_id_criado" in trecho
+    assert "fv.transacao_id::text AS agregado_id" in trecho
+    assert "fl.transacao_id_criado::text AS parcela_id" in trecho
+    assert "a.transacao_id::text=r.agregado_id" in trecho
+    assert "destino.transacao_id::text=e.parcela_id" in trecho
     assert "destino.categoria IS NULL OR destino.categoria=''" in trecho
     assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
     assert "Parcela gerada pela fatura %%" in trecho

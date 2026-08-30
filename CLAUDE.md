@@ -1,7 +1,7 @@
 # Pé de Meia — contexto do projeto
 
 **Última atualização:** 30/08/2026. Estado funcional de referência: branch `main`, tela detalhada
-de fatura Unicred e schema esperado na migração **30**. O histórico registra o conjunto anterior
+de fatura Unicred e schema esperado na migração **31**. O histórico registra o conjunto anterior
 como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo no Coolify
 e `cartao.schema_version` antes de qualquer nova intervenção.
 
@@ -302,7 +302,7 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 ## Estado registrado em produção — 29/08/2026
 
 Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O código espera schema na migração **30**. Entre `cfa183e` e `7c1ce99` foram publicados 75
+O código espera schema na migração **31**. Entre `cfa183e` e `7c1ce99` foram publicados 75
 commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
 primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
 regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
@@ -1221,3 +1221,15 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Antes de publicar: executar a suíte completa, sintaxe e `git diff --check`. Depois do deploy,
   conferir o registro da migração 30 nos logs e comparar os totais/quantidades da origem Unicred;
   não alterar manualmente nenhum OK apenas para testar.
+
+## Correção da importação — migração 31
+
+- A primeira execução da migração 30 podia abortar ao comparar
+  `transacao_dimensao.transacao_id` (texto) com os IDs UUID de transação/fatura. Como a migração
+  roda em uma única transação, a falha revertia também categorias, observações e OKs anteriores.
+- O helper agora normaliza agregado e parcela para texto em todas as junções. A migração 31
+  reprocessa exatamente a mesma importação, de forma idempotente e com as mesmas proteções contra
+  sobrescrita. Se a 30 não foi registrada, ambas usam o helper corrigido; se foi registrada, a 31
+  garante a recuperação restante.
+- Validar após o deploy: schema 31, ausência de aviso de migração e redução dos “Pendentes de OK”
+  na visão detalhada. A contagem exata deve vir do audit log da migração 31; não inferir números.

@@ -1018,7 +1018,8 @@ def importar_legado_para_parcelas_fatura(cur, account_id):
     na parcela mensal nunca sao substituidos.
     """
     rel = (
-        " SELECT DISTINCT fv.transacao_id AS agregado_id, fl.transacao_id_criado AS parcela_id "
+        " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
+        "fl.transacao_id_criado::text AS parcela_id "
         " FROM cartao.fatura_linha fl "
         " JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
         " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
@@ -1030,12 +1031,12 @@ def importar_legado_para_parcelas_fatura(cur, account_id):
     cur.execute(
         "WITH rel AS (" + rel + "), escolha AS ("
         " SELECT r.parcela_id, MIN(a.categoria) AS categoria "
-        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id::text=r.agregado_id "
         " WHERE a.categoria IS NOT NULL AND a.categoria<>'' GROUP BY r.parcela_id "
         " HAVING COUNT(DISTINCT a.categoria)=1"
         ") UPDATE cartao.transacao destino SET categoria=e.categoria, "
         "categoria_manual=true, regra_aplicada_id=NULL, atualizado_em=now() "
-        "FROM escolha e WHERE destino.transacao_id=e.parcela_id "
+        "FROM escolha e WHERE destino.transacao_id::text=e.parcela_id "
         "AND (destino.categoria IS NULL OR destino.categoria='');",
         (account_id,),
     )
@@ -1057,11 +1058,11 @@ def importar_legado_para_parcelas_fatura(cur, account_id):
     cur.execute(
         "WITH rel AS (" + rel + "), escolha AS ("
         " SELECT r.parcela_id, MIN(a.observacao) AS observacao "
-        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id::text=r.agregado_id "
         " WHERE a.observacao IS NOT NULL AND trim(a.observacao)<>'' GROUP BY r.parcela_id "
         " HAVING COUNT(DISTINCT a.observacao)=1"
         ") UPDATE cartao.transacao destino SET observacao=e.observacao, atualizado_em=now() "
-        "FROM escolha e WHERE destino.transacao_id=e.parcela_id AND ("
+        "FROM escolha e WHERE destino.transacao_id::text=e.parcela_id AND ("
         "destino.observacao IS NULL OR trim(destino.observacao)='' "
         "OR destino.observacao LIKE 'Parcela gerada pela fatura %%');",
         (account_id,),
@@ -1071,7 +1072,7 @@ def importar_legado_para_parcelas_fatura(cur, account_id):
     cur.execute(
         "WITH rel AS (" + rel + "), assinaturas AS ("
         " SELECT r.parcela_id, a.conferida_por, a.conferida_em "
-        " FROM rel r JOIN cartao.transacao a ON a.transacao_id=r.agregado_id "
+        " FROM rel r JOIN cartao.transacao a ON a.transacao_id::text=r.agregado_id "
         " WHERE COALESCE(a.conferida,false)=true"
         "), escolha AS ("
         " SELECT DISTINCT ON (parcela_id) parcela_id,conferida_por,conferida_em "
@@ -1079,7 +1080,7 @@ def importar_legado_para_parcelas_fatura(cur, account_id):
         ") UPDATE cartao.transacao destino SET conferida=true, "
         "conferida_por=COALESCE(e.conferida_por,destino.conferida_por), "
         "conferida_em=COALESCE(e.conferida_em,destino.conferida_em), atualizado_em=now() "
-        "FROM escolha e WHERE destino.transacao_id=e.parcela_id "
+        "FROM escolha e WHERE destino.transacao_id::text=e.parcela_id "
         "AND COALESCE(destino.conferida,false)=false;",
         (account_id,),
     )
@@ -2242,6 +2243,27 @@ def migrate():
                 ),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (30);")
+            conn.commit()
+
+        if versao_atual < 31:
+            # Repete de forma idempotente a importacao da v30 com os IDs
+            # normalizados para texto. transacao_dimensao.transacao_id e text,
+            # enquanto transacao/fatura usam uuid; comparar sem cast abortava
+            # toda a transacao antes de preservar os OKs antigos.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            importados = importar_legado_para_parcelas_fatura(cur, conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Reprocessamento corrigido dos ajustes Unicred',"
+                "jsonb_build_object('versao',31,'account_id',%s,'categorias',%s,'dimensoes',%s,"
+                "'observacoes',%s,'conferidas',%s));",
+                (
+                    conta_unicred,
+                    importados["categorias"], importados["dimensoes"],
+                    importados["observacoes"], importados["conferidas"],
+                ),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (31);")
             conn.commit()
 
         cur.close()
