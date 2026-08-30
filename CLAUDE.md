@@ -366,6 +366,9 @@ de permissões, robustez do import de PDF e conciliação/classificação das ou
   respostas incluem HSTS, CSP, proteção contra iframe/MIME sniffing e `Cache-Control: no-store`.
 - Logs fica dentro de Relatórios e registra acesso, alteração com antes/depois, falha e sync.
   Senhas/tokens são sanitizados. Rateios também geram auditoria.
+- Upload de fatura aceita no máximo 10 MB, exige assinatura real `%PDF-` e recusa documentos com
+  mais de 50 páginas. Resposta 413 não tenta reler o formulário na auditoria, pois isso causava
+  um erro 500 durante o próprio tratamento do arquivo excessivo.
 - E-mail operacional mudou para `ronaldo@brdrive.net`; teste foi recebido. Backup no mesmo
   servidor foi aceito pelo usuário. Não executar teste de restore agora; isso ficou adiado.
 
@@ -666,8 +669,8 @@ futuras a partir do número de parcelas impresso na fatura.
 
 ## Revisão técnica do conjunto publicado — 29/08/2026
 
-Revisão feita sobre `cfa183e..7c1ce99`, seguida da correção de permissões: 75 commits, 23 arquivos
-alterados e suíte local com **205 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
+Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões e upload: 75 commits,
+23 arquivos alterados e suíte local com **210 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
 preservados:
 
 - a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
@@ -685,14 +688,13 @@ Pontos de atenção encontrados, por prioridade:
 1. **Resolvido — “ver relatório” foi separado de “editar conciliação”.** A migração 26 criou
    `conciliacao_editar`, preservou o acesso de Administradores/Operadores e retirou as ações de
    gravação do perfil Somente leitura. Há testes cobrindo todas as rotas mutáveis dessa tela.
-2. **Média — limitar e validar o PDF antes de processar.** O upload usa `arquivo.read()` sem
-   limite explícito e sem conferir assinatura/tipo real do arquivo. Definir tamanho máximo,
-   validar `%PDF`, quantidade razoável de páginas e rejeitar cedo arquivos fora do padrão; isso
-   também evita crescimento acidental do PostgreSQL, onde o original fica guardado.
-3. **Média — criar testes automatizados do parser.** Os testes novos cobrem muito bem o matcher,
-   mas `extrair_fatura()` ainda depende da validação manual dos PDFs reais. Manter amostras
-   sintéticas/anonimizadas de layout e testes de referência, vencimento, parcelas, estorno,
-   moeda estrangeira e soma centavo a centavo. Alteração de layout da Unicred deve falhar no CI.
+2. **Resolvido — PDF limitado e validado antes de processar.** O servidor recusa acima de 10 MB,
+   conteúdo sem assinatura `%PDF-` e documentos acima de 50 páginas. Há mensagem clara e testes
+   inclusive para o caminho 413; o original continua armazenado somente após o parser aceitar.
+3. **Parcialmente resolvido — ampliar testes automatizados do parser.** Já há teste sintético de
+   referência, vencimento, titular, parcela, valor e estorno, além das travas de entrada. Ainda
+   faltam casos de moeda estrangeira e variações de múltiplas páginas; a validação dos PDFs reais
+   continua necessária. Alteração de layout da Unicred deve falhar no CI.
 4. **Média — trocar `float` por `Decimal`/centavos na conciliação.** PostgreSQL já usa `numeric`,
    mas parser e matcher convertem valores para `float` em vários pontos. Os `round(..., 2)`
    reduzem o risco, porém uma rotina financeira deve comparar e somar em centavos exatos.
@@ -1012,7 +1014,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **205 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 29/08/2026 a suíte local está em **210 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 

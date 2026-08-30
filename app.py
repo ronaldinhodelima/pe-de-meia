@@ -36,7 +36,25 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
     SESSION_REFRESH_EACH_REQUEST=True,
+    # O PDF original fica no PostgreSQL e e processado pelo pdfplumber. Um
+    # limite explicito evita consumo excessivo de memoria/CPU e crescimento
+    # acidental do banco por upload incorreto.
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
 )
+
+
+@app.errorhandler(413)
+def _arquivo_grande(_erro):
+    return "Arquivo muito grande. O limite para envio é de 10 MB.", 413
+
+
+@app.before_request
+def _recusar_corpo_excessivo_antes_de_processar():
+    """Falha cedo, antes que a rota ou a auditoria tentem ler o formulário."""
+    limite = current_app.config.get("MAX_CONTENT_LENGTH")
+    if limite and request.content_length and request.content_length > limite:
+        return _arquivo_grande(None)
+    return None
 
 
 @app.route("/favicon.ico")
@@ -103,7 +121,13 @@ def _auditar_requisicao(response):
 
     endpoint = request.endpoint or "rota_desconhecida"
     operacao = None
-    if request.form:
+    # Em 413 o corpo excedeu MAX_CONTENT_LENGTH. Tentar acessar request.form
+    # de novo dentro do after_request levanta outro RequestEntityTooLarge e
+    # transforma a resposta clara em erro 500. O tamanho e o caminho bastam
+    # para auditar essa falha; o corpo nunca deve ser relido.
+    if response.status_code == 413:
+        entrada = {"content_length": request.content_length}
+    elif request.form:
         operacao = request.form.get("acao")
         entrada = request.form.to_dict(flat=False)
     else:
@@ -127,7 +151,7 @@ def _auditar_requisicao(response):
     view_args = request.view_args or {}
     recurso_id = next(iter(view_args.values()), None)
     usuario = getattr(g, "audit_usuario", None) or session.get("user")
-    if endpoint == "auth.login" and not usuario:
+    if endpoint == "auth.login" and not usuario and response.status_code != 413:
         usuario = (request.form.get("usuario") or "").strip() or None
     inicio = getattr(g, "audit_inicio", None)
     duracao_ms = round((time.monotonic() - inicio) * 1000, 1) if inicio else None

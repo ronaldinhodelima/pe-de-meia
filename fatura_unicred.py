@@ -19,6 +19,7 @@ MESES = {
 DATA_RE = re.compile(r"^(\d{2})/([a-zç]{3})$", re.IGNORECASE)
 TITULAR_RE = re.compile(r"^[A-ZÀ-Ú][A-ZÀ-Ú ]+$")
 PARC_RE = re.compile(r"Parc\.\d+/\d+", re.IGNORECASE)
+MAX_PAGINAS_FATURA = 50
 
 
 class FaturaInvalida(ValueError):
@@ -56,9 +57,23 @@ def extrair_fatura(arquivo):
     total_fatura = None
     final4 = None
 
+    # `accept="application/pdf"` no navegador e apenas uma dica e pode ser
+    # contornado. Recusar antes do parser deixa a mensagem clara e evita tentar
+    # interpretar imagem, documento ou arquivo arbitrario como fatura.
+    if hasattr(arquivo, "read"):
+        posicao = arquivo.tell()
+        assinatura = arquivo.read(5)
+        arquivo.seek(posicao)
+        if assinatura != b"%PDF-":
+            raise FaturaInvalida("O arquivo enviado não é um PDF válido.")
+
     with pdfplumber.open(arquivo) as pdf:
         if not pdf.pages:
             raise FaturaInvalida("PDF vazio.")
+        if len(pdf.pages) > MAX_PAGINAS_FATURA:
+            raise FaturaInvalida(
+                f"PDF com páginas demais ({len(pdf.pages)}). O limite é {MAX_PAGINAS_FATURA}."
+            )
 
         texto_pag1 = pdf.pages[0].extract_text() or ""
         m = re.search(r"REF\.?:\s*([a-zç]{3})/(\d{4})", texto_pag1, re.IGNORECASE)
