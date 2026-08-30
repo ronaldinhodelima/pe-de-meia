@@ -100,6 +100,16 @@
         <div class="valor">{{ v.valor|moeda }}</div>
         <div>{% if v.principal %}<span class="estado ok">contabilizado e editável</span>{% else %}<span class="estado">registro técnico · somente leitura</span>{% endif %}</div>
       </div>
+      <div class="transacao-info" id="info-{{ linha.id }}-{{ loop.index }}" hidden><div class="detalhes-grid">
+        <div><b>Fonte</b>{{ v.fonte_nome }}</div><div class="detalhe-id"><b>ID</b><span>{{ v.transacao_id }}</span></div>
+        <div><b>Status</b>{{ v.status or '-' }}</div><div><b>Tipo</b>{{ v.tipo or '-' }}</div>
+        <div><b>Valor original</b>{{ v.valor_original if v.valor_original is not none else '-' }} {{ v.moeda_original or '' }}</div>
+        <div><b>Parcela</b>{{ (v.parcela_atual|string ~ '/' ~ v.parcela_total|string) if v.parcela_total else 'À vista' }}</div>
+        <div><b>Primeira sincronização</b>{{ v.primeiro_sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.primeiro_sincronizado_local else '-' }}</div>
+        <div><b>Última sincronização</b>{{ v.sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.sincronizado_local else '-' }}</div>
+        {% if v.conferida %}<div><b>OK por</b>{{ v.conferida_por or '-' }}{% if v.conferida_local %} · {{ v.conferida_local.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>{% endif %}
+        {% if v.observacao_sistema %}<div class="nota-sistema"><b>Informação interna do sistema</b>{{ v.observacao_sistema }}</div>{% endif %}
+      </div></div>
       {% if v.principal %}
       <div class="editor-financeiro" data-editor="{{ v.transacao_id }}">
         {% if v.rateado %}<div style="grid-column:1/-1;color:var(--ink-soft);font-size:12px">Este lançamento possui rateio. As partes continuam agrupadas e devem ser ajustadas nos detalhes do lançamento.</div>{% else %}
@@ -112,16 +122,6 @@
         {% endif %}
       </div>
       {% endif %}
-      <div class="transacao-info" id="info-{{ linha.id }}-{{ loop.index }}" hidden><div class="detalhes-grid">
-        <div><b>Fonte</b>{{ v.fonte_nome }}</div><div class="detalhe-id"><b>ID</b><span>{{ v.transacao_id }}</span></div>
-        <div><b>Status</b>{{ v.status or '-' }}</div><div><b>Tipo</b>{{ v.tipo or '-' }}</div>
-        <div><b>Valor original</b>{{ v.valor_original if v.valor_original is not none else '-' }} {{ v.moeda_original or '' }}</div>
-        <div><b>Parcela</b>{{ (v.parcela_atual|string ~ '/' ~ v.parcela_total|string) if v.parcela_total else 'À vista' }}</div>
-        <div><b>Primeira sincronização</b>{{ v.primeiro_sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.primeiro_sincronizado_local else '-' }}</div>
-        <div><b>Última sincronização</b>{{ v.sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.sincronizado_local else '-' }}</div>
-        {% if v.conferida %}<div><b>OK por</b>{{ v.conferida_por or '-' }}{% if v.conferida_local %} · {{ v.conferida_local.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>{% endif %}
-        {% if v.observacao_sistema %}<div class="nota-sistema"><b>Informação interna do sistema</b>{{ v.observacao_sistema }}</div>{% endif %}
-      </div></div>
       </div>
     {% endfor %}
   </td></tr>{% endif %}
@@ -134,4 +134,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260830-4"></script>{% endblock %}
+{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260830-5"></script>{% endblock %}

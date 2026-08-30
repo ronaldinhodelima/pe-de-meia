@@ -1312,6 +1312,9 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   fim da descrição; ela abre o painel anexado àquele mesmo registro. O ID deve quebrar linha dentro
   de uma área própria e nunca sobrepor Status, Tipo ou Valor. Os selos `P` e `F` usam tooltip CSS
   imediato no mouse/foco, sem depender da demora do atributo nativo `title`.
+- Dentro de cada registro, a ordem visual é fixa: linha do lançamento, painel técnico aberto pela
+  seta e, somente no principal editável, tabela de classificação. O painel da fatura nunca deve
+  aparecer depois da classificação, pois pareceria pertencer aos campos editáveis.
 - O JavaScript da visão detalhada usa parâmetro de versão no `src`. Sempre renovar esse parâmetro
   quando o comportamento do arquivo mudar, evitando HTML novo com script antigo no cache.
 - O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
