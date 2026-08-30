@@ -639,6 +639,10 @@ def index():
     config_lancamentos = {
         "pode_editar": pode_editar,
         "pode_conferir": pode_conferir,
+        "origens_credito": [
+            aid for aid, _curto, _completo, _texto, _selo in origem_opcoes
+            if contas_by_id[aid]["tipo"] == "CREDIT"
+        ],
         "duplicada_obs": DUPLICADA_OBS_PADRAO,
         "dimensoes_cadastro_rapido": {
             str(d["id"]): d["nome"] for d in dimensoes
@@ -704,6 +708,340 @@ def index():
         detalhes_json=json_script(detalhes_js),
         config_json=json_script(config_lancamentos),
     )
+
+
+def _eh_pagamento_fatura(descricao):
+    texto = (descricao or "").strip().upper()
+    return texto.startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
+
+
+@bp.route("/lancamentos/fatura")
+@requer("lancamentos_ver")
+def lancamentos_por_fatura():
+    """Revisao contabil de uma fatura, sem confundir data de compra com ciclo.
+
+    Cada linha principal vem do PDF. Os varios registros que explicam a linha
+    ficam agrupados no sinal +; somente o registro financeiro escolhido conta
+    no DRE e pode ser editado aqui.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    contas_by_id, origem_opcoes = carregar_origens(cur)
+    contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
+    account_id = request.args.get("account_id") or ""
+    fatura_id = request.args.get("fatura_id", type=int)
+
+    if fatura_id:
+        cur.execute(
+            "SELECT f.*, c.tipo FROM cartao.fatura_importada f "
+            "JOIN cartao.conta c ON c.account_id=f.account_id WHERE f.id=%s;",
+            (fatura_id,),
+        )
+        fatura = cur.fetchone()
+        if fatura:
+            account_id = str(fatura["account_id"])
+    else:
+        if not account_id and contas_credito:
+            account_id = contas_credito[0][0]
+        cur.execute(
+            "SELECT f.*, c.tipo FROM cartao.fatura_importada f "
+            "JOIN cartao.conta c ON c.account_id=f.account_id "
+            "WHERE f.account_id=%s ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.id DESC LIMIT 1;",
+            (account_id,),
+        )
+        fatura = cur.fetchone()
+        fatura_id = fatura["id"] if fatura else None
+
+    if not fatura_id or not fatura:
+        cur.close()
+        conn.close()
+        return render_template(
+            "lancamentos_fatura.html", titulo="Lançamentos por fatura",
+            topbar=topbar_html("Lançamentos", "inicio"), fatura=None,
+            contas_credito=contas_credito, account_id=account_id, linhas=[],
+            erro="Nenhuma fatura importada foi encontrada para este cartão.",
+        )
+
+    cur.execute(
+        "SELECT id, mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;",
+        (account_id,),
+    )
+    faturas = cur.fetchall()
+    ids_faturas = [r["id"] for r in faturas]
+    pos = ids_faturas.index(fatura_id)
+    fatura_nova = faturas[pos - 1] if pos > 0 else None
+    fatura_antiga = faturas[pos + 1] if pos + 1 < len(faturas) else None
+
+    cur.execute(
+        "SELECT fl.* FROM cartao.fatura_linha fl WHERE fl.fatura_id=%s "
+        "ORDER BY fl.data, fl.id;",
+        (fatura_id,),
+    )
+    linhas = [dict(r) for r in cur.fetchall()]
+
+    cur.execute(
+        f"SELECT v.fatura_linha_id, v.transacao_id, v.origem, v.criado_por, "
+        f"t.descricao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        f"t.data_transacao, t.categoria, t.observacao, t.conferida, "
+        f"COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
+        f"COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
+        f"{NATUREZA_SQL} AS natureza_efetiva "
+        f"FROM cartao.fatura_vinculo v "
+        f"JOIN cartao.transacao t ON t.transacao_id=v.transacao_id "
+        f"JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
+        f"{JOIN_NATUREZA} WHERE fl.fatura_id=%s ORDER BY v.id;",
+        (fatura_id,),
+    )
+    vinculos_por_linha = {}
+    todos_ids = []
+    for r in cur.fetchall():
+        item = dict(r)
+        transacao_uuid = item["transacao_id"]
+        item["transacao_id"] = str(item["transacao_id"])
+        item["data_local"] = data_hora_local(item.pop("data_transacao"))
+        item["elegivel"] = not (
+            item["duplicada"] or item["substituido_por"] or item["somente_conciliacao"]
+        )
+        vinculos_por_linha.setdefault(item["fatura_linha_id"], []).append(item)
+        todos_ids.append(transacao_uuid)
+
+    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
+    dimensoes = cur.fetchall()
+    obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
+    cur.execute(
+        "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
+        "FROM cartao.dimensao_valor ORDER BY nome;"
+    )
+    valores_por_dim = {}
+    projeto_portfolio_map = {}
+    for v in cur.fetchall():
+        valores_por_dim.setdefault(v["dimensao_id"], []).append(v)
+        if v["portfolio_valor_id"]:
+            projeto_portfolio_map[str(v["id"])] = str(v["portfolio_valor_id"])
+
+    dims_por_tx = {}
+    if todos_ids:
+        cur.execute(
+            "SELECT transacao_id, dimensao_id, valor_id FROM cartao.transacao_dimensao "
+            "WHERE transacao_id IN %s;", (tuple(set(todos_ids)),),
+        )
+        for r in cur.fetchall():
+            dims_por_tx.setdefault(str(r["transacao_id"]), {})[r["dimensao_id"]] = r["valor_id"]
+
+    proporcao_dre = {}
+    rateados = set()
+    rateio_valido = {}
+    if todos_ids:
+        cur.execute(
+            f"SELECT t.transacao_id, COALESCE(SUM(CASE WHEN {NATUREZA_SQL}='despesa' "
+            f"THEN ABS(COALESCE(t.valor_brl,t.valor_original)) ELSE 0 END) / "
+            f"NULLIF(SUM(ABS(COALESCE(t.valor_brl,t.valor_original))),0),0) AS proporcao "
+            f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE t.transacao_id IN %s "
+            f"AND COALESCE(t.duplicada,false)=false GROUP BY t.transacao_id;",
+            (tuple(set(todos_ids)),),
+        )
+        proporcao_dre = {str(r["transacao_id"]): Decimal(str(r["proporcao"] or 0)) for r in cur.fetchall()}
+        cur.execute(
+            "SELECT r.transacao_id, r.id, r.valor_brl, r.categoria, "
+            "ABS(COALESCE(t.valor_brl,t.valor_original)) AS total, "
+            "EXISTS (SELECT 1 FROM cartao.dimensao d LEFT JOIN cartao.transacao_rateio_dimensao rd "
+            "ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
+            "WHERE d.obrigatoria=true AND rd.valor_id IS NULL) AS dim_faltando "
+            "FROM cartao.transacao_rateio r JOIN cartao.transacao t ON t.transacao_id=r.transacao_id "
+            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
+            (tuple(set(todos_ids)),),
+        )
+        resumo_rateios = {}
+        for r in cur.fetchall():
+            tid = str(r["transacao_id"])
+            item = resumo_rateios.setdefault(tid, {
+                "partes": 0, "soma": Decimal("0"), "total": Decimal(str(r["total"] or 0)), "incompleto": False,
+            })
+            item["partes"] += 1
+            item["soma"] += abs(Decimal(str(r["valor_brl"] or 0)))
+            item["incompleto"] = item["incompleto"] or not r["categoria"] or r["dim_faltando"]
+        for tid, item in resumo_rateios.items():
+            rateados.add(tid)
+            rateio_valido[tid] = item["partes"] >= 2 and item["soma"] == item["total"] and not item["incompleto"]
+
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
+    categorias_db = {r["categoria"] for r in cur.fetchall()}
+    categorias = sorted(
+        (categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
+    categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
+
+    total_pdf = Decimal("0")
+    total_dre = Decimal("0")
+    total_fora = Decimal("0")
+    total_pendente = Decimal("0")
+    contagens = {"linhas": 0, "vinculadas": 0, "classificadas": 0, "conferidas": 0, "multiplos": 0}
+    for linha in linhas:
+        linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
+        vinculos = vinculos_por_linha.get(linha["id"], [])
+        criado = str(linha["transacao_id_criado"]) if linha["transacao_id_criado"] else None
+        elegiveis = [v for v in vinculos if v["elegivel"]]
+        elegiveis.sort(key=lambda v: (
+            0 if v["transacao_id"] == criado else 1,
+            abs(abs(Decimal(str(v["valor"] or 0))) - abs(Decimal(str(linha["valor"] or 0)))),
+        ))
+        principal = elegiveis[0] if elegiveis else None
+        for v in vinculos:
+            v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
+            v["tecnico"] = not v["principal"]
+        linha["vinculos"] = vinculos
+        linha["principal"] = principal
+        linha["multiplos"] = len(vinculos) > 1
+        if linha["multiplos"]:
+            contagens["multiplos"] += 1
+        valor_pdf = abs(Decimal(str(linha["valor"] or 0)))
+        if linha["pagamento"]:
+            linha["estado"] = "pagamento"
+            linha["classificada"] = False
+            continue
+        contagens["linhas"] += 1
+        total_pdf += valor_pdf
+        if principal:
+            contagens["vinculadas"] += 1
+            tid = principal["transacao_id"]
+            principal["dims"] = dims_por_tx.get(tid, {})
+            principal["rateado"] = tid in rateados
+            completa = (
+                rateio_valido.get(tid, False) if principal["rateado"] else
+                bool(principal["categoria"]) and obrigatorias.issubset({k for k, v in principal["dims"].items() if v})
+            )
+            linha["classificada"] = completa
+            if completa:
+                contagens["classificadas"] += 1
+                proporcao = proporcao_dre.get(tid, Decimal("0"))
+                linha["valor_dre"] = valor_pdf * proporcao
+                linha["valor_fora"] = valor_pdf - linha["valor_dre"]
+                total_dre += linha["valor_dre"]
+                total_fora += linha["valor_fora"]
+                linha["estado"] = "dre" if proporcao == 1 else ("fora" if proporcao == 0 else "misto")
+            else:
+                total_pendente += valor_pdf
+                linha["estado"] = "classificar"
+        else:
+            linha["classificada"] = False
+            total_pendente += valor_pdf
+            linha["estado"] = "sem_vinculo"
+        if linha["conferida_fatura"]:
+            contagens["conferidas"] += 1
+
+    status = request.args.get("status", "todas")
+    filtros_validos = {"todas", "pendente_classificacao", "pendente_ok", "dre", "fora", "sem_vinculo", "multiplos"}
+    if status not in filtros_validos:
+        status = "todas"
+    linhas_visiveis = [l for l in linhas if (
+        status == "todas" or
+        (status == "pendente_classificacao" and not l["pagamento"] and not l["classificada"]) or
+        (status == "pendente_ok" and not l["pagamento"] and not l["conferida_fatura"]) or
+        (status == "dre" and l["estado"] in {"dre", "misto"}) or
+        (status == "fora" and l["estado"] in {"fora", "misto"}) or
+        (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
+        (status == "multiplos" and l["multiplos"])
+    )]
+
+    config = {
+        "pode_editar": pode("lancamentos_editar"),
+        "pode_conferir": pode("lancamentos_conferir"),
+        "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
+    }
+    conta = contas_by_id.get(account_id)
+    cur.close()
+    conn.close()
+    return render_template(
+        "lancamentos_fatura.html", titulo="Lançamentos por fatura",
+        topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
+        fatura_nova=fatura_nova, fatura_antiga=fatura_antiga,
+        faturas=faturas, conta=conta, contas_credito=contas_credito,
+        account_id=account_id, linhas=linhas_visiveis, categorias=categorias_template,
+        dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
+        totais={"pdf": total_pdf, "dre": total_dre, "fora": total_fora, "pendente": total_pendente},
+        contagens=contagens, config_json=json_script(config),
+        projeto_portfolio_map=projeto_portfolio_map,
+        pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
+    )
+
+
+@bp.route("/api/fatura-linha/<int:linha_id>/conferida", methods=["POST"])
+@requer("lancamentos_conferir")
+def conferir_linha_fatura(linha_id):
+    data = request.get_json(force=True) or {}
+    conferir = bool(data.get("conferida"))
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT id, descricao, conferida_fatura FROM cartao.fatura_linha WHERE id=%s FOR UPDATE;",
+            (linha_id,),
+        )
+        linha = cur.fetchone()
+        if not linha:
+            return jsonify({"ok": False, "erro": "Linha da fatura não encontrada."}), 404
+        if _eh_pagamento_fatura(linha["descricao"]):
+            return jsonify({"ok": False, "erro": "Pagamento anterior é informativo e não recebe OK."}), 400
+        if linha["conferida_fatura"] and not conferir and data.get("confirmar_desmarcacao") is not True:
+            return jsonify({"ok": False, "erro": "Confirme a retirada do OK da fatura."}), 409
+        if conferir:
+            cur.execute(
+                "SELECT t.transacao_id, t.categoria, COALESCE(t.valor_brl,t.valor_original) AS valor "
+                "FROM cartao.fatura_vinculo v JOIN cartao.transacao t ON t.transacao_id=v.transacao_id "
+                "JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
+                "WHERE v.fatura_linha_id=%s AND COALESCE(t.duplicada,false)=false "
+                "AND t.substituido_por IS NULL AND COALESCE(t.somente_conciliacao,false)=false "
+                "ORDER BY (v.transacao_id=fl.transacao_id_criado) DESC, "
+                "ABS(ABS(COALESCE(t.valor_brl,t.valor_original))-ABS(fl.valor)), v.id LIMIT 1;",
+                (linha_id,),
+            )
+            principal = cur.fetchone()
+            if not principal:
+                return jsonify({"ok": False, "erro": "Vincule um lançamento contabilizado antes de marcar OK."}), 400
+            cur.execute(
+                "SELECT id, valor_brl, categoria FROM cartao.transacao_rateio WHERE transacao_id=%s ORDER BY ordem,id;",
+                (principal["transacao_id"],),
+            )
+            partes = cur.fetchall()
+            if partes:
+                soma = sum((abs(Decimal(str(p["valor_brl"] or 0))) for p in partes), Decimal("0"))
+                ids_partes = [p["id"] for p in partes]
+                cur.execute(
+                    "SELECT 1 FROM cartao.transacao_rateio r CROSS JOIN cartao.dimensao d "
+                    "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
+                    "WHERE r.id IN %s AND d.obrigatoria=true AND rd.valor_id IS NULL LIMIT 1;",
+                    (tuple(ids_partes),),
+                )
+                incompleto = (
+                    len(partes) < 2 or soma != abs(Decimal(str(principal["valor"] or 0)))
+                    or any(not p["categoria"] for p in partes) or bool(cur.fetchone())
+                )
+            else:
+                cur.execute(
+                    "SELECT 1 FROM cartao.dimensao d LEFT JOIN cartao.transacao_dimensao td "
+                    "ON td.dimensao_id=d.id AND td.transacao_id=%s "
+                    "WHERE d.obrigatoria=true AND td.valor_id IS NULL LIMIT 1;",
+                    (principal["transacao_id"],),
+                )
+                incompleto = not principal["categoria"] or bool(cur.fetchone())
+            if incompleto:
+                return jsonify({"ok": False, "erro": "Complete categoria e campos obrigatórios antes do OK da fatura."}), 400
+        cur.execute(
+            "UPDATE cartao.fatura_linha SET conferida_fatura=%s, "
+            "conferida_fatura_por=CASE WHEN %s THEN %s ELSE NULL END, "
+            "conferida_fatura_em=CASE WHEN %s THEN now() ELSE NULL END WHERE id=%s;",
+            (conferir, conferir, session.get("user"), conferir, linha_id),
+        )
+        conn.commit()
+        registrar_auditoria(
+            "alteracao", "fatura_linha.conferida", sucesso=True,
+            detalhes={"linha_id": linha_id, "conferida": conferir},
+        )
+        return jsonify({"ok": True, "conferida": conferir, "usuario": session.get("user")})
+    finally:
+        fechar_recursos_banco(conn, cur)
 
 
 @bp.route("/api/lancamento-manual", methods=["POST"])

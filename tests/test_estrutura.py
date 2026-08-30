@@ -135,7 +135,9 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/categoria-lancamentos", "/api/dimensao-lancamentos",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
-        "/relatorios/conciliar-fatura", "/api/fatura-linha/<int:linha_id>/criar-lancamento",
+        "/relatorios/conciliar-fatura", "/lancamentos/fatura",
+        "/api/fatura-linha/<int:linha_id>/criar-lancamento",
+        "/api/fatura-linha/<int:linha_id>/conferida",
         "/api/fatura-linha/marcar-conferida-repeticao", "/relatorios/fatura/<int:fatura_id>/pdf",
         "/api/fatura/<int:fatura_id>/vincular-automatico",
         "/api/faturas/sincronizar-parcelas",
@@ -150,6 +152,31 @@ def test_todas_as_rotas_continuam_registradas():
         "/usuarios", "/logs",
     }
     assert rotas == esperadas
+
+
+def test_visao_por_fatura_separa_ok_e_mantem_agregados():
+    """A conferencia contabil nao pode reutilizar o OK do registro do Pluggy,
+    nem esconder os registros tecnicos que explicam uma linha do PDF."""
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert 'conferida_fatura' in view
+    assert 'data-expande="{{ linha.id }}"' in template
+    assert "Lançamentos agregados a esta linha" in template
+    assert "contabilizado e editável" in template
+    assert "registro técnico · somente leitura" in template
+    assert "data-ok-fatura" in template
+    assert "/api/fatura-linha/" in js and "/conferida" in js
+
+
+def test_origem_unica_de_cartao_abre_fatura_mais_recente():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    assert '"origens_credito"' in view
+    assert "/lancamentos/fatura?account_id=" in js
+    trecho = view.split('def lancamentos_por_fatura', 1)[1].split('@bp.route("/api/fatura-linha', 1)[0]
+    assert "ORDER BY f.ano_referencia DESC, f.mes_referencia DESC" in trecho
+    assert "LIMIT 1" in trecho
 
 
 def test_tojson_nunca_dentro_de_atributo_html():

@@ -298,7 +298,7 @@ delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derr
 ## Estado registrado em produção — 29/08/2026
 
 Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O código espera schema na migração **26**. Entre `cfa183e` e `7c1ce99` foram publicados 75
+O código espera schema na migração **28**. Entre `cfa183e` e `7c1ce99` foram publicados 75
 commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
 primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
 regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
@@ -1024,7 +1024,7 @@ Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
 
 ## Testes automatizados
 
-Em 29/08/2026 a suíte local está em **216 aprovados e 6 ignorados**. Ela cobre a regra de ouro
+Em 30/08/2026 a suíte local está em **224 aprovados e 6 ignorados**. Ela cobre a regra de ouro
 do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
 auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
 
@@ -1060,6 +1060,20 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   dimensão ou observação nunca pode marcar nem desmarcar `conferida`. Para retirar um OK ou
   marcar duplicidade, a tela exige confirmação explícita. Lançamentos conferidos aparecem em
   cinza-claro, não em verde.
+- **Conferência de cartão usa a fatura, não o mês civil.** Ao escolher uma única origem de
+  cartão em Lançamentos, abrir `/lancamentos/fatura` na fatura importada mais recente. A linha
+  principal é sempre a cobrança oficial do PDF; o sinal `+` mostra todos os registros agregados.
+  Somente o lançamento financeiro identificado como **contabilizado** pode ser editado e entrar
+  no DRE. Registros `somente_conciliacao`, substituídos e duplicados permanecem visíveis para
+  auditoria, mas são somente leitura e não somam outra vez.
+- **OK da fatura é independente do OK do lançamento.** A migração 28 adiciona
+  `fatura_linha.conferida_fatura`, usuário e horário. Esse OK confirma uma cobrança específica
+  do PDF e não pode marcar/desmarcar `transacao.conferida`. Reimportar o mesmo PDF preserva o
+  estado. Para marcar, deve existir lançamento financeiro vinculado e a classificação/rateio
+  precisa estar completa; para retirar, pedir confirmação explícita.
+- **Cards da fatura separam a diferença.** Mostrar total oficial do PDF, despesas no DRE, fora
+  do DRE (investimentos e outras naturezas) e valor ainda sem classificação/vínculo. A igualdade
+  esperada é `PDF = DRE + fora do DRE + pendente`, sempre usando o valor da linha oficial.
 - **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
   classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
   abaixo dele com botão `+`/`−`, descritas como `<descrição original> — Parte N`. As partes

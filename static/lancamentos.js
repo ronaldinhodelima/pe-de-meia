@@ -247,6 +247,15 @@ function mudarMes(delta) {
 function aplicarFiltros(recarregarPagina) {
   atualizarChipLabels();
   const params = coletarQuery();
+  const origens = params.getAll('origem');
+  const cartoes = window.configLancamentos.origens_credito || [];
+  // Uma unica origem de cartao muda a pergunta: em vez de mes civil, o
+  // usuario quer conferir a fatura oficial. A tela dedicada abre a fatura
+  // importada mais recente e mantem os registros agregados no sinal +.
+  if (origens.length === 1 && cartoes.includes(origens[0])) {
+    window.location.assign('/lancamentos/fatura?account_id=' + encodeURIComponent(origens[0]));
+    return;
+  }
   const novaUrl = '/?' + params.toString();
   if (recarregarPagina) {
     guardarPosicaoAtual();

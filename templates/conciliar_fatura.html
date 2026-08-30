@@ -129,9 +129,12 @@
       {{ resultado.orfas|length }} lançamento(s) do Pluggy sem vínculo
     </div>
     <div style="margin-top:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <a href="/lancamentos/fatura?fatura_id={{ f.id }}" style="font-size:12px;font-weight:600">
+        Revisar classificação, DRE e OK desta fatura →
+      </a>
       <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
-         style="font-size:12px">
-        Ver esse período inteiro em Lançamentos ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }}) →
+         style="font-size:11.5px;color:var(--ink-faint)">
+        Ver registros técnicos do período ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }})
       </a>
       {% if pode_editar_conciliacao %}
         <button type="button" class="ver-btn" style="font-size:12px" onclick="vincularAutomatico({{ f.id }}, this)">

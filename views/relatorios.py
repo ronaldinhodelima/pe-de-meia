@@ -1165,7 +1165,8 @@ def conciliar_fatura():
                 # que bater exatamente igual.
                 cur.execute(
                     "SELECT data, descricao, valor, titular, transacao_id_criado, "
-                    "conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em "
+                    "conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em, "
+                    "conferida_fatura, conferida_fatura_por, conferida_fatura_em "
                     "FROM cartao.fatura_linha WHERE fatura_id=%s;",
                     (fatura_id,),
                 )
@@ -1181,14 +1182,18 @@ def conciliar_fatura():
                     cur.execute(
                         "INSERT INTO cartao.fatura_linha "
                         "(fatura_id, data, descricao, descricao_base, parcela_atual, parcela_total, valor, titular, "
-                        "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em) "
-                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);",
+                        "transacao_id_criado, conferida_repeticao, conferida_repeticao_por, conferida_repeticao_em, "
+                        "conferida_fatura, conferida_fatura_por, conferida_fatura_em) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);",
                         (fatura_id, l["data"], l["descricao"], l["descricao_base"],
                          l["parcela_atual"], l["parcela_total"], l["valor"], l["titular"],
                          anterior["transacao_id_criado"] if anterior else None,
                          anterior["conferida_repeticao"] if anterior else False,
                          anterior["conferida_repeticao_por"] if anterior else None,
-                         anterior["conferida_repeticao_em"] if anterior else None),
+                         anterior["conferida_repeticao_em"] if anterior else None,
+                         anterior["conferida_fatura"] if anterior else False,
+                         anterior["conferida_fatura_por"] if anterior else None,
+                         anterior["conferida_fatura_em"] if anterior else None),
                     )
                 # Casamento automatico roda aqui (POST), nao na abertura da
                 # tela: GET nao pode gravar - e assim o resultado para de mudar

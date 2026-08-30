@@ -2025,6 +2025,24 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (27);")
             conn.commit()
 
+        if versao_atual < 28:
+            # O OK do lancamento confirma o registro financeiro; a revisao da
+            # fatura confirma uma linha especifica do PDF. Sao assinaturas
+            # diferentes e precisam sobreviver independentemente.
+            cur.execute(
+                "ALTER TABLE cartao.fatura_linha "
+                "ADD COLUMN IF NOT EXISTS conferida_fatura boolean NOT NULL DEFAULT false, "
+                "ADD COLUMN IF NOT EXISTS conferida_fatura_por text, "
+                "ADD COLUMN IF NOT EXISTS conferida_fatura_em timestamptz;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','OK independente por linha da fatura',"
+                "jsonb_build_object('versao',28));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (28);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
