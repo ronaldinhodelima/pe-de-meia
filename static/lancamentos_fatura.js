@@ -72,6 +72,75 @@
     });
   }
 
+  const revisarParcelamentos = document.getElementById('revisarParcelamentos');
+  const revisarStatus = document.getElementById('revisarParcelamentosStatus');
+  let previaParcelamentos = null;
+  async function carregarPreviaParcelamentos() {
+    if (!revisarParcelamentos) return null;
+    revisarParcelamentos.disabled = true;
+    try {
+      const url = '/api/faturas/sincronizar-parcelas?fatura_id=' +
+        encodeURIComponent(revisarParcelamentos.dataset.faturaId);
+      const resp = await fetch(url, {cache: 'no-store'});
+      const json = await resp.json();
+      if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível analisar.');
+      previaParcelamentos = json;
+      if (!json.agregados || !json.parcelas_pendentes) {
+        revisarParcelamentos.textContent = 'Parcelamentos revisados';
+        revisarParcelamentos.title = 'Não há parcelamentos pendentes neste cartão';
+        if (revisarStatus) revisarStatus.textContent = 'Nenhuma alteração necessária.';
+        return json;
+      }
+      revisarParcelamentos.textContent = 'Revisar parcelamentos';
+      revisarParcelamentos.disabled = false;
+      if (revisarStatus) revisarStatus.textContent =
+        json.agregados + ' compra(s) · ' + json.parcelas_pendentes + ' parcela(s) pendente(s)';
+      return json;
+    } catch (erro) {
+      revisarParcelamentos.textContent = 'Não foi possível analisar';
+      revisarParcelamentos.title = erro.message;
+      if (revisarStatus) revisarStatus.textContent = erro.message;
+      return null;
+    }
+  }
+  if (revisarParcelamentos) {
+    carregarPreviaParcelamentos();
+    revisarParcelamentos.addEventListener('click', async () => {
+      const previa = previaParcelamentos || await carregarPreviaParcelamentos();
+      if (!previa || !previa.agregados || !previa.parcelas_pendentes) return;
+      const confirmar = window.confirm(
+        'Este cartão possui ' + previa.agregados + ' compra(s) pelo valor total e ' +
+        previa.parcelas_pendentes + ' parcela(s) pendente(s).\n\n' +
+        'O valor total passará a ser registro técnico fora do DRE, e cada parcela será ' +
+        'contabilizada no mês da fatura. Isso pode alterar os totais mensais.\n\n' +
+        'Confirma a revisão?'
+      );
+      if (!confirmar) return;
+      revisarParcelamentos.disabled = true;
+      revisarParcelamentos.textContent = 'Revisando…';
+      const corpo = new URLSearchParams({
+        fatura_id: revisarParcelamentos.dataset.faturaId,
+        retorno: window.location.pathname + window.location.search
+      });
+      try {
+        const resp = await fetch('/api/faturas/sincronizar-parcelas', {
+          method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: corpo.toString()
+        });
+        if (!resp.ok) {
+          const json = await resp.json();
+          throw new Error(json.erro || 'Não foi possível revisar.');
+        }
+        if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+        window.location.assign(window.location.href);
+      } catch (erro) {
+        revisarParcelamentos.textContent = 'Revisar parcelamentos';
+        revisarParcelamentos.disabled = false;
+        if (revisarStatus) revisarStatus.textContent = erro.message;
+      }
+    });
+  }
+
   function alternarLinha(id) {
     const botao = document.querySelector('[data-expande="' + CSS.escape(id) + '"]');
     const detalhe = document.getElementById('vinculos-' + id);

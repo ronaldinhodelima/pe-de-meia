@@ -1211,7 +1211,9 @@ def conciliar_fatura():
                 # A propria importacao conclui o regime de caixa. Assim uma
                 # compra total do Pluggy nunca espera outra acao manual para
                 # virar parcelas mensais oficiais.
-                resumo_parcelas = _sincronizar_parcelas_de_agregado(cur, session.get("user"))
+                resumo_parcelas = _sincronizar_parcelas_de_agregado(
+                    cur, session.get("user"), account_id=account_id
+                )
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -1724,7 +1726,7 @@ def _revincular_lancamentos_da_fatura(cur, usuario):
     return cur.rowcount or 0
 
 
-def _sincronizar_parcelas_de_agregado(cur, usuario):
+def _sincronizar_parcelas_de_agregado(cur, usuario, account_id=None, preview=False):
     """Regime de caixa para parcelamento (decisão do usuário, 29/08/2026).
 
     O Pluggy as vezes grava o parcelamento inteiro como UMA transacao no valor
@@ -1741,7 +1743,12 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     marcar "esta linha ja virou lancamento". Rodar de novo nao duplica.
     Herda categoria e dimensoes do agregado, para nao perder classificacao.
     """
-    _revincular_lancamentos_da_fatura(cur, usuario)
+    # A prévia é estritamente somente leitura. Na execução, recompõe antes os
+    # vínculos de parcelas já criadas que um reenvio de PDF possa ter removido.
+    if not preview:
+        _revincular_lancamentos_da_fatura(cur, usuario)
+    escopo_sql = " AND t.account_id=%s " if account_id else ""
+    escopo_params = (account_id,) if account_id else ()
     cur.execute(
         "SELECT v.transacao_id, COUNT(DISTINCT v.fatura_linha_id) AS linhas, "
         "COALESCE(bool_or(t.somente_conciliacao),false) AS era_tecnico "
@@ -1750,15 +1757,35 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         "JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
         "WHERE NOT EXISTS (SELECT 1 FROM cartao.fatura_linha criada "
         " WHERE criada.transacao_id_criado=v.transacao_id) "
+        + escopo_sql +
         "GROUP BY v.transacao_id "
         "HAVING COUNT(DISTINCT v.fatura_linha_id) >= 2 OR bool_or("
         " fl.parcela_total >= 2 AND ABS(ABS(COALESCE(t.valor_brl,t.valor_original)) "
-        " - ABS(fl.valor * fl.parcela_total)) <= 1.00);"
+        " - ABS(fl.valor * fl.parcela_total)) <= 1.00);",
+        escopo_params,
     )
     agregados_info = {str(r["transacao_id"]): dict(r) for r in cur.fetchall()}
     agregados = list(agregados_info)
     if not agregados:
-        return {"agregados": 0, "parcelas_criadas": 0}
+        return {"agregados": 0, "parcelas_pendentes": 0, "parcelas_criadas": 0,
+                "preview": bool(preview)}
+
+    # Conta antes de alterar. O mesmo levantamento alimenta a confirmação da
+    # interface e impede que o usuário confirme uma operação de impacto incerto.
+    cur.execute(
+        "SELECT COUNT(*) AS parcelas_pendentes FROM cartao.fatura_linha fl "
+        "JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+        "JOIN cartao.fatura_vinculo v ON v.fatura_linha_id=fl.id "
+        "WHERE v.transacao_id=ANY(%s::uuid[]) AND fl.transacao_id_criado IS NULL "
+        "AND fi.periodo_fim IS NOT NULL;",
+        (agregados,),
+    )
+    parcelas_pendentes = int(cur.fetchone()["parcelas_pendentes"] or 0)
+    if preview:
+        return {
+            "agregados": len(agregados), "parcelas_pendentes": parcelas_pendentes,
+            "parcelas_criadas": 0, "preview": True,
+        }
 
     cur.execute(
         "UPDATE cartao.transacao SET somente_conciliacao = true, atualizado_em = now() "
@@ -1844,7 +1871,8 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
     preenchidas = preencher_classificacao_vazia_parcelas(cur)
     return {
         "agregados": len(agregados), "marcados_agora": marcados,
-        "parcelas_criadas": criadas, "classificacoes_preenchidas": preenchidas,
+        "parcelas_pendentes": parcelas_pendentes, "parcelas_criadas": criadas,
+        "classificacoes_preenchidas": preenchidas, "preview": False,
     }
 
 
@@ -2112,7 +2140,7 @@ def criar_cobrancas_sem_pluggy():
         conn.close()
 
 
-@bp.route("/api/faturas/sincronizar-parcelas", methods=["POST"])
+@bp.route("/api/faturas/sincronizar-parcelas", methods=["GET", "POST"])
 @requer("conciliacao_editar")
 def sincronizar_parcelas():
     """Aplica o regime de caixa nos parcelamentos agregados (ver
@@ -2122,7 +2150,24 @@ def sincronizar_parcelas():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        resumo = _sincronizar_parcelas_de_agregado(cur, session.get("user"))
+        fonte = request.args if request.method == "GET" else request.form
+        try:
+            fatura_id = int(fonte.get("fatura_id") or 0)
+        except (TypeError, ValueError):
+            fatura_id = 0
+        if not fatura_id:
+            return jsonify({"ok": False, "erro": "Informe a fatura que será revisada."}), 400
+        cur.execute("SELECT account_id FROM cartao.fatura_importada WHERE id=%s;", (fatura_id,))
+        fatura = cur.fetchone()
+        if not fatura:
+            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+        resumo = _sincronizar_parcelas_de_agregado(
+            cur, session.get("user"), account_id=str(fatura["account_id"]),
+            preview=request.method == "GET",
+        )
+        if request.method == "GET":
+            conn.rollback()
+            return jsonify({"ok": True, **resumo})
         conn.commit()
         registrar_auditoria(
             "alteracao", "relatorios.sincronizar_parcelas", sucesso=True, detalhes=resumo,

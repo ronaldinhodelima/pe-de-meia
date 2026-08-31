@@ -1482,4 +1482,10 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - A revisão é idempotente: `fatura_linha.transacao_id_criado` impede criar a mesma parcela duas
   vezes. O botão pode ser executado novamente para tratar novas famílias detectadas. Toda execução
   fica no log de auditoria. O rótulo continua curto, mas o tooltip deve explicar o impacto real.
+- Antes de executar, a tela chama a mesma rotina em modo `preview`, estritamente somente leitura.
+  O botão fica desativado quando não houver pendências; quando houver, mostra quantas compras e
+  parcelas serão afetadas e exige confirmação explícita com aviso de impacto no DRE mensal.
+- A revisão manual é limitada ao cartão da fatura aberta. A importação automática também passa o
+  `account_id` da fatura recém-importada. Nunca usar o botão de uma origem para revisar silenciosamente
+  parcelamentos de outros cartões ou contas.
 - O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.

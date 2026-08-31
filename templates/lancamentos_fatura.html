@@ -79,10 +79,10 @@
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
 </div>
 <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
-{% if pode_editar %}<form method="post" action="/api/faturas/sincronizar-parcelas" style="margin:-6px 0 14px">
-  <input type="hidden" name="retorno" value="/lancamentos/fatura?fatura_id={{ fatura.id }}&status={{ status }}">
-  <button type="submit" class="ver-btn" title="Corrige compras que o Pluggy trouxe pelo valor total: o total vira registro técnico e cada parcela passa a ser contabilizada no mês da fatura">Revisar parcelamentos</button>
-</form>{% endif %}
+{% if pode_editar %}<div style="margin:-6px 0 14px;display:flex;align-items:center;gap:9px">
+  <button type="button" class="ver-btn" id="revisarParcelamentos" data-fatura-id="{{ fatura.id }}" aria-label="Revisar parcelamentos" title="Analisa primeiro e só corrige após confirmação">Verificando parcelamentos…</button>
+  <span id="revisarParcelamentosStatus" style="font-size:12px;color:var(--ink-faint)" aria-live="polite"></span>
+</div>{% endif %}
 
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
@@ -144,4 +144,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-3"></script>{% endblock %}
