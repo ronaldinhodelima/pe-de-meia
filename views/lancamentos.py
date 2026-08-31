@@ -732,6 +732,28 @@ def _diferenca_valor_linha_fatura(valor_pdf, parcela_total, valor_lancamento):
     return abs(pdf - lancamento)
 
 
+def _candidatos_fatura_equivalentes(candidatos):
+    """Reconhece ecos tecnicos da mesma cobranca sem apagar nenhum registro.
+
+    Quando o PDF possui uma unica linha e o Pluggy entrega duas representacoes
+    no mesmo instante, cartão e valor, uma delas pode ser o lançamento
+    contabilizado e as demais permanecem para auditoria. Isso não é uma
+    divergência financeira nem exige que o usuário escolha entre cópias
+    indistinguíveis.
+    """
+    if len(candidatos) < 2:
+        return False
+    assinaturas = {
+        (
+            c.get("data_local"),
+            abs(Decimal(str(c.get("valor") or 0))),
+            c.get("numero_cartao_final"),
+        )
+        for c in candidatos
+    }
+    return len(assinaturas) == 1
+
+
 @bp.route("/lancamentos/fatura")
 @requer("lancamentos_ver")
 def lancamentos_por_fatura():
@@ -948,9 +970,9 @@ def lancamentos_por_fatura():
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1
         linha["ambigua"] = bool(
-            len(elegiveis) > 1 and not (
-                criado and any(v["transacao_id"] == criado for v in elegiveis)
-            )
+            len(elegiveis) > 1
+            and not _candidatos_fatura_equivalentes(elegiveis)
+            and not (criado and any(v["transacao_id"] == criado for v in elegiveis))
         )
         linha["requer_validacao"] = False
         linha["validacao_motivos"] = []

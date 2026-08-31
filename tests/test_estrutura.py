@@ -202,12 +202,23 @@ def test_cards_da_fatura_explicam_valores_e_filtram_divergencias():
 
 
 def test_compra_agregada_nao_vira_falsa_divergencia_de_valor():
-    from views.lancamentos import _diferenca_valor_linha_fatura
+    from views.lancamentos import (
+        _candidatos_fatura_equivalentes,
+        _diferenca_valor_linha_fatura,
+    )
 
     assert _diferenca_valor_linha_fatura("360.00", 6, "2160.00") == 0
     assert _diferenca_valor_linha_fatura("1416.70", 6, "8500.00") == 0
     assert _diferenca_valor_linha_fatura("91.15", 3, "273.41") == 0
     assert _diferenca_valor_linha_fatura("100.00", None, "102.00") == 2
+    ecos = [
+        {"data_local": "10/07/2026 17:00", "valor": "70.00", "numero_cartao_final": "1234"},
+        {"data_local": "10/07/2026 17:00", "valor": "70.00", "numero_cartao_final": "1234"},
+    ]
+    assert _candidatos_fatura_equivalentes(ecos)
+    assert not _candidatos_fatura_equivalentes([
+        ecos[0], {**ecos[1], "valor": "71.00"},
+    ])
 
 
 def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():

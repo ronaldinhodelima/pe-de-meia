@@ -1517,3 +1517,20 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - A explicação dos registros P/F e o controle seguro de revisão de parcelamentos ficam no rodapé,
   depois da tabela. A tarefa principal — filtrar, comparar e classificar lançamentos — vem antes.
 - O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.
+
+# Fechamento Unicred e conferência inicial do DRE (31/08/2026)
+
+- Na fatura de agosto, `MP*REGIBARBERSHOP` (R$ 70,00) e `GUILHERMEDASILVA`
+  (R$ 185,00) possuíam dois registros Pluggy com o mesmo instante, cartão e valor. Há uma única
+  cobrança oficial no PDF, um registro contabilizado e o outro continua preservado para auditoria.
+  Esse cenário é eco técnico, não divergência; não apagar nem somar os dois registros.
+- A equivalência só elimina o alerta quando data/hora, valor e final do cartão coincidem. Valores,
+  horários ou cartões diferentes continuam exigindo validação humana.
+- Retrato das faturas: junho R$ 16.492,58 (37 classificações e 83 OK pendentes), julho
+  R$ 16.543,97 (classificação completa e 4 OK pendentes) e agosto R$ 18.821,76
+  (classificação completa e 1 OK pendente). Não marcar OK automaticamente.
+- Os três totais oficiais estão integralmente classificados como despesa no DRE e sem valor fora
+  do DRE. O DRE mensal geral é maior porque reúne todas as contas e cartões; comparar a parcela da
+  Unicred pelos cartões da própria fatura, não com o total geral do mês.
+- O DRE 2026 ainda mostra muitos lançamentos sem categoria oriundos das demais contas. Resolver a
+  Unicred não autoriza classificar esses registros de outras origens com as mesmas regras.
