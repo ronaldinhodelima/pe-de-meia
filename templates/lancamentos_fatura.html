@@ -2,9 +2,9 @@
 
 {% block head_extra %}
 <style>
-  .fatura-cabecalho{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 18px;margin-bottom:16px}
-  .fatura-cabecalho h2{margin:0;font-size:20px}.fatura-cabecalho .nav{font-size:18px;text-decoration:none;padding:5px 11px;border:1px solid var(--line);border-radius:7px;color:var(--ink)}
-  .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}
+  .fatura-cabecalho{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;min-height:42px}
+  .fatura-cabecalho h2{margin:0;font-size:17px;line-height:1.15}.fatura-cabecalho .nav{font-size:16px;text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink)}
+  .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}.fatura-filtros .visao-lancamentos{margin-left:auto;margin-bottom:0}
   .fatura-cards .card{cursor:pointer}.fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
   .fatura-cards .card-ok .val{color:var(--good)}.fatura-cards .card-aviso .val{color:#a36b0b}.fatura-cards .card-erro .val{color:var(--bad)}.fatura-cards .card-fora .val{color:#665b88}
   .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
@@ -19,7 +19,8 @@
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:17px;line-height:1;cursor:pointer;border-radius:5px}.info-toggle:hover,.info-toggle:focus{background:#e8eaed;color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:#f5f5f3;border-radius:6px;padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:#c23c34!important;background:#fbeceb!important}.editor-financeiro label.obrigatorio{color:#a63832;font-weight:600}
-  .ok-lancamento{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0 14px}
+  .ok-lancamento{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0}
+  .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px}.busca-fatura span{font-size:12px;color:var(--ink-faint)}
   @media(max-width:900px){.vinculo-grid,.detalhes-grid{grid-template-columns:1fr}.detalhe-id{grid-column:auto}.vinculos-detalhe>td{padding-left:12px!important}}
 </style>
@@ -30,18 +31,9 @@
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
 <div class="fatura-cabecalho">
   {% if fatura_antiga %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_antiga.id }}" title="Fatura anterior">‹</a>{% else %}<span class="nav" style="opacity:.3">‹</span>{% endif %}
-  <div>
-    <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}</h2>
-    <div style="font-size:12px;color:var(--ink-faint)">{{ conta.label if conta else account_id }} · PDF oficial</div>
-    {% if fatura.periodo_inicio and fatura.periodo_fim %}<div style="font-size:12px;color:var(--ink-faint)">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% endif %}</div>{% endif %}
-  </div>
+  <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}</h2>
   {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
-  <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn" style="margin-left:auto;text-decoration:none">Ver conciliação do PDF</a>
-</div>
-
-<div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
-  <a href="{{ url_resumida }}">Resumida</a>
-  <a href="/lancamentos/fatura?fatura_id={{ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
+  <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn" style="text-decoration:none">Ver conciliação do PDF</a>
 </div>
 
 <div class="fatura-filtros">
@@ -64,6 +56,10 @@
     <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
     <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>
   </select>
+  <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
+    <a href="{{ url_resumida }}">Resumida</a>
+    <a href="/lancamentos/fatura?fatura_id={{ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
+  </div>
 </div>
 
 <div class="cards fatura-cards">
@@ -78,12 +74,6 @@
   <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
 </div>
-<div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
-{% if pode_editar %}<div style="margin:-6px 0 14px;display:flex;align-items:center;gap:9px">
-  <button type="button" class="ver-btn" id="revisarParcelamentos" data-fatura-id="{{ fatura.id }}" aria-label="Revisar parcelamentos" title="Analisa primeiro e só corrige após confirmação" disabled>Verificando parcelamentos…</button>
-  <span id="revisarParcelamentosStatus" style="font-size:12px;color:var(--ink-faint)" aria-live="polite"></span>
-</div>{% endif %}
-
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
   <span id="buscaFaturaContador" aria-live="polite"></span>
@@ -137,6 +127,13 @@
   </td></tr>{% endif %}
 {% else %}<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
 </tbody></table></div>
+<div class="rodape-fatura">
+  <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
+  {% if pode_editar %}<div class="revisao-parcelas">
+    <button type="button" class="ver-btn" id="revisarParcelamentos" data-fatura-id="{{ fatura.id }}" aria-label="Revisar parcelamentos" title="Analisa primeiro e só corrige após confirmação" disabled>Verificando parcelamentos…</button>
+    <span id="revisarParcelamentosStatus" style="font-size:12px;color:var(--ink-faint)" aria-live="polite"></span>
+  </div>{% endif %}
+</div>
 <script type="application/json" data-config-fatura>{{ config_json|safe }}</script>
 {% else %}
 <div class="aviso-erro">{{ erro }}</div>
@@ -144,4 +141,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-4"></script>{% endblock %}
+{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-5"></script>{% endblock %}

@@ -250,12 +250,14 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert "window.location.reload()" not in js
 
 
-def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
+def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-    assert "Ciclo {{ fatura.periodo_inicio.strftime" in template
-    assert "vence {{ fatura.vencimento.strftime" in template
+    cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
+    assert "Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}" in cabecalho
+    assert "Ciclo" not in cabecalho
+    assert "vence" not in cabecalho
     assert 'data-tip="{{ v.fonte_nome }}"' in template
     assert "Mais informações da transação" not in template
     assert "data-info-target" in template and "transacao-info" in template
@@ -332,6 +334,12 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     assert 'request.form.get("retorno")' in view
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "Revisar parcelamentos" in template
+    assert template.index('class="tabela-scroll"') < template.index('class="rodape-fatura"')
+    filtros = template.split('<div class="fatura-filtros">', 1)[1].split('</div>\n\n<div class="cards', 1)[0]
+    assert 'class="visao-lancamentos"' in filtros
+    cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
+    assert "Ciclo" not in cabecalho
+    assert "PDF oficial" not in cabecalho
     assert 'id="buscaFatura"' in template
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     assert "textoFiltravelDoGrupo" in js
