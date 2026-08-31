@@ -2601,6 +2601,122 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (35);")
             conn.commit()
 
+        if versao_atual < 36:
+            # Complemento da v35: uma linha oficial pode contabilizar o
+            # registro do Pluggy em vez de transacao_id_criado. Atualiza todos
+            # os registros explicitamente ligados pela fatura, sem inferir por
+            # descricao solta e sem tocar no OK.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v36 = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+
+            def valor_v36(dim_nome, valor_nome):
+                dim_id = dims_v36.get(dim_nome)
+                if not dim_id:
+                    return None, None
+                cur.execute(
+                    "SELECT id FROM cartao.dimensao_valor WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) ORDER BY id LIMIT 1;",
+                    (dim_id, valor_nome),
+                )
+                row = cur.fetchone()
+                return dim_id, row[0] if row else None
+
+            resp_id, familia = valor_v36("responsavel", "Família")
+            _, andrea = valor_v36("responsavel", "Andrea")
+            projeto_id, casa = valor_v36("projeto", "Casa")
+            _, saude = valor_v36("projeto", "Saúde")
+            _, compras_pessoais = valor_v36("projeto", "Compras Pessoais")
+            _, servicos_financeiros = valor_v36("projeto", "Serviços Financeiros")
+            _, iron_maiden = valor_v36("projeto", "Iron Maiden 2026")
+            portfolio_id, vida_familiar = valor_v36("portfolio", "Vida Familiar")
+            _, eventos = valor_v36("portfolio", "Eventos")
+
+            def ids_vinculados_sql(condicao):
+                return (
+                    "WITH linhas AS (SELECT fl.id,fl.transacao_id_criado,fl.descricao "
+                    "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                    "WHERE fi.account_id=%s AND fi.ano_referencia=2026 AND fi.mes_referencia IN (7,8)), "
+                    "alvos AS (SELECT fv.transacao_id::text AS transacao_id,l.descricao FROM linhas l "
+                    "JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=l.id "
+                    "UNION SELECT l.transacao_id_criado::text,l.descricao FROM linhas l "
+                    "WHERE l.transacao_id_criado IS NOT NULL) "
+                    "SELECT DISTINCT a.transacao_id FROM alvos a JOIN cartao.transacao t "
+                    "ON t.transacao_id::text=a.transacao_id WHERE (" + condicao + ")"
+                )
+
+            def dimensao_vinculados(condicao, parametros, dimensao_id, valor_id):
+                if not dimensao_id or not valor_id:
+                    return 0
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT transacao_id,%s,%s FROM (" + ids_vinculados_sql(condicao) + ") q "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (dimensao_id, valor_id, conta_unicred, *parametros),
+                )
+                return max(cur.rowcount, 0)
+
+            def categoria_vinculados(condicao, parametros, categoria):
+                cur.execute(
+                    "UPDATE cartao.transacao t SET categoria=%s,categoria_manual=true,atualizado_em=now() "
+                    "FROM (" + ids_vinculados_sql(condicao) + ") q "
+                    "WHERE t.transacao_id::text=q.transacao_id;",
+                    (categoria, conta_unicred, *parametros),
+                )
+                return max(cur.rowcount, 0)
+
+            categorias_v36 = 0
+            dimensoes_v36 = 0
+            farmacia = (
+                "lower(COALESCE(t.categoria,''))=lower('Pharmacy') AND EXISTS ("
+                "SELECT 1 FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text "
+                "AND td.dimensao_id=%s AND td.valor_id=%s)"
+            )
+            dimensoes_v36 += dimensao_vinculados(farmacia, (projeto_id, casa), projeto_id, saude)
+            dimensoes_v36 += dimensao_vinculados(farmacia, (projeto_id, casa), portfolio_id, vida_familiar)
+
+            beleza = "upper(a.descricao) LIKE 'LISCIA%%' OR upper(a.descricao) LIKE 'STUDIOJULIA%%'"
+            categorias_v36 += categoria_vinculados(beleza, (), "Beleza")
+            for dim_id, valor_id in (
+                (resp_id, andrea), (projeto_id, compras_pessoais), (portfolio_id, vida_familiar)
+            ):
+                dimensoes_v36 += dimensao_vinculados(beleza, (), dim_id, valor_id)
+
+            anuidade = "upper(a.descricao) LIKE 'ANUIDADE%%'"
+            categorias_v36 += categoria_vinculados(anuidade, (), "Credit card fees")
+            for dim_id, valor_id in (
+                (resp_id, familia), (projeto_id, servicos_financeiros), (portfolio_id, vida_familiar)
+            ):
+                dimensoes_v36 += dimensao_vinculados(anuidade, (), dim_id, valor_id)
+
+            evento = (
+                "upper(a.descricao) LIKE 'EVENTIM BRASIL S%%' OR "
+                "upper(a.descricao) LIKE 'SAN JUAN EXECUTIVE%%'"
+            )
+            for dim_id, valor_id in (
+                (resp_id, familia), (projeto_id, iron_maiden), (portfolio_id, eventos)
+            ):
+                dimensoes_v36 += dimensao_vinculados(evento, (), dim_id, valor_id)
+            cur.execute(
+                "UPDATE cartao.transacao t SET observacao='Iron Maiden',atualizado_em=now() "
+                "FROM (" + ids_vinculados_sql(evento) + ") q "
+                "WHERE t.transacao_id::text=q.transacao_id;",
+                (conta_unicred,),
+            )
+            observacoes_v36 = max(cur.rowcount, 0)
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Complemento da padronizacao Unicred',"
+                "jsonb_build_object('versao',36,'categorias',%s,'dimensoes',%s,'observacoes',%s));",
+                (categorias_v36, dimensoes_v36, observacoes_v36),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (36);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

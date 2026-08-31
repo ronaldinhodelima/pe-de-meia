@@ -1430,3 +1430,7 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Conjunta de julho e agosto/2026. Em 31/08/2026 o usuário informou que marcou mais quatro
   lançamentos como OK e aprovou seguir com os demais ainda pendentes; a migração não altera
   nenhuma marcação de conferência.
+- A validação pós-publicação mostrou que algumas linhas contabilizam diretamente o registro P do
+  Pluggy, sem `transacao_id_criado`. A migração 36 repete as decisões sobre todos os registros
+  explicitamente presentes em `fatura_vinculo`, inclusive descrições parceladas de LISCIA. Não
+  agrupa por semelhança e continua sem alterar qualquer OK.
