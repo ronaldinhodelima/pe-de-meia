@@ -267,6 +267,8 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     assert 'data-tip="{{ v.fonte_nome }}"' in template
     assert "atualizarAvisoClassificacao(editor)" in js
     assert "destino.replaceChildren(aviso)" in js
+    assert "await (filaSalvar[campo.dataset.okLancamento]" in js
+    assert "cursor:default" in template
     assert 'v["fonte"] = "F"' in view
     assert 'v["fonte_nome"]' in view
 
@@ -290,6 +292,21 @@ def test_categoria_tambem_e_obrigatoria_para_novo_ok():
     assert "if versao_atual < 34:" in core
     assert "Classificacao completa obrigatoria" in core
     assert "'responsável','responsavel','projeto','portfólio','portfolio'" in core
+
+
+def test_pendente_conciliado_ao_pdf_pode_receber_ok():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = view.split("def update_transacao", 1)[1]
+    assert "O PDF oficial encerra a incerteza" in trecho
+    assert "SELECT EXISTS (SELECT 1 FROM cartao.fatura_vinculo" in trecho
+    assert '"SELECT d.nome FROM cartao.dimensao d "' in trecho
+
+
+def test_cadastro_rapido_mantem_listas_alfabeticas():
+    resumo = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    detalhada = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "lista.sort((a, b)" in resumo and "localeCompare" in resumo
+    assert "json.nome.localeCompare" in detalhada
 
 
 def test_tojson_nunca_dentro_de_atributo_html():

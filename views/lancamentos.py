@@ -1519,7 +1519,7 @@ def update_transacao(transacao_id):
     rateio_invalido = False
     if qtd_rateios:
         cur.execute(
-            "SELECT r.id, d.id FROM cartao.transacao_rateio r CROSS JOIN cartao.dimensao d "
+            "SELECT r.id, d.nome FROM cartao.transacao_rateio r CROSS JOIN cartao.dimensao d "
             "LEFT JOIN cartao.transacao_rateio_dimensao rd "
             "ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
             "WHERE r.transacao_id=%s AND d.obrigatoria=true AND rd.valor_id IS NULL;",
@@ -1531,7 +1531,7 @@ def update_transacao(transacao_id):
         rateio_invalido = qtd_rateios < 2 or soma_rateios != esperado or bool(rateios_sem_categoria)
     else:
         cur.execute(
-            "SELECT d.id FROM cartao.dimensao d "
+            "SELECT d.nome FROM cartao.dimensao d "
             "LEFT JOIN cartao.transacao_dimensao td ON td.dimensao_id = d.id AND td.transacao_id = %s "
             "WHERE d.obrigatoria = true AND (td.valor_id IS NULL);",
             (transacao_id,),
@@ -1554,6 +1554,14 @@ def update_transacao(transacao_id):
     pendente_banco = _pendente_bloqueia(
         transacao[7], data_hora_local(transacao[8]) if transacao[8] else None
     )
+    if pendente_banco:
+        # O PDF oficial encerra a incerteza do status PENDING do Pluggy. Se a
+        # cobranca ja foi conciliada a uma fatura, ela pode receber OK.
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM cartao.fatura_vinculo WHERE transacao_id=%s);",
+            (transacao_id,),
+        )
+        pendente_banco = not bool(cur.fetchone()[0])
     alterando_conferencia = "conferida" in data
     conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
     # Campos obrigatorios (e o status pendente) bloqueiam somente uma NOVA

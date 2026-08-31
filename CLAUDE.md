@@ -1353,3 +1353,17 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   `static/lancamentos_fatura.js`, testes estruturais e este documento. Após publicar, executar a
   sincronização de parcelas autenticada e confirmar no ANJOS DE QUINTAL que `F` de R$ 360,00 é o
   contabilizado/editável e `P` de R$ 2.160,00 é técnico/somente leitura.
+- O cursor dos selos `P` e `F` permanece normal; o tooltip rápido não transforma o selo em ajuda
+  clicável. Antes de enviar um OK, a tela aguarda a fila de salvamento automático do mesmo
+  lançamento, evitando o falso bloqueio logo após preencher o último campo.
+- Um status `PENDING` recente só bloqueia o OK enquanto a cobrança ainda não estiver conciliada a
+  um PDF oficial. A fatura conciliada encerra essa incerteza; nesse caso, o usuário pode conferir
+  normalmente. Se houver bloqueio real, a mensagem distingue classificação, rateio e pendência
+  bancária.
+- Categoria e valores de dimensão chegam ordenados do servidor. Quando Projeto ou Portfólio é
+  cadastrado diretamente em qualquer uma das duas visualizações, inserir/reidratar a opção em
+  ordem alfabética portuguesa, mantendo `(não definido)` no início e `+ Cadastrar novo` no fim.
+- Diferença real entre o valor oficial do PDF e o único lançamento contabilizado continua sendo
+  divergência vermelha e filtrável. A exceção não é ocultação: compra total do Pluggy igual a
+  parcela × quantidade é normalizada para uma parcela `F`; qualquer outra diferença permanece
+  obrigatoriamente para revisão.

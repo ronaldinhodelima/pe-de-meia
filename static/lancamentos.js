@@ -71,7 +71,10 @@ function cadastrarNovoValorDimensao(sel) {
   }).then(r => r.json()).then(d => {
     if (!d.ok) throw new Error(d.erro || 'Não foi possível cadastrar.');
     const lista = (window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [];
-    if (!lista.some(v => String(v.id) === String(d.id))) lista.push({id: d.id, rotulo: d.nome});
+    if (!lista.some(v => String(v.id) === String(d.id))) {
+      lista.push({id: d.id, rotulo: d.nome});
+      lista.sort((a, b) => String(a.rotulo).localeCompare(String(b.rotulo), 'pt-BR', {sensitivity: 'base'}));
+    }
     document.querySelectorAll('.dim-select[data-dim="' + sel.dataset.dim + '"]').forEach(outro => {
       const valor = outro === sel ? String(d.id) : outro.value;
       delete outro.dataset.hidratado;

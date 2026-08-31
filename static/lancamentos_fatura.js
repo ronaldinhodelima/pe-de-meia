@@ -53,6 +53,7 @@
     botao.title = painel.hidden ? 'Abrir detalhes da transação' : 'Fechar detalhes da transação';
   });
 
+  const filaSalvar = {};
   document.querySelectorAll('[data-ok-lancamento]').forEach(campo => campo.addEventListener('change', async () => {
     const novo = campo.checked;
     let confirmar = false;
@@ -62,6 +63,7 @@
     }
     campo.disabled = true;
     try {
+      await (filaSalvar[campo.dataset.okLancamento] || Promise.resolve());
       const resp = await fetch('/api/transacao/' + encodeURIComponent(campo.dataset.okLancamento), {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({conferida: novo, confirmar_desmarcacao: confirmar})
@@ -72,7 +74,10 @@
       campo.disabled = !config.pode_conferir;
       if (json.bloqueada) {
         const nomes = (json.faltando || []).map(String).join(', ');
-        alert('O OK só é liberado quando a classificação estiver completa' + (nomes ? ': ' + nomes : '.'));
+        let motivo = 'O OK só é liberado quando a classificação estiver completa' + (nomes ? ': ' + nomes + '.' : '.');
+        if (json.rateio_invalido) motivo = 'O OK só é liberado quando o rateio estiver completo e fechar exatamente com o lançamento.';
+        if (json.pendente_banco) motivo = 'O banco ainda informa que este lançamento está pendente. Aguarde a confirmação bancária para marcar OK.';
+        alert(motivo);
       }
       await atualizarResumoPagina();
     } catch (e) {
@@ -170,7 +175,6 @@
     });
   }
 
-  const filaSalvar = {};
   function salvarEditor(editor, alterado) {
     const id = editor.dataset.editor;
     const aviso = editor.querySelector('[data-status]');
@@ -217,7 +221,11 @@
       document.querySelectorAll('[data-dimensao="' + CSS.escape(select.dataset.dimensao) + '"]').forEach(outro => {
         if (!Array.from(outro.options).some(o => o.value === String(json.id))) {
           const opcao = new Option(json.nome, String(json.id));
-          outro.insertBefore(opcao, outro.querySelector('option[value="__novo__"]'));
+          const antes = Array.from(outro.options).find(o => (
+            o.value && o.value !== '__novo__'
+            && json.nome.localeCompare(o.textContent, 'pt-BR', {sensitivity: 'base'}) < 0
+          ));
+          outro.insertBefore(opcao, antes || outro.querySelector('option[value="__novo__"]'));
         }
       });
       select.value = String(json.id);
