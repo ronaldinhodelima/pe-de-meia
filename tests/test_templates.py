@@ -230,7 +230,7 @@ class TestIndex:
 
     def test_dimensao_obrigatoria_sem_valor_fica_destacada(self, ctx):
         html = self.render([self.linha(dims={1: None})])
-        assert "#c23c34;background:#fbeceb" in html
+        assert "classificacao-faltando" in html
 
     def test_dimensao_obrigatoria_preenchida_nao_destaca(self, ctx):
         html = self.render([self.linha(dims={1: 10})])

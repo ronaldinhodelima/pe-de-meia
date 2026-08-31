@@ -1583,3 +1583,16 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   estabelecimento e valor. Compras positivas exigem pelo menos dois termos significativos do
   estabelecimento em comum. Diferença compatível com valor total só é aceita quando forma um número
   inteiro plausível de parcelas. Pagamentos/créditos sem termos comuns exigem mesmo dia e mesmo valor.
+
+# Modelo de seleção pesquisável (31/08/2026)
+
+- Categoria, Responsável, Projeto e Portfólio usam primeiro o componente compartilhado
+  `static/combobox.js` nas visualizações resumida e detalhada. O `<select>` original continua como
+  fonte de verdade, para preservar APIs, permissões, validações e salvamento automático existentes.
+- A pesquisa filtra por qualquer parte do texto, sem diferenciar acentos ou caixa. Setas percorrem,
+  Enter confirma, Tab confirma a opção destacada e segue ao próximo campo, Shift+Tab volta e Escape
+  cancela. Nunca criar ou escolher silenciosamente uma opção que não esteja destacada.
+- Projeto continua preenchendo seu Portfólio padrão e ambos os campos visuais precisam refletir a
+  mudança sem recarregar a página. Projeto e Portfólio preservam a opção de cadastro rápido.
+- Este piloto deve ser validado antes da expansão. Uma vez aprovado, o mesmo componente será o padrão
+  obrigatório para seleções pesquisáveis de todas as telas atuais e novas do Pé de Meia.

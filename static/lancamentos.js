@@ -878,6 +878,7 @@ document.addEventListener('change', function (e) {
     if (!selPortfolio || selPortfolio.value === portfolioId) return;
     hidratarSelect(selPortfolio);
     selPortfolio.value = portfolioId;
+    if (window.pdmCombobox) window.pdmCombobox.sincronizar(selPortfolio);
     salvar(id, selPortfolio);
     if (idAtualModal === id) {
       const selModalPortfolio = document.querySelector('.modal-dim-select[data-dim="' + dimPortfolio + '"]');
@@ -946,14 +947,11 @@ function salvar(id, el, opcoes) {
       if ('observacao' in payload && window.detalhes[id]) {
         window.detalhes[id].observacao = payload.observacao || '-';
       }
-      tr.querySelectorAll('.dim-select').forEach(sel => {
-        sel.style.borderColor = '';
-        sel.style.background = '';
-      });
+      tr.querySelectorAll('.dim-select').forEach(sel => sel.classList.remove('classificacao-faltando'));
       if (d.bloqueada) {
         (d.faltando || []).forEach(dimId => {
           const sel = tr.querySelector('.dim-select[data-dim="' + dimId + '"]');
-          if (sel) { sel.style.borderColor = '#c23c34'; sel.style.background = '#fbeceb'; }
+          if (sel) sel.classList.add('classificacao-faltando');
         });
         alert(d.rateio_invalido
           ? 'Não foi possível confirmar: revise o rateio e faça as partes fecharem exatamente com o valor do lançamento.'

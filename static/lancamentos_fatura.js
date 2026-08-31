@@ -271,7 +271,10 @@
         const portfolio = (config.projeto_portfolio_map || {})[alterado.value];
         if (portfolio && config.dim_id_portfolio) {
           const destino = editor.querySelector('[data-dimensao="' + CSS.escape(config.dim_id_portfolio) + '"]');
-          if (destino) destino.value = String(portfolio);
+          if (destino) {
+            destino.value = String(portfolio);
+            if (window.pdmCombobox) window.pdmCombobox.sincronizar(destino);
+          }
           payload.dimensoes[config.dim_id_portfolio] = String(portfolio);
         }
       }

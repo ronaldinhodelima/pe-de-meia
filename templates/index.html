@@ -131,14 +131,13 @@
            pelo usuario, entao vai escapado #}
         <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}">{{ r.origem_selo|safe }}<span>{{ r.origem_texto }}</span></td>
         <td class="cel-dim" data-col="categoria">
-          <select class="cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
+          <select data-pdm-combobox aria-label="Categoria" class="cat-select {{ 'classificacao-faltando' if not r.categoria }}" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
             <option value="{{ r.categoria or '' }}" selected>{{ r.categoria_nome }}</option>
           </select>
         </td>
         {% for d in dimensoes %}
           <td class="cel-dim" data-col="dim_{{ d.id }}">
-            <select class="dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao"
-                    {% if d.obrigatoria and not r.dims.get(d.id) %}style="border-color:#c23c34;background:#fbeceb"{% endif %}
+            <select data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select {{ 'classificacao-faltando' if d.obrigatoria and not r.dims.get(d.id) }}" data-dim="{{ d.id }}" data-lazy-options="dimensao"
                     {{ 'disabled' if not pode_editar or r.rateios }}>
               <option value="{{ r.dims.get(d.id) or '' }}" selected>{{ r.dims_rotulos.get(d.id) }}</option>
             </select>
