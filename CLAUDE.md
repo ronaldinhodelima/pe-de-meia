@@ -1509,9 +1509,9 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 
 # Organização compacta da fatura detalhada (31/08/2026)
 
-- O cabeçalho superior da visualização detalhada mostra somente `Fatura <mês> de <ano>`, navegação
-  anterior/seguinte e acesso à conciliação. Não repetir cartão, PDF oficial, ciclo e vencimento nesse
-  bloco; esses dados já existem nos controles e na conciliação. Manter o cabeçalho baixo e à direita.
+- O cabeçalho superior da visualização detalhada começa à esquerda com `Fatura <mês> de <ano>`.
+  Imediatamente ao lado, na mesma linha, exibir o início e fim do ciclo e o vencimento. Manter o
+  cabeçalho baixo; o acesso à conciliação permanece alinhado à direita.
 - Os controles Cartão, Fatura e Status e a alternância Resumida/Detalhada pertencem à mesma linha
   flexível. Em telas estreitas podem quebrar naturalmente, sem sobreposição.
 - A explicação dos registros P/F e o controle seguro de revisão de parcelamentos ficam no rodapé,

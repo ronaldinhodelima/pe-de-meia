@@ -256,8 +256,9 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
     assert "Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}" in cabecalho
-    assert "Ciclo" not in cabecalho
-    assert "vence" not in cabecalho
+    assert "Ciclo {{ fatura.periodo_inicio.strftime" in cabecalho
+    assert "vence {{ fatura.vencimento.strftime" in cabecalho
+    assert 'class="fatura-ciclo"' in cabecalho
     assert 'data-tip="{{ v.fonte_nome }}"' in template
     assert "Mais informações da transação" not in template
     assert "data-info-target" in template and "transacao-info" in template
@@ -338,7 +339,7 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     filtros = template.split('<div class="fatura-filtros">', 1)[1].split('</div>\n\n<div class="cards', 1)[0]
     assert 'class="visao-lancamentos"' in filtros
     cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
-    assert "Ciclo" not in cabecalho
+    assert "Ciclo" in cabecalho
     assert "PDF oficial" not in cabecalho
     assert 'id="buscaFatura"' in template
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")

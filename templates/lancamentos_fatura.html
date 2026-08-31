@@ -2,8 +2,8 @@
 
 {% block head_extra %}
 <style>
-  .fatura-cabecalho{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;min-height:42px}
-  .fatura-cabecalho h2{margin:0;font-size:17px;line-height:1.15}.fatura-cabecalho .nav{font-size:16px;text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink)}
+  .fatura-cabecalho{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;min-height:42px}
+  .fatura-cabecalho h2{margin:0;font-size:17px;line-height:1.15}.fatura-cabecalho .nav{font-size:16px;text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink)}.fatura-ciclo{font-size:12px;color:var(--ink-faint);white-space:nowrap}.fatura-conciliacao{margin-left:auto}
   .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}.fatura-filtros .visao-lancamentos{margin-left:auto;margin-bottom:0}
   .fatura-cards .card{cursor:pointer}.fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
   .fatura-cards .card-ok .val{color:var(--good)}.fatura-cards .card-aviso .val{color:#a36b0b}.fatura-cards .card-erro .val{color:var(--bad)}.fatura-cards .card-fora .val{color:#665b88}
@@ -32,8 +32,9 @@
 <div class="fatura-cabecalho">
   {% if fatura_antiga %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_antiga.id }}" title="Fatura anterior">‹</a>{% else %}<span class="nav" style="opacity:.3">‹</span>{% endif %}
   <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}</h2>
+  {% if fatura.periodo_inicio and fatura.periodo_fim %}<span class="fatura-ciclo">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% endif %}</span>{% endif %}
   {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
-  <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn" style="text-decoration:none">Ver conciliação do PDF</a>
+  <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn fatura-conciliacao" style="text-decoration:none">Ver conciliação do PDF</a>
 </div>
 
 <div class="fatura-filtros">
