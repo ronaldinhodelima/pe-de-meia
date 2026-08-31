@@ -289,6 +289,15 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert "atualizarResumoPagina(novo && status && status.value === 'pendente_ok')" in js
     assert "if (ocultarAusentes)" in js
     assert "linha.remove()" in js
+    assert 'data-ordenar="data"' in template
+    assert 'data-ordenar="descricao"' in template
+    assert 'data-ordenar="titular"' in template
+    assert 'data-ordenar="parcela"' in template
+    assert 'data-ordenar="valor"' in template
+    assert 'data-ordenar="classificacao"' in template
+    assert 'data-ordenar="ok"' in template
+    assert "function ordenarFatura(cabecalho)" in js
+    assert "corpo.appendChild(item.detalhe)" in js
 
 
 def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():

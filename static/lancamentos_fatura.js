@@ -72,6 +72,64 @@
     });
   }
 
+  const tabelaFatura = document.querySelector('.fatura-tabela');
+  function valorOrdenacao(linha, chave) {
+    const celulas = linha.children;
+    if (chave === 'data') {
+      const partes = (celulas[1]?.textContent || '').trim().split('/').map(Number);
+      return partes.length === 3 ? new Date(partes[2], partes[1] - 1, partes[0]).getTime() : 0;
+    }
+    if (chave === 'descricao') return (celulas[2]?.textContent || '').trim();
+    if (chave === 'titular') return (celulas[3]?.textContent || '').trim();
+    if (chave === 'parcela') {
+      const texto = (celulas[4]?.textContent || '').trim();
+      const partes = texto.match(/(\d+)\s*\/\s*(\d+)/);
+      return partes ? Number(partes[1]) / Number(partes[2]) : 0;
+    }
+    if (chave === 'valor') {
+      const texto = (celulas[5]?.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
+      return Number(texto) || 0;
+    }
+    if (chave === 'classificacao') return (celulas[6]?.textContent || '').trim();
+    if (chave === 'ok') return linha.querySelector('[data-ok-lancamento]')?.checked ? 1 : 0;
+    return '';
+  }
+
+  function ordenarFatura(cabecalho) {
+    if (!tabelaFatura) return;
+    const chave = cabecalho.dataset.ordenar;
+    const direcao = cabecalho.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
+    tabelaFatura.querySelectorAll('th[data-ordenar]').forEach(th => th.removeAttribute('aria-sort'));
+    cabecalho.setAttribute('aria-sort', direcao);
+    const corpo = tabelaFatura.tBodies[0];
+    const linhas = Array.from(corpo.querySelectorAll('tr[data-linha]')).map((linha, indice) => ({
+      linha, detalhe: document.getElementById('vinculos-' + linha.dataset.linha), indice,
+      valor: valorOrdenacao(linha, chave)
+    }));
+    linhas.sort((a, b) => {
+      let comparacao;
+      if (typeof a.valor === 'number' && typeof b.valor === 'number') comparacao = a.valor - b.valor;
+      else comparacao = String(a.valor).localeCompare(String(b.valor), 'pt-BR', {numeric: true, sensitivity: 'base'});
+      if (!comparacao) comparacao = a.indice - b.indice;
+      return direcao === 'ascending' ? comparacao : -comparacao;
+    });
+    linhas.forEach(item => {
+      corpo.appendChild(item.linha);
+      if (item.detalhe) corpo.appendChild(item.detalhe);
+    });
+    aplicarBuscaFatura();
+  }
+
+  if (tabelaFatura) tabelaFatura.querySelectorAll('th[data-ordenar]').forEach(cabecalho => {
+    cabecalho.setAttribute('role', 'button');
+    cabecalho.addEventListener('click', () => ordenarFatura(cabecalho));
+    cabecalho.addEventListener('keydown', evento => {
+      if (evento.key !== 'Enter' && evento.key !== ' ') return;
+      evento.preventDefault();
+      ordenarFatura(cabecalho);
+    });
+  });
+
   const revisarParcelamentos = document.getElementById('revisarParcelamentos');
   const revisarStatus = document.getElementById('revisarParcelamentosStatus');
   let previaParcelamentos = null;

@@ -1562,3 +1562,11 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   agregado técnico. Nunca formar família apenas por descrição, data ou valor semelhante.
 - Uma limpeza feita explicitamente pelo usuário também é compartilhada. Campos ainda vazios que
   não foram alterados não apagam dados existentes. O OK permanece sempre individual por parcela.
+
+# Ordenação da tabela detalhada (31/08/2026)
+
+- Na visualização detalhada, os cabeçalhos Data, Descrição no PDF, Titular/Cartão, Parcela, Valor
+  PDF, Classificação e OK são ordenáveis. O primeiro clique ordena crescente e o seguinte inverte
+  para decrescente, com seta indicando o estado.
+- Ordenar é local e não recarrega a página. O bloco de registros e detalhes permanece imediatamente
+  abaixo do lançamento principal correspondente. A pesquisa atual continua aplicada após ordenar.
