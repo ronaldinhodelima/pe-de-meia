@@ -305,6 +305,15 @@ def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
     assert "Credit card fees" in tarifas
     assert "Serviços Financeiros" in tarifas
     assert "t.conferida" not in tarifas
+    consenso = core.split("if versao_atual < 39:", 1)[1].split("cur.close()", 1)[0]
+    assert "fi.mes_referencia<=5" in consenso
+    assert "d.obrigatoria" in consenso
+    assert "account_id=%s" in consenso
+    assert "t.conferida" not in consenso
+    assert "SET observacao" not in consenso
+    assert "AUTO POSTO" not in consenso
+    assert "MP*PRODUTOS" in consenso
+    assert "FARM GEREMIAS - CENTRO" in consenso
 
 
 def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():

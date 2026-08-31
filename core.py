@@ -2869,6 +2869,131 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (38);")
             conn.commit()
 
+        if versao_atual < 39:
+            # Consenso das classificacoes que o usuario completou nas faturas
+            # Unicred de junho, julho e agosto/2026. Aplica somente ao historico
+            # anterior ainda incompleto; uma classificacao completa, o OK e a
+            # observacao pessoal permanecem intocados. As regras futuras ficam
+            # restritas a esta origem para nao contaminar outros cartoes.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v39 = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+
+            def valor_v39(dim_nome, valor_nome):
+                dim_id = dims_v39.get(dim_nome)
+                if not dim_id:
+                    return None, None
+                cur.execute(
+                    "SELECT id FROM cartao.dimensao_valor WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) ORDER BY id LIMIT 1;",
+                    (dim_id, valor_nome),
+                )
+                row = cur.fetchone()
+                return dim_id, row[0] if row else None
+
+            resp_id = dims_v39.get("responsavel")
+            projeto_id = dims_v39.get("projeto")
+            portfolio_id = dims_v39.get("portfolio")
+            padroes_v39 = (
+                ("SUPERVIZA", "Groceries", "Família", "Casa", "Vida Familiar"),
+                ("MP*PRODUTOS", "Eating out", "Ronaldo", "Refeições fora", "Vida Familiar"),
+                ("HIPERCENTER UNIVERSIDAD", "Groceries", "Família", "Casa", "Vida Familiar"),
+                ("HAVAN VIDEIRA", "Houseware", "Família", "Casa", "Vida Familiar"),
+                ("FARM GEREMIAS - CENTRO", "Pharmacy", "Família", "Saúde", "Vida Familiar"),
+                ("CATIVA", "Viagem", "Família", "Viagem Chile", "Viagens"),
+                ("HNA*OBOTICARIO", "Healthcare", "Andrea", "Compras Pessoais", "Vida Familiar"),
+                ("IEAS", "Bookstore", "Amanda", "Colégio Salvatoriano", "Educação"),
+                ("AZULEQVY2E", "Airport and airlines", "Família", "BGS 2026", "Viagens"),
+                ("CASA DE CARNES 95 LTDA ME", "Groceries", "Família", "Casa", "Vida Familiar"),
+                ("DM*SPOTIFY", "Digital services", "Família", "Casa", "Vida Familiar"),
+                ("STUDIOJULIA", "Beleza", "Andrea", "Compras Pessoais", "Vida Familiar"),
+                ("SESI FARMACIA FM", "Pharmacy", "Família", "Saúde", "Vida Familiar"),
+                ("GMGODONTOLOGIA", "Dentist", "Ronaldo", "Saúde", "Vida Familiar"),
+                ("CIDATEC", "Parking", "Família", "Tracker", "Veículos"),
+                ("SUPERMERCADO ITAL", "Groceries", "Família", "Casa", "Vida Familiar"),
+            )
+            regras_v39 = 0
+            historico_categorias_v39 = 0
+            historico_dimensoes_v39 = 0
+            for ordem, (padrao, categoria, responsavel, projeto, portfolio) in enumerate(
+                padroes_v39, start=70
+            ):
+                cur.execute(
+                    "SELECT id FROM cartao.regra_classificacao WHERE lower(padrao)=lower(%s) "
+                    "AND account_id=%s AND valor_operador IS NULL AND valor_limite IS NULL "
+                    "ORDER BY id LIMIT 1;",
+                    (padrao, conta_unicred),
+                )
+                row = cur.fetchone()
+                if row:
+                    regra_id = row[0]
+                    cur.execute(
+                        "UPDATE cartao.regra_classificacao SET categoria=%s,ativa=true WHERE id=%s;",
+                        (categoria, regra_id),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO cartao.regra_classificacao "
+                        "(padrao,categoria,ordem,account_id) VALUES (%s,%s,%s,%s) RETURNING id;",
+                        (padrao, categoria, ordem, conta_unicred),
+                    )
+                    regra_id = cur.fetchone()[0]
+                    regras_v39 += 1
+                valores_dim = []
+                for dim_nome, nome_valor in (
+                    ("responsavel", responsavel), ("projeto", projeto), ("portfolio", portfolio)
+                ):
+                    dim_id, valor_id = valor_v39(dim_nome, nome_valor)
+                    if dim_id and valor_id:
+                        valores_dim.append((dim_id, valor_id))
+                        cur.execute(
+                            "INSERT INTO cartao.regra_dimensao_valor "
+                            "(regra_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                            "ON CONFLICT (regra_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                            (regra_id, dim_id, valor_id),
+                        )
+
+                alvos_sql = (
+                    "WITH linhas AS (SELECT fl.id,fl.transacao_id_criado FROM cartao.fatura_linha fl "
+                    "JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id WHERE fi.account_id=%s "
+                    "AND (fi.ano_referencia<2026 OR (fi.ano_referencia=2026 AND fi.mes_referencia<=5))), "
+                    "ids AS (SELECT fv.transacao_id::text AS transacao_id FROM linhas l "
+                    "JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=l.id UNION "
+                    "SELECT transacao_id_criado::text FROM linhas WHERE transacao_id_criado IS NOT NULL) "
+                    "SELECT DISTINCT t.transacao_id::text FROM ids JOIN cartao.transacao t "
+                    "ON t.transacao_id::text=ids.transacao_id WHERE t.descricao ILIKE '%%' || %s || '%%' "
+                    "AND (t.categoria IS NULL OR EXISTS (SELECT 1 FROM cartao.dimensao d "
+                    "WHERE d.obrigatoria AND NOT EXISTS (SELECT 1 FROM cartao.transacao_dimensao td "
+                    "WHERE td.transacao_id=t.transacao_id::text AND td.dimensao_id=d.id)))"
+                )
+                cur.execute(
+                    "UPDATE cartao.transacao t SET categoria=%s,categoria_manual=true,"
+                    "regra_aplicada_id=NULL,atualizado_em=now() FROM (" + alvos_sql + ") a "
+                    "WHERE t.transacao_id::text=a.transacao_id;",
+                    (categoria, conta_unicred, padrao),
+                )
+                historico_categorias_v39 += max(cur.rowcount, 0)
+                for dim_id, valor_id in valores_dim:
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                        "SELECT transacao_id,%s,%s FROM (" + alvos_sql + ") a "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;",
+                        (dim_id, valor_id, conta_unicred, padrao),
+                    )
+                    historico_dimensoes_v39 += max(cur.rowcount, 0)
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Consenso Unicred junho a agosto',"
+                "jsonb_build_object('versao',39,'regras_criadas',%s,'categorias',%s,'dimensoes',%s));",
+                (regras_v39, historico_categorias_v39, historico_dimensoes_v39),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (39);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

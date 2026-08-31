@@ -1488,4 +1488,22 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - A revisão manual é limitada ao cartão da fatura aberta. A importação automática também passa o
   `account_id` da fatura recém-importada. Nunca usar o botão de uma origem para revisar silenciosamente
   parcelamentos de outros cartões ou contas.
+
+# Consenso Unicred de junho, julho e agosto para o histórico (31/08/2026)
+
+- Junho/2026 foi revisado pelo usuário e passou a compor, junto com julho e agosto, a base de
+  referência das classificações do Cartão de Crédito Unicred · Conjunta. As três faturas possuem
+  477 linhas oficiais; somente os pagamentos informativos ficam sem classificação financeira.
+- A migração 39 cria regras restritas à Unicred para descrições que permaneceram coerentes:
+  SUPERVIZA, MP*PRODUTOS, HIPERCENTER UNIVERSIDAD, HAVAN VIDEIRA, FARM GEREMIAS - CENTRO,
+  CATIVA, HNA*OBOTICARIO, IEAS, AZULEQVY2E, CASA DE CARNES 95 LTDA ME, DM*SPOTIFY,
+  STUDIOJULIA, SESI FARMACIA FM, GMGODONTOLOGIA, CIDATEC e SUPERMERCADO ITAL.
+- No histórico anterior a junho/2026, aplicar esses padrões somente quando a classificação estiver
+  incompleta. Preencher Categoria e somente dimensões ausentes; nunca substituir uma classificação
+  já completa, nunca mudar OK e nunca copiar ou apagar Observação pessoal.
+- Não transformar em regra descrições cujo contexto pode variar apesar de repetirem, especialmente
+  postos de combustível. `AUTO POSTO CAMPO DO ARE` apareceu como BRDrive na referência, mas pode
+  representar gasto pessoal em outro mês e foi deliberadamente excluído da automação.
+- Observações divergentes em uma mesma descrição (por exemplo, compras diferentes na HAVAN) não
+  fazem parte dessas regras. A classificação pode ser comum sem misturar o motivo pessoal da compra.
 - O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.
