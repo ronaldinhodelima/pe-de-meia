@@ -1434,3 +1434,18 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Pluggy, sem `transacao_id_criado`. A migração 36 repete as decisões sobre todos os registros
   explicitamente presentes em `fatura_vinculo`, inclusive descrições parceladas de LISCIA. Não
   agrupa por semelhança e continua sem alterar qualquer OK.
+
+# Expansão da classificação para todo o histórico Unicred (31/08/2026)
+
+- Após validar julho e agosto, o usuário aprovou replicar os padrões para todos os meses do Cartão
+  de Crédito Unicred · Conjunta, preenchendo o máximo possível sem adivinhar casos ambíguos.
+- A migração 37 executa novamente o consenso das famílias oficiais de parcelas e as regras
+  automáticas cadastradas. Só campos vazios ou lançamentos ainda não tratados por regra recebem
+  dados; categoria manual, lançamentos com OK e suspeitas de duplicidade nunca são sobrescritos.
+- Tanto o consenso das famílias quanto a aplicação das regras recebem explicitamente o
+  `account_id` da Unicred Conjunta. Não aplicar esta expansão em outra origem por efeito colateral.
+- Categoria, Responsável, Projeto, Portfólio e Observação pertencem à família da compra parcelada.
+  Quando uma observação pessoal é editada em qualquer parcela, a API a replica imediatamente para
+  todas as parcelas explicitamente ligadas ao mesmo agregado. Na recuperação histórica, só copiar
+  quando houver um único texto inequívoco e apenas para observações vazias.
+- O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.

@@ -886,7 +886,7 @@ def login_required(view):
     return wrapped
 
 
-def preencher_classificacao_vazia_parcelas(cur):
+def preencher_classificacao_vazia_parcelas(cur, account_id=None):
     """Completa apenas campos vazios de parcelas ligadas ao mesmo agregado.
 
     A familia vem exclusivamente dos vinculos persistentes da fatura: uma
@@ -903,10 +903,12 @@ def preencher_classificacao_vazia_parcelas(cur):
         " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
         " fl.transacao_id_criado::text AS parcela_id "
         " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
         " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
         " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
         " WHERE fl.transacao_id_criado IS NOT NULL "
-        " AND COALESCE(a.somente_conciliacao,false)=true"
+        " AND COALESCE(a.somente_conciliacao,false)=true "
+        " AND (%s IS NULL OR fi.account_id=%s)"
         "), membros AS ("
         " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
         " UNION SELECT agregado_id, parcela_id FROM rel"
@@ -917,7 +919,8 @@ def preencher_classificacao_vazia_parcelas(cur):
         " GROUP BY m.agregado_id HAVING COUNT(DISTINCT t.categoria)=1"
         ") UPDATE cartao.transacao destino SET categoria=e.categoria, atualizado_em=now() "
         "FROM rel r JOIN escolha e ON e.agregado_id=r.agregado_id "
-        "WHERE destino.transacao_id::text=r.parcela_id AND destino.categoria IS NULL;"
+        "WHERE destino.transacao_id::text=r.parcela_id AND destino.categoria IS NULL;",
+        (account_id, account_id),
     )
     categorias = max(getattr(cur, "rowcount", 0) or 0, 0)
 
@@ -926,10 +929,12 @@ def preencher_classificacao_vazia_parcelas(cur):
         " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
         " fl.transacao_id_criado::text AS parcela_id "
         " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
         " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
         " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
         " WHERE fl.transacao_id_criado IS NOT NULL "
-        " AND COALESCE(a.somente_conciliacao,false)=true"
+        " AND COALESCE(a.somente_conciliacao,false)=true "
+        " AND (%s IS NULL OR fi.account_id=%s)"
         "), membros AS ("
         " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
         " UNION SELECT agregado_id, parcela_id FROM rel"
@@ -941,7 +946,8 @@ def preencher_classificacao_vazia_parcelas(cur):
         ") INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
         "SELECT r.parcela_id,e.dimensao_id,e.valor_id FROM rel r "
         "JOIN escolha e ON e.agregado_id=r.agregado_id "
-        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;"
+        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;",
+        (account_id, account_id),
     )
     dimensoes = max(getattr(cur, "rowcount", 0) or 0, 0)
 
@@ -953,10 +959,12 @@ def preencher_classificacao_vazia_parcelas(cur):
         " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
         " fl.transacao_id_criado::text AS parcela_id "
         " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
         " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
         " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
         " WHERE fl.transacao_id_criado IS NOT NULL "
-        " AND COALESCE(a.somente_conciliacao,false)=true"
+        " AND COALESCE(a.somente_conciliacao,false)=true "
+        " AND (%s IS NULL OR fi.account_id=%s)"
         "), membros AS ("
         " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
         " UNION SELECT agregado_id, parcela_id FROM rel"
@@ -968,7 +976,8 @@ def preencher_classificacao_vazia_parcelas(cur):
         ") UPDATE cartao.transacao destino SET observacao=e.observacao, atualizado_em=now() "
         "FROM membros m JOIN escolha e ON e.agregado_id=m.agregado_id "
         "WHERE destino.transacao_id::text=m.transacao_id "
-        "AND NULLIF(BTRIM(destino.observacao),'') IS NULL;"
+        "AND NULLIF(BTRIM(destino.observacao),'') IS NULL;",
+        (account_id, account_id),
     )
     observacoes = max(getattr(cur, "rowcount", 0) or 0, 0)
     return {"categorias": categorias, "dimensoes": dimensoes, "observacoes": observacoes}
@@ -2717,13 +2726,44 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (36);")
             conn.commit()
 
+        if versao_atual < 37:
+            # Expande para todo o historico da origem as decisoes ja
+            # confirmadas. Parcelamentos usam somente a familia oficial;
+            # demais recorrencias passam pelas regras cadastradas, que nunca
+            # sobrescrevem categoria manual, lancamento conferido ou possivel
+            # duplicidade. O OK permanece individual e intocado.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            parcelas_preenchidas = preencher_classificacao_vazia_parcelas(
+                cur, account_id=conta_unicred
+            )
+            regras_historicas = aplicar_regras(cur, account_id=conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Expansao historica da classificacao Unicred',"
+                "jsonb_build_object('versao',37,'parcelas_categorias',%s,"
+                "'parcelas_dimensoes',%s,'parcelas_observacoes',%s,"
+                "'regras_lancamentos',%s,'regras_dimensoes',%s,"
+                "'duplicidades_preservadas',%s,'erro_regra',%s));",
+                (
+                    parcelas_preenchidas["categorias"],
+                    parcelas_preenchidas["dimensoes"],
+                    parcelas_preenchidas["observacoes"],
+                    regras_historicas["lancamentos"],
+                    regras_historicas["dimensoes"],
+                    len(regras_historicas["duplicatas_ignoradas"]),
+                    regras_historicas["erro"],
+                ),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (37);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
         print("Aviso: falha ao rodar migracao:", e)
 
 
-def aplicar_regras(cur):
+def aplicar_regras(cur, account_id=None):
     """Aplica regras de classificacao automatica a lancamentos pendentes ainda nao tocados por nenhuma regra.
     Nunca sobrescreve categoria escolhida pelo usuario nem transacao confirmada, e nunca
     classifica sozinha uma linha que pode ser a mesma compra de outra ja existente (mesma
@@ -2732,6 +2772,8 @@ def aplicar_regras(cur):
     # aplicacao em um savepoint para que esse dado ruim nao aborte todas as
     # consultas da pagina que chamou esta funcao.
     resultado = {"lancamentos": 0, "dimensoes": 0, "erro": None, "duplicatas_ignoradas": []}
+    escopo_sql = " AND t.account_id=%s " if account_id else ""
+    escopo_params = (account_id,) if account_id else ()
     cur.execute("SAVEPOINT aplicar_regras")
     try:
         # Diagnostico: lancamentos que bateriam com uma regra mas foram pulados
@@ -2753,13 +2795,15 @@ def aplicar_regras(cur):
             "     ELSE false END) "
             "WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
             "  AND COALESCE(t.categoria_manual, false) = false "
+            + escopo_sql +
             "  AND EXISTS ("
             "    SELECT 1 FROM cartao.transacao t2 "
             "    WHERE t2.transacao_id <> t.transacao_id "
             "      AND t2.account_id = t.account_id "
             "      AND t2.data_transacao = t.data_transacao "
             "      AND COALESCE(t2.valor_brl, t2.valor_original) = COALESCE(t.valor_brl, t.valor_original)"
-            "  ) LIMIT 50;"
+            "  ) LIMIT 50;",
+            escopo_params,
         )
         resultado["duplicatas_ignoradas"] = [
             {"transacao_id": row[0], "descricao": row[1], "data": row[2].isoformat() if row[2] else None}
@@ -2781,6 +2825,7 @@ def aplicar_regras(cur):
             "       ELSE false END) "
             "  WHERE t.regra_aplicada_id IS NULL AND t.conferida = false "
             "    AND COALESCE(t.categoria_manual, false) = false "
+            + escopo_sql +
             # O Pluggy as vezes reenvia a mesma compra com um id novo e uma
             # descricao diferente (ex: 'Compra a Vista - X' e 'A vista sem
             # juros - Visa - X ... BR' no mesmo minuto e valor). Se ja existe
@@ -2798,7 +2843,8 @@ def aplicar_regras(cur):
             "  ORDER BY t.transacao_id, r.ordem, r.id"
             ") "
             "UPDATE cartao.transacao t SET categoria = m.categoria, regra_aplicada_id = m.regra_id "
-            "FROM match m WHERE t.transacao_id = m.transacao_id::uuid;"
+            "FROM match m WHERE t.transacao_id = m.transacao_id::uuid;",
+            escopo_params,
         )
         resultado["lancamentos"] = max(cur.rowcount, 0)
         cur.execute(
@@ -2807,7 +2853,9 @@ def aplicar_regras(cur):
             "FROM cartao.transacao t "
             "JOIN cartao.regra_dimensao_valor rdv ON rdv.regra_id = t.regra_aplicada_id "
             "WHERE t.regra_aplicada_id IS NOT NULL "
-            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
+            + escopo_sql +
+            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;",
+            escopo_params,
         )
         resultado["dimensoes"] = max(cur.rowcount, 0)
 
@@ -2825,7 +2873,9 @@ def aplicar_regras(cur):
             "JOIN cartao.dimensao_valor dvp ON dvp.id = td.valor_id AND dvp.portfolio_valor_id IS NOT NULL "
             "JOIN cartao.dimensao dport ON lower(dport.nome)=lower('Portfólio') "
             "WHERE t.regra_aplicada_id IS NOT NULL "
-            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;"
+            + escopo_sql +
+            "ON CONFLICT (transacao_id, dimensao_id) DO NOTHING;",
+            escopo_params,
         )
     except Exception as e:
         cur.execute("ROLLBACK TO SAVEPOINT aplicar_regras")

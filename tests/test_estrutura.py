@@ -293,6 +293,12 @@ def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
     assert "fi.mes_referencia IN (7,8)" in complemento
     assert "t.conferida" not in complemento
     assert "LIKE 'LISCIA%%'" in complemento
+    historico = core.split("if versao_atual < 37:", 1)[1].split("cur.close()", 1)[0]
+    assert "preencher_classificacao_vazia_parcelas(" in historico
+    assert "account_id=conta_unicred" in historico
+    assert "aplicar_regras(cur, account_id=conta_unicred)" in historico
+    assert "t.conferida" not in historico
+    assert 'escopo_sql = " AND t.account_id=%s "' in core
 
 
 def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
