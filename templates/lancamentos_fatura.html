@@ -20,6 +20,7 @@
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:#f5f5f3;border-radius:6px;padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:#c23c34!important;background:#fbeceb!important}.editor-financeiro label.obrigatorio{color:#a63832;font-weight:600}
   .ok-lancamento{width:19px;height:19px}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0 14px}
+  .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px}.busca-fatura span{font-size:12px;color:var(--ink-faint)}
   @media(max-width:900px){.vinculo-grid,.detalhes-grid{grid-template-columns:1fr}.detalhe-id{grid-column:auto}.vinculos-detalhe>td{padding-left:12px!important}}
 </style>
 {% endblock %}
@@ -80,9 +81,13 @@
 <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
 {% if pode_editar %}<form method="post" action="/api/faturas/sincronizar-parcelas" style="margin:-6px 0 14px">
   <input type="hidden" name="retorno" value="/lancamentos/fatura?fatura_id={{ fatura.id }}&status={{ status }}">
-  <button type="submit" class="ver-btn" title="Revisar compras parceladas que o Pluggy trouxe pelo valor total">Revisar parcelamentos</button>
+  <button type="submit" class="ver-btn" title="Corrige compras que o Pluggy trouxe pelo valor total: o total vira registro técnico e cada parcela passa a ser contabilizada no mês da fatura">Revisar parcelamentos</button>
 </form>{% endif %}
 
+<div class="busca-fatura">
+  <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
+  <span id="buscaFaturaContador" aria-live="polite"></span>
+</div>
 <div class="tabela-scroll">
 <table class="compacta fatura-tabela"><thead><tr><th></th><th>Data</th><th>Descrição no PDF</th><th>Titular / cartão</th><th>Parcela</th><th>Valor PDF</th><th>Classificação</th><th>OK</th></tr></thead><tbody>
 {% for linha in linhas %}
@@ -139,4 +144,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-2"></script>{% endblock %}

@@ -321,6 +321,11 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     assert 'request.form.get("retorno")' in view
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "Revisar parcelamentos" in template
+    assert 'id="buscaFatura"' in template
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "textoFiltravelDoGrupo" in js
+    assert "visiveis + ' de ' + linhas.length" in js
+    assert "detalhe.style.display = exibir ? '' : 'none'" in js
 
 
 def test_categoria_tambem_e_obrigatoria_para_novo_ok():

@@ -1467,4 +1467,19 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Se houver zero ou mais de um candidato, não adivinhar e deixar para revisão manual.
 - A herança copia Categoria, Responsável, Projeto e Portfólio, mas nunca copia Observação pessoal
   nem marca OK. A migração 38 corrige todo o histórico aprovado e cria as regras permanentes.
+
+# Pesquisa da visualização detalhada e revisão de parcelas (31/08/2026)
+
+- A visualização detalhada por fatura possui pesquisa local própria. Ela filtra somente as linhas
+  já carregadas da fatura e do Status selecionado, considerando descrição do PDF, titular, cartão,
+  valores, registros P/F, classificação escolhida e observação. A linha principal e todos os seus
+  registros agregados formam um bloco: aparecem ou somem juntos. `Esc` limpa a pesquisa.
+- `Revisar parcelamentos` não é uma consulta sem efeito. Ele corrige o regime de caixa quando o
+  Pluggy trouxe a compra inteira em um único registro: marca o total como registro técnico
+  `somente_conciliacao` e cria uma transação contabilizada para cada parcela, no mês e valor do
+  PDF. Isso redistribui o DRE entre meses. Categoria, dimensões e observação disponíveis são
+  preservadas; o primeiro trabalho humano pode ser transferido com segurança.
+- A revisão é idempotente: `fatura_linha.transacao_id_criado` impede criar a mesma parcela duas
+  vezes. O botão pode ser executado novamente para tratar novas famílias detectadas. Toda execução
+  fica no log de auditoria. O rótulo continua curto, mas o tooltip deve explicar o impacto real.
 - O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.

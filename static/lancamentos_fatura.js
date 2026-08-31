@@ -23,6 +23,55 @@
     if (card) ir({status: card.dataset.filtro});
   });
 
+  function normalizarBusca(texto) {
+    return String(texto == null ? '' : texto)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function textoFiltravelDoGrupo(linha, detalhe) {
+    const partes = [linha.textContent || ''];
+    if (detalhe) {
+      const clone = detalhe.cloneNode(true);
+      clone.querySelectorAll('select').forEach(select => select.remove());
+      partes.push(clone.textContent || '');
+      detalhe.querySelectorAll('input').forEach(input => {
+        if (!['checkbox', 'radio', 'hidden'].includes(input.type)) partes.push(input.value || '');
+      });
+      detalhe.querySelectorAll('select').forEach(select => {
+        const opcao = select.options[select.selectedIndex];
+        if (opcao) partes.push(opcao.textContent || '');
+      });
+    }
+    return normalizarBusca(partes.join(' '));
+  }
+
+  const buscaFatura = document.getElementById('buscaFatura');
+  const contadorBusca = document.getElementById('buscaFaturaContador');
+  function aplicarBuscaFatura() {
+    if (!buscaFatura) return;
+    const termo = normalizarBusca(buscaFatura.value).trim();
+    const linhas = Array.from(document.querySelectorAll('tr[data-linha]'));
+    let visiveis = 0;
+    linhas.forEach(linha => {
+      const detalhe = document.getElementById('vinculos-' + linha.dataset.linha);
+      const exibir = !termo || textoFiltravelDoGrupo(linha, detalhe).includes(termo);
+      linha.style.display = exibir ? '' : 'none';
+      if (detalhe) detalhe.style.display = exibir ? '' : 'none';
+      if (exibir) visiveis += 1;
+    });
+    if (contadorBusca) contadorBusca.textContent = termo ? visiveis + ' de ' + linhas.length : '';
+  }
+  if (buscaFatura) {
+    buscaFatura.addEventListener('input', aplicarBuscaFatura);
+    buscaFatura.addEventListener('keydown', evento => {
+      if (evento.key === 'Escape') {
+        buscaFatura.value = '';
+        aplicarBuscaFatura();
+        evento.stopPropagation();
+      }
+    });
+  }
+
   function alternarLinha(id) {
     const botao = document.querySelector('[data-expande="' + CSS.escape(id) + '"]');
     const detalhe = document.getElementById('vinculos-' + id);
@@ -197,6 +246,7 @@
         try { await atualizarResumoPagina(); } catch (e) {
           if (editor.dataset.versaoSalva === versao) aviso.textContent = 'Salvo; resumo atualiza ao reabrir';
         }
+        aplicarBuscaFatura();
       } catch (e) {
         aviso.textContent = e.message; aviso.classList.add('erro');
       } finally {
