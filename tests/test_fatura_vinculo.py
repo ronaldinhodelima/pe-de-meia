@@ -41,6 +41,21 @@ def test_tolerancia_do_agregado_termina_exatamente_em_um_real():
     assert _melhor_agregado([fora], 10000, 2, "LOJA") is None
 
 
+def test_agregado_exige_estabelecimento_compativel_e_nao_so_valor():
+    mercado = {
+        "_usado": False, "parcela_total": None, "_valor_centavos": 16400,
+        "descricao": "Parcelado Lojista - Visa - MERCADOLIVRE*COM CURITIBA BR",
+    }
+    pizzaria = {
+        "_usado": False, "parcela_total": None, "_valor_centavos": 16400,
+        "descricao": "A vista sem juros - Visa - YELLOW BOX PIZZARIA VIDEIRA BR",
+    }
+    assert _melhor_agregado(
+        [pizzaria, mercado], 16400, 5, "MERCADOLIVRE*COMPRAS"
+    ) is mercado
+    assert _melhor_agregado([pizzaria], 16400, 5, "MERCADOLIVRE*COMPRAS") is None
+
+
 class CursorFake:
     """Devolve sempre a mesma lista de candidatos, no formato da consulta real."""
 

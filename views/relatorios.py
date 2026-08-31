@@ -508,10 +508,15 @@ def _melhor_agregado(candidatos, valor_esperado_centavos, parcela_total, desc_no
     uma linha por mes, em faturas diferentes - e' o unico caso em que reusar
     transacao ja vinculada e' correto."""
     tolerancia_centavos = 100
+    tokens_linha = _tokens_significativos(desc_norm)
     candidatos_valor = [
         c for c in candidatos
         if not c["_usado"]
         and abs(c["_valor_centavos"] - valor_esperado_centavos) <= tolerancia_centavos
+        # Valor cheio igual nao basta: duas compras diferentes podem ter o
+        # mesmo total (caso real: MERCADOLIVRE 5x32,80 e YELLOW BOX 164,00).
+        # Exigimos ao menos um token de estabelecimento em comum.
+        and bool(tokens_linha & _tokens_significativos(c.get("descricao")))
     ]
     if not candidatos_valor:
         return None

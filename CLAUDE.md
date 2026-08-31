@@ -1534,3 +1534,13 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Unicred pelos cartões da própria fatura, não com o total geral do mês.
 - O DRE 2026 ainda mostra muitos lançamentos sem categoria oriundos das demais contas. Resolver a
   Unicred não autoriza classificar esses registros de outras origens com as mesmas regras.
+
+# Vínculo corrigido — Mercado Livre 5x R$ 32,80 (31/08/2026)
+
+- A parcela 1/5 de `MERCADOLIVRE*COMPRAS` foi ligada incorretamente a `YELLOW BOX PIZZARIA` porque
+  ambas resultavam em R$ 164,00. Coincidência de valor total nunca é prova suficiente de família.
+- O registro técnico correto é `MERCADOLIVRE*COM CURITIBA`, R$ 164,00. As parcelas 2/5 e 3/5 já
+  confirmavam a classificação compartilhada: Utilidades Domésticas / Família / Reformas da casa /
+  Imóveis, observação pessoal `Resina Epoxi mesa`. A migração 40 aplica isso à parcela 1/5, sem OK.
+- O conciliador de parcelamentos agora exige, além do valor total, ao menos um token significativo
+  do estabelecimento em comum entre a linha do PDF e o registro agregado do Pluggy.

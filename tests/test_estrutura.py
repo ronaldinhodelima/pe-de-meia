@@ -290,7 +290,7 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
 
 def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
-    trecho = core.split("if versao_atual < 35:", 1)[1].split("cur.close()", 1)[0]
+    trecho = core.split("if versao_atual < 35:", 1)[1].split("if versao_atual < 36:", 1)[0]
     assert "fi.ano_referencia=2026" in trecho
     assert "fi.mes_referencia IN (7,8)" in trecho
     assert "t.conferida" not in trecho

@@ -2994,6 +2994,76 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (39);")
             conn.commit()
 
+        if versao_atual < 40:
+            # Repara um falso casamento por coincidencia matematica: tanto a
+            # compra YELLOW BOX quanto o parcelamento MERCADOLIVRE somavam
+            # R$164,00. A parcela 1/5 do PDF pertence ao segundo. Mantemos a
+            # pizzaria intacta e trocamos somente o vinculo desta linha.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            cur.execute(
+                "DELETE FROM cartao.fatura_vinculo v USING cartao.fatura_linha fl, "
+                "cartao.fatura_importada fi, cartao.transacao t "
+                "WHERE v.fatura_linha_id=fl.id AND fi.id=fl.fatura_id "
+                "AND t.transacao_id=v.transacao_id AND fi.account_id=%s "
+                "AND fl.descricao ILIKE 'MERCADOLIVRE%%COMPRAS%%Parc.1/5%%' "
+                "AND t.descricao ILIKE '%%YELLOW BOX PIZZARIA%%';",
+                (conta_unicred,),
+            )
+            removidos_v40 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.fatura_vinculo (fatura_linha_id,transacao_id,origem,criado_por) "
+                "SELECT fl.id,t.transacao_id,'sistema','correcao_v40' "
+                "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                "JOIN cartao.transacao t ON t.account_id=fi.account_id "
+                "WHERE fi.account_id=%s "
+                "AND fl.descricao ILIKE 'MERCADOLIVRE%%COMPRAS%%Parc.1/5%%' "
+                "AND t.descricao ILIKE '%%MERCADOLIVRE%%COM%%CURITIBA%%' "
+                "AND ABS(ABS(COALESCE(t.valor_brl,t.valor_original))-164.00)<=0.01 "
+                "ON CONFLICT (fatura_linha_id,transacao_id) DO NOTHING;",
+                (conta_unicred,),
+            )
+            inseridos_v40 = max(cur.rowcount, 0)
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v40 = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+            cur.execute(
+                "UPDATE cartao.transacao t SET categoria='Houseware', "
+                "observacao=COALESCE(NULLIF(t.observacao,''),'Resina Epoxi mesa'), atualizado_em=now() "
+                "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                "WHERE fl.transacao_id_criado=t.transacao_id AND fi.account_id=%s "
+                "AND fl.descricao ILIKE 'MERCADOLIVRE%%COMPRAS%%Parc.1/5%%';",
+                (conta_unicred,),
+            )
+            classificados_v40 = max(cur.rowcount, 0)
+            for dim_nome, valor_nome in (
+                ("responsavel", "Família"), ("projeto", "Reformas da casa"),
+                ("portfolio", "Imóveis"),
+            ):
+                dim_id = dims_v40.get(dim_nome)
+                if not dim_id:
+                    continue
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT fl.transacao_id_criado,%s,dv.id FROM cartao.fatura_linha fl "
+                    "JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                    "JOIN cartao.dimensao_valor dv ON dv.dimensao_id=%s AND lower(dv.nome)=lower(%s) "
+                    "WHERE fi.account_id=%s AND fl.transacao_id_criado IS NOT NULL "
+                    "AND fl.descricao ILIKE 'MERCADOLIVRE%%COMPRAS%%Parc.1/5%%' "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (dim_id, dim_id, valor_nome, conta_unicred),
+                )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Correcao vinculo Mercado Livre',"
+                "jsonb_build_object('versao',40,'removidos',%s,'inseridos',%s,'classificados',%s));",
+                (removidos_v40, inseridos_v40, classificados_v40),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (40);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
