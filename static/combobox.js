@@ -44,6 +44,7 @@
     wrapper.appendChild(lista);
     select.classList.add('pdm-select-original');
     select.tabIndex = -1;
+    select.setAttribute('aria-hidden', 'true');
 
     var filtradas = [];
     var ativo = -1;

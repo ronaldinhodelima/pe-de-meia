@@ -20,7 +20,7 @@ def test_piloto_cobre_quatro_campos_nas_duas_visualizacoes():
     resumida = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
 
-    assert 'src="/static/combobox.js"' in base
+    assert '/static/combobox.js?v=' in base
     assert 'data-pdm-combobox data-campo="categoria"' in detalhada
     assert 'data-pdm-combobox data-dimensao=' in detalhada
     assert 'data-pdm-combobox aria-label="Categoria" class="cat-select' in resumida

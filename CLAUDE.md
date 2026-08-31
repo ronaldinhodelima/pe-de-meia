@@ -1596,3 +1596,5 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   mudança sem recarregar a página. Projeto e Portfólio preservam a opção de cadastro rápido.
 - Este piloto deve ser validado antes da expansão. Uma vez aprovado, o mesmo componente será o padrão
   obrigatório para seleções pesquisáveis de todas as telas atuais e novas do Pé de Meia.
+- O campo nativo fica preservado tecnicamente, mas oculto também da árvore de acessibilidade; leitores
+  de tela e navegação por teclado devem encontrar somente o novo combobox, sem controles duplicados.
