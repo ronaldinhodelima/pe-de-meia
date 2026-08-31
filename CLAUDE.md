@@ -1493,7 +1493,7 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 
 - Junho/2026 foi revisado pelo usuário e passou a compor, junto com julho e agosto, a base de
   referência das classificações do Cartão de Crédito Unicred · Conjunta. As três faturas possuem
-  477 linhas oficiais; somente os pagamentos informativos ficam sem classificação financeira.
+  478 linhas oficiais; somente os pagamentos informativos ficam sem classificação financeira.
 - A migração 39 cria regras restritas à Unicred para descrições que permaneceram coerentes:
   SUPERVIZA, MP*PRODUTOS, HIPERCENTER UNIVERSIDAD, HAVAN VIDEIRA, FARM GEREMIAS - CENTRO,
   CATIVA, HNA*OBOTICARIO, IEAS, AZULEQVY2E, CASA DE CARNES 95 LTDA ME, DM*SPOTIFY,
