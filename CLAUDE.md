@@ -1552,3 +1552,13 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   sem recarregar a página e sem perder a posição de rolagem.
 - A remoção automática só ocorre nesse filtro e somente após resposta bem-sucedida da API. Nos
   demais filtros, marcar OK mantém o lançamento visível e apenas atualiza seu estado.
+
+# Classificação integral compartilhada nas parcelas (31/08/2026)
+
+- Categoria, Responsável, Projeto, Portfólio e Observação pertencem à compra parcelada inteira.
+  Ao editar qualquer um desses campos em uma parcela, sincronizar com todas as demais parcelas da
+  família o conjunto completo já definido no lançamento editado, não somente o campo do evento.
+- A família continua sendo determinada exclusivamente pelos vínculos persistidos da fatura com o
+  agregado técnico. Nunca formar família apenas por descrição, data ou valor semelhante.
+- Uma limpeza feita explicitamente pelo usuário também é compartilhada. Campos ainda vazios que
+  não foram alterados não apagam dados existentes. O OK permanece sempre individual por parcela.

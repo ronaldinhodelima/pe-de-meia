@@ -1634,14 +1634,35 @@ def update_transacao(transacao_id):
         "membros": 0, "categorias": 0, "dimensoes": 0, "observacoes": 0,
     }
     if "categoria" in data or dimensoes_validadas or "observacao" in data:
+        # A classificacao pertence a compra parcelada inteira. Mesmo que esta
+        # requisicao tenha alterado so um campo, envia para a familia todo o
+        # conjunto ja definido no membro editado. Assim uma observacao nova,
+        # por exemplo, tambem completa Categoria/Responsavel/Projeto/Portfolio
+        # das demais parcelas sem exigir quatro edicoes separadas.
+        cur.execute(
+            "SELECT categoria, observacao FROM cartao.transacao WHERE transacao_id=%s;",
+            (transacao_id,),
+        )
+        classificacao_atual = cur.fetchone()
+        categoria_familia = classificacao_atual[0]
+        observacao_familia = classificacao_atual[1]
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.transacao_dimensao "
+            "WHERE transacao_id=%s AND valor_id IS NOT NULL;",
+            (transacao_id,),
+        )
+        dimensoes_familia = {item[0]: item[1] for item in cur.fetchall()}
+        # Uma limpeza explicita tambem precisa alcançar as outras parcelas.
+        for item in dimensoes_validadas:
+            dimensoes_familia[item[0]] = item[1]
         classificacoes_compartilhadas = propagar_classificacao_familia_parcelas(
             cur,
             transacao_id,
-            categoria_enviada="categoria" in data,
-            categoria=data.get("categoria") or None,
-            dimensoes={item[0]: item[1] for item in dimensoes_validadas},
-            observacao_enviada="observacao" in data,
-            observacao=data.get("observacao"),
+            categoria_enviada=bool(categoria_familia) or "categoria" in data,
+            categoria=categoria_familia,
+            dimensoes=dimensoes_familia,
+            observacao_enviada=bool(observacao_familia) or "observacao" in data,
+            observacao=observacao_familia,
         )
     conn.commit()
     cur.close()

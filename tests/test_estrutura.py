@@ -573,7 +573,10 @@ def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas()
     assert "SET conferida" not in trecho
     assert "observacao_enviada" in trecho and "SET observacao=%s" in trecho
     assert "propagar_classificacao_familia_parcelas(" in view
-    assert 'observacao_enviada="observacao" in data' in view
+    assert "dimensoes_familia" in view
+    assert "categoria_familia" in view and "observacao_familia" in view
+    assert 'categoria_enviada=bool(categoria_familia) or "categoria" in data' in view
+    assert 'observacao_enviada=bool(observacao_familia) or "observacao" in data' in view
 
 
 def test_importacao_legada_unicred_preserva_ajustes_da_nova_tela():
