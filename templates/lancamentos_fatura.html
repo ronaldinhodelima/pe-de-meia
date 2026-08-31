@@ -78,6 +78,10 @@
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
 </div>
 <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
+{% if pode_editar %}<form method="post" action="/api/faturas/sincronizar-parcelas" style="margin:-6px 0 14px">
+  <input type="hidden" name="retorno" value="/lancamentos/fatura?fatura_id={{ fatura.id }}&status={{ status }}">
+  <button type="submit" class="ver-btn" title="Revisar compras parceladas que o Pluggy trouxe pelo valor total">Revisar parcelamentos</button>
+</form>{% endif %}
 
 <div class="tabela-scroll">
 <table class="compacta fatura-tabela"><thead><tr><th></th><th>Data</th><th>Descrição no PDF</th><th>Titular / cartão</th><th>Parcela</th><th>Valor PDF</th><th>Classificação</th><th>OK</th></tr></thead><tbody>

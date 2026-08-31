@@ -1608,14 +1608,18 @@ def update_transacao(transacao_id):
             f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s;",
             valores + [transacao_id],
         )
-    classificacoes_compartilhadas = {"membros": 0, "categorias": 0, "dimensoes": 0}
-    if "categoria" in data or dimensoes_validadas:
+    classificacoes_compartilhadas = {
+        "membros": 0, "categorias": 0, "dimensoes": 0, "observacoes": 0,
+    }
+    if "categoria" in data or dimensoes_validadas or "observacao" in data:
         classificacoes_compartilhadas = propagar_classificacao_familia_parcelas(
             cur,
             transacao_id,
             categoria_enviada="categoria" in data,
             categoria=data.get("categoria") or None,
             dimensoes={item[0]: item[1] for item in dimensoes_validadas},
+            observacao_enviada="observacao" in data,
+            observacao=data.get("observacao"),
         )
     conn.commit()
     cur.close()
@@ -1649,6 +1653,7 @@ def update_transacao(transacao_id):
     if (
         classificacoes_compartilhadas["categorias"]
         or classificacoes_compartilhadas["dimensoes"]
+        or classificacoes_compartilhadas["observacoes"]
     ):
         registrar_mudanca_auditoria(
             "Classificação compartilhada entre parcelas vinculadas",

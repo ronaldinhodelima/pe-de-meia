@@ -1175,8 +1175,9 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   exibidos nas duas telas devem ler a mesma fonte; não criar cópias desses campos.
 - Parcelas mensais da mesma compra explicitamente ligadas ao mesmo agregado técnico pela tabela
   `fatura_vinculo` compartilham **categoria e dimensões**. Alterar uma delas aplica a classificação
-  às demais parcelas da família. Nunca inferir família por descrição, data ou valor. Observação e
-  OK permanecem individuais por parcela, porque documentam e assinam a cobrança daquele mês.
+  às demais parcelas da família. Nunca inferir família por descrição, data ou valor. A observação
+  pessoal também é compartilhada entre as parcelas da mesma compra; o OK permanece individual,
+  porque assina a conferência de cada cobrança mensal.
 - Uma linha do PDF pode mostrar vários registros técnicos agregados, todos preservados para
   auditoria. Apenas o lançamento financeiro principal é editável e contabilizado. Clicar em
   qualquer área não interativa da linha principal deve abrir/recolher os detalhes, igual ao botão
@@ -1215,8 +1216,8 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   só muda de falso para verdadeiro e preserva usuário/horário quando existirem. Duplicidade,
   valor, data e os demais campos bancários não são alterados.
 - Esta cópia de OK é apenas recuperação do trabalho humano já realizado. Depois da migração, o OK
-  e a observação continuam individuais por parcela; novas parcelas futuras não recebem OK
-  automaticamente do agregado.
+  continua individual por parcela e novas parcelas futuras não recebem OK automaticamente. A
+  observação é compartilhada entre toda a família de parcelas conforme a decisão de 30/08/2026.
 - Arquivos alterados nesta entrega: `core.py`, `tests/test_estrutura.py` e este `CLAUDE.md`.
 - Antes de publicar: executar a suíte completa, sintaxe e `git diff --check`. Depois do deploy,
   conferir o registro da migração 30 nos logs e comparar os totais/quantidades da origem Unicred;
@@ -1337,7 +1338,7 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
 - Um parcelamento pode aparecer primeiro como um único registro do Pluggy pelo valor total da
   compra e ainda estar ligado a apenas uma fatura importada. Não esperar duas faturas para
   reconhecê-lo: quando `valor do Pluggy = valor do PDF × total de parcelas` (tolerância de um
-  centavo), o registro do Pluggy vira `somente_conciliacao` e a cobrança mensal do PDF passa a ser
+  real), o registro do Pluggy vira `somente_conciliacao` e a cobrança mensal do PDF passa a ser
   o único lançamento financeiro.
 - Exemplo validado: ANJOS DE QUINTAL, compra total de R$ 2.160,00 em 6 parcelas. A fatura e o DRE
   devem contabilizar R$ 360,00 por mês; R$ 2.160,00 permanece apenas como registro técnico da
@@ -1367,3 +1368,14 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   divergência vermelha e filtrável. A exceção não é ocultação: compra total do Pluggy igual a
   parcela × quantidade é normalizada para uma parcela `F`; qualquer outra diferença permanece
   obrigatoriamente para revisão.
+- Toda importação/reimportação de fatura agora chama a normalização de parcelamentos depois de
+  gravar os vínculos automáticos e antes do `commit`. Para dados históricos, a visão detalhada
+  oferece `Revisar parcelamentos`: é uma operação autenticada, idempotente e retorna à mesma
+  fatura. Ela não apaga registros; apenas separa compra técnica e cobranças mensais conforme o PDF.
+- A comparação do total usa a mesma tolerância de R$ 1,00 já adotada na conciliação, necessária
+  para arredondamentos mensais (por exemplo, R$ 91,15 × 3 versus total de R$ 273,41). Fora dessa
+  tolerância, não normalizar automaticamente: manter divergência vermelha para investigação.
+- Observações pessoais preenchidas em qualquer lançamento da família são compartilhadas com todas
+  as parcelas explicitamente ligadas ao mesmo agregado técnico. Uma edição humana passa a valer
+  para toda a família. Na recuperação histórica, preencher somente observações vazias e apenas
+  quando existir um único texto inequívoco, nunca apagando anotações diferentes já existentes.

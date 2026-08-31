@@ -944,18 +944,46 @@ def preencher_classificacao_vazia_parcelas(cur):
         "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;"
     )
     dimensoes = max(getattr(cur, "rowcount", 0) or 0, 0)
-    return {"categorias": categorias, "dimensoes": dimensoes}
+
+    # Observacao pessoal pertence a compra parcelada. Na recuperacao
+    # historica, so preenche campos vazios e so quando toda a familia possui
+    # um unico texto nao vazio; assim nenhuma anotacao diferente e apagada.
+    cur.execute(
+        "WITH rel AS ("
+        " SELECT DISTINCT fv.transacao_id::text AS agregado_id, "
+        " fl.transacao_id_criado::text AS parcela_id "
+        " FROM cartao.fatura_linha fl "
+        " JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id=fl.id "
+        " JOIN cartao.transacao a ON a.transacao_id=fv.transacao_id "
+        " WHERE fl.transacao_id_criado IS NOT NULL "
+        " AND COALESCE(a.somente_conciliacao,false)=true"
+        "), membros AS ("
+        " SELECT agregado_id, agregado_id AS transacao_id FROM rel "
+        " UNION SELECT agregado_id, parcela_id FROM rel"
+        "), escolha AS ("
+        " SELECT m.agregado_id, MIN(t.observacao) AS observacao "
+        " FROM membros m JOIN cartao.transacao t ON t.transacao_id::text=m.transacao_id "
+        " WHERE NULLIF(BTRIM(t.observacao),'') IS NOT NULL "
+        " GROUP BY m.agregado_id HAVING COUNT(DISTINCT t.observacao)=1"
+        ") UPDATE cartao.transacao destino SET observacao=e.observacao, atualizado_em=now() "
+        "FROM membros m JOIN escolha e ON e.agregado_id=m.agregado_id "
+        "WHERE destino.transacao_id::text=m.transacao_id "
+        "AND NULLIF(BTRIM(destino.observacao),'') IS NULL;"
+    )
+    observacoes = max(getattr(cur, "rowcount", 0) or 0, 0)
+    return {"categorias": categorias, "dimensoes": dimensoes, "observacoes": observacoes}
 
 
 def propagar_classificacao_familia_parcelas(
-    cur, transacao_id, *, categoria_enviada=False, categoria=None, dimensoes=None
+    cur, transacao_id, *, categoria_enviada=False, categoria=None, dimensoes=None,
+    observacao_enviada=False, observacao=None
 ):
     """Compartilha classificacao entre parcelas ligadas ao mesmo agregado.
 
     A familia nasce exclusivamente de ``fatura_vinculo``: agregado tecnico e
     parcelas mensais geradas a partir das linhas que apontam para ele. Nunca
-    agrupa por descricao, data ou valor. Categoria e dimensoes sao comuns;
-    observacao e OK continuam individuais em cada cobranca mensal.
+    agrupa por descricao, data ou valor. Categoria, dimensoes e observacao sao
+    comuns; o OK continua individual em cada cobranca mensal.
     """
     cur.execute(
         "WITH agregados AS ("
@@ -976,7 +1004,7 @@ def propagar_classificacao_familia_parcelas(
     )
     familia = [r[0] for r in cur.fetchall()]
     if not familia:
-        return {"membros": 0, "categorias": 0, "dimensoes": 0}
+        return {"membros": 0, "categorias": 0, "dimensoes": 0, "observacoes": 0}
 
     categorias = 0
     if categoria_enviada:
@@ -1002,9 +1030,17 @@ def propagar_classificacao_familia_parcelas(
                 (dimensao_id, valor_id, [str(x) for x in familia]),
             )
         dimensoes_atualizadas += max(getattr(cur, "rowcount", 0) or 0, 0)
+    observacoes = 0
+    if observacao_enviada:
+        cur.execute(
+            "UPDATE cartao.transacao SET observacao=%s, atualizado_em=now() "
+            "WHERE transacao_id IN %s;",
+            (observacao, tuple(familia)),
+        )
+        observacoes = max(getattr(cur, "rowcount", 0) or 0, 0)
     return {
         "membros": len(familia), "categorias": categorias,
-        "dimensoes": dimensoes_atualizadas,
+        "dimensoes": dimensoes_atualizadas, "observacoes": observacoes,
     }
 
 

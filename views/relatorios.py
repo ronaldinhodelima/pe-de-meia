@@ -7,7 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, Response, request, jsonify, render_template, session
+from flask import Blueprint, Response, request, jsonify, render_template, session, redirect
 
 from fatura_unicred import extrair_fatura, FaturaInvalida
 from core import (
@@ -1208,6 +1208,10 @@ def conciliar_fatura():
                 # leva os vinculos junto - inclusive o da parcela ja gerada
                 _revincular_lancamentos_da_fatura(cur, session.get("user"))
                 _vincular_automatico(cur, fatura_para_vincular, session.get("user"))
+                # A propria importacao conclui o regime de caixa. Assim uma
+                # compra total do Pluggy nunca espera outra acao manual para
+                # virar parcelas mensais oficiais.
+                resumo_parcelas = _sincronizar_parcelas_de_agregado(cur, session.get("user"))
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -1215,6 +1219,7 @@ def conciliar_fatura():
                         "conta": account_id, "fatura_id": fatura_id,
                         "mes_referencia": fatura["mes_referencia"], "ano_referencia": fatura["ano_referencia"],
                         "linhas": len(fatura["linhas"]),
+                        "parcelas": resumo_parcelas,
                     },
                 )
 
@@ -1748,7 +1753,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
         "GROUP BY v.transacao_id "
         "HAVING COUNT(DISTINCT v.fatura_linha_id) >= 2 OR bool_or("
         " fl.parcela_total >= 2 AND ABS(ABS(COALESCE(t.valor_brl,t.valor_original)) "
-        " - ABS(fl.valor * fl.parcela_total)) <= 0.01);"
+        " - ABS(fl.valor * fl.parcela_total)) <= 1.00);"
     )
     agregados_info = {str(r["transacao_id"]): dict(r) for r in cur.fetchall()}
     agregados = list(agregados_info)
@@ -1811,7 +1816,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario):
                 f"{linha['periodo_fim']} 12:00:00-03:00",
                 origem["categoria"] if origem else None,
                 origem["natureza"] if origem else None,
-                origem["observacao"] if transferir_trabalho else None,
+                origem["observacao"] if origem else None,
                 bool(origem["conferida"]) if transferir_trabalho else False,
                 origem["conferida_por"] if transferir_trabalho else None,
                 origem["conferida_em"] if transferir_trabalho else None,
@@ -2122,6 +2127,9 @@ def sincronizar_parcelas():
         registrar_auditoria(
             "alteracao", "relatorios.sincronizar_parcelas", sucesso=True, detalhes=resumo,
         )
+        retorno = (request.form.get("retorno") or "").strip()
+        if retorno.startswith("/lancamentos/fatura"):
+            return redirect(retorno)
         return jsonify({"ok": True, **resumo})
     except Exception as exc:
         conn.rollback()

@@ -280,8 +280,13 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     )[0]
     assert "fl.parcela_total >= 2" in trecho
     assert "fl.valor * fl.parcela_total" in trecho
+    assert "<= 1.00" in trecho
     assert "transferir_trabalho" in trecho
-    assert 'origem["observacao"] if transferir_trabalho else None' in trecho
+    assert 'origem["observacao"] if origem else None' in trecho
+    assert "resumo_parcelas = _sincronizar_parcelas_de_agregado" in view
+    assert 'request.form.get("retorno")' in view
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "Revisar parcelamentos" in template
 
 
 def test_categoria_tambem_e_obrigatoria_para_novo_ok():
@@ -472,6 +477,8 @@ def test_classificacao_de_parcela_so_preenche_vazios_e_exige_consenso():
     assert "destino.categoria IS NULL" in trecho
     assert "HAVING COUNT(DISTINCT td.valor_id)=1" in trecho
     assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+    assert "HAVING COUNT(DISTINCT t.observacao)=1" in trecho
+    assert "NULLIF(BTRIM(destino.observacao),'') IS NULL" in trecho
 
 
 def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas():
@@ -486,8 +493,10 @@ def test_edicao_compartilha_classificacao_so_por_familia_explicita_de_parcelas()
     assert "transacao_id_criado" in trecho
     assert "t.descricao" not in trecho and "fl.descricao" not in trecho
     assert "data_transacao" not in trecho
-    assert "SET conferida" not in trecho and "SET observacao" not in trecho
+    assert "SET conferida" not in trecho
+    assert "observacao_enviada" in trecho and "SET observacao=%s" in trecho
     assert "propagar_classificacao_familia_parcelas(" in view
+    assert 'observacao_enviada="observacao" in data' in view
 
 
 def test_importacao_legada_unicred_preserva_ajustes_da_nova_tela():
