@@ -1414,7 +1414,7 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Beleza em Saúde versus Compras Pessoais; ingressos/hospedagem do Iron Maiden em
   Compras Pessoais / Viagens; tarifas do cartão em Casa versus Compras Pessoais.
 
-## Decisões aprovadas, preparadas localmente e ainda não publicadas
+## Decisões aprovadas para publicação
 
 - Farmácia cotidiana passa de Casa para Saúde; projetos explícitos de viagem ou cirurgia são
   preservados. LISCIA e STUDIOJULIA passam a Beleza / Andrea / Compras Pessoais / Vida Familiar.
@@ -1427,4 +1427,6 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   SUPERVIZA e SUPERMERCADO VIDE -> Mercado / Família / Casa / Vida Familiar. Não criar regra
   genérica para Apple, Google, Mercado Livre, combustível, mecânica, estorno ou IOF.
 - Tudo está na migração 35, que preserva OK e limita as reclassificações às faturas Unicred
-  Conjunta de julho e agosto/2026. Esta migração ainda não foi publicada por decisão do usuário.
+  Conjunta de julho e agosto/2026. Em 31/08/2026 o usuário informou que marcou mais quatro
+  lançamentos como OK e aprovou seguir com os demais ainda pendentes; a migração não altera
+  nenhuma marcação de conferência.
