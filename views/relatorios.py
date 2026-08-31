@@ -1409,6 +1409,44 @@ def _tokens_significativos(descricao):
     return {t for t in brutos if t not in _TOKENS_GENERICOS and not t.isdigit()}
 
 
+def _par_substituicao_compativel(origem, destino):
+    """Ultima trava antes de excluir um registro do resultado.
+
+    A classificacao de orfaos ja monta pares conservadores, mas esta validacao
+    independente impede que um resultado antigo ou defeituoso associe
+    estabelecimentos diferentes apenas por proximidade de data ou valor.
+    """
+    if not origem or not destino:
+        return False
+    if str(origem["account_id"]) != str(destino["account_id"]):
+        return False
+    dias = abs((origem["data"] - destino["data"]).days)
+    valor_origem = abs(_centavos(origem["valor"]))
+    valor_destino = abs(_centavos(destino["valor"]))
+
+    # Pagamento/credito duplicado pode chegar com descricoes inteiramente
+    # diferentes; nesse caso exigimos dia e valor exatos.
+    if _centavos(origem["valor"]) <= 0 and _centavos(destino["valor"]) <= 0:
+        return dias == 0 and abs(valor_origem - valor_destino) <= 2
+
+    tokens_comuns = (
+        _tokens_significativos(origem["descricao"])
+        & _tokens_significativos(destino["descricao"])
+    )
+    if dias > 5 or len(tokens_comuns) < 2:
+        return False
+    if abs(valor_origem - valor_destino) <= 100:
+        return True
+
+    # Eco de parcelamento: um lado pode ser a parcela mensal e o outro o
+    # valor total da compra. A relacao precisa ser um numero inteiro plausivel.
+    menor, maior = sorted((valor_origem, valor_destino))
+    if menor == 0:
+        return False
+    parcelas = round(maior / menor)
+    return 2 <= parcelas <= 24 and abs(maior - menor * parcelas) <= 100
+
+
 def _classificar_orfaos(cur, incluir_duplicadas=False):
     """Separa os lancamentos sem vinculo em tres baldes, usando o modelo de
     dados (nao heuristica de lojista):
@@ -1959,6 +1997,19 @@ def marcar_duplicidades():
         for i in itens:
             if i["substituto_id"] == i["transacao_id"]:
                 continue  # nunca apontar para si mesmo
+            cur.execute(
+                f"SELECT transacao_id, account_id, descricao, "
+                f"COALESCE(valor_brl,valor_original) AS valor, "
+                f"({DATA_LOCAL_SQL})::date AS data FROM cartao.transacao "
+                f"WHERE transacao_id IN (%s,%s);",
+                (i["transacao_id"], i["substituto_id"]),
+            )
+            candidatos = {str(r["transacao_id"]): dict(r) for r in cur.fetchall()}
+            if not _par_substituicao_compativel(
+                candidatos.get(i["transacao_id"]),
+                candidatos.get(i["substituto_id"]),
+            ):
+                continue
             cur.execute(
                 "UPDATE cartao.transacao SET substituido_por = %s, duplicada = false, "
                 "atualizado_em = now() WHERE transacao_id = %s AND substituido_por IS NULL;",

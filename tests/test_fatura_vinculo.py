@@ -337,6 +337,44 @@ def test_tokens_de_lojistas_diferentes_nao_se_confundem():
     assert len(a & b) < 2, f"nao podiam casar: {a & b}"
 
 
+def test_trava_substituicao_rejeita_lojistas_e_valores_diferentes():
+    from views.relatorios import _par_substituicao_compativel
+
+    liscia = {
+        "account_id": "conta-unicred",
+        "descricao": "Parcela Lojista Visa - LISCIA",
+        "valor": 107.50,
+        "data": date(2026, 4, 21),
+    }
+    illuminato = {
+        "account_id": "conta-unicred",
+        "descricao": "A vista sem juros - Visa - ILLUMINATO BAR E TRATT GRAMADO BR",
+        "valor": 157.30,
+        "data": date(2026, 4, 21),
+    }
+
+    assert not _par_substituicao_compativel(liscia, illuminato)
+
+
+def test_trava_substituicao_aceita_mesmo_lojista_e_total_parcelado():
+    from views.relatorios import _par_substituicao_compativel
+
+    parcela = {
+        "account_id": "conta-unicred",
+        "descricao": "Parcela Lojista Visa - ANJOS DE QUINTAL",
+        "valor": 360.00,
+        "data": date(2026, 7, 16),
+    }
+    agregado = {
+        "account_id": "conta-unicred",
+        "descricao": "Parcelado Lojista Visa - ANJOS DE QUINTAL VIDEIRA BR",
+        "valor": 2160.00,
+        "data": date(2026, 7, 18),
+    }
+
+    assert _par_substituicao_compativel(parcela, agregado)
+
+
 def test_eco_de_parcelamento_novo_casa_pela_linha_da_fatura():
     """Parcelamento novo: o agregado ainda atende UMA linha so, entao nao e'
     reconhecido como agregado (isso exige 2+ linhas) e o eco escapa das duas

@@ -3064,6 +3064,79 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (40);")
             conn.commit()
 
+        if versao_atual < 41:
+            # ILLUMINATO foi transformado em registro tecnico depois de uma
+            # associacao automatica incompatível com LISCIA. O PDF confirma
+            # uma cobranca real e unica de R$ 157,30. Restaura somente esse
+            # evento, preservando Observacao e OK, e registra a classificacao
+            # aprovada pelo usuario.
+            illuminato_id = "8d495bfa-41a5-4e67-b833-1bc393a7b318"
+            liscia_id = "380fe0a1-12ba-4b16-9db5-72dcbb86b2c4"
+            cur.execute(
+                "UPDATE cartao.transacao SET duplicada=false, substituido_por=NULL, "
+                "somente_conciliacao=false, categoria='Eating out', atualizado_em=now() "
+                "WHERE transacao_id=%s;",
+                (illuminato_id,),
+            )
+            restaurados_v41 = max(cur.rowcount, 0)
+            cur.execute(
+                "UPDATE cartao.transacao SET substituido_por=NULL, atualizado_em=now() "
+                "WHERE transacao_id=%s AND substituido_por=%s;",
+                (liscia_id, illuminato_id),
+            )
+            desvinculados_v41 = max(cur.rowcount, 0)
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v41 = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+            valores_v41 = {}
+            for chave, nome in (
+                ("responsavel", "Ronaldo"),
+                ("projeto", "Viagem Gramado"),
+                ("portfolio", "Viagens"),
+            ):
+                dim_id = dims_v41.get(chave)
+                if not dim_id:
+                    continue
+                cur.execute(
+                    "SELECT id FROM cartao.dimensao_valor WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) ORDER BY id LIMIT 1;",
+                    (dim_id, nome),
+                )
+                row = cur.fetchone()
+                if row:
+                    valor_id = row[0]
+                else:
+                    cur.execute(
+                        "INSERT INTO cartao.dimensao_valor (dimensao_id,nome) "
+                        "VALUES (%s,%s) RETURNING id;",
+                        (dim_id, nome),
+                    )
+                    valor_id = cur.fetchone()[0]
+                valores_v41[chave] = valor_id
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "VALUES (%s,%s,%s) ON CONFLICT (transacao_id,dimensao_id) "
+                    "DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (illuminato_id, dim_id, valor_id),
+                )
+            if valores_v41.get("projeto") and valores_v41.get("portfolio"):
+                cur.execute(
+                    "UPDATE cartao.dimensao_valor SET portfolio_valor_id=%s "
+                    "WHERE id=%s AND portfolio_valor_id IS NULL;",
+                    (valores_v41["portfolio"], valores_v41["projeto"]),
+                )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Correcao ILLUMINATO',"
+                "jsonb_build_object('versao',41,'restaurados',%s,'associacoes_desfeitas',%s));",
+                (restaurados_v41, desvinculados_v41),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (41);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

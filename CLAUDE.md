@@ -1570,3 +1570,16 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   para decrescente, com seta indicando o estado.
 - Ordenar é local e não recarrega a página. O bloco de registros e detalhes permanece imediatamente
   abaixo do lançamento principal correspondente. A pesquisa atual continua aplicada após ordenar.
+
+# Correção ILLUMINATO e trava de associações (31/08/2026)
+
+- A cobrança `ILLUMINATO BAR E TRATT`, de 21/04/2026 e R$ 157,30, existe tanto no PDF oficial
+  quanto no Pluggy e é um único lançamento real. Classificação aprovada: Restaurantes / Ronaldo /
+  Viagem Gramado / Viagens. Não alterar automaticamente Observação nem OK.
+- Uma revisão antiga associou incorretamente `LISCIA`, de R$ 107,50, ao registro ILLUMINATO e
+  deixou a cobrança oficial sem lançamento contabilizado. A migração 41 desfaz apenas esse vínculo,
+  restaura o ILLUMINATO como contabilizado e preserva os dois registros para classificação correta.
+- Antes de gravar qualquer `substituido_por`, validar novamente conta, proximidade de data,
+  estabelecimento e valor. Compras positivas exigem pelo menos dois termos significativos do
+  estabelecimento em comum. Diferença compatível com valor total só é aceita quando forma um número
+  inteiro plausível de parcelas. Pagamentos/créditos sem termos comuns exigem mesmo dia e mesmo valor.
