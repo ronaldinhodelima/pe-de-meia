@@ -274,6 +274,22 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     assert 'v["fonte_nome"]' in view
 
 
+def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = core.split("if versao_atual < 35:", 1)[1].split("cur.close()", 1)[0]
+    assert "fi.ano_referencia=2026" in trecho
+    assert "fi.mes_referencia IN (7,8)" in trecho
+    assert "t.conferida" not in trecho
+    assert "APPLE.COM" not in trecho
+    assert "MERCADOLIVRE" not in trecho
+    assert "Iron Maiden 2026" in trecho
+    assert "Serviços Financeiros" in trecho
+    assert "Reformas da casa" in trecho
+    assert "ACOUGUE CARNE FRESCA" in trecho
+    assert "SUPERVIZA" in trecho
+    assert "SUPERMERCADO VIDE" in trecho
+
+
 def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     trecho = view.split("def _sincronizar_parcelas_de_agregado", 1)[1].split(

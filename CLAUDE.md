@@ -1380,11 +1380,51 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   para toda a família. Na recuperação histórica, preencher somente observações vazias e apenas
   quando existir um único texto inequívoco, nunca apagando anotações diferentes já existentes.
 
-# Ordem dos registros na divergência detalhada (31/08/2026)
+# Ordem universal de registros agrupados (31/08/2026)
 
-- Ao abrir uma linha da fatura com dois ou mais registros vinculados, mostrar primeiro todos os
-  lançamentos, um abaixo do outro e na ordem recebida. Os detalhes técnicos expansíveis permanecem
-  imediatamente abaixo do lançamento ao qual pertencem.
+- Em qualquer visualização que apresente vários registros vinculados e uma classificação comum,
+  mostrar primeiro todos os lançamentos, um abaixo do outro e na ordem recebida. A regra não é
+  exclusiva do filtro de divergências. Os detalhes técnicos expansíveis permanecem imediatamente
+  abaixo do lançamento ao qual pertencem.
 - A tabela única de classificação do lançamento contabilizado e editável aparece somente depois
   do último registro. Não intercalar a classificação entre o primeiro registro e os registros
   técnicos seguintes, pois isso dificulta comparar candidatos em divergências.
+
+# Auditoria de padronização — Unicred Conjunta, julho e agosto de 2026 (31/08/2026)
+
+Levantamento somente de leitura. São propostas pendentes de aprovação; não alterar os dados nem
+criar regras automáticas a partir desta seção sem nova confirmação do usuário.
+
+- Foram avaliadas 333 linhas oficiais: 118 de julho e 215 de agosto. As únicas duas linhas sem
+  classificação são os pagamentos recebidos, que são informativos e devem continuar assim.
+- As 23 famílias de parcelas presentes nos dois meses conservaram Categoria, Responsável, Projeto
+  e Portfólio. A única variação encontrada foi textual na observação do EVENTIM (`iron maidem`,
+  `Iron maiden` e `iron maiden`).
+- Cobranças idênticas que variaram de classificação entre os meses: anuidades Unicred, STUDIOJULIA
+  R$ 35,00, APPLE.COM/BILL R$ 5,90, LISCIA R$ 50,00 e DL*GOOGLE R$ 14,99. Exigir decisão de
+  contexto antes de automatizar; descrição sozinha não basta para Apple/Google.
+- GUILHERMEDASILVA já apresenta um padrão de valor útil e coerente: R$ 40,00 como Água e R$ 125,00
+  ou R$ 185,00 como Gás; todos Família / Casa / Vida Familiar.
+- Projeto e Portfólio quase sempre formam pares estáveis. Exceções a revisar: `reformas` aparece
+  uma vez em Vida Familiar e 13 vezes em Imóveis; `Compras Pessoais` aparece 31 vezes em Vida
+  Familiar e 7 vezes em Viagens.
+- Nomes candidatos a normalização editorial: `reformas`, `bgs 2026`, `viagem atacama`,
+  `Colegio Salvatoriano`, `Jantas`; não renomear até o usuário aprovar os nomes finais.
+- Contextos que precisam de decisão funcional antes de virar regra: Farmácia em Casa versus Saúde;
+  Beleza em Saúde versus Compras Pessoais; ingressos/hospedagem do Iron Maiden em
+  Compras Pessoais / Viagens; tarifas do cartão em Casa versus Compras Pessoais.
+
+## Decisões aprovadas, preparadas localmente e ainda não publicadas
+
+- Farmácia cotidiana passa de Casa para Saúde; projetos explícitos de viagem ou cirurgia são
+  preservados. LISCIA e STUDIOJULIA passam a Beleza / Andrea / Compras Pessoais / Vida Familiar.
+- Anuidades e bonificações Unicred passam a Tarifas do Cartão / Família / Serviços Financeiros /
+  Vida Familiar. EVENTIM e SAN JUAN ligados ao show passam ao projeto Iron Maiden 2026 e
+  Portfólio Eventos, com observação `Iron Maiden`.
+- Normalizar os nomes aprovados e ligar cada Projeto ao seu Portfólio padrão. `Reformas da casa`
+  sempre aponta para Imóveis.
+- Criar regras apenas para descrições invariantes nos dois meses: ACOUGUE CARNE FRESCA,
+  SUPERVIZA e SUPERMERCADO VIDE -> Mercado / Família / Casa / Vida Familiar. Não criar regra
+  genérica para Apple, Google, Mercado Livre, combustível, mecânica, estorno ou IOF.
+- Tudo está na migração 35, que preserva OK e limita as reclassificações às faturas Unicred
+  Conjunta de julho e agosto/2026. Esta migração ainda não foi publicada por decisão do usuário.

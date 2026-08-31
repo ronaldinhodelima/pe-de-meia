@@ -2379,6 +2379,228 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (34);")
             conn.commit()
 
+        if versao_atual < 35:
+            # Padrao aprovado depois da revisao integral das faturas Unicred
+            # Conjunta de julho e agosto/2026. A migracao e' deliberadamente
+            # fechada nesses dois ciclos para as reclassificacoes; os nomes de
+            # projetos sao normalizados globalmente. OK nunca e' alterado.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dimensoes_padrao = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+            resp_id = dimensoes_padrao.get("responsavel")
+            projeto_id = dimensoes_padrao.get("projeto")
+            portfolio_id = dimensoes_padrao.get("portfolio")
+
+            def valor_dimensao(dimensao_id, nome, criar=True):
+                if not dimensao_id:
+                    return None
+                cur.execute(
+                    "SELECT id FROM cartao.dimensao_valor WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) ORDER BY id LIMIT 1;",
+                    (dimensao_id, nome),
+                )
+                row = cur.fetchone()
+                if row or not criar:
+                    return row[0] if row else None
+                cur.execute(
+                    "INSERT INTO cartao.dimensao_valor (dimensao_id,nome) "
+                    "VALUES (%s,%s) RETURNING id;",
+                    (dimensao_id, nome),
+                )
+                return cur.fetchone()[0]
+
+            renomes = (
+                ("reformas", "Reformas da casa"),
+                ("bgs 2026", "BGS 2026"),
+                ("viagem atacama", "Viagem Atacama"),
+                ("Colegio Salvatoriano", "Colégio Salvatoriano"),
+                ("Jantas", "Refeições fora"),
+            )
+            renomeados = 0
+            for anterior, novo in renomes:
+                cur.execute(
+                    "UPDATE cartao.dimensao_valor SET nome=%s WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) AND nome<>%s;",
+                    (novo, projeto_id, anterior, novo),
+                )
+                renomeados += max(cur.rowcount, 0)
+
+            familia = valor_dimensao(resp_id, "Família")
+            andrea = valor_dimensao(resp_id, "Andrea")
+            saude = valor_dimensao(projeto_id, "Saúde")
+            compras_pessoais = valor_dimensao(projeto_id, "Compras Pessoais")
+            servicos_financeiros = valor_dimensao(projeto_id, "Serviços Financeiros")
+            iron_maiden = valor_dimensao(projeto_id, "Iron Maiden 2026")
+            reformas_casa = valor_dimensao(projeto_id, "Reformas da casa")
+            vida_familiar = valor_dimensao(portfolio_id, "Vida Familiar")
+            imoveis = valor_dimensao(portfolio_id, "Imóveis")
+            eventos = valor_dimensao(portfolio_id, "Eventos")
+
+            for projeto, portfolio in (
+                (saude, vida_familiar),
+                (compras_pessoais, vida_familiar),
+                (servicos_financeiros, vida_familiar),
+                (iron_maiden, eventos),
+                (reformas_casa, imoveis),
+                (valor_dimensao(projeto_id, "BGS 2026", False), valor_dimensao(portfolio_id, "Viagens", False)),
+                (valor_dimensao(projeto_id, "Viagem Atacama", False), valor_dimensao(portfolio_id, "Viagens", False)),
+                (valor_dimensao(projeto_id, "Colégio Salvatoriano", False), valor_dimensao(portfolio_id, "Educação", False)),
+                (valor_dimensao(projeto_id, "Refeições fora", False), vida_familiar),
+            ):
+                if projeto and portfolio:
+                    cur.execute(
+                        "UPDATE cartao.dimensao_valor SET portfolio_valor_id=%s WHERE id=%s;",
+                        (portfolio, projeto),
+                    )
+
+            def atualizar_dimensao_faturas(condicao, parametros, dimensao_id, valor_id):
+                if not dimensao_id or not valor_id:
+                    return 0
+                cur.execute(
+                    "WITH alvos AS (SELECT DISTINCT fl.transacao_id_criado::text AS transacao_id "
+                    "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                    "JOIN cartao.transacao t ON t.transacao_id=fl.transacao_id_criado "
+                    "WHERE fi.account_id=%s AND fi.ano_referencia=2026 "
+                    "AND fi.mes_referencia IN (7,8) AND (" + condicao + ")) "
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT transacao_id,%s,%s FROM alvos "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (conta_unicred, *parametros, dimensao_id, valor_id),
+                )
+                return max(cur.rowcount, 0)
+
+            def atualizar_categoria_faturas(condicao, parametros, categoria):
+                cur.execute(
+                    "UPDATE cartao.transacao t SET categoria=%s,categoria_manual=true,atualizado_em=now() "
+                    "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                    "WHERE t.transacao_id=fl.transacao_id_criado AND fi.account_id=%s "
+                    "AND fi.ano_referencia=2026 AND fi.mes_referencia IN (7,8) "
+                    "AND (" + condicao + ");",
+                    (categoria, conta_unicred, *parametros),
+                )
+                return max(cur.rowcount, 0)
+
+            dimensoes_ajustadas = 0
+            categorias_ajustadas = 0
+
+            # Farmacia usada no dia a dia pertence ao projeto Saude. Mantem
+            # projetos explicitos de viagem/cirurgia e so corrige o antigo Casa.
+            farmacia_em_casa = (
+                "lower(COALESCE(t.categoria,''))=lower('Pharmacy') AND EXISTS ("
+                "SELECT 1 FROM cartao.transacao_dimensao td "
+                "WHERE td.transacao_id=t.transacao_id::text AND td.dimensao_id=%s AND td.valor_id=%s)"
+            )
+            dimensoes_ajustadas += atualizar_dimensao_faturas(
+                farmacia_em_casa, (projeto_id, valor_dimensao(projeto_id, "Casa", False)),
+                projeto_id, saude,
+            )
+            dimensoes_ajustadas += atualizar_dimensao_faturas(
+                farmacia_em_casa, (projeto_id, valor_dimensao(projeto_id, "Casa", False)),
+                portfolio_id, vida_familiar,
+            )
+
+            beleza = "upper(trim(fl.descricao)) IN ('LISCIA','STUDIOJULIA')"
+            categorias_ajustadas += atualizar_categoria_faturas(beleza, (), "Beleza")
+            for dim_id, valor_id in (
+                (resp_id, andrea), (projeto_id, compras_pessoais), (portfolio_id, vida_familiar)
+            ):
+                dimensoes_ajustadas += atualizar_dimensao_faturas(beleza, (), dim_id, valor_id)
+
+            anuidade = "upper(trim(fl.descricao)) LIKE 'ANUIDADE%%'"
+            categorias_ajustadas += atualizar_categoria_faturas(anuidade, (), "Credit card fees")
+            for dim_id, valor_id in (
+                (resp_id, familia), (projeto_id, servicos_financeiros), (portfolio_id, vida_familiar)
+            ):
+                dimensoes_ajustadas += atualizar_dimensao_faturas(anuidade, (), dim_id, valor_id)
+
+            evento_iron = (
+                "upper(fl.descricao) LIKE 'EVENTIM BRASIL S%%' OR "
+                "upper(fl.descricao) LIKE 'SAN JUAN EXECUTIVE%%'"
+            )
+            for dim_id, valor_id in (
+                (resp_id, familia), (projeto_id, iron_maiden), (portfolio_id, eventos)
+            ):
+                dimensoes_ajustadas += atualizar_dimensao_faturas(evento_iron, (), dim_id, valor_id)
+            cur.execute(
+                "UPDATE cartao.transacao t SET observacao='Iron Maiden',atualizado_em=now() "
+                "FROM cartao.fatura_linha fl JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+                "WHERE t.transacao_id=fl.transacao_id_criado AND fi.account_id=%s "
+                "AND fi.ano_referencia=2026 AND fi.mes_referencia IN (7,8) AND (" + evento_iron + ");",
+                (conta_unicred,),
+            )
+            observacoes_ajustadas = max(cur.rowcount, 0)
+
+            # Um Projeto determina seu Portfolio. Corrige tambem lancamentos
+            # fora dos dois ciclos que ja usam o projeto geral de reformas.
+            if reformas_casa and imoveis:
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT td.transacao_id,%s,%s FROM cartao.transacao_dimensao td "
+                    "WHERE td.dimensao_id=%s AND td.valor_id=%s "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (portfolio_id, imoveis, projeto_id, reformas_casa),
+                )
+                dimensoes_ajustadas += max(cur.rowcount, 0)
+
+            cur.execute(
+                "UPDATE cartao.transacao SET observacao=CASE lower(trim(observacao)) "
+                "WHEN 'iron maidem' THEN 'Iron Maiden' "
+                "WHEN 'iron maiden' THEN 'Iron Maiden' "
+                "WHEN 'livrros colegio' THEN 'Livros do colégio' END, atualizado_em=now() "
+                "WHERE lower(trim(COALESCE(observacao,''))) IN "
+                "('iron maidem','iron maiden','livrros colegio');"
+            )
+            observacoes_ajustadas += max(cur.rowcount, 0)
+
+            # So descricoes que foram invariantes nos dois meses recebem
+            # regra nova. Se o usuario ja cadastrou uma regra equivalente,
+            # ela e' preservada integralmente.
+            regras_criadas = 0
+            casa = valor_dimensao(projeto_id, "Casa", False)
+            for padrao in ("ACOUGUE CARNE FRESCA", "SUPERVIZA", "SUPERMERCADO VIDE"):
+                cur.execute(
+                    "SELECT id FROM cartao.regra_classificacao WHERE lower(padrao)=lower(%s) "
+                    "AND valor_operador IS NULL AND valor_limite IS NULL ORDER BY id LIMIT 1;",
+                    (padrao,),
+                )
+                existente = cur.fetchone()
+                if existente:
+                    continue
+                cur.execute(
+                    "INSERT INTO cartao.regra_classificacao "
+                    "(padrao,categoria,ordem) VALUES (%s,'Groceries',200) RETURNING id;",
+                    (padrao,),
+                )
+                regra_id = cur.fetchone()[0]
+                regras_criadas += 1
+                for dim_id, valor_id in (
+                    (resp_id, familia), (projeto_id, casa), (portfolio_id, vida_familiar)
+                ):
+                    if dim_id and valor_id:
+                        cur.execute(
+                            "INSERT INTO cartao.regra_dimensao_valor "
+                            "(regra_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                            "ON CONFLICT (regra_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                            (regra_id, dim_id, valor_id),
+                        )
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Padronizacao Unicred julho e agosto',"
+                "jsonb_build_object('versao',35,'renomes',%s,'categorias',%s,"
+                "'dimensoes',%s,'observacoes',%s,'regras_criadas',%s));",
+                (
+                    renomeados, categorias_ajustadas, dimensoes_ajustadas,
+                    observacoes_ajustadas, regras_criadas,
+                ),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (35);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
