@@ -1544,3 +1544,11 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Imóveis, observação pessoal `Resina Epoxi mesa`. A migração 40 aplica isso à parcela 1/5, sem OK.
 - O conciliador de parcelamentos agora exige, além do valor total, ao menos um token significativo
   do estabelecimento em comum entre a linha do PDF e o registro agregado do Pluggy.
+
+# Conferência contínua no filtro Pendentes de OK (31/08/2026)
+
+- Na visualização detalhada, o filtro `Pendentes de OK` funciona como fila. Depois que o servidor
+  confirma o OK, atualizar cartões e contadores e remover imediatamente a linha e seus detalhes,
+  sem recarregar a página e sem perder a posição de rolagem.
+- A remoção automática só ocorre nesse filtro e somente após resposta bem-sucedida da API. Nos
+  demais filtros, marcar OK mantém o lançamento visível e apenas atualiza seu estado.

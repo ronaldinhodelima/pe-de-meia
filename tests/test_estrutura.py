@@ -286,6 +286,9 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert "cursor:default" in template
     assert 'v["fonte"] = "F"' in view
     assert 'v["fonte_nome"]' in view
+    assert "atualizarResumoPagina(novo && status && status.value === 'pendente_ok')" in js
+    assert "if (ocultarAusentes)" in js
+    assert "linha.remove()" in js
 
 
 def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():

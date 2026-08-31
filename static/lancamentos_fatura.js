@@ -197,7 +197,8 @@
         if (json.pendente_banco) motivo = 'O banco ainda informa que este lançamento está pendente. Aguarde a confirmação bancária para marcar OK.';
         alert(motivo);
       }
-      await atualizarResumoPagina();
+      await atualizarResumoPagina(novo && status && status.value === 'pendente_ok');
+      aplicarBuscaFatura();
     } catch (e) {
       campo.checked = !novo; campo.disabled = false; alert(e.message);
     }
@@ -257,7 +258,7 @@
     }
   }
 
-  async function atualizarResumoPagina() {
+  async function atualizarResumoPagina(ocultarAusentes) {
     const resp = await fetch(window.location.href, {headers: {'X-Parcial': '1'}, cache: 'no-store'});
     if (!resp.ok) return;
     const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
@@ -268,7 +269,14 @@
     });
     document.querySelectorAll('tr[data-linha]').forEach(linha => {
       const nova = doc.querySelector('tr[data-linha="' + CSS.escape(linha.dataset.linha) + '"]');
-      if (!nova) return;
+      if (!nova) {
+        if (ocultarAusentes) {
+          const detalhe = document.getElementById('vinculos-' + linha.dataset.linha);
+          if (detalhe) detalhe.remove();
+          linha.remove();
+        }
+        return;
+      }
       linha.className = nova.className;
       const classificacao = linha.querySelector('[data-classificacao]');
       const classificacaoNova = nova.querySelector('[data-classificacao]');
