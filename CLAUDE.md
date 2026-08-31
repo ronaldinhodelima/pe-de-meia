@@ -1379,3 +1379,12 @@ Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em 
   as parcelas explicitamente ligadas ao mesmo agregado técnico. Uma edição humana passa a valer
   para toda a família. Na recuperação histórica, preencher somente observações vazias e apenas
   quando existir um único texto inequívoco, nunca apagando anotações diferentes já existentes.
+
+# Ordem dos registros na divergência detalhada (31/08/2026)
+
+- Ao abrir uma linha da fatura com dois ou mais registros vinculados, mostrar primeiro todos os
+  lançamentos, um abaixo do outro e na ordem recebida. Os detalhes técnicos expansíveis permanecem
+  imediatamente abaixo do lançamento ao qual pertencem.
+- A tabela única de classificação do lançamento contabilizado e editável aparece somente depois
+  do último registro. Não intercalar a classificação entre o primeiro registro e os registros
+  técnicos seguintes, pois isso dificulta comparar candidatos em divergências.

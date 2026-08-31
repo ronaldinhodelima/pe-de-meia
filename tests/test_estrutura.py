@@ -260,8 +260,9 @@ def test_detalhada_exibe_ciclo_fontes_e_informacoes_tecnicas():
     assert "Mais informações da transação" not in template
     assert "data-info-target" in template and "transacao-info" in template
     assert 'lancamentos_fatura.js?v=' in template
-    trecho_registro = template.split('<div class="vinculo-bloco">', 1)[1].split('{% endfor %}', 1)[0]
-    assert trecho_registro.index('class="transacao-info"') < trecho_registro.index('class="editor-financeiro"')
+    trecho_detalhe = template.split('<div class="vinculo-bloco">', 1)[1].split('</td></tr>', 1)[0]
+    assert trecho_detalhe.index('class="transacao-info"') < trecho_detalhe.index('{% endfor %}')
+    assert trecho_detalhe.index('{% endfor %}') < trecho_detalhe.index('class="editor-financeiro"')
     assert "detalhe-id" in template and "overflow-wrap:anywhere" in template
     assert "fonte-badge:hover::after" not in template
     assert 'data-tip="{{ v.fonte_nome }}"' in template
