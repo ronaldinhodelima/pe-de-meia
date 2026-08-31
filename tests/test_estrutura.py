@@ -299,6 +299,12 @@ def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
     assert "aplicar_regras(cur, account_id=conta_unicred)" in historico
     assert "t.conferida" not in historico
     assert 'escopo_sql = " AND t.account_id=%s "' in core
+    tarifas = core.split("if versao_atual < 38:", 1)[1].split("cur.close()", 1)[0]
+    assert "account_id uuid" in tarifas
+    assert "estorno_origem_id uuid" in tarifas
+    assert "Credit card fees" in tarifas
+    assert "Serviços Financeiros" in tarifas
+    assert "t.conferida" not in tarifas
 
 
 def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():

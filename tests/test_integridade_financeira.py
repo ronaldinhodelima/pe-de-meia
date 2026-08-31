@@ -43,6 +43,19 @@ def test_regra_automatica_nao_sobrescreve_categoria_manual():
 
     assert "COALESCE(t.categoria_manual, false) = false" in trecho
     assert "ABS(COALESCE(t.valor_brl,t.valor_original))" in trecho
+    assert "r.account_id IS NULL OR r.account_id=t.account_id" in trecho
+
+
+def test_estorno_so_herda_classificacao_quando_o_par_e_unico_e_seguro():
+    texto = (Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("def aplicar_estornos_classificacao", 1)[1].split(
+        "def registrar_e_calcular_crescimento", 1
+    )[0]
+    assert "COUNT(DISTINCT o.transacao_id)=1" in trecho
+    assert "COALESCE(o.valor_brl,o.valor_original)=-COALESCE(e.valor_brl,e.valor_original)" in trecho
+    assert "e.numero_cartao_final=o.numero_cartao_final" in trecho
+    assert "e.conferida" not in trecho
+    assert "observacao=" not in trecho
 
 
 def test_regra_por_valor_aceita_formato_brasileiro_e_valor_negativo_e_comparado_em_modulo():

@@ -2757,6 +2757,118 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (37);")
             conn.commit()
 
+        if versao_atual < 38:
+            # Tarifas do cartao e seus creditos precisam conservar a mesma
+            # classificacao, sem transformar toda tarifa de conta corrente em
+            # anuidade. Por isso estas regras permanentes sao restritas a
+            # origem Unicred Conjunta. OK e observacoes pessoais nao sao tocados.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            cur.execute(
+                "ALTER TABLE cartao.regra_classificacao "
+                "ADD COLUMN IF NOT EXISTS account_id uuid;"
+            )
+            cur.execute(
+                "ALTER TABLE cartao.transacao "
+                "ADD COLUMN IF NOT EXISTS estorno_origem_id uuid;"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_transacao_estorno_origem "
+                "ON cartao.transacao(estorno_origem_id);"
+            )
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v38 = {chave_alfa(nome): dim_id for dim_id, nome in cur.fetchall()}
+
+            def valor_v38(dim_nome, valor_nome):
+                dim_id = dims_v38.get(dim_nome)
+                if not dim_id:
+                    return None, None
+                cur.execute(
+                    "SELECT id FROM cartao.dimensao_valor WHERE dimensao_id=%s "
+                    "AND lower(nome)=lower(%s) ORDER BY id LIMIT 1;",
+                    (dim_id, valor_nome),
+                )
+                row = cur.fetchone()
+                return dim_id, row[0] if row else None
+
+            resp_id, familia = valor_v38("responsavel", "Família")
+            projeto_id, servicos = valor_v38("projeto", "Serviços Financeiros")
+            portfolio_id, vida_familiar = valor_v38("portfolio", "Vida Familiar")
+            padroes_anuidade = ("ANUIDADE", "Est.Tarifa manutencao de conta")
+            regras_v38 = []
+            for ordem, padrao in enumerate(padroes_anuidade, start=40):
+                cur.execute(
+                    "SELECT id FROM cartao.regra_classificacao WHERE lower(padrao)=lower(%s) "
+                    "AND account_id=%s AND valor_operador IS NULL AND valor_limite IS NULL "
+                    "ORDER BY id LIMIT 1;",
+                    (padrao, conta_unicred),
+                )
+                row = cur.fetchone()
+                if row:
+                    regra_id = row[0]
+                    cur.execute(
+                        "UPDATE cartao.regra_classificacao SET categoria='Credit card fees',ativa=true "
+                        "WHERE id=%s;", (regra_id,),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO cartao.regra_classificacao "
+                        "(padrao,categoria,ordem,account_id) VALUES "
+                        "(%s,'Credit card fees',%s,%s) RETURNING id;",
+                        (padrao, ordem, conta_unicred),
+                    )
+                    regra_id = cur.fetchone()[0]
+                regras_v38.append(regra_id)
+                for dim_id, valor_id in (
+                    (resp_id, familia), (projeto_id, servicos),
+                    (portfolio_id, vida_familiar),
+                ):
+                    if dim_id and valor_id:
+                        cur.execute(
+                            "INSERT INTO cartao.regra_dimensao_valor "
+                            "(regra_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                            "ON CONFLICT (regra_id,dimensao_id) DO UPDATE "
+                            "SET valor_id=EXCLUDED.valor_id;",
+                            (regra_id, dim_id, valor_id),
+                        )
+
+            # Corrige todo o historico desta origem, inclusive linhas que antes
+            # receberam IOF por engano. Os dois sinais ficam no DRE e se anulam.
+            cur.execute(
+                "UPDATE cartao.transacao SET categoria='Credit card fees',"
+                "categoria_manual=true,regra_aplicada_id=NULL,atualizado_em=now() "
+                "WHERE account_id=%s AND (descricao ILIKE '%%ANUIDADE%%' OR "
+                "descricao ILIKE '%%Est.Tarifa manutencao de conta%%');",
+                (conta_unicred,),
+            )
+            historico_v38 = max(cur.rowcount, 0)
+            for dim_id, valor_id in (
+                (resp_id, familia), (projeto_id, servicos),
+                (portfolio_id, vida_familiar),
+            ):
+                if dim_id and valor_id:
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) "
+                        "SELECT transacao_id::text,%s,%s FROM cartao.transacao "
+                        "WHERE account_id=%s AND (descricao ILIKE '%%ANUIDADE%%' OR "
+                        "descricao ILIKE '%%Est.Tarifa manutencao de conta%%') "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE "
+                        "SET valor_id=EXCLUDED.valor_id;",
+                        (dim_id, valor_id, conta_unicred),
+                    )
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Tarifas e estornos do cartao',"
+                "jsonb_build_object('versao',38,'historico',%s,'regras',%s));",
+                (historico_v38, len(regras_v38)),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (38);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -2784,6 +2896,7 @@ def aplicar_regras(cur, account_id=None):
             "SELECT DISTINCT t.transacao_id::text, t.descricao, t.data_transacao "
             "FROM cartao.transacao t "
             "JOIN cartao.regra_classificacao r ON COALESCE(r.ativa,true)=true "
+            " AND (r.account_id IS NULL OR r.account_id=t.account_id) "
             " AND t.descricao ILIKE '%%' || r.padrao || '%%' "
             " AND (r.valor_operador IS NULL OR r.valor_limite IS NULL OR "
             "   CASE r.valor_operador "
@@ -2814,6 +2927,7 @@ def aplicar_regras(cur, account_id=None):
             "  SELECT DISTINCT ON (t.transacao_id) t.transacao_id, r.id AS regra_id, r.categoria "
             "  FROM cartao.transacao t "
             "  JOIN cartao.regra_classificacao r ON COALESCE(r.ativa,true)=true "
+            "   AND (r.account_id IS NULL OR r.account_id=t.account_id) "
             "   AND t.descricao ILIKE '%%' || r.padrao || '%%' "
             "   AND (r.valor_operador IS NULL OR r.valor_limite IS NULL OR "
             "     CASE r.valor_operador "
@@ -2858,6 +2972,7 @@ def aplicar_regras(cur, account_id=None):
             escopo_params,
         )
         resultado["dimensoes"] = max(cur.rowcount, 0)
+        resultado["estornos"] = aplicar_estornos_classificacao(cur, account_id=account_id)
 
         # Regra automatica Projeto -> Portfolio: quando uma regra_classificacao
         # define o Projeto de um lancamento (linha acima) mas nao define o
@@ -2887,6 +3002,51 @@ def aplicar_regras(cur, account_id=None):
     finally:
         cur.execute("RELEASE SAVEPOINT aplicar_regras")
     return resultado
+
+
+def aplicar_estornos_classificacao(cur, account_id=None):
+    """Herda a classificacao de um unico lancamento original para seu estorno.
+
+    A associacao e conservadora: mesma origem/cartao, valor exatamente oposto,
+    ate 30 dias, descricao explicitamente de estorno/cancelamento/bonificacao e
+    somente um candidato possivel. Nunca propaga OK ou observacao pessoal.
+    """
+    escopo_sql = " AND e.account_id=%s " if account_id else ""
+    params = (account_id,) if account_id else ()
+    cur.execute(
+        "WITH candidatos AS ("
+        " SELECT e.transacao_id AS estorno_id, MIN(o.transacao_id::text)::uuid AS origem_id "
+        " FROM cartao.transacao e JOIN cartao.transacao o ON o.account_id=e.account_id "
+        "  AND o.transacao_id<>e.transacao_id "
+        "  AND COALESCE(o.valor_brl,o.valor_original)=-COALESCE(e.valor_brl,e.valor_original) "
+        "  AND ABS(EXTRACT(EPOCH FROM (o.data_transacao-e.data_transacao)))<=2592000 "
+        "  AND (e.numero_cartao_final IS NULL OR o.numero_cartao_final IS NULL "
+        "       OR e.numero_cartao_final=o.numero_cartao_final) "
+        " WHERE e.estorno_origem_id IS NULL AND e.categoria IS NULL "
+        "  AND COALESCE(e.duplicada,false)=false AND COALESCE(o.duplicada,false)=false "
+        "  AND o.categoria IS NOT NULL "
+        "  AND (e.descricao ILIKE '%%ESTORNO%%' OR e.descricao ILIKE '%%CANCEL%%' "
+        "       OR e.descricao ILIKE '%%BONIFICA%%') "
+        + escopo_sql +
+        " GROUP BY e.transacao_id HAVING COUNT(DISTINCT o.transacao_id)=1"
+        "), atualizados AS ("
+        " UPDATE cartao.transacao e SET categoria=o.categoria, "
+        "  estorno_origem_id=c.origem_id, atualizado_em=now() "
+        " FROM candidatos c JOIN cartao.transacao o ON o.transacao_id=c.origem_id "
+        " WHERE e.transacao_id=c.estorno_id RETURNING e.transacao_id::text, c.origem_id::text"
+        "), dimensoes AS ("
+        " INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+        " SELECT a.transacao_id,td.dimensao_id,td.valor_id FROM atualizados a "
+        " JOIN cartao.transacao_dimensao td ON td.transacao_id=a.origem_id "
+        " ON CONFLICT (transacao_id,dimensao_id) DO NOTHING RETURNING 1"
+        ") SELECT (SELECT COUNT(*) FROM atualizados) AS lancamentos, "
+        "(SELECT COUNT(*) FROM dimensoes) AS dimensoes;",
+        params,
+    )
+    row = cur.fetchone()
+    if hasattr(row, "keys"):
+        return {"lancamentos": row["lancamentos"], "dimensoes": row["dimensoes"]}
+    return {"lancamentos": row[0], "dimensoes": row[1]}
 
 
 def registrar_e_calcular_crescimento(cur):

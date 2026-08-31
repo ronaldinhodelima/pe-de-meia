@@ -1448,4 +1448,23 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   Quando uma observação pessoal é editada em qualquer parcela, a API a replica imediatamente para
   todas as parcelas explicitamente ligadas ao mesmo agregado. Na recuperação histórica, só copiar
   quando houver um único texto inequívoco e apenas para observações vazias.
+
+# Tarifas, bonificações e estornos (31/08/2026)
+
+- Anuidade, tarifa e a respectiva bonificação não são IOF. No Cartão de Crédito Unicred ·
+  Conjunta, `ANUIDADE` e `Est.Tarifa manutencao de conta` usam **Tarifas do Cartão / Família /
+  Serviços Financeiros / Vida Familiar**, tanto no histórico quanto nas novas sincronizações.
+- A cobrança entra como despesa e o crédito/bonificação reduz a mesma despesa. Manter as duas
+  linhas para auditoria e conciliação; elas se anulam no DRE quando os valores forem iguais.
+- IOF só pode ser atribuído por regra quando a descrição mencionar IOF explicitamente. Nunca
+  inferir IOF pelo sinal negativo, pelas palavras tarifa, anuidade, bonificação ou estorno.
+- Regras que poderiam confundir uma conta corrente com um cartão devem ter origem vinculada. A
+  coluna `regra_classificacao.account_id` limita a regra à origem quando preenchida; regra sem
+  origem continua geral.
+- Para outros estornos/cancelamentos/bonificações, herdar a classificação do original apenas
+  quando houver exatamente um candidato: mesma origem, mesmo cartão quando informado, valor
+  exatamente oposto e distância máxima de 30 dias. Persistir o vínculo em `estorno_origem_id`.
+  Se houver zero ou mais de um candidato, não adivinhar e deixar para revisão manual.
+- A herança copia Categoria, Responsável, Projeto e Portfólio, mas nunca copia Observação pessoal
+  nem marca OK. A migração 38 corrige todo o histórico aprovado e cria as regras permanentes.
 - O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.
