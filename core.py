@@ -925,6 +925,63 @@ def _canonizar_v45(chaves):
     return mapa
 
 
+def _dimensao_vazia(dims, campo):
+    """A dimensao esta vazia tambem quando a linha existe com valor_id NULL.
+
+    `transacao_dimensao.valor_id` e nulavel e tem ON DELETE SET NULL: apagar um
+    valor de dimensao deixa a linha para tras com valor nulo. Testar so
+    `chave in dims` da a linha como preenchida, e a tela mostra
+    "(nao definido)" - foi o que zerou o preenchimento nas migracoes 45 e 46.
+    """
+    return (dims or {}).get(str(campo)) is None
+
+
+def _consenso_por_lojista(linhas, dim_projeto=None, nomes_valor=None,
+                          recusados=(), minimo=2):
+    """Consenso de classificacao apurado SO entre lancamentos conferidos.
+
+    `linhas` sao tuplas (tid, descricao, categoria, conferida, dims).
+    Decide CAMPO A CAMPO: um lojista pode ter categoria unanime e nenhum
+    projeto (o posto abastece o Jeep e o Tracker). Exige unanimidade e
+    `minimo` evidencias. Nunca devolve projeto de viagem, que e evento datado.
+    """
+    mapa = _canonizar_v45({_loja_v45(l[1]) for l in linhas})
+    votos = {}
+    for _tid, descricao, categoria, conferida, dims in linhas:
+        if not conferida:
+            continue
+        alvo = votos.setdefault(mapa[_loja_v45(descricao)], {})
+        if categoria:
+            alvo.setdefault("cat", {})
+            alvo["cat"][categoria] = alvo["cat"].get(categoria, 0) + 1
+        for dim_id, valor_id in (dims or {}).items():
+            if valor_id is None:
+                continue
+            chave = int(dim_id)
+            alvo.setdefault(chave, {})
+            alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
+
+    nomes_valor = nomes_valor or {}
+    consenso = {}
+    for loja, campos in votos.items():
+        if loja in recusados:
+            continue
+        escolha = {}
+        for campo, contagem in campos.items():
+            if len(contagem) != 1:
+                continue  # OKs divergem entre si: nao ha consenso
+            valor, vezes = next(iter(contagem.items()))
+            if vezes < minimo:
+                continue
+            if (dim_projeto is not None and campo == dim_projeto
+                    and str(nomes_valor.get(valor, "")).upper().startswith("VIAGEM ")):
+                continue
+            escolha[campo] = valor
+        if escolha:
+            consenso[loja] = escolha
+    return mapa, consenso
+
+
 def preencher_classificacao_vazia_parcelas(cur, account_id=None):
     """Completa apenas campos vazios de parcelas ligadas ao mesmo agregado.
 
@@ -3758,6 +3815,104 @@ def migrate():
                  parcelas_v46["categorias"], parcelas_v46["dimensoes"]),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (46);")
+            conn.commit()
+
+        if versao_atual < 47:
+            # As migracoes 45 e 46 preencheram menos do que deviam, e a 46
+            # completou ZERO lancamento com OK. Causa: `transacao_dimensao`
+            # guarda linha com `valor_id` NULL (a coluna e nulavel e tem
+            # ON DELETE SET NULL), entao o teste "a chave existe no jsonb" dava
+            # a dimensao como preenchida enquanto a tela mostrava
+            # "(nao definido)" - e o ON CONFLICT DO NOTHING tambem nao corrigia.
+            # Aqui o vazio inclui o valor nulo, e o conflito atualiza a linha
+            # nula sem NUNCA sobrescrever valor ja preenchido.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            recusados_v47 = {
+                "POUSADA FOGO*RESE",  # pousada marcada como Combustivel
+                "ESTACAO",            # ambiguo, recusado desde a migracao 42
+            }
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v47 = {chave_alfa(n): i for i, n in cur.fetchall()}
+            cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+            nomes_v47 = dict(cur.fetchall())
+
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v47 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.conferida,"
+                "t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s;",
+                (conta_unicred,),
+            )
+
+            cur.execute(
+                "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                " '{}'::jsonb) "
+                "FROM cartao.transacao t WHERE t.account_id=%s "
+                "AND COALESCE(t.duplicada,false)=false "
+                "AND COALESCE(t.somente_conciliacao,false)=false "
+                "AND t.substituido_por IS NULL;",
+                (conta_unicred,),
+            )
+            linhas_v47 = cur.fetchall()
+            mapa_v47, consenso_v47 = _consenso_por_lojista(
+                linhas_v47, dim_projeto=dims_v47.get("projeto"),
+                nomes_valor=nomes_v47, recusados=recusados_v47,
+            )
+
+            cats_v47 = 0
+            dims_gravadas_v47 = 0
+            tocados_v47 = {"com_ok": set(), "sem_ok": set()}
+            for tid, descricao, categoria, conferida, dims in linhas_v47:
+                escolha = consenso_v47.get(mapa_v47[_loja_v45(descricao)])
+                if not escolha:
+                    continue
+                onde = "com_ok" if conferida else "sem_ok"
+                if not categoria and escolha.get("cat"):
+                    cur.execute(
+                        "UPDATE cartao.transacao SET categoria=%s, atualizado_em=now() "
+                        "WHERE transacao_id=%s AND NULLIF(categoria,'') IS NULL;",
+                        (escolha["cat"], tid),
+                    )
+                    if cur.rowcount:
+                        cats_v47 += 1
+                        tocados_v47[onde].add(tid)
+                for campo, valor_id in escolha.items():
+                    if campo == "cat" or not _dimensao_vazia(dims, campo):
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE "
+                        "SET valor_id=EXCLUDED.valor_id "
+                        "WHERE cartao.transacao_dimensao.valor_id IS NULL;",
+                        (tid, campo, valor_id),
+                    )
+                    if cur.rowcount:
+                        dims_gravadas_v47 += 1
+                        tocados_v47[onde].add(tid)
+
+            parcelas_v47 = preencher_classificacao_vazia_parcelas(cur, account_id=conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Completa a classificacao vazia da Unicred',"
+                "jsonb_build_object('versao',47,'lojistas_com_consenso',%s,"
+                "'categorias',%s,'dimensoes',%s,'tocados_com_ok',%s,'tocados_sem_ok',%s,"
+                "'parcelas_categorias',%s,'parcelas_dimensoes',%s,"
+                "'backup','cartao.classificacao_backup_v47'));",
+                (len(consenso_v47), cats_v47, dims_gravadas_v47,
+                 len(tocados_v47["com_ok"]), len(tocados_v47["sem_ok"]),
+                 parcelas_v47["categorias"], parcelas_v47["dimensoes"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (47);")
             conn.commit()
 
         cur.close()

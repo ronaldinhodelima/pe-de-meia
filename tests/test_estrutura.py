@@ -951,3 +951,20 @@ def test_regra_do_guilherme_respeita_o_limite_de_120_reais():
     assert '("Agua", "<")' in trecho
     assert '("Agua / Gas", ">")' in trecho
     assert '"<=" ' not in trecho and '">=" ' not in trecho
+
+
+def test_migracao_47_trata_valor_nulo_como_dimensao_vazia():
+    """O bug que zerou o preenchimento nas migracoes 45 e 46.
+
+    ON CONFLICT DO NOTHING nunca conserta uma linha que ja existe com
+    valor_id NULL - e o WHERE do DO UPDATE garante que valor preenchido
+    jamais e sobrescrito.
+    """
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 47:", 1)[1].split("VALUES (47)", 1)[0]
+    assert "_dimensao_vazia(dims, campo)" in trecho
+    assert "DO UPDATE" in trecho
+    assert "WHERE cartao.transacao_dimensao.valor_id IS NULL" in trecho
+    assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v47" in trecho
+    for proibido in ("SET conferida", "conferida=true", "conferida_por="):
+        assert proibido not in trecho
