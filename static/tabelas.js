@@ -116,7 +116,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     busca.className = 'filtro-tabela';
     busca.placeholder = 'Filtrar';
     busca.setAttribute('aria-label', 'Filtrar');
-    busca.style.cssText = 'padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:200px';
+    busca.style.cssText = 'padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:200px;background:var(--surface);color:var(--ink);font-family:inherit';
     const contador = document.createElement('span');
     contador.style.cssText = 'font-size:12px;color:var(--ink-faint)';
     esq.appendChild(busca);
