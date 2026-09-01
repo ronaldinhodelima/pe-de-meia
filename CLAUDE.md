@@ -1,1975 +1,1045 @@
 # Pé de Meia — contexto do projeto
 
-**Última atualização:** 30/08/2026. Estado funcional de referência: branch `main`, tela detalhada
-de fatura Unicred e schema esperado na migração **31**. O histórico registra o conjunto anterior
-como publicado e validado em produção; ainda assim, confirmar `git log`, o deploy ativo no Coolify
-e `cartao.schema_version` antes de qualquer nova intervenção.
+**Última revisão:** 01/09/2026 · **Schema:** migração 47 · **Testes:** 270 aprovados, 6 ignorados
+· **Produção:** https://pedemeia.brdrive.net
 
-Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza lançamentos de cartão de
-crédito e conta corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank:
-Ronaldo e Andrea). Substitui o antigo nome "Conferência de Cartão".
+Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
+corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank: Ronaldo e Andrea),
+e concilia o cartão Unicred contra a fatura oficial em PDF.
 
-Este arquivo existe para que qualquer sessão do Claude (Code, Cowork, etc.) retome o projeto
-sem precisar redescobrir decisões já tomadas. Leia isto inteiro antes de mexer em qualquer coisa.
+Este arquivo existe para que qualquer sessão do Claude retome o projeto sem redescobrir decisões
+já tomadas. **Leia inteiro antes de mexer em qualquer coisa.** Ele é normativo, não é diário:
+se algo aqui não for mais verdade, corrija em vez de acrescentar uma seção nova contradizendo a
+anterior.
 
-## Regra de ouro (instrução permanente do usuário)
+---
+
+# 1. Regras invioláveis
+
+## 1.1 Regra de ouro (instrução permanente do usuário)
 
 > "Sempre que formos falar em financeiro, preciso que traga as considerações do DRE, do conceito
 > de DRE financeiro, não podemos ter dados mascarados ou informações que inflem os lançamentos.
 > Os números precisam ser reais."
 
 Na prática:
+
 - Resultado = Receitas − Despesas. Só isso é "resultado".
 - Investimento, compra de bem (terreno, veículo, imóvel), pagamento de fatura de cartão e
   transferência entre contas próprias **não são despesa** — só trocam a forma do patrimônio.
 - Juros e tarifas **são despesa de verdade** (o dinheiro sai e não volta).
-- Terreno não deprecia. Só entraria depreciação de bens que perdem valor com o tempo (não
-  implementamos depreciação ainda — hoje bens só ficam fora do resultado, não geram despesa).
-- Toda vez que mexer em relatório/DRE/natureza de categoria, explicar o raciocínio contábil,
-  nunca só aplicar sem justificar.
+- Terreno não deprecia. Depreciação não está implementada: bens ficam fora do resultado e não
+  geram despesa.
+- Toda vez que mexer em relatório, DRE ou natureza de categoria, **explicar o raciocínio
+  contábil** — nunca só aplicar.
 
-## Preferências de estilo do usuário (Ronaldo)
+## 1.2 O OK é uma assinatura humana
+
+**Nunca marcar nem desmarcar o "conferido" de um lançamento.** Só o Ronaldo ou outro usuário
+marca. O Claude pode ajustar categoria, dimensão, natureza e observação; o check é a confirmação
+humana de que o lançamento foi conciliado. Lançamento manual criado pelo Claude nasce desmarcado.
+
+Sincronização, regra automática, migração, importação e edição de qualquer campo **nunca** podem
+alterar `conferida`, `conferida_por` ou `conferida_em`. Retirar um OK ou marcar duplicidade exige
+confirmação explícita na tela.
+
+## 1.3 Marcação de duplicidade é decisão do usuário
+
+O Claude levanta, evidencia e explica; não marca. Vale inclusive quando a evidência parece
+inequívoca. IDs distintos recebidos da operadora são sempre importados — podem representar
+cobrança realmente duplicada.
+
+## 1.4 Nunca inventar número ou informação
+
+Se não souber, perguntar. Não estimar, não arredondar para "fechar", não deduzir de memória.
+Quando um levantamento contradiz o que já se viu na tela, **o erro provavelmente é do
+levantamento** — conferir contra um caso conhecido antes de confiar.
+
+## 1.5 Preferências de estilo do usuário (Ronaldo)
 
 - Respostas diretas, sem enrolação, com tópicos quando fizer sentido.
-- **Nunca inventar números ou informação** — se não souber, perguntar.
 - Interface do sistema em português.
-- **Ao classificar lançamento, sempre avaliar a melhor forma de distribuir e
-  organizar** — categoria, natureza, dimensão e projeto — em vez de só encaixar
-  no que já existe. Instrução dada em 22/08/2026, durante a conciliação.
-- **Nunca marcar o "conferido" (check OK) de um lançamento.** Esse campo é a
-  assinatura de quem conferiu — só o Ronaldo ou outro usuário marca. O Claude pode
-  ajustar categoria, dimensão, natureza e observação, mas o check é a confirmação
-  humana de que o lançamento foi conciliado. Vale também para lançamento manual
-  criado pelo Claude: nasce desmarcado.
+- Ao classificar lançamento, **avaliar a melhor forma de distribuir e organizar** — categoria,
+  natureza, dimensão e projeto — em vez de só encaixar no que já existe.
 
-## Stack e arquitetura
+## 1.6 Regra permanente de publicação
 
-- **App principal**, separado em quatro camadas:
-  - `app.py` — cria o Flask app, configura sessão/auditoria, registra os filtros Jinja e os
-    blueprints.
-  - `core.py` — constantes, acesso ao banco, permissões, helpers de HTML. **Não importa
-    nada de `views/` nem de `app.py`.**
-  - `views/` — blueprints `auth`, `sistema`, `lancamentos`, `relatorios`, `cadastros`,
-    `usuarios` e `logs`. Cada módulo importa do `core` só os nomes que usa, listados
-    explicitamente. Não fixar quantidade de rotas aqui: `tests/test_estrutura.py` mantém a
-    lista autoritativa e acusa qualquer rota perdida ou inesperada.
-  - `templates/` (Jinja2) e `static/` (CSS, JS, logos). **Nenhuma tela monta HTML por
-    f-string no Python** — se aparecer uma, é regressão.
-  Sem framework front-end — JS puro. A view faz SQL e regra de negócio, o template só exibe.
-  **O escaping do Jinja é automático**: nada de `esc()` dentro de valor que vai para template
-  (gera `&quot;` visível na tela). Quando o valor já é HTML confiável montado no Python
-  (selo do banco, topbar, aviso de pendências), marque `|safe` explicitamente — assim fica
-  claro na revisão que foi decisão, não esquecimento.
-  **Nunca interpole dado dentro de `onclick`/`onchange`/`onsubmit`.** `|tojson` é o escape
-  certo dentro de `<script>`, e errado dentro de atributo: o filtro do Flask não escapa aspas
-  duplas, então `onclick="f({{ id|tojson }})"` vira `onclick="f("abc")"` — o atributo fecha
-  cedo, o handler não compila e **falha em silêncio**. Foi assim que a tela de Lançamentos
-  parou de abrir detalhes e de salvar, e que o "Excluir" de `/usuarios` passou a apagar sem
-  pedir confirmação. Para levar dado ao JS: `data-attribute` + delegação de evento, ou um
-  bloco `<script type="application/json">`. `tests/test_estrutura.py` trava os dois casos.
-- **Banco**: PostgreSQL, schema `cartao.*` (rodando dentro do Coolify, host interno de rede
-  Docker — não acessível de fora).
-- **Worker de sincronização**: `bussola/app.py` (serviço separado no Coolify) — busca dados do
-  Pluggy e grava no mesmo Postgres.
-- **Deploy**: Coolify (PaaS auto-hospedado da BRDrive), build via Dockerfile a partir de um
-  repositório git no GitHub.
+Todo deploy atualiza este arquivo com decisões, comportamento entregue, migrações, validações e
+pendências. Antes de publicar: suíte pytest completa, `py_compile`, `git diff --check`. Depois do
+deploy: conferir os logs, abrir a tela afetada em produção e comparar os números anotados antes.
+**Não marcar/desmarcar OK real apenas para testar.**
 
-## Repositório e deploy
+---
 
-- **GitHub**: `ronaldinhodelima/pe-de-meia` (branch `main`).
-  - `app.py`, `core.py`, `views/`, `templates/`, `static/` → app principal (Flask).
-  - `tests/` → suíte pytest.
-  - `bussola/app.py` → worker de sincronização Pluggy.
-  - `Dockerfile` → build do app principal. **Ao criar pasta nova, adicione o `COPY`** —
-    o container sobe sem ela e quebra só na hora de servir a tela.
-- **Coolify**: `https://coolify.brdrive.net`, projeto **Ronaldinho**.
-  - App principal: nome `conferencia-cartao-app`, uuid `nvbnzjhig1og7s0gn5nrbxjo`.
-    Domínio: **https://pedemeia.brdrive.net** (+ domínio padrão do Coolify como backup:
-    `https://nvbnzjhig1og7s0gn5nrbxjo.coolify.brdrive.net`).
-  - Worker de sync: nome `bussola-financeira-app-v2`, uuid `hdgffcvh3ljqe61dczztaycz`.
-    Domínio interno: `https://hdgffcvh3ljqe61dczztaycz.coolify.brdrive.net`.
-    **Atenção**: esse domínio já mudou uma vez sem avisar (Coolify reatribuiu o subdomínio
-    em algum redeploy) e quebrou o botão "Atualizar agora" porque a URL estava hardcoded em
-    `BUSSOLA_SYNC_URL` no app principal. Se o sync voltar a dar erro 404/502, o primeiro
-    passo é conferir se o domínio do worker mudou de novo.
-- **Deploy automático:** push na `main` dispara o webhook GitHub → Coolify. Acompanhar o build,
-  a troca do container e os logs; não considerar o push como conclusão. A API do Coolify é
-  apenas alternativa caso o webhook não dispare. Fluxo de contingência:
-  ```bash
-  git clone https://github.com/ronaldinhodelima/pe-de-meia.git
-  cp app.py <repo>/app.py   # depois de editar
-  cd <repo> && git add app.py && git commit -m "..." && git push
-  curl -X POST -H "Authorization: Bearer <COOLIFY_TOKEN>" \
-    "https://coolify.brdrive.net/api/v1/deploy?uuid=nvbnzjhig1og7s0gn5nrbxjo"
-  ```
-  O token do Coolify e as credenciais de banco ficam nas variáveis de ambiente do próprio
-  Coolify (aba Environment de cada app) — nunca no código nem no repositório git.
-- **Regra obrigatória de documentação em todo deploy:** o mesmo commit que será publicado deve
-  atualizar este `CLAUDE.md`, sem exceção. Registrar decisões funcionais, arquivos/áreas alteradas,
-  migração de banco, testes executados, pendências e o que precisa ser validado em produção. Um
-  deploy sem essa atualização documental é incompleto e não deve ser enviado à `main`.
+# 2. Stack, arquitetura e deploy
 
-## Banco de dados — tabelas principais (schema `cartao`)
+## 2.1 Camadas
 
-- `pluggy_item` — cada conexão bancária (1 linha por item Pluggy).
-- `conta` — contas dentro de cada item (conta corrente, cartão de crédito, "manual"/dinheiro).
-- `transacao` — lançamentos (chave: `transacao_id` do Pluggy, evita duplicidade).
-- `sync_log` — auditoria das rodadas de sincronização.
-- `metrica_diaria` — fotografia diária da quantidade total e conferida de lançamentos, usada
-  pelo card de crescimento da tela principal.
-- `categoria_natureza` — natureza contábil de cada categoria (despesa/receita/investimento/
-  bem/transferência/fluxo) — base do DRE.
-- `categoria` — overrides de nome (renomeações feitas pelo usuário em `/categorias`).
-- `categoria_oculta` — categorias removidas pelo usuário (ficam escondidas nos dropdowns).
-- `grupo_custo` / `subgrupo_custo` / `categoria_subgrupo` — centro de custo (grupos de gasto).
-- `usuario` — login/senha (PBKDF2-HMAC-SHA256, 200k iterações) + perfil + permissões.
-- `item_titular` — de quem é cada conexão bancária (Ronaldo / Andrea / Ronaldo e Andrea).
-- `investimento` / `investimento_saldo` — posições de investimento e histórico diário de saldo.
-- `cartao_nome` — apelido de cada cartão pelos 4 últimos dígitos. Um cartão de crédito (uma
-  linha em `conta`) pode ter vários cartões físicos/virtuais/adicionais; a `conta` guarda só o
-  final do principal, e os adicionais só aparecem em `transacao.numero_cartao_final` — é dali
-  que a tela `/contas` descobre quais cartões existem.
-- `regra_classificacao` / `regra_dimensao_valor` — regras automáticas de categorização.
-- `dimensao` / `dimensao_valor` / `transacao_dimensao` — dimensões livres (ex: Responsável:
-  Ronaldo/Andrea/Amanda/Compartilhado, Projeto, etc.) além da categoria.
-  `dimensao_valor` também guarda `teto_mensal` / `teto_anual` (teto de gasto por valor) e o
-  vínculo opcional de um Projeto com seu Portfólio padrão.
-- `transacao_rateio` / `transacao_rateio_dimensao` — partes internas de um lançamento bancário
-  que pertence a mais de uma classificação. O lançamento original do Pluggy é preservado;
-  as partes precisam fechar exatamente o seu valor e o substituem somente nos totais e
-  relatórios, por meio das views `lancamento_financeiro*`.
-- `fatura_importada` / `fatura_linha` — histórico das faturas Unicred importadas, linhas
-  extraídas e PDF original armazenado no PostgreSQL.
-- `fatura_vinculo` — relação persistente N:N entre linha da fatura e lançamento. Guarda origem
-  automática, manual ou criada da própria fatura e impede que a conciliação mude sozinha.
-- `schema_version` — controle de migração (ver `migrate()`). Cada bloco `if versao_atual < N`
-  roda uma vez só; **não reescrever migração já aplicada** — criaria divergência de schema.
+- `app.py` — cria o Flask app, sessão/auditoria, filtros Jinja, registra blueprints.
+- `core.py` — constantes, acesso ao banco, permissões, migrações, helpers.
+  **Não importa nada de `views/` nem de `app.py`.**
+- `views/` — blueprints `auth`, `sistema`, `lancamentos`, `relatorios`, `cadastros`, `usuarios`,
+  `logs`. Cada módulo importa do `core` só os nomes que usa.
+- `templates/` (Jinja2) e `static/` (CSS, JS, logos). Sem framework front-end — JS puro.
+- `bussola/app.py` — worker de sincronização Pluggy (serviço separado).
 
-## Modelo de natureza (6 naturezas, base do DRE)
+A dependência corre sempre `app.py → views/ → core.py`. Inverter recria o import circular.
+`tests/test_estrutura.py` mantém a lista autoritativa de rotas e acusa rota perdida ou inesperada.
 
-`despesa`, `receita`, `investimento`, `bem`, `transferencia` e `fluxo` — este último é o
-padrão: a direção do lançamento decide se é receita ou despesa (usado pra PIX/TED/dinheiro).
-As três neutras (`investimento`, `bem`, `transferencia`) ficam fora do resultado.
+Banco: PostgreSQL, schema `cartao.*`, dentro do Coolify (host interno de rede Docker, não
+acessível de fora).
 
-## Sistema de permissões
+## 2.2 Regras de código que já quebraram produção
 
-Perfis: `admin` (tudo), `operador` (lançamentos + relatórios + conciliação + sincronizar, sem
-cadastros/usuários), `leitura` (só ver lançamentos e relatórios). As 9 permissões granulares:
-`lancamentos_ver`, `lancamentos_editar`, `lancamentos_conferir`, `lancamentos_manual`,
-`relatorios`, `conciliacao_editar`, `cadastros`, `sincronizar`, `usuarios`. Decorator `@requer(permissao)`
-protege cada rota; `pode(permissao)` controla o que aparece na interface.
+**Nenhuma tela monta HTML por f-string no Python.** Se aparecer uma, é regressão.
 
-`relatorios` é somente consulta. Importar/reimportar PDF, sincronizar parcelas, refazer vínculos,
-vincular/desvincular linhas e registrar revisão de cobrança repetida exigem
-`conciliacao_editar`. A migração 26 concede a nova permissão aos Administradores e Operadores já
-existentes, preservando seu acesso; o perfil Somente leitura continua vendo as telas sem controles
-de gravação.
+**O escaping do Jinja é automático:** nada de `esc()` dentro de valor que vai para template
+(gera `&quot;` visível). Quando o valor já é HTML confiável montado no Python, marque `|safe`
+explicitamente — assim fica claro que foi decisão, não esquecimento.
 
-Usuários atuais: `ronaldo` (admin), `andrea` (admin, herdado do sistema antigo), `amanda`
-(operador, criada nesta sessão).
+**Nunca interpole dado dentro de `onclick`/`onchange`/`onsubmit`.** `|tojson` é o escape certo
+dentro de `<script>` e **errado** dentro de atributo: não escapa aspas duplas, então
+`onclick="f({{ id|tojson }})"` fecha o atributo cedo, o handler não compila e **falha em
+silêncio**. Foi assim que Lançamentos parou de abrir detalhes e o "Excluir" de `/usuarios` passou
+a apagar sem confirmar. Para levar dado ao JS: `data-attribute` + delegação de evento, ou um bloco
+`<script type="application/json">`.
 
-## Identidade visual
+**Escape em JS montado no cliente:** `lancamentos.js`, `relatorios.js` e `categorias.js` montam
+HTML com `innerHTML` a partir de AJAX. Ali o Jinja não protege — quem escapa é `escHtml()` do
+`tabelas.js`. A regra combinada: **o servidor manda texto puro e o JS escapa.** Escapar dos dois
+lados gera escape duplo, e em rótulo de gráfico (canvas) apareceria `&amp;` literal.
 
-- Nome: **Pé de Meia**. Logo oficial fornecida pelo usuário (meia de tricô com dinheiro),
-  em **fundo claro sólido** no topbar e na tela de login.
-  Os PNGs foram embutidos como base64 direto no `app.py` (`LOGO_TOPBAR_B64`, `LOGO_HERO_B64`)
-  — não dependem de arquivo externo.
-- **Favicon**: meia sólida em marrom (`#9f7251`) com **fundo transparente**, diferente da logo
-  do topbar. Cuidado: o favicon que vale está **hardcoded dentro de `BASE_CSS_HEAD`**
-  (`<link rel="icon" ...>`); a variável `LOGO_FAVICON_B64` existe mas **não é usada por
-  ninguém** — mexer nela não muda nada na tela.
-- Bancos identificados por "selo" colorido em CSS puro (cor da marca + sigla de 2 letras),
-  não por logo de imagem — Pluggy não fornece logo utilizável.
-- Tooltips customizados (120ms, mais rápido que o `title` nativo do navegador).
+**Um processo Gunicorn, com threads — não aumente `-w`.** `core.py` guarda apelidos de categoria
+em memória e só recarrega após um POST. Com mais de um processo, cada um tem sua cópia e um segue
+servindo o nome antigo. Aconteceu em produção com `-w 2`. Se precisar de paralelismo, aumente
+`--threads`, não `-w`.
 
-## Funcionalidades já construídas (sessão 1 — Cowork)
+**Gunicorn com `--preload` — não remova.** `core.py` chama `migrate()` no import; sem preload cada
+worker roda a migração ao mesmo tempo no boot e as DDL competem. É seguro porque nenhuma conexão
+fica aberta em variável de módulo — se alguém criar um pool global, o preload passa a compartilhar
+socket entre filhos e vira bug. O `--timeout 120` existe porque "Atualizar agora" chama o worker
+com timeout de 60s.
 
-1. Sync completo do Pluggy (corrigido bug de paginação — campo `next`, não `cursor.after`).
-2. Relatórios em ordem cronológica (gráfico) com lista "Totais agrupados" mais recente primeiro.
-3. Modelo de natureza contábil (5 naturezas) aplicado em Relatórios e DRE.
-4. DRE com Receitas/Despesas/Resultado/Margem por mês + grupos de custo.
-5. Tela `/naturezas` para reclassificar a natureza de qualquer categoria.
-6. Grupo "Despesas Financeiras" (juros e tarifas) no centro de custo.
-7. Conexão Nubank (duas contas — Ronaldo e Andrea) além da Unicred, sync multi-conexão com
-   auto-descoberta de conexões já sincronizadas (mas **não** de conexões novas nunca vistas —
-   essas precisam ser adicionadas manualmente na env var `PLUGGY_ITEM_ID` do worker).
-8. Selos coloridos de banco + tooltips rápidos.
-9. Renomeação do app (Conferência de Cartão → Meu Dinheiro → **Pé de Meia**), com DNS próprio
-   `pedemeia.brdrive.net`.
-10. Remoção do serviço Metabase (não era mais usado).
-11. Sistema completo de usuários e permissões (`/usuarios`).
-12. Logo oficial aplicada (favicon, topbar, tela de login).
-13. Grupos/categorias sempre em ordem alfabética (ignorando acento/maiúscula — função
-    `chave_alfa()`); `<details>` de `/grupos` lembram se estavam abertos ao salvar
-    (via `localStorage`).
-14. Item "Importar extrato/fatura" saiu primeiro do menu e depois a funcionalidade inteira foi
-    removida na refatoração, pois estava quebrada e sem uso. Não assumir que a rota ainda existe.
-15. `/categorias`: criar, renomear, mover lançamentos entre categorias, excluir (só permite
-    excluir categoria vazia — com lançamentos, fica "protegida").
-16. `/contas`: identifica o titular de cada conexão bancária (Unicred = Ronaldo e Andrea,
-    Nubank 1 = Ronaldo, Nubank 2 = Andrea) — aparece em Lançamentos, Relatórios e em qualquer
-    lugar que mostre a origem do dinheiro.
-17. Correção do bug do botão "Atualizar agora" (URL do worker de sync desatualizada).
+**Estado compartilhado:** `CATEGORIA_PT_DB` e `CATEGORIAS_OCULTAS` são recarregados em runtime.
+Como os blueprints fazem `from core import ...`, `recarregar_categorias_db()` **altera os
+dicionários no lugar** (`clear()` + `update()`). Trocar por reatribuição congelaria os nomes na
+versão do boot, sem erro nenhum. `tests/test_core_estado.py` trava isso checando a identidade.
 
-## Funcionalidades e correções (sessão 2 — Claude Code, 20–21/08/2026)
+**Helper usado por mais de uma migração mora no módulo**, nunca dentro do bloco
+`if versao_atual < N`. Num banco já migrado aquele bloco não roda e a migração seguinte quebra com
+`NameError` — erro que não aparece em banco novo, que é onde os testes olham.
 
-Segurança:
-1. Cookie de sessão com `Secure`, `HttpOnly` e `SameSite=Lax`.
-2. Senhas genéricas hardcoded (`changeme1/2`) foram removidas do código. Por decisão posterior
-   do usuário, os acessos administrativos antigos/de emergência continuam configurados **no
-   ambiente do Coolify**, nunca no repositório. Não alterar esses acessos sem pedido explícito.
-3. **XSS corrigido em todo o app** (`esc()` e `json_script()`): nome de categoria, dimensão,
-   grupo, cartão, titular, descrição/observação de lançamento e mensagens de aviso. O caso mais
-   grave era `json.dumps()` dentro de `<script>` — não escapa `</`, então uma descrição contendo
-   `</script>` executava JS para qualquer um que abrisse Lançamentos. Validado com payload real.
-4. `/sync` do worker exige `X-Sync-Secret` (env `SYNC_SECRET`, mesma nos dois serviços).
-5. `/` do worker parou de expor a lista de tabelas do banco e o resumo do sync sem a chave.
+**O JS da visão detalhada usa parâmetro de versão no `src`.** Sempre renovar quando o
+comportamento mudar, evitando HTML novo com script antigo no cache.
 
-Processo:
-6. Migração versionada (`cartao.schema_version`) — antes rodava ~30 DDL a cada boot.
-7. A suíte começou com 46 testes nesta etapa e foi ampliada depois; ver contagem atual em
-   "Testes automatizados".
-8. `.gitignore` e identidade do git configurada.
+## 2.3 Repositório e deploy
 
-Produto:
-9. Login: mostrar senha + `autocomplete` para o navegador salvar credencial.
-10. Favicon novo (meia sólida, fundo transparente). **Atenção**: o favicon real fica hardcoded
-    dentro de `BASE_CSS_HEAD`, não na variável `LOGO_FAVICON_B64` (que não é usada).
-11. `/categorias`: clicar em "X lanç. — protegida" lista os lançamentos que bloqueiam a remoção.
-12. `/grupos` virou **Centro de Custos**: tabela única, hierarquia visual grupo → subgrupo,
-    vínculo de categoria por chips removíveis.
-13. Teto de gasto saiu do centro de custo e virou **teto por valor de dimensão** (ex: "Ronaldo:
-    R$3.000/mês"), com barra de progresso do gasto real do mês/ano em `/dimensoes`.
-14. **`/pendencias`** — painel de pendências de classificação (ver seção própria).
-15. **Colunas ajustáveis em todas as 7 tabelas**: redimensionar (estilo planilha, a vizinha
-    compensa), reordenar arrastando o cabeçalho, ordenar clicando no título, botão "Redefinir
-    colunas". Preferências no `localStorage` por tabela. Ver seção própria.
-16. Fatura por cartão: `fechamento_fatura`/`vencimento_fatura` vêm do Pluggy por conta — antes
-    o fechamento era uma constante única (`FATURA_DIA_FECHAMENTO`), que só servia para um cartão.
-17. `/cartoes` foi **fundido** em `/contas`, agora **"Configurações de Contas / Cartão"**:
-    titular da conexão + nome de cada cartão (físico, virtual, adicional) + datas da fatura
-    (somente leitura).
-18. Navegação de mês (`‹ ›`) em Lançamentos e logo do topbar como link para o início.
+- **GitHub**: `ronaldinhodelima/pe-de-meia`, branch `main`.
+- **Coolify** (`https://coolify.brdrive.net`, projeto Ronaldinho):
+  - App principal `conferencia-cartao-app`, uuid `nvbnzjhig1og7s0gn5nrbxjo`,
+    domínio **https://pedemeia.brdrive.net**.
+  - Worker de sync `bussola-financeira-app-v2`, uuid `hdgffcvh3ljqe61dczztaycz`.
+    **Esse domínio já mudou sozinho uma vez** e quebrou "Atualizar agora" porque a URL estava
+    hardcoded em `BUSSOLA_SYNC_URL`. Se o sync der 404/502, conferir isso primeiro.
+- **Push na `main` dispara o webhook → Coolify.** Acompanhar build, troca de container e logs;
+  push não é conclusão. Token do Coolify e credenciais ficam nas variáveis de ambiente do
+  Coolify — nunca no código nem no git.
+- **Ao criar pasta nova, adicione o `COPY` no Dockerfile** — o container sobe sem ela e quebra só
+  na hora de servir a tela.
+- **Não há ambiente de staging.** Todo push na `main` vai direto para o app que a família usa.
 
-## Refatoração e limpeza (sessão 3 — 21/08/2026)
+## 2.4 Operacional
 
-`app.py` saiu de **5.612 para ~3.260 linhas**. Todo o HTML foi para `templates/` (Jinja) e o
-JS/CSS/logos para `static/`. As 11 telas foram migradas uma a uma, cada uma validada em
-produção antes da seguinte.
+Toda nova conexão bancária no Pluggy precisa do `item_id` na env `PLUGGY_ITEM_ID` do worker — a
+auto-descoberta só funciona para conexões que já sincronizaram alguma vez.
 
-**Cinco XSS latentes** apareceram na migração, todos em conteúdo de terceiro que era
-interpolado cru — o escaping automático do Jinja resolveu quatro; o do preview de importação
-era JS e foi corrigido com `escHtml`:
-descrição de arquivo importado, nome de aplicação (Pluggy), padrão de regra, nome de dimensão
-e valor de dimensão, e o apelido do cartão em `origem_curta()`.
+**Decisão sobre o worker (21/08/2026):** fica acessível publicamente. Uma `ipallowlist` no Traefik
+foi tentada e **quebrou o sync** (403): o app chama o worker pela URL pública e o Traefik vê um IP
+interno do Docker. Foi revertido. A proteção real é por chave (`SYNC_SECRET`). Para fechar de
+verdade: fazer o app chamar o worker pela rede interna e remover o domínio público.
 
-**Removido por não estar mais em uso:** a tela `/importar` inteira (3 rotas, 7 auxiliares, a
-permissão `importar`) — que aliás estava dando 500 desde `fcedcf1`, sem ninguém notar, porque
-tinha saído do menu. E os redirects legados `/cartoes` e `/naturezas`.
+---
 
-### Regra de dependência entre os módulos
+# 3. Banco de dados (schema `cartao`)
 
-`app.py` → `views/` → `core.py`, sempre nessa direção. Nada em `core.py` pode importar de
-`views/`, senão volta o import circular.
+| Tabela | Para que serve |
+|---|---|
+| `pluggy_item` | cada conexão bancária |
+| `conta` | contas de cada item (corrente, cartão, "manual"/dinheiro) |
+| `transacao` | lançamentos; chave `transacao_id` do Pluggy evita duplicidade |
+| `sync_log` | auditoria das rodadas de sincronização |
+| `categoria_natureza` | natureza contábil de cada categoria — base do DRE |
+| `categoria` / `categoria_oculta` | renomeações e categorias escondidas pelo usuário |
+| `grupo_custo` / `subgrupo_custo` / `categoria_subgrupo` | centro de custo |
+| `usuario` | login (PBKDF2-HMAC-SHA256, 200k iterações), perfil e permissões |
+| `item_titular` | de quem é cada conexão |
+| `investimento` / `investimento_saldo` | posições e histórico diário |
+| `cartao_nome` | apelido por 4 últimos dígitos |
+| `regra_classificacao` / `regra_dimensao_valor` | regras automáticas |
+| `dimensao` / `dimensao_valor` / `transacao_dimensao` | dimensões livres + tetos de gasto |
+| `transacao_rateio` / `transacao_rateio_dimensao` | partes internas de um lançamento |
+| `fatura_importada` / `fatura_linha` / `fatura_vinculo` | conciliação do PDF |
+| `schema_version` | controle de migração |
 
-**Armadilha do estado compartilhado:** `CATEGORIA_PT_DB` e `CATEGORIAS_OCULTAS` são
-recarregados em runtime (quando o usuário renomeia ou oculta categoria). Como os blueprints
-fazem `from core import CATEGORIA_PT_DB`, `recarregar_categorias_db()` **altera os dicionários
-no lugar** (`clear()` + `update()`). Se algum dia alguém trocar isso por reatribuição, os
-nomes de categoria congelam na versão do boot — sem erro nenhum, só nome errado na tela.
-`tests/test_core_estado.py` trava esse comportamento checando a identidade do objeto.
+**Um cartão de crédito (uma linha em `conta`) pode ter vários cartões físicos/virtuais.** A
+`conta` guarda só o final do principal; os adicionais só aparecem em
+`transacao.numero_cartao_final` — é dali que `/contas` descobre quais cartões existem.
 
-### Como cortar código sem quebrar nada
+**Colunas mortas, não voltar a depender delas:** `conta.fechamento_fatura` (o Pluggy nunca
+preenche para nenhuma conta real), `conta.dia_fechamento` e `conta.dia_vencimento` (tentativa
+descontinuada). Ficaram porque reescrever migração aplicada criaria divergência de schema.
 
-Duas vezes nesta sessão um corte por busca de texto apagou código vizinho por engano — uma
-delas levou a rota `/dre` inteira, outra levou `_montar_filtro_relatorio` e derrubou
-`/relatorios` em produção. O que funciona:
+**`transacao_dimensao.valor_id` é nulável e tem `ON DELETE SET NULL`.** Apagar um valor de
+dimensão deixa a linha para trás com valor nulo. Testar só "a chave existe" dá a dimensão como
+preenchida enquanto a tela mostra "(não definido)" — usar `_dimensao_vazia()`.
 
-1. Delimitar a função pelo **AST** (`node.end_lineno`), nunca por "até o próximo `@app.route`"
-   — auxiliares sem decorator moram entre as rotas e são engolidos.
-2. Depois do corte, **comparar as definições de topo antes/depois**. Contar rotas não basta,
-   justamente porque o que se perde costuma ser função sem decorator.
-3. **302 não é prova de que a tela funciona** — é o redirect de login. Validação real só
-   logado, olhando o conteúdo. **Depois do deploy, abrir todas as telas** (um `fetch` em cada
-   e conferir status 200 + ausência de traceback no corpo): variável usada mas atribuída só
-   dentro de um `if` passa por `py_compile`, passa pelos testes (que não executam view, porque
-   exigiriam banco) e só aparece quando alguém abre aquela tela. Já derrubou `/grupos`.
-4. **`replace` em código só com `assert` de que casou.** Um `replace` silencioso que não casa
-   deixa o código velho no lugar e a edição parece ter funcionado.
-4. Em tela com número (DRE, relatórios), **anotar os valores em produção antes do deploy** e
-   comparar depois. Migração de tela não pode mexer em número.
+**Migrações:** cada bloco `if versao_atual < N` roda uma vez só. **Nunca reescrever migração já
+aplicada** — criaria divergência de schema entre bancos. Antes de alteração de dados em lote,
+criar tabela de backup no mesmo Postgres (`*_backup_vN`) e gravar auditoria com o resultado.
 
-## Estado registrado em produção — 29/08/2026
+---
 
-Produção está em `https://pedemeia.brdrive.net`, branch `main`, deploy automático pelo webhook.
-O código espera schema na migração **31**. Entre `cfa183e` e `7c1ce99` foram publicados 75
-commits, alterando 23 arquivos: proteção de dimensões, visão anual dos lançamentos, rastreio da
-primeira sincronização, vínculo Projeto → Portfólio, importação e conciliação das faturas Unicred,
-regime de caixa dos parcelamentos e os estados `somente_conciliacao` / `substituido_por`.
-Não há implementação versionada conhecida aguardando commit; as pendências atuais são revisão
-de permissões, robustez do import de PDF e conciliação/classificação das outras origens.
+# 4. Modelo financeiro
 
-### Lançamentos e experiência de uso
+## 4.1 Naturezas (base do DRE)
 
-- Filtro **Status** tem: Todas, Pendentes, Conferidas, Possíveis duplicidades e Duplicados.
-  O aviso grande de suspeitas foi removido; a filtragem ficou centralizada no Status.
-- Possível duplicidade é apenas alerta. O Pluggy pode realmente trazer duas cobranças iguais;
-  nunca criar regra que descarte isso automaticamente. Duplicado confirmado pelo usuário fica
-  fora dos totais, mas pode ser consultado pelo status **Duplicados**.
-- Linha com OK fica cinza-claro. Tirar OK e marcar duplicidade exigem confirmação; Cancelar
-  fecha também os detalhes. A confirmação não repete data/descrição/valor, pois já estão acima.
-- Categoria, dimensões e observação podem ser alteradas tanto na tabela quanto nos detalhes.
-  Alterar qualquer campo não pode mudar o OK já salvo.
-- Detalhes compactam Data/Valor, Valor original/Parcela e Status/Tipo em pares. Campos à direita
-  ficam alinhados à direita; "Conferida" mostra `por <usuário>` somente quando estiver em Sim.
-- Botão `+` em cada lançamento abre a criação de regra automática já preenchida com a descrição.
-  O botão da linha é apenas `+`, sem a palavra "Regra" dentro dele.
-- Menu Colunas permanece aberto enquanto marca/desmarca itens e fecha ao clicar fora. Projeto e
-  Portfólio permitem cadastro rápido sem sair da tela. Trocar mês por digitação, calendário ou
-  setas recarrega a lista. Filtros/meses criam histórico real para o botão Voltar do navegador.
-- O período de Lançamentos aceita consultar o ano inteiro. O card antes chamado **Conferidas**
-  agora se chama **Lançamentos** e usa `metrica_diaria` para mostrar crescimento do total.
-- Os detalhes mostram quando o lançamento apareceu pela primeira vez e a última sincronização.
-  Se o Pluggy mudar valor ou data de uma linha já conferida, o worker preserva o OK e grava um
-  alerta de auditoria; ele não desfaz silenciosamente a assinatura humana.
-- Dimensões e seus valores não podem ser excluídos enquanto houver lançamentos vinculados. A
-  tela informa a quantidade e permite abrir a lista dos lançamentos que precisam ser
-  reclassificados primeiro.
-- Favicon correto é a meia com fundo transparente; o arquivo HTML local cru mostra Jinja sem
-  processar e **não serve como teste do site**. Sempre validar pela URL Flask/produção.
+São **seis**: `despesa`, `receita`, `investimento`, `bem`, `transferencia` e `fluxo` — este
+último é o padrão, e a direção do lançamento decide se é receita ou despesa (usado para
+PIX/TED/dinheiro). As três neutras (`investimento`, `bem`, `transferencia`) ficam fora do
+resultado.
 
-### Rateio de lançamento
+**A natureza vem da categoria, não do lançamento.** Para classificar uma operação fora do padrão
+(um PIX de R$ 98 mil que foi a compra de um terreno), o caminho correto é **mover o lançamento
+para uma categoria com a natureza certa** ("Imóveis / Terrenos" → `bem`). Assim não importa se o
+meio foi PIX, cartão ou dinheiro.
 
-- Implementado nas migrações/tabelas `transacao_rateio*` e nas views financeiras
-  `lancamento_financeiro*`. O registro bancário pai nunca é alterado ou duplicado; no DRE,
-  Relatórios e totais as partes substituem o pai.
-- Na tabela, o botão `+`/`−` expande linhas chamadas `<descrição original> — Parte 1`, Parte 2…
-  Valor, categoria, Responsável, Projeto, Portfólio e observação são editáveis nas próprias
-  linhas. O quadrado `✓` no fim de qualquer parte salva **o conjunto inteiro**, não só a linha.
-- Soma usa centavos exatos e precisa fechar o valor do pai. Quando fecha, não aparece texto de
-  confirmação e a linha fica normal. Quando diverge, as partes ficam vermelho-claro, os campos
-  de valor ganham borda vermelha, aparece `Rateado R$ X de R$ Y` e Salvar/OK ficam bloqueados.
-- Nos detalhes, Rateio fica no final, abaixo de "Marcar como duplicada", com a mesma formatação
-  das linhas superiores e sem o texto explicativo antigo. É possível editar rateio com o pai
-  em OK sem apagar a assinatura, desde que o novo conjunto continue completo e válido; desfazer
-  o rateio inteiro exige retirar o OK.
-- Primeiro caso real validado: **DEB MONGERAL, R$ 705,28** — R$ 505,46 para Ronaldo e
-  R$ 199,82 para Andrea; categoria Seguros, projeto Seguro de Vida, portfólio Proteção e Futuro.
-  O total mensal ficou idêntico antes/depois e DRE/Relatórios foram validados.
+O campo `transacao.natureza` ainda existe e sobrepõe a da categoria, mas é a via **antiga**: fica
+invisível para quem olha a categoria depois. `/pendencias` conta quantos lançamentos ainda usam.
 
-### Sincronização, segurança e auditoria
+**Categoria sem natureza é o problema mais grave:** o app assume `despesa` (`NATUREZA_PADRAO`),
+então categoria nova inventada pelo Pluggy entra como despesa *silenciosamente*. Não dá para
+impedir o Pluggy de criar categorias — a solução é alertar (`/pendencias` + faixa no DRE) para o
+usuário decidir: definir natureza, renomear ou ocultar.
 
-- Sync do Pluggy importa todos os IDs recebidos, mas não pode sobrescrever categoria manual,
-  Responsável, Projeto, Portfólio, observação, OK, duplicidade ou rateio. O banco impede duas
-  linhas com a mesma chave do Pluggy; IDs diferentes são mantidos para não esconder cobrança.
-- Sessão dura 24 horas e renova com uso; cookies `Secure`, `HttpOnly`, `SameSite=Lax`. Senha
-  mínima continua em 6 caracteres por decisão do usuário. Não mudar acessos. Credenciais
-  administrativas de emergência permanecem somente nas variáveis do Coolify.
-- Login limita tentativas por usuário e IP numa janela de 15 minutos e usa mensagem genérica.
-  Senhas do banco ficam em PBKDF2. Requisições mutáveis exigem Origin/Referer do próprio site;
-  respostas incluem HSTS, CSP, proteção contra iframe/MIME sniffing e `Cache-Control: no-store`.
-- Logs fica dentro de Relatórios e registra acesso, alteração com antes/depois, falha e sync.
-  Senhas/tokens são sanitizados. Rateios também geram auditoria.
-- Upload de fatura aceita no máximo 10 MB, exige assinatura real `%PDF-` e recusa documentos com
-  mais de 50 páginas. Resposta 413 não tenta reler o formulário na auditoria, pois isso causava
-  um erro 500 durante o próprio tratamento do arquivo excessivo.
-- E-mail operacional mudou para `ronaldo@brdrive.net`; teste foi recebido. Backup no mesmo
-  servidor foi aceito pelo usuário. Não executar teste de restore agora; isso ficou adiado.
+**Centro de custo só se aplica a categorias de despesa.** Vincular receita ou transferência a
+centro de custo não faz sentido contábil — por isso `/pendencias` só cobra vínculo das categorias
+com natureza `despesa`.
 
-### Classificações e cadastros já aprovados
+## 4.2 O que entra no DRE
 
-- Portfólio **Eventos e Negócios** foi renomeado para **Eventos**.
-- Mapeamentos aprovados: Azul → Viagem; Shein → Vestuário.
-- Regra `GuilhermeDaSilva`: abaixo de R$ 120 Água; acima de R$ 120 Gás; ambos Família / Casa /
-  Moradia. A regra antiga genérica foi desativada sem apagar histórico.
-- Transferências `Amanda Bressan de Lima` usam regra própria. **Reaplicar** libera todos os
-  lançamentos pendentes ligados à regra, em qualquer mês, e reaplica no próximo acesso; não há
-  filtro de mês nessa operação e lançamentos conferidos são preservados.
-- Conta Corrente Conjunta, julho/2026: lançamentos de condomínio foram reconhecidos; o de
-  R$ 644,88 representa três meses acumulados. Restaurante "StarWars" foi classificado Família /
-  Viagem Chile 2026 / Viagens 2026, observação StarWars.
-- Valores Quanta entre R$ 319,00 e R$ 343,15 foram identificados como previdência privada de
-  Ronaldo já paga: categoria Previdência, projeto Previdência Privada, portfólio Proteção e
-  Futuro. Projeto Saúde e projeto Seguro de Vida foram criados.
-- Exemplo já ajustado: DELTA VIDEIRA R$ 265,07 — Responsável Ronaldo, categoria Combustível,
-  projeto Jeep, portfólio Veículos. Não generalizar para toda descrição DELTA sem revisar.
+- **Todo lançamento real do período**, independentemente de `POSTED` ou da data atual. Foi
+  desfeita a tentativa de limitar a `POSTED` até hoje.
+- **Não entram:** duplicados confirmados, registros `somente_conciliacao`, lançamentos
+  `substituido_por` e naturezas neutras.
+- Um lançamento rateado conta **uma vez**: as partes substituem o pai.
+- Os cards de receitas/despesas/resultado usam exatamente essa mesma regra.
 
-## Conciliação de fatura em PDF (reescrita em 29/08/2026 — leia antes de mexer)
+**A exclusão mora na view `cartao.lancamento_financeiro`**, ponto único por onde passam DRE,
+relatórios, totais de Lançamentos e pendências — mexer lá vale para todos de uma vez. As telas de
+Lançamentos e de conciliação leem `cartao.transacao` direto, por isso mostram também o que a view
+exclui (ver §7.4).
 
-Tela `/relatorios/conciliar-fatura`. Confere a fatura oficial da Unicred (PDF) contra o que o
-Pluggy sincronizou. **A fatura é a autoridade**: ela é a prova do que a operadora cobrou.
+Distinguir sempre **"recebidos"** (todos os registros do banco) de **"contabilizados"** (os que
+participam do resultado).
 
-No cabeçalho da fatura aberta, a referência aparece por extenso (`Agosto de 2026`). A linha
-visual com início/fim do ciclo foi removida a pedido do usuário, mas essas datas **continuam no
-banco e em toda a lógica de conciliação**. As setas anterior/seguinte usam `data-nav-mes` para
-guardar e restaurar a rolagem; não remover esse atributo, ou a página volta ao topo na troca.
+## 4.3 Os três estados que tiram um lançamento do resultado
 
-### O erro de arquitetura que foi corrigido
+Cada um significa exatamente uma coisa. Não confundir:
 
-Até 29/08/2026 a conciliação era **sem memória**: recalculava tudo por heurística a cada
-abertura da tela e não tinha onde registrar decisão humana. Consequências, todas observadas em
-produção: resultado mudava sozinho entre uma visita e outra, a mesma cobrança aparecia como
-"sobra" em dois meses seguidos, e parcelamento era impossível de resolver.
+- **`somente_conciliacao`** — registro de conciliação, não é evento de caixa. Hoje: a compra
+  parcelada agregada. Visível, vinculável, fora do resultado.
+- **`substituido_por`** (uuid → outra transação) — este lançamento é o **mesmo evento real** que
+  outro; só o outro conta. Cobre o *pending → posted* e a *parcela mensal repetida*.
+- **`duplicada`** — só o que sobrar: mesma cobrança duas vezes, sem estorno e sem par
+  identificável.
 
-**Migração 23** criou `cartao.fatura_vinculo` — relação **N:N** entre `fatura_linha` e
-`transacao`. O N:N não é luxo: um parcelamento que o Pluggy gravou como UMA transação (valor
-cheio, data da compra) corresponde a **uma linha por mês, em faturas diferentes**. Com
-"usado/não usado" dentro de uma fatura isso era irrepresentável, e um mês roubava a transação
-do outro.
+**Cobrança dupla REAL da operadora não usa nenhum dos três.** Ela vem como cobrança + estorno,
+ambos legítimos, que se anulam sozinhos no resultado — marcar qualquer um quebraria a conta
+(esconderia a cobrança e deixaria o estorno negativo solto). Aparece só na conciliação do PDF, no
+bloco "cobranças repetidas na própria fatura", que tem o "conferido" para registrar a revisão.
 
-Regras:
-- Transação já vinculada não é reivindicada pelo casamento 1:1 nem por avulsa.
-- **Exceção deliberada:** o fallback de parcelamento agregado PODE reusar transação já
-  vinculada — é o caso legítimo acima.
-- Vínculo `origem='manual'` nunca é sobrescrito pelo automático (mesma regra de
-  `categoria_manual` e do OK).
-- O casamento automático só roda em **POST** (import do PDF ou botão "Vincular
-  automaticamente"), nunca em GET. GET que grava faria a tela mudar sozinha e furaria a
-  checagem de Origin/Referer.
-- **A ordem importa ao rodar o vínculo automático em lote: da fatura mais antiga para a mais
-  nova**, porque o bloqueio depende dos vínculos já existentes.
+**Todo estado que tira lançamento do resultado precisa do caminho de volta desde o início.** Um
+estado que só se aplica e nunca se retira vira dado perdido silencioso — ver §6.6, onde isso
+custou R$ 1.167,38 sumidos do DRE.
 
-### Datas do ciclo — três armadilhas já resolvidas
+Antes de gravar qualquer `substituido_por`, validar conta, proximidade de data, estabelecimento e
+valor. Compras positivas exigem **pelo menos dois termos significativos** do estabelecimento em
+comum. Pagamentos/créditos sem termos comuns exigem **mesmo dia e mesmo valor**.
 
-1. **A Unicred não imprime a data de fechamento em lugar nenhum do PDF.** Conferido nas 14
-   faturas: só existem `REF.:`, `VENCIMENTO:` e o resumo de saldo. Não adianta procurar de novo.
-2. **O intervalo vencimento−fechamento NÃO é fixo** (varia de 9 a 14 dias). Não cabe fórmula.
-   O usuário conferiu as datas reais no app do Unicred (tela "Melhor dia para compra" = data de
-   fechamento) e elas estão em `FECHAMENTOS_CONHECIDOS`, em `fatura_unicred.py`. **Preencher ali
-   conforme ele for confirmando novos meses.** Fora da tabela, cai na heurística (última compra
-   impressa) com trava: nunca fecha no dia do vencimento ou depois.
-3. **`periodo_inicio` é calculado na LEITURA, nunca congelado no import**
-   (`_ciclo_inicio_encadeado`). Congelar tornava o resultado dependente da ORDEM de envio dos
-   PDFs: quem mandasse da fatura mais nova para a mais antiga ficava com todas no palpite de 35
-   dias. Aconteceu de verdade com as 6 faturas de 2025. **O palpite de 35 dias só vale quando
-   não existe fatura anterior daquela conta** — nunca como regra.
+## 4.4 Rateio
 
-`cartao.conta.fechamento_fatura` é **coluna morta**: o Pluggy nunca preenche para nenhuma conta
-real (a tela `/contas` mostra "fechamento não informado pelo banco" nas 3 conexões). Já foi
-tentado e revertido; não voltar a depender dela.
+Quando um único débito pertence a mais de uma pessoa ou classificação, o pai continua sendo o
+registro bancário e as partes aparecem recolhidas abaixo dele com `+`/`−`, descritas como
+`<descrição original> — Parte N`.
 
-### O que cada número da tela significa (já confundiu o usuário)
+- As partes somam **exatamente** o total, inclusive o sinal, em centavos exatos, e substituem o
+  pai no DRE/relatórios. O registro bancário pai nunca é alterado ou duplicado.
+- Valor, categoria, dimensões e observação são editados nas próprias linhas e salvos juntos: o
+  `✓` de qualquer parte salva **o conjunto inteiro**.
+- Quando a soma diverge, as partes ficam vermelho-claro, aparece `Rateado R$ X de R$ Y` e
+  Salvar/OK ficam bloqueados.
+- Pode-se editar rateio com o pai em OK sem apagar a assinatura, desde que o conjunto continue
+  completo e válido; **desfazer o rateio inteiro exige retirar o OK antes**.
+- Primeiro caso validado: DEB MONGERAL R$ 705,28 → R$ 505,46 Ronaldo + R$ 199,82 Andrea.
 
-- **Total impresso no PDF** — o SALDO TOTAL da fatura.
-- **Soma das linhas lidas** — soma das linhas extraídas do PDF, sem "Pagamento Recebido".
-  É **fatura contra fatura**, não contra o Pluggy: prova que a leitura do PDF está correta.
-  Tem que ser igual ao total impresso (fica vermelho quando não é).
-- **Já vinculado ao Pluggy** / **Falta vincular** — aí sim é contra o Pluggy.
-  "Falta vincular" **não é** `Total − Soma`; é o quanto da fatura ainda não foi conciliado.
+## 4.5 Regime de caixa para parcelamento
 
-"Pagamento Recebido" é a fatura ANTERIOR sendo quitada; o próprio SALDO TOTAL da Unicred não a
-inclui. Ela fica fora das duas somas — se entrar em um lado só, a tela acusa diferença de
-dezenas de milhares sem erro nenhum (aconteceu: R$ 16.647,99 falsos).
+**Decisão do usuário (29/08/2026):** parcelamento vira despesa **mês a mês, conforme a fatura
+cobra** — regime de caixa, não competência. A despesa acontece quando o dinheiro sai.
 
-### Consolidação de data: por que não existe botão em massa
+O problema que resolve: o Pluggy grava parte dos parcelamentos como UMA transação no valor cheio,
+na data da compra. Contar assim **inflava o mês da compra e deixava os outros vazios** —
+novembro/2025 sozinho tinha R$ 18.498,63 que não saíram naquele mês.
 
-Existiu por algumas horas em 29/08/2026 e **corrompeu 22 datas reais** de agosto/2026,
-jogando-as para a data da compra original (algumas em novembro/2025). Causa: numa linha de
-parcela a data impressa é a da **COMPRA ORIGINAL**, fixa em toda reimpressão mensal — não a data
-da cobrança daquele mês. Foi revertido no mesmo dia pelo log de auditoria (que guardava
-antes/depois de cada uma).
+Como funciona (`_sincronizar_parcelas_de_agregado`):
 
-Decisão do usuário: consolidação de data, se voltar, é **por lançamento, um a um**, dentro do
-painel de vínculo, junto com observação — nunca em lote por fatura. **Não reintroduzir sem
-uma fonte de data mensal confiável, que a fatura não fornece.**
-
-## Regime de caixa para parcelamento (decidido e aplicado em 29/08/2026)
-
-**Decisão do usuário:** parcelamento vira despesa **mês a mês, conforme a fatura cobra** —
-regime de caixa, não competência. A despesa acontece quando o dinheiro sai.
-
-O problema que isso resolve: o Pluggy grava parte dos parcelamentos como UMA transação no valor
-cheio, na data da compra (OTICA CALLIARI, R$3.160 em 02/11/2025, 10× R$316). Contar assim
-**inflava o mês da compra e deixava os outros nove vazios**. Novembro/2025 sozinho tinha
-R$ 18.498,63 de despesa que não saiu naquele mês.
-
-Como funciona (migração 24 + `_sincronizar_parcelas_de_agregado` em `views/relatorios.py`):
-
-1. Toda transação vinculada a **2+ linhas de fatura** é um agregado, e recebe
-   `transacao.somente_conciliacao = true`. Ela continua existindo, visível e vinculável — só
-   sai do resultado.
-2. Cada linha de fatura ligada a esse agregado vira um lançamento próprio, **no valor e no mês
-   em que a fatura cobrou**, herdando categoria e dimensões do agregado.
+1. Transação vinculada a **2+ linhas de fatura** é um agregado e recebe `somente_conciliacao`.
+   Continua existindo, visível e vinculável — só sai do resultado.
+2. Cada linha de fatura ligada a ele vira um lançamento próprio, **no valor e no mês em que a
+   fatura cobrou**, herdando categoria e dimensões.
 3. Idempotente por `fatura_linha.transacao_id_criado` — rodar de novo não duplica.
+4. **Também desmarca**: quando o conjunto de vínculos muda e a transação deixa de ser agregado, a
+   marca é retirada — com a trava de nunca desmarcar quem já gerou parcela (§6.6).
 
-**`somente_conciliacao` NÃO é `duplicada`.** A compra agregada é legítima; ela só não é a
-cobrança. Marcar como duplicada mentiria sobre a natureza do dado e atrapalharia a revisão.
+**Reconhecimento com uma única linha:** não é preciso esperar duas faturas. Quando
+`valor do Pluggy = valor do PDF × total de parcelas` (tolerância de R$ 1,00), já vira agregado.
+Exemplo validado: ANJOS DE QUINTAL, R$ 2.160,00 em 6×; o DRE contabiliza R$ 360,00/mês e
+R$ 2.160,00 fica só como registro técnico, nunca somado de novo.
 
-**A exclusão mora na view `cartao.lancamento_financeiro`**, que é o ponto único por onde passam
-DRE, relatórios, totais de Lançamentos e pendências — mexer lá vale para todos de uma vez. A
-tela de Lançamentos e a conciliação leem `cartao.transacao` direto, por isso o agregado continua
-aparecendo e podendo ser vinculado.
+**Data da parcela gerada = `periodo_fim` da fatura que a cobrou.** Não usar a data impressa: numa
+parcela ela é a da COMPRA ORIGINAL, fixa em toda reimpressão mensal.
 
-**Data da parcela gerada = `periodo_fim` da fatura que a cobrou.** Não dá para usar a data
-impressa na linha: numa parcela ela é a da COMPRA ORIGINAL, fixa em toda reimpressão mensal.
+Resultado medido: `nov/25: 43.904,64 → 25.406,01`, `ago/26: 55.395,59 → 60.862,16`.
 
-Resultado medido em produção (92 agregados marcados, 331 parcelas geradas):
-`nov/25: 43.904,64 → 25.406,01` · `ago/26: 55.395,59 → 60.862,16`. A despesa saiu do mês da
-compra e foi para os meses em que foi cobrada.
+**Consequência esperada, não é erro:** parcela que só será cobrada em fatura futura deixou de
+contar antecipadamente. Parcelamento com parcela anterior a jul/2025 perde essa despesa, porque
+não existe fatura importada cobrindo o período; importar faturas mais antigas recupera
+automaticamente.
 
-**Sincronização do Pluggy não desfaz nada disto** (verificado em 29/08/2026, 2.336 transações
-atualizadas, 0 novas: DRE, vínculos, duplicidades e conciliação idênticos antes/depois). O
-`UPSERT` do worker só escreve `status`, `valor_brl`, `data_transacao` e os carimbos — não toca em
-`somente_conciliacao`, `substituido_por`, `duplicada`, categoria nem dimensões. **Atenção:**
-`data_transacao` PODE mudar se o Pluggy corrigir fuso/data, e isso move o lançamento para dentro
-ou fora do ciclo de uma fatura. Os vínculos não se perdem (são por id), mas a lista de órfãos
-pode oscilar — se acontecer, rodar o vínculo automático de novo.
+**"Revisar parcelamentos" não é consulta sem efeito** — redistribui o DRE entre meses. A tela roda
+antes o mesmo código em modo `preview` (estritamente somente leitura), mostra quantas compras e
+parcelas serão afetadas e exige confirmação explícita. É limitada ao cartão da fatura aberta.
 
-**Consequência esperada, não é erro:** a despesa total caiu R$ 15.956,42. Parcela que só será
-cobrada em fatura futura deixou de contar antecipadamente — correto no regime de caixa; ela
-entra quando a fatura do mês for importada. **Mas atenção:** parcelamento com parcela anterior a
-jul/2025 perde essa despesa, porque não existe fatura importada cobrindo o período. Importar
-faturas mais antigas recupera automaticamente (a sincronização é idempotente).
+## 4.6 Sincronização do Pluggy
 
-## Hierarquia de fontes — CARTÃO DE CRÉDITO UNICRED (aprovada em 29/08/2026)
+**Pluggy é a origem bancária, não o dono da classificação.** O `UPSERT` do worker só escreve
+`status`, `valor_brl`, `data_transacao` e os carimbos. Nunca pode sobrescrever categoria manual,
+Responsável, Projeto, Portfólio, observação, OK, duplicidade, rateio, `somente_conciliacao` ou
+`substituido_por`.
 
-**Escopo:** só o cartão de crédito da Unicred. Cartão Nubank e conta corrente ainda não foram
-avaliados e provavelmente precisam de regras próprias — conta corrente não tem fatura, então a
-hierarquia lá nasce diferente (o extrato do Pluggy vira a única fonte de "houve cobrança").
+Verificado em 29/08/2026 (2.336 transações atualizadas, 0 novas): DRE, vínculos, duplicidades e
+conciliação idênticos antes/depois.
+
+**Atenção:** `data_transacao` PODE mudar se o Pluggy corrigir fuso/data, e isso move o lançamento
+para dentro ou fora do ciclo de uma fatura. Os vínculos não se perdem (são por id), mas a lista de
+órfãos pode oscilar — se acontecer, rodar o vínculo automático de novo.
+
+**Correção de horário Unicred (migração 43):** o Pluggy entregava +3 horas nessa conta.
+Referência confirmada na Visa: DELTA VIDEIRA, R$ 220,01, 13/08/2026 às **15:49**, que o sistema
+mostrava como 18:49. A migração subtraiu 3h **só** de registros Pluggy da Unicred Conjunta,
+guardando o estado em `cartao.horario_backup_v43`; o worker aplica a mesma normalização a novas
+sincronizações. **Horários exatamente 00:00 são preservados** — representam data sem hora
+confiável, e mover levaria ao dia anterior. **Não aplicar a Nubank ou conta corrente sem antes
+validar um evento concreto no app da instituição.**
+
+---
+
+# 5. Hierarquia de fontes — CARTÃO DE CRÉDITO UNICRED
+
+**Escopo:** só o cartão de crédito da Unicred (`b6243125-dca2-42b2-8c20-0825782c6d8d`). Nubank e
+conta corrente ainda não foram avaliados e provavelmente precisam de regras próprias — conta
+corrente não tem fatura, então o extrato do Pluggy vira a única fonte de "houve cobrança".
 
 > **A fatura manda sobre o que foi cobrado. O Pluggy manda sobre o que aconteceu.
 > O usuário manda sobre o que significa.**
 
 | Campo | Manda | Por quê |
 |---|---|---|
-| A cobrança existiu? | **Fatura** | É a prova do que a operadora cobrou. Sem linha, não houve cobrança. |
-| Valor cobrado | **Fatura** | Idem. |
-| Mês da parcela | **Fatura** (`periodo_fim`) | A data impressa na linha é a da compra original. |
-| Data/hora da compra à vista | **Pluggy** | Traz data e hora reais; a fatura só o dia. |
-| Estabelecimento (detalhe) | **Pluggy** | Traz cidade/país; a fatura abrevia. |
-| Compra ainda não faturada | **Pluggy** | Comprou após o fechamento: existe, sem fatura ainda. |
-| Categoria, dimensões, observação | **Usuário** > regra > Pluggy | Regra antiga do projeto. |
-| Conferida (OK) | **Só usuário** | Regra antiga do projeto. |
+| A cobrança existiu? | **Fatura** | é a prova do que a operadora cobrou |
+| Valor cobrado | **Fatura** | idem |
+| Mês da parcela | **Fatura** (`periodo_fim`) | a data impressa é a da compra original |
+| Data/hora da compra à vista | **Pluggy** | traz data e hora reais; a fatura só o dia |
+| Estabelecimento (detalhe) | **Pluggy** | traz cidade/país; a fatura abrevia |
+| Compra ainda não faturada | **Pluggy** | comprou após o fechamento: existe, sem fatura ainda |
+| Categoria, dimensões, observação | **Usuário** > regra > Pluggy | |
+| Conferida (OK) | **Só usuário** | |
 
 Nenhuma fonte sobrescreve as outras fora do seu campo.
 
-### Os três estados de um lançamento (não confundir)
+**A fatura é a fonte quando o Pluggy não sincroniza.** Se a operadora cobrou, o dinheiro saiu: a
+linha vira lançamento. Vale nos dois sentidos — pedágio e IOF **aumentam** a despesa, a
+bonificação da anuidade **reduz** (é o crédito que o Pluggy nunca mandava, deixando só a
+cobrança).
 
-- **`somente_conciliacao`** — registro de conciliação, não é evento de caixa. Hoje: a compra
-  parcelada agregada. Visível, vinculável, fora do resultado.
-- **`substituido_por`** (uuid → outra transação) — este lançamento é o **mesmo evento real** que
-  outro; só o outro conta, e o vínculo 1-para-1 diz qual. Cobre o *pending → posted* (o eco
-  aponta para a compra consolidada) e a *parcela mensal repetida* (aponta para a parcela que a
-  fatura gerou naquele mês).
-- **`duplicada`** — só o que sobrar: mesma cobrança duas vezes, sem estorno e sem par
-  identificável. Se nada cair aqui na prática, o campo pode ser aposentado.
-
-**Cobrança dupla REAL da operadora não usa nenhum dos três.** Ela vem como cobrança + estorno,
-os dois lançamentos legítimos, que se anulam sozinhos no resultado — marcar qualquer um quebraria
-a conta (esconderia a cobrança e deixaria o estorno negativo solto). Ela aparece **só** na
-conciliação do PDF, no bloco "cobranças repetidas na própria fatura", que mostra o estorno e tem
-o "conferido" para registrar a revisão humana.
-
-### Tela `/relatorios/duplicidades-fatura`
-
-Classifica no servidor (nunca por heurística sobre HTML) em quatro baldes: *parcela cobrada de
-novo*, *eco pending → posted*, *precisa de revisão* e *aguardando a próxima fatura* (compra perto
-do fechamento, que entra na fatura seguinte — não é duplicidade e não tem ação).
-
-**Armadilha já resolvida:** agrupar parcelamento por `lojista + nº de parcelas` COLIDE — MECANICA
-HOCHIOVE tem 6× R$583,33 e 6× R$1.316,66, e SESI FARMACIA tem vários. **O valor da parcela entra
-na chave.** Foi essa colisão que fez o primeiro levantamento subcontar (R$ 9.907,69 em vez dos
-R$ 18.915,71 reais).
-
-**Outra armadilha:** `"Parcelado Lojista - Visa - X"` é o parcelamento inteiro (agregado);
-`"Parcela Lojista Visa - X"` é a cobrança de UMA parcela. Só a forma mensal pode entrar em
-"evidência inequívoca" — um agregado sem vínculo costuma ser parcelamento novo cujas parcelas
-ainda vão aparecer, e marcá-lo apagaria compra real.
-
-### Resultado aplicado em 29/08/2026
-
-74 parcelas repetidas + 35 ecos vinculados via `substituido_por`. Despesa de 2026 caiu de
-R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 não mudou: o fenômeno só existe a
-partir de **abril/2026**, quando o Pluggy mudou o comportamento nessa conta e passou a mandar as
-mensais além do agregado. Naquele estágio intermediário sobraram 11 lançamentos para revisão
-humana (R$ 1.678,72) e 7 aguardando a próxima fatura (R$ 1.232,52); as etapas posteriores
-resolveram o restante e encerraram a tela de duplicidades sem pendência conhecida.
-
-## Incidente de parcelamentos contados em dobro — identificado e resolvido em 29/08/2026
-
-Depois que o vínculo persistente entrou, ficou visível que **26 parcelamentos estavam no Pluggy
-com as duas representações ao mesmo tempo**: a compra inteira (valor cheio) E as cobranças
-mensais. Como o agregado já cobre todas as parcelas, cada mensal por cima entra duas vezes na
-despesa e **infla o DRE**.
-
-São dois mecanismos distintos:
-
-**Família 1 — "eco da compra": 21 lançamentos, R$ 2.268,07.** Transação individual de UMA
-parcela, **2 dias antes** do agregado (19 dos 21 casos). É o ciclo PENDING → POSTED que não
-fecha: o Pluggy registra a autorização e depois registra de novo consolidado, sem remover a
-primeira. Sinal claro: pares com 1 centavo de diferença (R$43,34/R$43,33 PITTOLCALCADOS,
-R$67,19/R$67,18 HNA, R$31,08/R$31,06 FARMACIA SAGRADO) — arredondamento da parcela.
-
-**Família 2 — "mensais tardias": 34 lançamentos, R$ 7.639,62.** Cobranças **sempre no dia 12**
-(12/06, 12/07, 12/08 de 2026), até 283 dias depois do agregado. **Nenhuma existe antes de
-junho/2026** — o Pluggy mudou o comportamento nessa conta nessa data e passou a emitir as
-parcelas mensais além do agregado. É por isso que o órfão é quase sempre 12/07/2026: no ciclo de
-agosto chegam duas mensais para uma única parcela impressa.
-
-Caso exemplar rastreado ponta a ponta — **OTICA CALLIARI, Ronaldo, 10× R$316 = R$3.160**,
-comprado em 02/11/2025. A fatura cobrou as 10 parcelas certinho. O Pluggy mandou o agregado de
-R$3.160 **mais** R$316 em 12/06, 12/07 e 12/08. Total no sistema: R$4.108. Sobrando R$948.
-
-**Anomalia separada revisada durante a conciliação:** FARM GEREMIAS (Andrea) 3× R$63,30 tinha
-**dois agregados** (26/11/2025 e 10/07/2026, ambos R$189,90) e linhas duplicadas nas faturas.
-Foi um dos casos que exigiram decisão humana; consultar o vínculo e o log, não refazer por
-heurística se o mesmo padrão reaparecer.
-
-O primeiro levantamento encontrou R$ 9.907,69, mas estava incompleto: parcelamentos diferentes
-do mesmo lojista e com o mesmo número de parcelas colidiam na chave. Depois de incluir o valor da
-parcela, o excesso real ficou em **R$ 18.915,71**. A solução final não usa `duplicada`: 74 parcelas
-repetidas e 35 ecos foram ligados ao lançamento que os substitui por `substituido_por`. Assim o
-mesmo evento conta uma vez, continua visível e mantém uma relação auditável e reversível.
-
-**Matcher já corrigido (commit `87a664b`):** quando o parcelamento TEM agregado, todas as linhas
-do grupo apontam para ele (`_melhor_agregado` roda antes do casamento 1:1). Antes algumas
-parcelas ficavam presas a uma mensal de mesmo valor — escolha arbitrária que ainda escondia a
-duplicata atrás de um vínculo. Com a correção os órfãos de agosto/2026 subiram de 29 para 51:
-**são as duplicatas ficando visíveis**, não regressão. Refazer vínculos de uma fatura já
-existente: `POST /api/fatura/<id>/vincular-automatico` com `{"refazer": true}` — apaga só
-`origem='automatico'`, nunca o manual.
-
-**Por que o regime de caixa sozinho não resolvia:** as parcelas geradas pela fatura substituem o
-agregado (que saiu do resultado), mas as mensais e ecos do Pluggy continuavam por cima. Foi o
-vínculo `substituido_por`, e não uma exclusão ou marca genérica de duplicidade, que retirou os
-R$ 18.915,71 excedentes do resultado.
-
-## Cobranças que só existem na fatura (aplicado em 29/08/2026)
-
-Terceiro tipo de pendência, ao lado das duplicidades: **a operadora cobrou e o Pluggy nunca
-sincronizou**. A despesa (ou o crédito) simplesmente não existia no resultado.
-
-Rota `POST /api/faturas/criar-cobrancas-sem-pluggy` (`preview: true` levanta sem gravar; `ano`
-limita o alcance). **Trava de segurança:** recusa (409) se ainda houver lançamento do Pluggy sem
-vínculo esperando decisão — sem órfão do outro lado, criar pela fatura não pode duplicar.
+**Criar lançamento pela fatura só é seguro com o outro lado zerado.** A rota
+`POST /api/faturas/criar-cobrancas-sem-pluggy` recusa (409) enquanto houver lançamento do Pluggy
+sem vínculo esperando decisão — sem órfão do outro lado, não há como duplicar. `preview: true`
+levanta sem gravar; `ano` limita o alcance.
 
 Tipos com categoria fixa, conferidos um a um contra o PDF: `Unicred TAG` → Pedágio,
-`Anuidade - bonificação` → Tarifas do Cartão (é o crédito que estorna a anuidade, e o Pluggy
-mandava só a cobrança), `IOF compra internacional` → IOF, `ESTORNO` → sem categoria fixa.
-O resto nasce sem categoria e passa por `aplicar_regras()`.
+`Anuidade - bonificação` → Tarifas do Cartão, `IOF compra internacional` → IOF, `ESTORNO` → sem
+categoria fixa. O resto nasce sem categoria e passa por `aplicar_regras()`.
 
-**Resultado:** 1.135 lançamentos criados (80 + 15 em 2026 + 1.040 em 2025), R$ 159.464,93.
-**As 20 faturas (01/2025 a 08/2026) fecham 100%** — nenhuma linha sem vínculo, nenhum órfão do
-Pluggy. DRE: 2025 de R$ 167.590,71 para R$ 309.144,60; 2026 de R$ 475.022,75 para
-R$ 487.279,16; e R$ 6.106,42 caíram em 2024 (o ciclo da fatura 01/2025 começa em 17/12/2024).
-O salto de 2025 é o número real: antes o ano estava subestimado em quase metade, porque o
-Pluggy só passou a sincronizar esse cartão em **22/07/2025**.
+Resultado da aplicação (29/08/2026): 1.135 lançamentos criados, R$ 159.464,93. O salto de 2025 é
+real — o Pluggy só passou a sincronizar esse cartão em **22/07/2025**, então o ano estava
+subestimado em quase metade.
 
-## Lançamento "fora do resultado" e como a tela mostra isso
+---
 
-A tela de Lançamentos lê `cartao.transacao` **direto**, então mostra também o que a view
-financeira exclui: `substituido_por` (mesmo evento que outro) e `somente_conciliacao` (a compra
-parcelada inteira). Sem marca visual, dois lançamentos de mesmo valor e data aparecem lado a lado
-sem pista de que só um conta — e quem revisa conclui que há duplicidade no DRE. Aconteceu:
-SESI FARMACIA 12/08/2026, a parcela gerada pela fatura e a cobrança do Pluggy, ambas R$ 41,23.
+# 6. Conciliação de fatura em PDF
 
-Hoje a linha fica esmaecida, com a descrição riscada e um selo **"fora do resultado"** cujo
-tooltip diz o motivo (classe `fora-resultado` + `.selo-fora` no `app.css`). **Ao criar um estado
-novo que tire lançamento do resultado, marcar aqui também** — senão a tela mente por omissão.
+Tela `/relatorios/conciliar-fatura`. Confere a fatura oficial da Unicred contra o que o Pluggy
+sincronizou. **A fatura é a autoridade**: ela é a prova do que a operadora cobrou.
 
-### Defasagem de um mês no parcelamento recém-comprado (comportamento esperado)
+## 6.1 O erro de arquitetura já corrigido
 
-Enquanto o agregado atende **uma única** linha de fatura, ele não é reconhecido como agregado
-(isso exige 2+), não vira `somente_conciliacao` e **o valor cheio conta no mês da compra** — o
-oposto do regime de caixa. Corrige-se sozinho quando a fatura do mês seguinte traz a Parc.2/N.
-Exemplo: `08/08/2026 Parcelado Lojista - SESI FARMACIA R$ 235,48` (6× R$ 39,25) contando inteiro
-em agosto. Se algum dia incomodar no fechamento mensal, dá para antecipar gerando as parcelas
-futuras a partir do número de parcelas impresso na fatura.
+Até 29/08/2026 a conciliação era **sem memória**: recalculava tudo por heurística a cada abertura
+e não tinha onde registrar decisão humana. O resultado mudava sozinho entre uma visita e outra, a
+mesma cobrança aparecia como sobra em dois meses seguidos, e parcelamento era impossível de
+resolver.
 
-## Revisão técnica do conjunto publicado — 29/08/2026
+`cartao.fatura_vinculo` (migração 23) é uma relação **N:N** entre `fatura_linha` e `transacao`. O
+N:N não é luxo: um parcelamento que o Pluggy gravou como UMA transação corresponde a **uma linha
+por mês, em faturas diferentes**. Com "usado/não usado" dentro de uma fatura isso era
+irrepresentável, e um mês roubava a transação do outro.
 
-Revisão feita sobre `cfa183e..7c1ce99`, seguida das correções de permissões, upload e precisão
-monetária, com suíte local de **216 testes aprovados e 6 ignorados**. Pontos positivos que devem ser
-preservados:
+Regras:
 
-- a conciliação deixou de ser uma heurística sem memória e passou a guardar vínculos N:N;
-- import, criação de parcelas e reenvio do mesmo PDF têm travas de idempotência;
-- `somente_conciliacao`, `substituido_por` e `duplicada` representam causas diferentes, em vez
-  de esconder tudo sob uma única marca;
-- a view financeira centraliza o que entra no DRE, reduzindo o risco de cada relatório calcular
-  um número diferente;
-- o Pluggy continua sem autoridade para sobrescrever classificação e OK humanos;
-- houve melhoria de auditoria, testes sintéticos dos casos reais e proteção contra exclusão de
-  dimensões ainda em uso.
+- Transação já vinculada não é reivindicada pelo casamento 1:1 nem por avulsa.
+- **Exceção deliberada:** o fallback de parcelamento agregado PODE reusar transação já vinculada.
+- Vínculo `origem='manual'` nunca é sobrescrito pelo automático.
+- O casamento automático só roda em **POST**, nunca em GET. GET que grava faria a tela mudar
+  sozinha e furaria a checagem de Origin/Referer.
+- **Ao rodar o vínculo automático em lote, ir da fatura mais antiga para a mais nova** — o
+  bloqueio depende dos vínculos já existentes.
+- Refazer vínculos: `POST /api/fatura/<id>/vincular-automatico` com `{"refazer": true}`.
 
-Pontos de atenção encontrados, por prioridade:
+## 6.2 Datas do ciclo — três armadilhas resolvidas
 
-1. **Resolvido — “ver relatório” foi separado de “editar conciliação”.** A migração 26 criou
-   `conciliacao_editar`, preservou o acesso de Administradores/Operadores e retirou as ações de
-   gravação do perfil Somente leitura. Há testes cobrindo todas as rotas mutáveis dessa tela.
-2. **Resolvido — PDF limitado e validado antes de processar.** O servidor recusa acima de 10 MB,
-   conteúdo sem assinatura `%PDF-` e documentos acima de 50 páginas. Há mensagem clara e testes
-   inclusive para o caminho 413; o original continua armazenado somente após o parser aceitar.
-3. **Resolvido no alcance atual — testes automatizados do parser ampliados.** Há casos sintéticos
-   de referência, vencimento, titular, parcela, valor, estorno, compra internacional com conversão
-   em três linhas e lançamentos atravessando várias páginas/virada de ano, além das travas de
-   entrada. A validação dos PDFs reais continua necessária sempre que a Unicred mudar o layout.
-4. **Resolvido — conciliação usa `Decimal`/centavos exatos.** O parser preserva `Decimal` até o
-   banco; matcher, tolerâncias, estornos e totais trabalham com inteiros em centavos. `float` só
-   aparece na saída para manter o contrato numérico das telas/APIs. Há testes de erro binário,
-   soma de mil centavos, arredondamento `ROUND_HALF_UP` e limite exato da tolerância de R$ 1,00.
-5. **Operacional — manter validação pós-deploy e planejar staging.** A suíte está saudável, mas
-   `main` publica direto no sistema familiar. Até existir staging, qualquer mudança em matcher,
-   migração ou view financeira precisa registrar os totais antes/depois e validar as telas
-   logadas após a troca do container.
+1. **A Unicred não imprime a data de fechamento em lugar nenhum do PDF.** Conferido nas 14
+   faturas: só existem `REF.:`, `VENCIMENTO:` e o resumo de saldo. Não procurar de novo.
+2. **O intervalo vencimento−fechamento NÃO é fixo** (varia de 9 a 14 dias). Não cabe fórmula. O
+   usuário conferiu as datas reais no app do Unicred (tela "Melhor dia para compra") e elas estão
+   em `FECHAMENTOS_CONHECIDOS`, em `fatura_unicred.py`. **Preencher ali conforme ele confirmar
+   novos meses.** Fora da tabela, cai na heurística (última compra impressa) com trava: nunca
+   fecha no dia do vencimento ou depois.
+3. **`periodo_inicio` é calculado na LEITURA, nunca congelado no import**
+   (`_ciclo_inicio_encadeado`). Congelar tornava o resultado dependente da ORDEM de envio dos
+   PDFs — aconteceu com as 6 faturas de 2025. **O palpite de 35 dias só vale quando não existe
+   fatura anterior daquela conta.**
 
-Validação do deploy `5e12938` (precisão monetária): as **20 faturas** de 01/2025 a 08/2026
-continuaram com ✓/100%. O DRE 2026 ficou idêntico antes e depois: receitas **R$ 458.242,64**,
-despesas **R$ 487.279,16**, resultado **R$ -29.036,52** e investido/bens **R$ 16.080,86**.
+## 6.3 O que cada número da tela significa
 
-## Pendências conhecidas
+- **Total impresso no PDF** — o SALDO TOTAL da fatura.
+- **Soma das linhas lidas** — soma das linhas extraídas, sem "Pagamento Recebido". É **fatura
+  contra fatura**: prova que a leitura do PDF está correta. Tem que ser igual ao total impresso.
+- **Já vinculado ao Pluggy** / **Falta vincular** — aí sim é contra o Pluggy. "Falta vincular"
+  **não é** `Total − Soma`; é o quanto da fatura ainda não foi conciliado.
+- **Despesas no DRE** é um subconjunto explicado por natureza. Exibir também **Fora do DRE** em
+  vez de forçar os dois números a serem iguais.
 
-### Ação do usuário (nada disso o Claude pode fazer sozinho)
+"Pagamento Recebido" é a fatura ANTERIOR sendo quitada; o próprio SALDO TOTAL da Unicred não a
+inclui. Fica fora das duas somas — se entrar em um lado só, a tela acusa diferença de dezenas de
+milhares sem erro nenhum (aconteceu: R$ 16.647,99 falsos). **Nunca vira lançamento e nunca trava
+o "fecha 100%"** — cobrar vínculo dela travava as 7 faturas do início de 2025.
 
-- **Rotar o token do Coolify.** O token foi colado no chat durante a sessão de 21/08/2026 e
-  deve ser considerado comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo.
-- **Revisar `/pendencias`.** O último retrato visto em produção (24/08/2026) mostrava **1
-  categoria sem natureza e 4 categorias de despesa sem centro de custo**. Os nomes/contagens
-  mudam conforme o Pluggy traz categorias e o usuário classifica; abrir a tela de novo antes de
-  agir. Categoria sem natureza assume `despesa` e pode inflar o DRE.
+**As duas telas medem coisas diferentes.** A conciliação pergunta *"a linha tem vínculo?"*
+(`tem_vinculo = bool(vinculos) or bool(transacao_id_criado)`). A detalhada pergunta *"sobrou um
+lançamento que conta?"*. Uma linha pode ter vínculo e mesmo assim não ter lançamento elegível —
+foi o que revelou o bug de §6.6. Ao investigar divergência entre elas, lembrar disso.
 
-### A validar com o usuário (dado que falta)
+## 6.4 Consolidação de data: por que não existe botão em massa
 
-**Andar de cima da residência alugado para a BRDrive.** A casa tem dois andares:
-a família mora no porão e a parte de cima é alugada para a BRDrive por
-R$ 1.500–1.700/mês. Isso significa que (a) há receita de aluguel a identificar
-nos recebimentos da BRDrive, hoje possivelmente confundida com pró-labore, e
-(b) parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
-Levantado em 22/08/2026, a ajustar depois.
+Existiu por algumas horas em 29/08/2026 e **corrompeu 22 datas reais** de agosto/2026, jogando-as
+para a data da compra original (algumas em novembro/2025). Causa: numa linha de parcela a data
+impressa é a da **COMPRA ORIGINAL**, fixa em toda reimpressão mensal. Foi revertido no mesmo dia
+pelo log de auditoria.
 
-**Duplicidades antigas.** O Pluggy já mandou o mesmo débito duas vezes (Cond Sta
-Lúcia, 21/11/2025 — conferido na conta, ocorreu uma vez só). A tela de
-Lançamentos agora avisa quando encontra repetição no mês aberto, mas **os meses
-anteriores nunca foram varridos**. Vale uma passada mês a mês.
-O caso sistemático dos parcelamentos Unicred de 2026 foi resolvido separadamente com
-`substituido_por`; não confundir com estas suspeitas históricas ainda não revisadas.
+Decisão do usuário: consolidação de data, se voltar, é **por lançamento, um a um**, dentro do
+painel de vínculo, junto com observação — nunca em lote por fatura. **Não reintroduzir sem uma
+fonte de data mensal confiável, que a fatura não fornece.**
 
-**Horários 00:00 e diferença de três horas.** Em Conta Corrente Ronaldo/Andrea há movimentos
-que chegam às 00:00 e, em agosto, suspeitas com diferença de 3h. Não usar horário isoladamente
-para apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
-revisar e marcar duplicidades manualmente. O sistema deve continuar trazendo tudo do Pluggy.
+## 6.5 Armadilhas do matcher (todas custaram caro — não repetir)
 
-**Depósitos em espécie sem origem identificada.** A categoria `Transfer - Cash`
-tem 32 lançamentos; os maiores em 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00
-(10/08) e +R$ 8.072,30 (21/07). Estão em natureza `fluxo`, então **entram como
-receita**. Ronaldo não soube dizer a origem de cabeça (22/08/2026) — precisa ser
-caso a caso. Enquanto não for, esses valores podem estar inflando a receita.
+Cada uma tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer em `_conciliar_linhas`,
+`_classificar_orfaos` ou `_vincular_automatico`, leia esta lista.
 
-### Retomada recomendada (atualizada em 29/08/2026, fim da sessão)
+1. **Chave de agrupamento sem o valor.** Agrupar parcelamento por `titular + lojista + nº de
+   parcelas` **colide**: MECANICA HOCHIOVE tem 2× R$135,00 e 2× R$233,50 na MESMA fatura. Colidindo,
+   o valor da parcela vira a média e nenhum agregado é encontrado. **O valor entra sempre na
+   chave.** Esse erro apareceu duas vezes no mesmo dia — no código e na análise feita por fora.
+2. **Um cursor por conexão — consumir antes da próxima consulta.** Inserir um `cur.execute` entre
+   o `execute` e o `fetchall` de outra consulta faz a primeira sumir **em silêncio**: a tela
+   mostrou "nenhuma cobrança em dobro" com tudo zerado, HTTP 200, sem erro.
+3. **Lançamento nascido da fatura não é candidato.** A parcela gerada tem o valor exato e cai
+   dentro do ciclo, então disputa a linha com o agregado e vira órfã. Ela não é um lançamento do
+   Pluggy — ela **é** a fatura. Filtrada por `fatura_linha.transacao_id_criado`.
+4. **Vínculo `origem='fatura'` não bloqueia o vínculo com o agregado.** São os dois lados: a
+   parcela gerada é o evento de caixa, o agregado é o registro da compra.
+5. **"Refazer vínculos" só apaga `origem='automatico'`.** Apagar o vínculo `fatura` deixava a
+   parcela gerada órfã para sempre (a geração é idempotente e não recria). Deu 340 falsos
+   positivos numa rodada.
+6. **Janela de candidatos vai além do fim do ciclo.** O Pluggy às vezes data a compra 1–2 dias
+   depois do que a fatura imprime (D MORI: fatura 11/02, Pluggy 12/02). Busca 3 dias além.
+7. **Comparar descrição inteira nunca casa o par do mesmo evento.** O Pluggy grava o mesmo evento
+   com prefixos diferentes. `_tokens_significativos()` remove o prefixo genérico e exige 2+ tokens
+   em comum, mesmo valor e ±1 dia.
+8. **`"Parcelado Lojista"` ≠ `"Parcela Lojista"`.** O primeiro é o parcelamento inteiro
+   (agregado); o segundo é a cobrança de UMA parcela. Só a forma mensal pode entrar em "evidência
+   inequívoca" — um agregado sem vínculo costuma ser parcelamento novo cujas parcelas ainda vão
+   aparecer, e marcá-lo apagaria compra real.
+9. **Reenviar o PDF apaga os vínculos da fatura.** As linhas são recriadas com ids novos e o
+   `ON DELETE CASCADE` leva `fatura_vinculo` junto. `_revincular_lancamentos_da_fatura()` roda no
+   import e na sincronização de parcelas.
+10. **Cada tela tem que aplicar os MESMOS filtros de "já resolvido".** A lista de órfãos não
+    excluía `substituido_por` nem `somente_conciliacao`: 57 falsos pendentes em 08/2026 enquanto a
+    outra tela dizia "nada pendente". **Ao criar um estado novo, procurar TODAS as consultas que
+    listam pendência.**
+11. **Eco de parcelamento NOVO precisa de regra própria.** Enquanto o agregado atende UMA linha
+    só, ele não é reconhecido como agregado e o eco escapa das outras regras. A regra: existe
+    linha de fatura do mesmo estabelecimento **já vinculada**, e o órfão vale a parcela dela ou o
+    parcelamento inteiro, dentro de 5 dias. A comparação usa a `descricao_base` da **linha**.
+12. **Valor negativo não casa por descrição.** O Pluggy chama o mesmo pagamento de "Pagamento
+    recebido" e de "Pag de Fatura Via Deb Aut" — zero palavras em comum. Para negativo o par é
+    **valor idêntico no MESMO dia**, com a outra gravação já vinculada.
+13. **Lançamento criado pela fatura: parcela usa o MÊS COBRADO.** Datar pela data impressa mandou
+    R$ 11.027,44 para 2025. Parcela usa `periodo_fim`; compra avulsa usa a data impressa.
+14. **Commit também quando só houve correção.** O `UPDATE` que conserta datas só era commitado
+    quando havia linha nova. Sem linha nova, a rota respondia "11 datas corrigidas" e **nada era
+    gravado**, em silêncio, com sucesso na resposta.
+15. **Estorno só anula quando os dois lados ainda contam.** Se o negativo já foi excluído, o par
+    deixou de se anular e a cobrança positiva ficou sozinha — ela tem que seguir para as outras
+    regras, não ser dada como resolvida.
+16. **Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os
+    dois são legítimos e se anulam sozinhos.
+17. **Coincidência de valor total nunca é prova de família.** A parcela 1/5 de MERCADOLIVRE foi
+    ligada a YELLOW BOX PIZZARIA porque ambas davam R$ 164,00. O matcher agora exige, além do
+    valor, ao menos um token significativo do estabelecimento em comum.
 
-**O cartão de crédito Unicred está fechado ponta a ponta.** As 20 faturas (01/2025 a 08/2026)
-fecham 100%, a tela de duplicidades está limpa e a sincronização do Pluggy foi validada como
-não-destrutiva. Não há pendência conhecida nessa frente.
+## 6.6 A marca de agregado sem caminho de volta (migração 44)
 
-Próximas frentes, nesta ordem:
+**O defeito.** `somente_conciliacao` só era POSTA, nunca retirada. Quando o conjunto de vínculos
+mudava depois (refazer vínculos, reenvio de PDF, desvincular na mão), a transação deixava de ser
+agregado e **continuava fora do resultado para sempre**, sem nenhuma parcela ocupando o lugar
+dela.
+
+**O estrago.** Cinco compras **à vista** sumiram do DRE — R$ 1.167,38: SUPERVIZA R$ 584,83
+(jan/2026), DELTA VIDEIRA R$ 83,30 (dez/2025), SUPERVIZA R$ 268,75 e MP *PRODUTOS R$ 105,00
+(out/2025), POSTO CANOAS R$ 125,50 (set/2025).
+
+**Como se manifestava.** A linha do PDF *tinha* vínculo, com um lançamento correto do Pluggy. Mas
+esse único vínculo era inelegível, então a detalhada não achava lançamento principal e escrevia
+**"Validar: falta vínculo"** — mensagem enganosa: não faltava vínculo, faltava um lançamento
+**contabilizável**.
+
+**A correção.** A sincronização agora desmarca, com a trava: **nunca desmarcar quem já teve
+parcela gerada** a partir das suas linhas — se as parcelas existem, são elas que contam. O retorno
+antecipado "sem agregado nenhum" vale só para a prévia, porque sem agregado ainda pode haver marca
+obsoleta a retirar. Migração 44 corrigiu o dado, backup em `cartao.agregado_backup_v44`,
+**5 lançamentos devolvidos — exatamente os 5 previstos**.
+
+## 6.7 Duplicidades — `/relatorios/duplicidades-fatura`
+
+Classifica no servidor (nunca por heurística sobre HTML) em baldes: *parcela cobrada de novo*,
+*eco pending → posted*, *cobrança estornada* (sem ação), *precisa de revisão* e *aguardando a
+próxima fatura* (compra perto do fechamento — não é duplicidade, não tem ação).
+
+**Os dois mecanismos identificados:**
+
+- **Eco da compra (pending → posted):** transação individual de UMA parcela, **2 dias antes** do
+  agregado. O Pluggy registra a autorização e depois registra de novo consolidado, sem remover a
+  primeira. Sinal claro: pares com 1 centavo de diferença (arredondamento da parcela).
+- **Mensais tardias:** cobranças **sempre por volta do dia 12**, até 283 dias depois do agregado.
+  **Nenhuma existe antes de junho/2026** — o Pluggy mudou o comportamento nessa conta e passou a
+  emitir as parcelas mensais **além** do agregado.
+
+Caso exemplar: OTICA CALLIARI, 10× R$316 = R$3.160, comprado em 02/11/2025. A fatura cobrou as 10
+parcelas certinho; o Pluggy mandou o agregado **mais** R$316 em 12/06, 12/07 e 12/08.
+
+Aplicado em 29/08/2026: 74 parcelas repetidas + 35 ecos vinculados via `substituido_por`. Despesa
+de 2026 caiu de R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 não mudou.
+
+**Eco técnico não é divergência:** dois registros Pluggy com o mesmo instante, cartão e valor,
+para uma única cobrança oficial no PDF — um contabilizado, o outro preservado para auditoria. A
+equivalência só elimina o alerta quando data/hora, valor e final do cartão coincidem.
+
+
+---
+
+# 7. Telas e comportamento de interface
+
+## 7.1 Lançamentos: Resumida e Detalhada
+
+São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usuário. A Resumida
+privilegia classificação rápida; a Detalhada (`/lancamentos/fatura`) privilegia fatura,
+procedência, registros agregados e auditoria. **Ambas leem e gravam os mesmos campos** — não
+duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tabela própria.
+
+- A detalhada exige uma única origem de cartão e abre a fatura mais recente. Sem `account_id` na
+  URL, escolhe **a conta de crédito que tem fatura importada** — antes caía no primeiro cartão da
+  lista (Nubank, sem fatura) e a tela abria só com o erro, sem seletor, sem saída.
+- O botão Resumida volta ao intervalo oficial daquela fatura, preservando a origem.
+- Cada linha do PDF pode ter vários registros técnicos agregados, todos preservados. **Apenas o
+  lançamento financeiro principal é editável e contabilizado.** Clicar em qualquer área não
+  interativa da linha abre/recolhe os detalhes.
+- Ordem visual fixa dentro do grupo: lançamento principal, registros agregados um abaixo do
+  outro, detalhes técnicos de cada um e, **por último**, o editor único de classificação. Nunca
+  intercalar a classificação entre os registros — impede comparar candidatos em divergências.
+- Cada registro mostra a fonte: **`F`** = criado pela fatura em PDF, **`P`** = trazido pelo
+  Pluggy, com tooltip CSS imediato (não o `title` nativo).
+- **Titular/cartão** identifica quem realizou a compra e é separado da dimensão financeira
+  **Responsável**.
+- Cabeçalhos ordenáveis (Data, Descrição, Titular/Cartão, Parcela, Valor PDF, Classificação, OK);
+  ordenar é local, não recarrega e não desmonta o grupo.
+- Pesquisa local filtra as linhas já carregadas; linha principal e agregados aparecem ou somem
+  juntos. `Esc` limpa.
+- No filtro **Pendentes de OK**, ao marcar, a linha sai da fila **somente depois da confirmação do
+  servidor**, preservando filtros e rolagem. Nos demais filtros, marcar OK mantém a linha visível.
+- Navegação de mês, filtros e troca de tela criam **histórico real** — o botão Voltar do navegador
+  retorna ao estado anterior, com a rolagem preservada.
+
+## 7.2 Classificação obrigatória e famílias de parcelas
+
+**Categoria, Responsável, Projeto e Portfólio são obrigatórios para liberar o OK.** Observação é
+pessoal e opcional. A mensagem `Faltam: ...` atualiza durante o preenchimento, sem recarregar.
+
+Alterações de classificação e observação **salvam automaticamente** (selects na mudança;
+observação com espera curta e ao sair do campo), atualizando cards e estado em segundo plano sem
+perder linha aberta, rolagem ou foco. Projeto aplica seu Portfólio padrão antes do único
+salvamento. Projeto e Portfólio permitem cadastro rápido sem sair da tela.
+
+**Em famílias de parcelas confirmadas por vínculos persistidos**, Categoria, Responsável, Projeto,
+Portfólio e Observação são compartilhados entre todas as parcelas — editar uma aplica o conjunto
+completo às demais. **O OK nunca é propagado**: assina a conferência de cada cobrança mensal.
+
+**A família é determinada exclusivamente pelos vínculos persistidos da fatura com o agregado.**
+Nunca inferir família por descrição, data ou valor semelhante. Só preencher automaticamente quando
+houver um único valor não vazio e inequívoco; em conflito, deixar vazio para revisão humana. Nunca
+sobrescrever campo já preenchido.
+
+## 7.3 Observação pessoal × informação interna
+
+`transacao.observacao` **pertence exclusivamente ao usuário**. Nenhuma rotina de importação,
+conciliação, parcelamento ou duplicidade pode escrever mensagem técnica nesse campo.
+
+Mensagens do sistema usam `transacao.observacao_sistema`, ocultas por padrão, visíveis só em
+"Informações internas do sistema", não editáveis e nunca na coluna Observação.
+
+A migração 32 moveu **apenas textos completos reconhecidos**. Não usar busca aproximada nem
+`LIKE '%fatura%'`: apagaria nota pessoal. Se uma anotação não for correspondência exata dos
+modelos técnicos documentados, ela fica em `observacao`, mesmo mencionando fatura ou Pluggy.
+
+## 7.4 Lançamento "fora do resultado"
+
+A tela de Lançamentos lê `cartao.transacao` **direto**, então mostra também o que a view financeira
+exclui. Sem marca visual, dois lançamentos de mesmo valor e data aparecem lado a lado sem pista de
+que só um conta — e quem revisa conclui que há duplicidade no DRE. Aconteceu com SESI FARMACIA
+12/08/2026, ambos R$ 41,23.
+
+Hoje a linha fica esmaecida, com a descrição riscada e um selo **"fora do resultado"** cujo tooltip
+diz o motivo (classe `fora-resultado` + `.selo-fora`). **Ao criar um estado novo que tire
+lançamento do resultado, marcar aqui também** — senão a tela mente por omissão.
+
+Um registro `substituido_por` só é recolhido sob o lançamento que conta quando o vínculo explícito
+existir e ambos estiverem no filtro atual; o mesmo para `somente_conciliacao`, e apenas quando
+houver um único destino visível e inequívoco.
+
+### Defasagem de um mês no parcelamento recém-comprado (esperado)
+
+Enquanto o agregado atende **uma única** linha de fatura e o valor não bate com
+`parcela × total`, ele não vira `somente_conciliacao` e **o valor cheio conta no mês da compra**.
+Corrige-se sozinho quando a fatura seguinte traz a Parc.2/N.
+
+## 7.5 Fatura em andamento
+
+Para o ciclo ainda sem PDF, a Detalhada abre `Fatura <mês> · Em andamento`. O período começa no
+dia seguinte ao fim da última fatura oficial e termina hoje. Mostra lançamentos do Pluggy, total
+provisório, DRE provisório, classificação e pendências, **sempre com aviso de que o PDF não
+existe** e valores identificados como provisórios.
+
+**Um novo OK de cartão de crédito exige vínculo persistido com uma linha do PDF.** Na fatura em
+andamento o OK fica desabilitado na interface **e protegido no servidor** — a API recusa tentativas
+vindas de outra tela ou chamada direta. Classificação pode ser preparada antes; a conferência só
+depois da conciliação. OKs históricos não são apagados.
+
+Links usam **dois parâmetros reais**: `andamento=1&account_id=<conta>`. Nunca montar `&amp;` dentro
+de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde a conta.
+
+## 7.6 Semântica visual
+
+- **Verde** apenas para fechado/completo; **amarelo** para revisão humana pendente; **vermelho**
+  para divergência real; **roxo** para investimento ou natureza fora do DRE; **neutro** para
+  totais informativos. Despesa normal não deve parecer erro só por ser despesa.
+- **Cor nunca é a única explicação de estado:** pontos no início da linha, tooltip com todas as
+  situações, legenda e filtros equivalentes.
+- Linha com OK usa cinza-claro. Pendente no banco **não** colore o fundo (bloqueia o OK e aparece
+  na legenda/dica).
+- Diferença de até **R$ 1,00** pode ser arredondamento; acima é divergência vermelha. Mesmo abaixo
+  do limite, preservar os valores originais e nunca esconder diferença de vínculo ou quantidade.
+- Compra parcelada agregada **não é divergência**: quando o total equivale a
+  `valor da parcela × número de parcelas` (±R$ 1,00), o card não fica vermelho.
+- A coluna de classificação é silenciosa quando a despesa está completa. Faltando dado, lista
+  `Faltam: ...`; natureza neutra explica que fica fora do DRE; rateio misto informa isso.
+
+## 7.7 Comboboxes pesquisáveis
+
+Categoria, Responsável, Projeto e Portfólio usam o componente compartilhado `static/combobox.js`
+nas duas visualizações. O `<select>` original **continua como fonte de verdade**, preservando APIs,
+permissões, validações e salvamento automático.
+
+- Filtra por qualquer parte do texto, ignorando acento e caixa. Setas percorrem, Enter confirma,
+  Tab confirma a opção destacada e segue, Shift+Tab volta, Escape cancela. **Nunca criar ou
+  escolher silenciosamente uma opção que não esteja destacada.**
+- Visual final: 26px, campo transparente, borda normalmente invisível, sombra mínima; hover/foco
+  em cinza neutro (`#f2f2f0`) com contorno translúcido e escala 1,012. Obrigatório incompleto
+  mantém sinalização vermelha discreta. **Não exibir o lembrete textual `Enter`.**
+- O campo nativo fica oculto **também da árvore de acessibilidade** — leitores de tela encontram
+  só o combobox, sem controles duplicados.
+- Aplica-se a qualquer `select` com `data-pdm-combobox` ou `data-lazy-options`, inclusive inseridos
+  dinamicamente. **Nunca usar quantidade de opções como critério automático** — quebrou o
+  alinhamento dos filtros Fatura e Status. Seletores de navegação (cartão, fatura, status, ano,
+  tipo) continuam nativos, protegidos com `data-pdm-native`.
+- Campos pesquisáveis não podem causar rolagem horizontal. Em `/pendencias`, scripts de ações em
+  lote precisam verificar se `formLote` existe — a seção é condicional.
+
+## 7.8 Colunas ajustáveis
+
+Utilitário compartilhado, ligado com
+`<table class="compacta ajustavel" data-tabela="chave-unica">`. Redimensionar é **estilo
+planilha**: a vizinha compensa, a soma nunca muda e a tabela não estoura a tela. Preferências no
+`localStorage` (`pedemeia_tabela_<chave>`).
+
+- `data-sem-ordenar` / `data-sem-reordenar` desligam recursos. Usados no **Centro de Custos**, que
+  é hierárquico: ordenar embaralharia a hierarquia.
+- Ordenação numérica entende `R$ 1,234.56` e `R$ 1.234,56` — o separador decimal é o último `.` ou
+  `,` do texto.
+- **Quando um filtro recarrega a tabela por AJAX, chamar `ativarTabelaAjustavel()` de novo** — o
+  elemento antigo vai embora levando os listeners.
+- CSS de célula não pode vazar para o `<th>`: `.cel-origem { display:flex }` tirava o cabeçalho do
+  grid e a coluna seguinte desenhava por cima. Por isso a regra é `td.cel-origem`, com
+  `display:table-cell !important` defensivo nos `th[data-col]`.
+
+## 7.9 Identidade visual
+
+Nome **Pé de Meia**; logo oficial (meia de tricô com dinheiro) em fundo claro sólido no topbar e no
+login, embutida em base64 no Python. Bancos identificados por "selo" colorido em CSS puro (cor da
+marca + sigla de 2 letras) — o Pluggy não fornece logo utilizável. Tooltips customizados de 120ms,
+mais rápidos que o `title` nativo.
+
+**Favicon:** fica em `static/favicon.png`. Se sumir após deploy, verificar a referência versionada
+em `templates/base.html` e renovar o parâmetro de cache — **não recriar a imagem**.
+
+---
+
+# 8. Classificação automática
+
+## 8.1 Regras
+
+- Filtram por trecho da descrição e, opcionalmente, por valor absoluto (`<`, `<=`, `>`, `>=`, `=`).
+  A prévia mostra quais lançamentos pendentes receberão a regra.
+- **Nunca se aplicam a lançamento conferido nem a categoria escolhida manualmente.**
+- `regra_classificacao.account_id` limita a regra à origem; regra sem origem é geral. **Regras que
+  poderiam confundir conta corrente com cartão devem ter origem vinculada.**
+- Regras são globais e gravadas sobre a transação: uma regra criada em qualquer visualização vale
+  para ambas. O botão `+` só abre o cadastro já preenchido.
+- **Reaplicar** libera todos os pendentes ligados à regra, em qualquer mês; conferidos são
+  preservados.
+
+## 8.2 Consenso dos lançamentos com OK (`_consenso_por_lojista`)
+
+Aprende **só com lançamento conferido** — o OK é a única fonte sobre o que cada gasto significa.
+Exige **unanimidade e no mínimo duas evidências**.
+
+**Decide campo a campo, não pelo conjunto.** Um lojista pode ter categoria unânime e nenhum projeto
+consensual — é o posto que abastece o Jeep e o Tracker. Exigir os quatro campos juntos jogava a
+categoria fora junto com o projeto.
+
+**Canonização do lojista:** a mesma loja chega com e sem sufixo de cidade/país (`DELTA VIDEIRA` e
+`DELTA VIDEIRA VIDEIRA BR`). Usa a menor chave que seja prefixo da outra, **cortando sempre em
+limite de palavra** — sem isso `ESTACAO` engoliria `HIPER CENTER ESTACAO`. Sem canonizar, o alcance
+cai pela metade.
+
+**Nunca propaga projeto que começa com "Viagem "** — viagem é evento datado: o mesmo hotel ou Uber
+reaparece em outra viagem e o projeto antigo fica errado.
+
+Aplica **apenas em campo vazio**, e vazio inclui `transacao_dimensao` com `valor_id` NULL. O
+`ON CONFLICT` faz `DO UPDATE ... WHERE valor_id IS NULL`, nunca sobrescrevendo valor preenchido.
+
+**Consenso unânime não é prova de acerto** — pode ser erro repetido. Padrões reprovados na revisão
+humana de 01/09/2026 ficam na lista de recusados: `POUSADA FOGO*RESE` (pousada marcada como
+Combustível) e `ESTACAO` (ambíguo, recusado desde a migração 42).
+
+## 8.3 Estornos e cancelamentos
+
+- **Anuidade, tarifa e bonificação não são IOF.** `ANUIDADE` e `Est.Tarifa manutencao de conta` na
+  Unicred Conjunta usam **Tarifas do Cartão / Família / Serviços Financeiros / Vida Familiar**.
+- A cobrança entra como despesa e o crédito/bonificação reduz a mesma despesa. **Manter as duas
+  linhas** para auditoria; elas se anulam no DRE quando os valores forem iguais.
+- **IOF só por regra quando a descrição mencionar IOF explicitamente.** Nunca inferir pelo sinal
+  negativo nem por "tarifa", "anuidade", "bonificação" ou "estorno".
+- Para outros estornos, herdar a classificação do original **apenas quando houver exatamente um
+  candidato**: mesma origem, mesmo cartão quando informado, valor exatamente oposto, no máximo 30
+  dias. Persistir em `estorno_origem_id`. Zero ou mais de um candidato: não adivinhar.
+- A herança copia Categoria, Responsável, Projeto e Portfólio; **nunca copia Observação nem marca
+  OK.**
+
+## 8.4 Classificações decididas pelo usuário
+
+Decisões tomadas em 01/09/2026, sobre lojistas cujos OK divergiam entre si. **Aqui a fonte é a
+decisão do usuário, que vale inclusive contra a maioria dos OK já gravados** — por isso a migração
+46 corrigiu também lançamento conferido, sem tocar no OK.
+
+| Lojista | Categoria | Responsável | Projeto | Observação |
+|---|---|---|---|---|
+| CATIVA | Viagem | — | — | |
+| LETICIAKAYSER | Beleza | Andrea | Compras Pessoais | unha, despesa pessoal |
+| MP *REGIBARBERSHOP | Beleza | Ronaldo | Compras Pessoais | barbearia, despesa pessoal |
+| LISCIA | Beleza | **não definir** | — | depilação: pode ser Ronaldo, Amanda ou Andrea |
+| MP *PRODUTOS | Restaurantes | Ronaldo | Refeições fora | `futebol quarta` |
+| PANIFICADORA E CONFEIT | Restaurantes | — | Refeições fora | |
+| APPLE.COM/BILL | Serviços Digitais | — | — | |
+| TOTAL SPORTES | Vestuário | — | — | |
+
+**GuilhermeDaSilva:** abaixo de R$ 120,00 é **Água**, acima é **Gás**; sempre Família / Casa /
+Vida Familiar. **R$ 120,00 exatos seguem sem decisão** e não são tocados.
+
+Decisões anteriores que continuam valendo: farmácia cotidiana é Saúde (projetos explícitos de
+viagem ou cirurgia são preservados); anuidades e bonificações Unicred são Tarifas do Cartão /
+Família / Serviços Financeiros / Vida Familiar; EVENTIM e SAN JUAN do show vão para Iron Maiden
+2026 / Eventos; `Reformas da casa` sempre aponta para Imóveis.
+
+**Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
+Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
+
+
+---
+
+# 9. Segurança, permissões e auditoria
+
+## 9.1 Permissões
+
+Perfis: `admin` (tudo), `operador` (lançamentos + relatórios + sincronizar, sem cadastros/
+usuários), `leitura` (só ver). As 8 permissões granulares: `lancamentos_ver`,
+`lancamentos_editar`, `lancamentos_conferir`, `lancamentos_manual`, `relatorios`, `cadastros`,
+`sincronizar`, `usuarios`. Decorator `@requer(permissao)` protege a rota; `pode(permissao)`
+controla o que aparece na interface.
+
+Usuários: `ronaldo` (admin), `andrea` (admin), `amanda` (operador).
+
+## 9.2 Sessão e proteções
+
+- Sessão de 24 horas, renovada com uso. Cookie `Secure`, `HttpOnly`, `SameSite=Lax`.
+- Login limita tentativas por usuário e IP em janela de 15 minutos, com mensagem genérica.
+- Senhas em PBKDF2-HMAC-SHA256, 200k iterações. **Mínimo de 6 caracteres, por decisão do
+  usuário** — não alterar.
+- Requisições mutáveis exigem Origin/Referer do próprio site. Respostas incluem HSTS, CSP,
+  proteção contra iframe/MIME sniffing e `Cache-Control: no-store`.
+- `/sync` do worker exige `X-Sync-Secret` (env `SYNC_SECRET`, igual nos dois serviços).
+- **Credenciais administrativas de emergência ficam apenas nas variáveis do Coolify.** Não alterar
+  esses acessos sem pedido explícito.
+- XSS: corrigido em todo o app e revalidado com payload real. O caso mais grave era `json.dumps()`
+  dentro de `<script>` — não escapa `</`, então uma descrição contendo `</script>` executava JS.
+
+## 9.3 Auditoria e backup
+
+Logs ficam dentro de Relatórios e registram acesso, alteração com antes/depois, falha, sync,
+regras e migrações. Senhas e tokens são sanitizados. Rateios e migrações também geram auditoria.
+
+**Não enfraquecer a auditoria.** Foi só porque cada alteração gravava antes/depois que deu para
+reverter exatamente as 22 datas corrompidas em 29/08/2026.
+
+E-mail operacional: `ronaldo@brdrive.net`. Backup no mesmo servidor foi aceito como primeira
+camada; teste de restauração foi **adiado explicitamente pelo usuário** — não executar sem nova
+autorização. Backup fora do servidor continua desejável.
+
+**Antes de qualquer alteração de dados em lote, criar ponto de reversão** no mesmo Postgres.
+**Nunca apagar lançamento do Pluggy** — preservar a origem para auditoria e marcar
+duplicidade/substituição só com decisão explícita ou prova segura.
+
+---
+
+# 10. Testes e método de trabalho
+
+## 10.1 Suíte
+
+**270 aprovados e 6 ignorados** (01/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
+automáticas, rateio, conciliação de fatura, consenso de classificação e fluxos com PostgreSQL
+temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
+do `skip`, não tratar como falha.
+
+```bash
+pytest tests/ -v
+```
+
+- `tests/test_fatura_vinculo.py` reproduz, com cursor dublado (roda sem Postgres), os casos reais
+  que quebraram a conciliação. **Foi escrevendo esses testes que dois bugs latentes apareceram.**
+- `tests/test_consenso_classificacao.py` roda a lógica de consenso de verdade, com dados
+  sintéticos. Existe porque o bug do `valor_id` NULL passou por toda a suíte estrutural sem ser
+  notado: o código "parecia certo" e só o dado real revelava.
+- Validação do parser contra dado real (refazer se mexer em `fatura_unicred.py`): parsear os PDFs e
+  conferir que a soma das linhas, sem "Pagamento Recebido", bate com o total impresso. Em
+  29/08/2026 bateu **centavo a centavo nas 14 faturas**.
+
+Teste de integração não substitui validação logada em produção: configuração, dados reais, rede do
+Coolify e comportamento do Pluggy são diferentes.
+
+## 10.2 Ciclo de trabalho que deu certo
+
+1. **Ler o código antes de mudar** — várias vezes a causa raiz era diferente da aparente.
+2. `python3 -m py_compile` + `pytest tests/ -q` antes de commitar.
+3. Commit + push, **e então validar em produção**: status no Coolify, `/health`, logs (procurar
+   traceback e `Aviso: falha ao rodar migracao`) e a tela real pelo navegador.
+4. **Testar de verdade, não só ler o código.** O teste com payload real de XSS encontrou 3 pontos
+   que o grep não pegou. Limpar o `localStorage` **antes** de recarregar, senão o estado antigo em
+   memória falseia o resultado.
+5. Limpar dados de teste depois.
+
+## 10.3 Como cortar código sem quebrar nada
+
+Duas vezes um corte por busca de texto apagou código vizinho — uma levou a rota `/dre` inteira,
+outra derrubou `/relatorios` em produção. O que funciona:
+
+1. Delimitar a função pelo **AST** (`node.end_lineno`), nunca por "até o próximo `@app.route`" —
+   auxiliares sem decorator moram entre as rotas e são engolidos.
+2. Depois do corte, **comparar as definições de topo antes/depois**. Contar rotas não basta,
+   justamente porque o que se perde costuma ser função sem decorator.
+3. **302 não é prova de que a tela funciona** — é o redirect de login. **Depois do deploy, abrir
+   todas as telas**: variável usada mas atribuída só dentro de um `if` passa por `py_compile`,
+   passa pelos testes (que não executam view) e só aparece quando alguém abre a tela.
+4. **`replace` em código só com `assert` de que casou.** Um `replace` silencioso que não casa
+   deixa o código velho no lugar e a edição parece ter funcionado.
+5. Em tela com número, **anotar os valores em produção antes do deploy** e comparar depois.
+
+## 10.4 Lições de incidentes reais
+
+1. **Testar hipótese localmente, nunca em produção.** Os dois erros de 29/08/2026 vieram do mesmo
+   vício: deployar para descobrir se a teoria estava certa. O `consolidar-datas` corrompeu 22 datas
+   reais.
+2. **Escrever o teste do caso real ANTES de mexer no algoritmo.**
+3. **Quando o número contradiz o que já se viu na tela, o erro provavelmente é da análise.** Uma
+   contagem deu "0" contradizendo um caso já visto: a célula tinha `colspan="2"` e o índice do
+   `children[]` estava deslocado.
+4. **Conferir o nome exato do parâmetro antes de confiar num levantamento.** Em 01/09/2026 usei
+   `status=conferidas` e `status=pendentes`; os valores válidos são `conferida` e `pendente`, e
+   qualquer outro cai no default `todas`. Relatei como "OK incompletos" um levantamento que era de
+   **todos** os lançamentos, e cheguei a diagnosticar como bug um comportamento correto do código.
+   **Validar o filtro contra um total conhecido antes de tirar conclusão dele.**
+5. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+   `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
+   construção e nunca vão ter classificação completa.
+
+---
+
+# 11. Estado atual e pendências
+
+## 11.1 Cartão Unicred Conjunta — fechado
+
+**As 20 faturas de 01/2025 a 08/2026 fecham 100%**: nenhuma linha sem vínculo, nenhum órfão do
+Pluggy, zero divergência, e o "Despesas no DRE" de cada uma bate com o total do PDF — exceto
+maio/2026, onde R$ 66,55 estão legitimamente em "Fora do DRE" por natureza.
+
+Estado da classificação (01/09/2026, excluindo registros técnicos):
+
+| | Total | Com OK | Sem OK |
+|---|---|---|---|
+| Lançamentos reais | 2.722 | 680 | 2.042 |
+| Classificação incompleta | 1.435 | **0** | 1.435 |
+| Sem categoria | 610 | 0 | 610 |
+
+**Todos os 680 lançamentos com OK estão com os quatro campos completos** — coerente com a regra de
+obrigatoriedade. O trabalho que falta está inteiramente nos que **não** têm OK.
+
+**O consenso automático está exaurido:** dos 1.435 incompletos, apenas ~10 têm consenso disponível.
+O resto são lojistas onde falta justamente o campo que varia por contexto — UNICRED TAG (77),
+DELTA VIDEIRA (68), APPLE.COM/BILL (29), LISCIA (27): têm categoria, falta Responsável/Projeto/
+Portfólio, que dependem de qual viagem, qual veículo, quem usou. **Não têm solução automática** —
+precisam de decisão caso a caso.
+
+## 11.2 Pendências que dependem do usuário
+
+- **Rotar o token do Coolify.** Foi colado no chat em 21/08/2026 e deve ser considerado
+  comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo.
+- **Revisar `/pendencias`.** Categoria sem natureza assume `despesa` e pode inflar o DRE. Abrir a
+  tela antes de agir — os números mudam conforme o Pluggy traz categorias.
+- **Classificar o que não tem consenso**, caso a caso, principalmente pedágio, combustível e
+  serviços digitais.
+- **LISCIA sem vínculo, julho/2026:** `Parcela Lojista Visa - LISCIA` R$ 107,50 em 12/06/2026. O
+  parcelamento LISCIA R$ 215,00 em 2× já está completo — Parc.1/2 cobrada em maio e Parc.2/2 em
+  junho, ambas vinculadas e contabilizadas. A fatura de julho **não tem linha de LISCIA**. É o
+  padrão das mensais tardias (dia 12): o Pluggy repetindo a Parc.2/2. A tela de duplicidades já o
+  classifica como "Parcela cobrada de novo" e oferece o vínculo — **falta só a decisão do
+  usuário**, porque marcação de duplicidade é dele (§1.3).
+
+## 11.3 A validar com o usuário (dado que falta)
+
+**Andar de cima da residência alugado para a BRDrive.** A casa tem dois andares: a família mora no
+porão e a parte de cima é alugada para a BRDrive por R$ 1.500–1.700/mês. Isso significa que (a) há
+receita de aluguel a identificar nos recebimentos da BRDrive, hoje possivelmente confundida com
+pró-labore, e (b) parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
+
+**Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
+de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Estão em natureza
+`fluxo`, então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não
+for caso a caso, podem estar inflando a receita.
+
+**Duplicidades antigas em conta corrente.** O Pluggy já mandou o mesmo débito duas vezes (Cond Sta
+Lúcia, 21/11/2025 — ocorreu uma vez só). A tela avisa sobre o mês aberto, mas **os meses anteriores
+nunca foram varridos**.
+
+**Horários 00:00 e diferença de três horas em conta corrente.** Não usar horário isoladamente para
+apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
+revisar e marcar manualmente.
+
+**FARM GEREMIAS (Andrea)** 3× R$ 63,30 tem **dois agregados** (26/11/2025 e 10/07/2026, ambos
+R$ 189,90) e linhas duplicadas nas faturas. Pode ser duas compras iguais ou duplicidade da
+operadora.
+
+**Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
+`viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
+
+## 11.4 Próximas frentes, nesta ordem
 
 1. **Cartão Nubank.** Avaliar se os mesmos fenômenos existem (parcelamento agregado, eco
    pending→posted, cobrança só na fatura). O parser de PDF é específico da Unicred — se o Nubank
    for conciliado por fatura, precisa de parser próprio; se não, a hierarquia de fontes muda.
-2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do
-   Pluggy vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos
-   (PIX, transferência entre contas próprias, depósito em espécie).
+2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
+   vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos (PIX,
+   transferência entre contas próprias, depósito em espécie).
 3. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
-4. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria (fora os
-   tipos com padrão conferido) e passaram por `aplicar_regras()`. O que sobrou sem categoria
-   entra no DRE como despesa por padrão — revisar.
-
-### Consenso dos lançamentos com OK — Unicred Conjunta (01/09/2026)
-
-- Escopo obrigatório: somente `Cartão de Crédito Unicred · Conjunta`, account_id
-  `b6243125-dca2-42b2-8c20-0825782c6d8d`. Não aplicar às demais origens.
-- Foram lidas as 20 faturas de janeiro/2025 a agosto/2026: 2.658 lançamentos editáveis,
-  675 com OK e 789 sem categoria. Surgiram 59 descrições com consenso entre OK e pendentes.
-- A migração 42 aplica apenas 11 lojistas com pelo menos dois OK completos e idênticos, alcançando
-  até 109 pendentes antes das travas. `ESTACAO` foi descartado por ser substring ambígua de outros
-  estabelecimentos. Variantes com e sem espaço de `MP*PRODUTOS` e `DM*SPOTIFY` têm regras próprias.
-- A rotina cria backup reversível em `cartao.classificacao_backup_v42`, regras futuras restritas à
-  conta e completa somente campos vazios. Não altera OK, observação pessoal, duplicados confirmados,
-  registros somente de conciliação, substituídos ou qualquer classificação conflitante já preenchida.
-- Depois das regras, a classificação é propagada apenas por vínculos explícitos de família de parcelas.
-  Não criar vínculos de fatura por semelhança de descrição; as 20 faturas já estavam conciliadas.
-
-### Ideias guardadas (decidir quando fizer sentido)
-
-**Lançamentos recorrentes / previstos.** Há gastos que se repetem em valor e
-intervalo fixos — a mesada de R$ 100 semanal é o caso mais claro, mas também
-assinaturas, seguros e parcelas. O sistema hoje só registra o que já aconteceu.
-Valeria um campo/marcação que identifique o lançamento como recorrente e permita
-**projetar os próximos com base no histórico** — para saber o compromisso do mês
-antes de ele acontecer. Levantado por Ronaldo em 22/08/2026, ao conciliar julho.
-
-**Backup fora do servidor.** O backup atual no mesmo servidor foi aceito como primeira camada,
-mas não protege contra perda do próprio servidor. Futuramente copiar para armazenamento externo.
-Teste de restauração foi explicitamente adiado pelo usuário; não executar sem nova autorização.
-
-### Técnicas
-
-**Escape em JS montado no cliente:** três telas montam HTML no navegador com `innerHTML`
-a partir de dados que chegam por AJAX (`lancamentos.js`, `relatorios.js`, `categorias.js`).
-Aí o Jinja não protege — quem escapa é o `escHtml()` do `tabelas.js`, no ponto onde o
-`innerHTML` é montado. A regra combinada: **o servidor manda texto puro** (`cat_pt_puro`,
-sem `esc()`) **e o JS escapa**. Não escapar no servidor também: gera escape duplo, e em
-rótulo de gráfico (Chart.js desenha em canvas) apareceria `&amp;` literal na tela.
-
-**Um processo Gunicorn, com threads (não aumente `-w`):** `core.py` guarda os apelidos de categoria
-(`CATEGORIA_PT_DB`) em memória e só recarrega depois de um POST. Com mais de um processo, cada
-um tem a sua cópia: renomear uma categoria atualiza a de quem atendeu o POST e o outro segue
-servindo o nome antigo por tempo indeterminado. Aconteceu em produção com `-w 2`. Se um dia
-precisar de mais paralelismo, aumente `--threads` (memória compartilhada), não `-w` — ou tire
-o cache de memória e leia do banco a cada requisição.
-
-**Gunicorn com `--preload` (não remova o preload):** o app principal roda em
-`gunicorn --preload -w 1 --threads 4 --timeout 120`. O `--preload` não é detalhe de performance —
-`core.py` chama `migrate()` no import, então sem ele **cada worker roda a migração ao mesmo
-tempo no boot** e as DDL competem entre si (medido: 3 workers = 3 imports; com preload = 1).
-É seguro porque nenhuma conexão de banco fica aberta em variável de módulo. Se algum dia
-alguém criar um pool global, o preload passa a compartilhar socket entre os processos filhos
-e vira bug. O `--timeout 120` existe porque "Atualizar agora" chama o worker de sync com
-timeout de 60s — o padrão do gunicorn (30s) mataria o processo antes.
-
-**Sem ambiente de staging:** todo push na `main` vai direto para o app que a família usa.
-Mitigado hoje pelos testes e pela validação pós-deploy, mas o risco existe.
-
-**Operacional:** toda vez que uma nova conexão bancária for adicionada no Pluggy, o `item_id`
-precisa entrar manualmente na env `PLUGGY_ITEM_ID` do worker (`hdgffcvh3ljqe61dczztaycz`) —
-a auto-descoberta só funciona para conexões que já sincronizaram alguma vez.
-
-**Colunas órfãs:** `conta.dia_fechamento` e `conta.dia_vencimento` existem no banco (migração v3)
-mas não são lidas nem gravadas por ninguém — foram uma tentativa de sobrescrita manual das datas
-de fatura, descontinuada. Ficaram porque reescrever migração já aplicada criaria divergência de
-schema entre bancos.
-
-**Decisão sobre o worker (21/08/2026):** o worker fica **acessível publicamente**, sem restrição
-de IP. Tentamos aplicar uma `ipallowlist` no Traefik e ela **quebrou o sync** (403): o app chama
-o worker pela URL pública e o Traefik enxerga um IP interno do Docker, não o IP público do
-servidor (45.163.12.5). Foi revertido. A proteção real hoje é por chave (`SYNC_SECRET`), não por
-rede. Se algum dia quiser fechar de verdade: fazer o app chamar o worker pela rede interna
-(`http://<container>:8000/sync`) e remover o domínio público dele.
-
-## Armadilhas do matcher de fatura (todas já custaram caro — não repetir)
-
-Cada uma destas causou erro real e tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer
-em `_conciliar_linhas`, `_classificar_orfaos` ou `_vincular_automatico`, leia esta lista.
-
-**1. Chave de agrupamento sem o valor.** Agrupar parcelamento por `titular + lojista + nº de
-parcelas` **colide**: o mesmo lojista tem mais de um parcelamento com o mesmo número de parcelas
-e valores diferentes (MECANICA HOCHIOVE: 2× R$135,00 e 2× R$233,50 na MESMA fatura; SESI FARMACIA
-tem vários). Colidindo, o valor da parcela vira a média, o valor cheio esperado sai errado e
-nenhum agregado é encontrado — os dois viram órfãos. **O valor entra sempre na chave.** Esse erro
-apareceu duas vezes no mesmo dia: no código de produção e na análise que eu fiz por fora.
-
-**2. Um cursor por conexão — consumir antes da próxima consulta.** Inserir um `cur.execute` entre
-o `execute` e o `fetchall` de outra consulta faz a primeira sumir **em silêncio**: a tela mostrou
-"nenhuma cobrança em dobro" com tudo zerado, HTTP 200, sem erro nenhum.
-
-**3. Lançamento nascido da fatura não é candidato.** A parcela gerada tem o valor exato da parcela
-e cai dentro do ciclo, então disputa a linha com o agregado do Pluggy e vira órfã. Ela não é um
-lançamento do Pluggy — ela **é** a fatura. Filtrada por `fatura_linha.transacao_id_criado`.
-
-**4. Vínculo `origem='fatura'` não bloqueia o vínculo com o agregado.** São os dois lados da
-conciliação: a parcela gerada é o evento de caixa, o agregado é o registro da compra. Tratar a
-linha como "já vinculada" fazia o agregado nunca ser reencontrado e o regime de caixa parar de
-se aplicar.
-
-**5. "Refazer vínculos" só apaga `origem='automatico'`.** Apagar o vínculo `fatura` deixava a
-parcela gerada órfã para sempre (a geração é idempotente por `transacao_id_criado` e não recria).
-Deu 340 falsos positivos numa rodada. Hoje `_sincronizar_parcelas_de_agregado` recria o que faltar.
-
-**6. Janela de candidatos vai além do fim do ciclo.** O Pluggy às vezes data a compra 1–2 dias
-depois do que a fatura imprime (D MORI: fatura 11/02, Pluggy 12/02). Sem folga, a transação nem
-entra como candidata. Hoje busca 3 dias além; só a avulsa aproveita.
-
-**7. Comparar descrição inteira nunca casa o par do mesmo evento.** O Pluggy grava o mesmo evento
-com prefixos diferentes (`"Compra Exterior R$ - Visa - X"` vs `"Compra Exterior - Visa - X ...COMUS"`).
-`_tokens_significativos()` remove o prefixo genérico e compara só o que identifica o
-estabelecimento — exige 2+ tokens em comum, mesmo valor e ±1 dia.
-
-**8. `"Parcelado Lojista"` ≠ `"Parcela Lojista"`.** O primeiro é o parcelamento inteiro (agregado);
-o segundo é a cobrança de UMA parcela. Só a forma mensal pode entrar em "evidência inequívoca":
-um agregado sem vínculo costuma ser parcelamento novo cujas parcelas ainda vão aparecer, e
-marcá-lo apagaria compra real.
-
-**9. Reenviar o PDF apaga os vínculos da fatura.** As linhas são apagadas e recriadas com ids
-novos, e o `ON DELETE CASCADE` leva `fatura_vinculo` junto. O `transacao_id_criado` sobrevive
-pela chave natural, mas o vínculo não — e a geração de parcelas é idempotente, então não repõe.
-A fatura 01/2026, reenviada pelo usuário, ficou com 33 parcelas geradas aparecendo como órfãs.
-Hoje `_revincular_lancamentos_da_fatura()` roda no import e na sincronização de parcelas.
-
-**10. Cada tela tem que aplicar os MESMOS filtros de "já resolvido".** A lista de órfãos da
-conciliação não excluía `substituido_por` nem `somente_conciliacao`, então repetia como pendência
-tudo o que a tela de duplicidades já tinha resolvido: 57 falsos pendentes em 08/2026 enquanto a
-outra tela dizia "nada pendente". Ao criar um estado novo, procurar TODAS as consultas que
-listam pendência.
-
-**11. Eco de parcelamento NOVO precisa de regra própria.** Enquanto o agregado atende UMA linha
-só, ele não é reconhecido como agregado (isso exige 2+) e o eco escapa das outras regras. A regra
-que resolve: existe linha de fatura do mesmo estabelecimento **já vinculada**, e o órfão vale ou
-a parcela dela ou o parcelamento inteiro, dentro de 5 dias. A comparação usa a `descricao_base`
-da **linha**, não a do agregado — `"PARC=106ANJOS DE QUINTA"` não casa com `"ANJOS DE QUINTAL"`.
-
-**12. Valor negativo não casa por descrição.** O Pluggy chama o mesmo pagamento de
-`"Pagamento recebido"` e de `"Pag de Fatura Via Deb Aut"` — zero palavras em comum, então tokens
-não servem. Para negativo o par é **valor idêntico no MESMO dia**, com a outra gravação já
-vinculada à fatura; exige dia exato justamente por não ter o reforço da descrição. Como o par tem
-o mesmo sinal, um estorno (sinal oposto ao da cobrança) nunca casa por aqui.
-
-**13. Lançamento criado pela fatura: parcela usa o MÊS COBRADO.** Datar pela data impressa joga
-a despesa no mês da compra — o oposto do regime de caixa. Errei nisso: criar as linhas de faturas
-de 2026 mandou R$ 11.027,44 para 2025. Parcela usa `periodo_fim` da fatura; compra avulsa usa a
-data impressa, que ali é a da própria cobrança.
-
-**14. Commit também quando só houve correção.** O `UPDATE` que conserta datas só era commitado
-quando havia linha nova criada. Sem linha nova, a rota respondia "11 datas corrigidas" e **nada
-era gravado** — em silêncio, com sucesso na resposta.
-
-**15. "Pagamento Recebido" nunca vira lançamento nem trava o fecha 100%.** É a fatura anterior
-sendo quitada; já fica fora das duas somas. Cobrar vínculo dela travava as 7 faturas do início de
-2025, onde era a única linha pendente e o Pluggy não tinha o pagamento.
-
-**16. Estorno só anula quando os dois lados ainda contam.** Se o negativo já foi excluído
-(duplicada, substituido_por, somente_conciliacao), o par deixou de se anular e a cobrança positiva
-ficou sozinha no resultado — ela tem que seguir para as outras regras, não ser dada como resolvida.
-
-**17. Cobrança estornada não se marca.** Se existe um negativo de mesmo valor no mesmo dia, os dois
-lançamentos são legítimos e se anulam sozinhos. Marcar um deixaria o estorno negativo solto.
-
-## Lições da sessão de 29/08/2026 (incidente real — não repetir)
-
-Nesta sessão o Claude **corrompeu 22 datas de lançamentos reais em produção** e, antes disso,
-subiu duas correções baseadas em hipótese não verificada. Vale mais que qualquer regra abstrata:
-
-1. **Testar hipótese localmente, nunca em produção.** Os dois erros do dia vieram do mesmo
-   vício: deployar para descobrir se a teoria estava certa. O `consolidar-datas` corrompeu dado
-   real; o fix do "mês vizinho" foi subido com base num caso (SAMILA) que não generalizava para
-   o caso que se queria resolver (AQUAMATER), e não resolveu nada.
-2. **Escrever o teste do caso real ANTES de mexer no algoritmo.** Quando os testes de
-   `tests/test_fatura_vinculo.py` foram escritos, dois bugs latentes apareceram na hora — um
-   deles (`ciclo_fim` vindo de `max(datas)` das linhas) estava em produção havia dias, invisível.
-3. **Quando o número contradiz o que já se viu na tela, o erro provavelmente é da análise.**
-   A primeira contagem de parcelamentos duplicados deu "0", contradizendo o AQUAMATER já visto.
-   Causa: a célula de valor do vínculo tem `colspan="2"`, então o índice do `children[]` estava
-   deslocado e todos os valores vinham zerados. Conferir contra um caso conhecido antes de
-   confiar em qualquer levantamento.
-4. **O log de auditoria salvou o dia.** Foi só porque cada alteração gravava antes/depois que
-   deu para reverter as 22 datas exatamente. Não enfraquecer a auditoria.
-
-## Como trabalhar neste projeto (fluxo que deu certo)
-
-Nenhuma skill "empacotada" foi usada — é engenharia direta (Python/Flask/SQL/Coolify API).
-As skills de BRDrive disponíveis no ambiente (vendas, propostas) são de outro contexto e não
-têm relação com este projeto.
-
-O ciclo usado na sessão 2, que vale repetir:
-1. **Ler o código antes de mudar** — várias vezes a causa raiz era diferente da aparente
-   (ex: coluna que "não reduzia" era um `max-width:0` conflitante; divisor "sumido" entre
-   Origem e Categoria era `display:flex` vazando de `.cel-origem` para o `<th>`).
-2. `python3 -m py_compile app.py bussola/app.py` e `pytest tests/ -q` antes de commitar.
-3. Commit + push (o webhook faz o deploy sozinho), **e então validar em produção** —
-   status no Coolify, `/health`, logs (procurar traceback e `Aviso: falha ao rodar migracao`)
-   e teste real da tela pelo navegador.
-4. **Testar de verdade, não só ler o código.** O teste com payload real de XSS encontrou 3
-   pontos que a varredura por grep não pegou. Testar em produção também já mostrou que o
-   `localStorage` precisa ser limpo **antes** de recarregar, senão o estado antigo em memória
-   falseia o resultado.
-5. Limpar dados de teste depois (categoria de teste, teto de teste, `localStorage`).
-
-## Como continuar no Claude Code
-
-1. Instalar: `npm install -g @anthropic-ai/claude-code` (requer Node.js).
-2. Clonar o repositório localmente:
-   ```bash
-   git clone https://github.com/ronaldinhodelima/pe-de-meia.git
-   cd pe-de-meia
-   ```
-3. Este arquivo (`CLAUDE.md`) deve ficar na raiz do repositório — o Claude Code lê
-   automaticamente ao iniciar uma sessão nessa pasta.
-4. Autenticação git: configurar um Personal Access Token do GitHub (ou SSH key) uma única vez
-   no `git credential helper` local, para não precisar colar o token a cada push.
-5. Para deploys, seguir o fluxo descrito em "Repositório e deploy" acima — o token do Coolify
-   precisa ser configurado como variável de ambiente local (não commitado).
-
-## Deploy automático
-
-Webhook do GitHub -> Coolify configurado em 20/08/2026. Todo push na `main` dispara build/deploy sozinho, sem precisar chamar a API do Coolify manualmente.
-
-## Classificação: natureza e centro de custo (decisão de 21/08/2026)
-
-A tela **`/pendencias`** ("Pendências de classificação", no menu Configurações) materializa
-tudo isto: lista categoria sem natureza e categoria de despesa sem centro de custo, com ação
-direta em cada linha, e conta os lançamentos que ainda usam natureza manual. Uma faixa de
-alerta aparece no DRE quando há pendência que distorce número — natureza manual sozinha
-**não** dispara alerta, porque não é erro.
-
-Como garantir que os números do DRE são reais, sem despesa inflada:
-
-- **A natureza vem da categoria, não do lançamento.** Para classificar uma operação fora do
-  padrão (ex: um PIX de R$ 98 mil que foi a compra de um terreno), o caminho correto é **mover
-  o lançamento para uma categoria com a natureza certa** ("Imóveis / Terrenos" → `bem`). Assim
-  não importa se o meio foi PIX, cartão ou dinheiro — a categoria carrega a natureza.
-- O campo "natureza" no modal do lançamento (`transacao.natureza`) ainda existe e continua
-  sobrepondo a da categoria, mas é a via **antiga**: fica invisível para quem olha a categoria
-  depois. A tela `/pendencias` conta quantos lançamentos ainda usam isso.
-- **Categoria sem natureza é o problema mais grave**: o app assume `despesa` por padrão
-  (`NATUREZA_PADRAO`), então uma categoria nova inventada pelo Pluggy entra como despesa
-  *silenciosamente*. Não dá para bloquear o Pluggy de criar categorias — a solução é alertar
-  (`/pendencias` + faixa no DRE) para o usuário decidir: definir natureza, renomear ou ocultar.
-- **Centro de custo só se aplica a categorias de despesa.** Vincular receita ou transferência a
-  um centro de custo não faz sentido contábil — centro de custo é análise de gasto. Por isso
-  `/pendencias` só cobra vínculo das categorias com natureza `despesa`.
-
-## Colunas ajustáveis nas tabelas
-
-Utilitário compartilhado no `<script>` do `BASE_CSS` (roda em todas as telas). Para ligar numa
-tabela nova, basta: `<table class="compacta ajustavel" data-tabela="chave-unica">`. O resto é
-automático — atribui `data-col` por índice quando o HTML não traz, injeta o botão "Redefinir
-colunas" e se ativa no `DOMContentLoaded`.
-
-- `data-sem-ordenar` / `data-sem-reordenar` desligam recursos individualmente. Usado no
-  **Centro de Custos**, que é hierárquico (linhas de grupo usam `colspan`): ordenar embaralharia
-  a hierarquia e reordenar colunas quebraria essas linhas.
-- Preferências (ordem, largura, ordenação) ficam no `localStorage`, chave `pedemeia_tabela_<chave>`.
-- Redimensionar é **estilo planilha**: a coluna vizinha compensa, então a soma nunca muda e a
-  tabela nunca estoura a largura da tela (a de Lançamentos não tem scroll horizontal).
-- Ordenação numérica entende `R$ 1,234.56` (formato do `:,.2f` do Python, que é o usado no app)
-  **e** `R$ 1.234,56` — o separador decimal é o último `.` ou `,` do texto.
-
-Duas armadilhas já resolvidas, que voltam a morder se alguém mexer:
-- Quando um filtro recarrega a tabela por AJAX (`aplicarFiltros` faz `replaceWith`), **é preciso
-  chamar `ativarTabelaAjustavel()` de novo** — o elemento antigo vai embora levando os listeners.
-- CSS de célula não pode vazar para o `<th>`: `.cel-origem { display:flex }` (pensado para o selo
-  do banco na célula) tirava o cabeçalho do grid da tabela e fazia a coluna seguinte desenhar por
-  cima. Por isso a regra é `td.cel-origem` e há um `display:table-cell !important` defensivo nos
-  `th[data-col]`.
-
-## Testes automatizados
-
-Em 30/08/2026 a suíte local está em **224 aprovados e 6 ignorados**. Ela cobre a regra de ouro
-do DRE, helpers puros, segurança/XSS, permissões, estrutura de rotas/templates, concorrência,
-auditoria, regras automáticas, rateio, conciliação de fatura e fluxos com PostgreSQL temporário.
-
-`tests/test_fatura_vinculo.py` reproduz, com dados sintéticos e cursor dublado (roda sem
-Postgres), os casos reais que quebraram a conciliação: parcela 1:1 dentro do ciclo, transação já
-vinculada que não pode ser roubada, parcelamento agregado que PODE ser reusado, "Pagamento
-Recebido" fora das duas somas, encadeamento das datas e precisão monetária em centavos. **Foi
-escrevendo esses testes que dois bugs latentes apareceram** — ver "Lições da sessão de 29/08/2026".
-
-`tests/test_fatura_parser.py` cobre também compra internacional com detalhes em três linhas e
-PDF com lançamentos distribuídos em páginas diferentes, mantendo titular, valor em BRL e ano.
-
-Validação do parser contra dado real (fazer de novo se mexer em `fatura_unicred.py`): parsear os
-PDFs e conferir que a soma das linhas, sem "Pagamento Recebido", bate com o total impresso. Em
-29/08/2026 bateu **centavo a centavo nas 14 faturas** (set/2025 a ago/2026). Os seis testes
-ignorados dependem de condições/serviços que não estão disponíveis em toda execução; conferir o
-motivo do `skip`, não tratar automaticamente como falha.
-
-Há testes de integração com PostgreSQL temporário, mas isso não substitui a validação logada em
-produção: configuração, dados reais, rede do Coolify e comportamento do Pluggy são diferentes.
-
-Rodar localmente:
-```bash
-pip install pytest flask psycopg2-binary
-pytest tests/ -v
-```
-
-## Decisões consolidadas da revisão de agosto/2026
-
-Estas são regras funcionais aprovadas pelo usuário e devem ser preservadas em mudanças futuras:
-
-- **OK é uma assinatura humana.** Sincronização, regra automática, edição de categoria,
-  dimensão ou observação nunca pode marcar nem desmarcar `conferida`. Para retirar um OK ou
-  marcar duplicidade, a tela exige confirmação explícita. Lançamentos conferidos aparecem em
-  cinza-claro, não em verde.
-- **Conferência de cartão usa a fatura, não o mês civil.** Ao escolher uma única origem de
-  cartão em Lançamentos, abrir `/lancamentos/fatura` na fatura importada mais recente. A linha
-  principal é sempre a cobrança oficial do PDF; o sinal `+` mostra todos os registros agregados.
-  Somente o lançamento financeiro identificado como **contabilizado** pode ser editado e entrar
-  no DRE. Registros `somente_conciliacao`, substituídos e duplicados permanecem visíveis para
-  auditoria, mas são somente leitura e não somam outra vez.
-- **Existe um único OK do lançamento em todas as telas.** A tela resumida e a tela detalhada da
-  fatura leem e alteram o mesmo `transacao.conferida`; não existe “OK da fatura” separado para o
-  usuário. A migração 29 copia para o lançamento qualquer assinatura feita no campo temporário
-  criado pela migração 28, preservando usuário e horário, e a interface deixa de usar esse campo
-  legado. Para marcar, a classificação/rateio precisa estar completa; para retirar, pedir
-  confirmação explícita. O OK continua individual por cobrança/parcela mensal.
-- **Cards da fatura separam a diferença.** Mostrar total oficial do PDF, despesas no DRE, fora
-  do DRE (investimentos e outras naturezas), classificação pendente e diferença sem vínculo.
-  Classificação incompleta continua sinalizada, mas não retira sozinha um lançamento do DRE:
-  vale a natureza efetiva atual. A igualdade monetária é `PDF = DRE + fora do DRE + sem vínculo`;
-  “classificação pendente” é indicador de qualidade que pode se sobrepor ao DRE. Estornos usam
-  o sinal do PDF e reduzem os totais; nunca aplicar `abs()` à soma oficial.
-- **Rateio não duplica dinheiro.** Quando um único débito pertence a mais de uma pessoa ou
-  classificação, o pai continua sendo o registro bancário e as partes aparecem recolhidas
-  abaixo dele com botão `+`/`−`, descritas como `<descrição original> — Parte N`. As partes
-  devem somar exatamente o total (inclusive o sinal) e substituem o pai no DRE/relatórios.
-  Podem ser alteradas com o pai em OK sem apagar essa
-  assinatura, mas o servidor só aceita o conjunto completo, fechado e com campos obrigatórios;
-  desfazer o rateio por inteiro exige retirar o OK antes.
-  Valor, categoria, dimensões e observação são editados diretamente nas linhas das partes e
-  salvos juntos; o OK do pai fica desabilitado enquanto a soma não fechar ou faltar campo
-  obrigatório. O OK continua sendo marcado apenas pelo usuário depois de conferir tudo.
-- **Pluggy é a origem bancária, não a dona da classificação.** A sincronização pode atualizar
-  apenas os campos bancários mutáveis. Nunca pode sobrescrever categoria ajustada manualmente,
-  Responsável, Projeto, Portfólio, observação, OK ou a marcação de duplicidade.
-- **Não eliminar movimentos repetidos vindos do Pluggy.** IDs distintos recebidos da operadora
-  devem ser importados, pois podem representar cobrança realmente duplicada. A duplicidade é
-  decidida pelo usuário e a marcação apenas exclui a linha dos totais.
-- **DRE considera todos os lançamentos do período.** Foi desfeita a tentativa de limitar o DRE
-  a `POSTED` até a data atual. A natureza contábil continua vindo da categoria, salvo o legado
-  de natureza específica do lançamento.
-- **Sessão:** duração de 24 horas, cookie `Secure`, `HttpOnly` e `SameSite=Lax`. Por decisão do
-  usuário, os acessos administrativos de emergência continuam no ambiente e a senha mínima
-  permanece com seis caracteres.
-- **Auditoria:** Logs fica dentro de Relatórios. Registrar acessos, alterações com antes/depois,
-  sincronizações e falhas, sem gravar senhas, chaves ou outros segredos.
-- **E-mail operacional:** `ronaldo@brdrive.net`; envio de teste confirmado pelo usuário.
-- **Backup:** cópia no próprio servidor é aceita, com retenção configurada. Não é necessário
-  executar teste de restauração agora; não confundir isso com garantia de recuperação externa.
-- **Navegação:** alterações de tela/filtro/URL devem criar histórico real, para o botão Voltar
-  retornar ao estado anterior dentro do sistema. Troca de mês em Lançamentos faz recarga completa.
-
-### Decisões da sessão de 29/08/2026 (conciliação de fatura)
-
-- **A fatura é a fonte quando o Pluggy não sincroniza.** Se a operadora cobrou, o dinheiro saiu:
-  a linha vira lançamento. Vale para os dois sentidos — pedágio e IOF **aumentam** a despesa, a
-  bonificação da anuidade **reduz** (é o crédito que o Pluggy nunca mandava, deixando só a
-  cobrança).
-- **Criar pela fatura só é seguro com o outro lado zerado.** A rota recusa enquanto houver
-  lançamento do Pluggy sem vínculo esperando decisão — sem órfão do outro lado, não há como
-  duplicar.
-- **2026 tem que fechar 100%; 2025 é histórico.** As faturas de 2025 foram importadas para dar
-  contexto. Ambos os anos acabaram fechando, mas a prioridade declarada é 2026.
-- **Vínculo manual de "mesmo evento"**: o usuário pode apontar os dois lados na mão quando
-  nenhuma regra alcança, inclusive para desfazer um "duplicado" marcado por engano.
-
-
-- **A fatura em PDF é a autoridade.** Se está no Pluggy, tem que bater com a fatura de alguma
-  forma — não basta "fechar o valor", cada lançamento precisa de vínculo ou de explicação.
-- **Vínculo automático grava sozinho quando não há ambiguidade** (decisão do usuário, entre
-  "gravar sozinho" e "só sugerir"). Ambíguo fica pendente esperando ele. Vínculo automático pode
-  ser desfeito a qualquer momento; vínculo manual nunca é sobrescrito.
-- **Consolidação de data é por lançamento, um a um** — nunca em lote por fatura. Exige conferência
-  manual e vai junto com observação/vínculo. Ficou para ser desenhada com calma dentro do painel
-  de vínculo (o usuário pediu explicitamente "pensar melhor como fazer e usarmos").
-- **A tela é organizada em torno da fatura**, com `+` por linha abrindo os lançamentos vinculados,
-  e vínculo possível nos dois sentidos (da linha para o lançamento e do lançamento para a linha).
-- **Marcação de duplicidade continua sendo só do usuário**, inclusive nos R$ 9.907,69 de
-  parcelamento contado em dobro. O Claude levanta, evidencia e explica; não marca.
-
-### Regras automáticas
-
-- Podem filtrar por trecho da descrição e, opcionalmente, por valor absoluto (`<`, `<=`, `>`,
-  `>=` ou `=`). A prévia mostra quais lançamentos pendentes e ainda não ajustados manualmente
-  receberão a nova regra.
-- Nunca se aplicam a lançamento conferido nem a categoria escolhida manualmente.
-- Regra aprovada para descrições contendo `GuilhermeDaSilva`:
-  - valor menor que R$ 120,00: categoria **Água**, Responsável **Família**, Projeto **Casa**,
-    Portfólio **Moradia**;
-  - valor maior que R$ 120,00: categoria **Gás**, com as mesmas dimensões;
-  - R$ 120,00 exatos ficam sem classificação automática até nova decisão.
-- A antiga categoria **Água / Gás** passa a se chamar apenas **Gás**; Água é uma categoria
-  própria. Ambas são despesas do centro de custo Moradia & Utilidades / Casa.
-# Registros técnicos e parcelas vinculadas (30/08/2026)
-
-- Em Lançamentos, um registro com `substituido_por` só é recolhido sob o lançamento que conta quando o vínculo explícito estiver presente e ambos estiverem no filtro atual. O mesmo vale para `somente_conciliacao` ligado pela fatura, mas apenas quando houver um único destino visível e inequívoco. Nunca agrupar por semelhança de descrição, data ou valor.
-- O registro recolhido continua acessível para auditoria pelo botão `+` e pelos detalhes; ele não entra novamente nos totais.
-- Parcelas geradas de uma compra agregada podem herdar categoria e dimensões que estejam vazias. A origem da família é exclusivamente o vínculo persistente da fatura.
-- Só preencher automaticamente quando houver um único valor não vazio e inequívoco na família. Em caso de conflito, deixar vazio para revisão humana.
-- Nunca sobrescrever categoria ou dimensão já preenchida, inclusive quando tenha sido ajustada manualmente.
-
-# Conferência visual e totais (30/08/2026)
-
-- Investimentos continuam fora do DRE, mesmo quando aparecem e fecham corretamente na fatura do cartão.
-- O total do PDF e o total conciliado precisam fechar entre si. “Despesas no DRE” é um subconjunto explicado por natureza; exibir também “Fora do DRE” em vez de forçar os dois números a serem iguais.
-- Em Lançamentos, distinguir “recebidos” (todos os registros do banco) de “contabilizados” (transações que efetivamente participam do resultado, contando um lançamento rateado apenas uma vez).
-- Cores nunca devem ser a única explicação de estado: mostrar pontos no início da linha, tooltip com todas as situações, legenda e filtros equivalentes.
-
-# Unificação da classificação e da conferência Unicred (30/08/2026)
-
-- A tela `/lancamentos/fatura` é a visão detalhada e a tela principal de Lançamentos é a visão
-  resumida dos mesmos registros. Categoria, Responsável, Projeto, Portfólio, observação e OK
-  exibidos nas duas telas devem ler a mesma fonte; não criar cópias desses campos.
-- Parcelas mensais da mesma compra explicitamente ligadas ao mesmo agregado técnico pela tabela
-  `fatura_vinculo` compartilham **categoria e dimensões**. Alterar uma delas aplica a classificação
-  às demais parcelas da família. Nunca inferir família por descrição, data ou valor. A observação
-  pessoal também é compartilhada entre as parcelas da mesma compra; o OK permanece individual,
-  porque assina a conferência de cada cobrança mensal.
-- Uma linha do PDF pode mostrar vários registros técnicos agregados, todos preservados para
-  auditoria. Apenas o lançamento financeiro principal é editável e contabilizado. Clicar em
-  qualquer área não interativa da linha principal deve abrir/recolher os detalhes, igual ao botão
-  `+`; não mostrar o título redundante “Lançamentos agregados a esta linha”.
-- Titular/nome do cartão identifica quem realizou a compra e deve permanecer separado da dimensão
-  financeira Responsável. Mostrar titular e apelido/final do cartão na linha e nos detalhes.
-- A coluna de classificação deve ser silenciosa quando uma despesa comum estiver completa. Quando
-  faltar dado, listar `Faltam: ...`; investimento/bem/transferência deve explicar que fica fora do
-  DRE; rateio com naturezas diferentes deve informar que é misto.
-- A migração 29 unifica o OK temporário da fatura em `transacao.conferida`. As colunas legadas da
-  migração 28 permanecem por compatibilidade, mas não são mais lidas nem escritas pela interface.
-- O favicon continua em `static/favicon.png`. Se desaparecer no navegador após deploy, verificar
-  primeiro a referência versionada em `templates/base.html` e renovar o parâmetro de cache; não
-  recriar ou substituir a imagem sem necessidade.
-- Arquivos alterados nesta entrega: `core.py`, `views/lancamentos.py`,
-  `templates/lancamentos_fatura.html`, `static/lancamentos_fatura.js`, `templates/base.html`,
-  testes estruturais e este documento.
-- Validação obrigatória antes de publicar: suíte pytest completa, sintaxe Python/JavaScript,
-  compilação dos templates e `git diff --check`. Depois do deploy, abrir a fatura Unicred mais
-  recente, conferir um OK já existente sem alterá-lo, abrir uma linha clicando no corpo e validar
-  o favicon. Não marcar/desmarcar OK real apenas para teste.
-- Escopo pendente: aplicar esse modelo a outros cartões ou contas somente após finalizar e validar
-  a Unicred. Não generalizar automaticamente agora.
-
-# Importação dos ajustes antigos para a nova tela Unicred (30/08/2026)
-
-- Antes da visão por fatura, o usuário classificava e conferia o registro original do Pluggy. No
-  regime de caixa dos parcelamentos, esse registro virou agregado técnico
-  (`somente_conciliacao`) e cada cobrança mensal passou a ter uma transação própria. Por isso os
-  dados podiam existir na tela resumida e parecer vazios na nova tela detalhada.
-- A migração 30 faz uma importação única e limitada à conta Unicred
-  `b6243125-dca2-42b2-8c20-0825782c6d8d`. Para cada parcela já criada e explicitamente ligada ao
-  agregado por `fatura_vinculo`, copia categoria, dimensões, observação e assinatura do OK.
-- A importação nunca sobrescreve classificação já preenchida na parcela. Observação só é copiada
-  quando vazia ou quando contém exclusivamente o texto técnico “Parcela gerada pela fatura”. OK
-  só muda de falso para verdadeiro e preserva usuário/horário quando existirem. Duplicidade,
-  valor, data e os demais campos bancários não são alterados.
-- Esta cópia de OK é apenas recuperação do trabalho humano já realizado. Depois da migração, o OK
-  continua individual por parcela e novas parcelas futuras não recebem OK automaticamente. A
-  observação é compartilhada entre toda a família de parcelas conforme a decisão de 30/08/2026.
-- Arquivos alterados nesta entrega: `core.py`, `tests/test_estrutura.py` e este `CLAUDE.md`.
-- Antes de publicar: executar a suíte completa, sintaxe e `git diff --check`. Depois do deploy,
-  conferir o registro da migração 30 nos logs e comparar os totais/quantidades da origem Unicred;
-  não alterar manualmente nenhum OK apenas para testar.
-
-## Correção da importação — migração 31
-
-- A primeira execução da migração 30 podia abortar ao comparar
-  `transacao_dimensao.transacao_id` (texto) com os IDs UUID de transação/fatura. Como a migração
-  roda em uma única transação, a falha revertia também categorias, observações e OKs anteriores.
-- O helper agora normaliza agregado e parcela para texto em todas as junções. A migração 31
-  reprocessa exatamente a mesma importação, de forma idempotente e com as mesmas proteções contra
-  sobrescrita. Se a 30 não foi registrada, ambas usam o helper corrigido; se foi registrada, a 31
-  garante a recuperação restante.
-- Validar após o deploy: schema 31, ausência de aviso de migração e redução dos “Pendentes de OK”
-  na visão detalhada. A contagem exata deve vir do audit log da migração 31; não inferir números.
-
-# Visualizações Resumida e Detalhada (30/08/2026)
-
-- A tela principal oferece uma escolha explícita entre **Resumida** e **Detalhada**. Selecionar
-  uma única origem de cartão não muda mais a visualização sozinho; o usuário decide pelo botão.
-  A visão detalhada exige uma única origem de cartão e abre a fatura importada mais recente. O
-  botão Resumida volta ao intervalo oficial daquela fatura, preservando a origem.
-- As duas visualizações continuam lendo e alterando o mesmo lançamento. Não duplicar categoria,
-  Responsável, Projeto, Portfólio, observação ou OK em tabela específica da interface.
-- Auditoria de julho/2026 na Unicred: 176 OK da tela antiga foram explicados entre as duas
-  faturas que atravessam o mês civil. Vinte e três pertencem à fatura de julho, 152 à fatura de
-  agosto e um é o pagamento informativo. Excluído o pagamento, os 175 registros financeiros
-  estavam todos vinculados, com zero diferença de categoria, dimensões, observação e OK. Não
-  criar migração quando os dados já são a mesma transação.
-- Expandir primeiro a visão detalhada para **cartões de crédito**. Contas correntes ficam para uma
-  segunda fase, pois exigem conciliação de extrato e não possuem ciclo de fatura.
-- Casos ambíguos nunca são resolvidos sobrescrevendo dados. Mostrar em **Requer validação** quando
-  faltar vínculo, houver mais de um lançamento financeiro possível sem principal oficial ou o
-  valor contabilizado/rateado não fechar com a linha do PDF.
-- Os cards detalhados ficam em dois grupos: financeiro (Total oficial, Conciliação, DRE e Fora do
-  DRE) e fluxo de trabalho (Classificação, OK, Divergências e Agregados). Todo card clicável aplica
-  o filtro correspondente e mostra, em texto reduzido, quantidade e valor que falta.
-- Semântica de cores: verde apenas para fechado/completo; amarelo para revisão humana pendente;
-  vermelho para divergência real; roxo para investimento ou outra natureza fora do DRE; neutro
-  para totais informativos. Despesa normal não deve parecer erro apenas por ser despesa.
-- Compra parcelada agregada não é divergência: o Pluggy pode guardar o valor total enquanto o PDF
-  mostra uma parcela. Quando o total equivale a `valor da parcela × número de parcelas`, com até
-  R$ 1,00 de tolerância de arredondamento, o card não deve ficar vermelho.
-
-# Observação pessoal e informação interna (30/08/2026)
-
-- `transacao.observacao` pertence exclusivamente ao usuário: lembretes, explicações e informações
-  pessoais da classificação. Nenhuma rotina de importação, conciliação, parcelamento ou marcação
-  de duplicidade pode escrever mensagem técnica nesse campo.
-- Mensagens geradas pelo aplicativo usam `transacao.observacao_sistema`. Elas ficam ocultas por
-  padrão e aparecem somente em “Informações internas do sistema” nos detalhes. Esse campo é de
-  auditoria, não é editável nas telas de classificação e nunca aparece na coluna Observação.
-- A migração 32 move apenas textos completos reconhecidos: parcela gerada pela fatura, lançamento
-  criado a partir do PDF/operadora e a antiga mensagem automática de duplicidade. Não usar busca
-  aproximada, `LIKE '%fatura%'` ou palavras soltas: isso poderia apagar uma nota pessoal.
-- A limpeza preserva todas as observações manuais, incluindo as registradas em julho e agosto.
-  Se uma anotação não for uma correspondência exata dos modelos técnicos documentados, ela fica
-  em `observacao`, mesmo que mencione fatura ou Pluggy.
-- Novos lançamentos criados a partir do PDF e novas parcelas já nascem com a explicação em
-  `observacao_sistema`. Marcar como duplicado registra a ação no campo booleano/auditoria e não
-  preenche nem reenvia a observação pessoal.
-- A migração 33 recompõe a procedência interna de transações apontadas por
-  `fatura_linha.transacao_id_criado` quando uma importação histórica já havia substituído a antiga
-  mensagem técnica por uma observação pessoal. Ela não altera a observação pessoal: usa os
-  vínculos oficiais para distinguir parcela derivada de agregado e cobrança criada pelo PDF.
-
-# Edição unificada na visão detalhada (30/08/2026)
-
-- A visão detalhada aplica as mesmas regras automáticas ao abrir. Regras são globais e gravadas
-  sobre a transação; o botão “+ Criar regra” apenas abre o cadastro já preenchido com aquele
-  lançamento, portanto uma regra criada em qualquer visualização vale para ambas.
-- Categoria, dimensões e observação salvam automaticamente. Selects salvam na mudança; observação
-  usa espera curta durante a digitação e salva também ao sair do campo. Não recarregar a página:
-  atualizar cards, estado da linha e classificação em segundo plano, preservando linha aberta,
-  rolagem e foco do usuário.
-- Projeto com Portfólio padrão deve preencher o Portfólio antes do único salvamento, igual à tela
-  resumida. Projeto e Portfólio podem ser cadastrados diretamente no seletor e o novo valor é
-  aplicado à transação sem redirecionamento.
-- Categoria e todas as dimensões marcadas como obrigatórias precisam estar preenchidas para um
-  novo OK. Rateio exige ao menos duas partes, categorias/dimensões completas e soma exata. Editar
-  um lançamento que já estava OK nunca o desmarca automaticamente.
-- Categoria, Responsável, Projeto e Portfólio formam a classificação mínima obrigatória. Campo
-  ausente recebe a mesma borda/fundo de alerta e aparece nominalmente em `Faltam: ...`; um novo OK
-  fica bloqueado até completar os quatro.
-- Cada registro agregado mostra sua fonte: `F` significa transação criada pela fatura em PDF e
-  `P` significa registro trazido pelo Pluggy; o tooltip escreve o nome completo. A linha principal
-  continua sendo a única classificada. Registros técnicos são leitura/auditoria.
-- “Mais informações da transação” existe em todo registro agregado, inclusive registro técnico ou
-  lançamento rateado. Informação interna não pode ficar inacessível só porque aquele registro não
-  é o principal editável.
-- Não repetir uma linha textual “Mais informações...” sob cada registro. Usar uma seta discreta no
-  fim da descrição; ela abre o painel anexado àquele mesmo registro. O ID deve quebrar linha dentro
-  de uma área própria e nunca sobrepor Status, Tipo ou Valor. Os selos `P` e `F` usam tooltip CSS
-  imediato no mouse/foco, sem depender da demora do atributo nativo `title`.
-- Dentro de cada registro, a ordem visual é fixa: linha do lançamento, painel técnico aberto pela
-  seta e, somente no principal editável, tabela de classificação. O painel da fatura nunca deve
-  aparecer depois da classificação, pois pareceria pertencer aos campos editáveis.
-- O JavaScript da visão detalhada usa parâmetro de versão no `src`. Sempre renovar esse parâmetro
-  quando o comportamento do arquivo mudar, evitando HTML novo com script antigo no cache.
-- O cabeçalho da fatura mostra início e fim do ciclo e vencimento. Dentro de “Mais informações da
-  transação”, mostrar ID, fonte, status, tipo, valor/moeda original, parcela, horários de
-  sincronização, assinatura do OK e, se existir, a informação interna do sistema.
-- O salvamento automático não elimina concorrência segura: a API recebe campos atuais, serializa
-  alterações do mesmo lançamento e continua preservando OK, duplicidade e ajustes humanos.
-
-# Regra permanente de publicação
-
-- Em todo deploy, atualizar este `CLAUDE.md` com decisões, comportamento entregue, migrações,
-  validações realizadas e pendências. Não publicar quando o documento estiver desatualizado.
-- As correções desta seção e a correção de falsa divergência de compra parcelada devem permanecer
-  locais até aprovação explícita do usuário. Antes da aprovação: suíte completa, sintaxe Python e
-  JavaScript, templates, `git diff --check` e revisão visual local; depois do deploy, validar a
-  fatura Unicred mais recente sem alterar OK real apenas para teste.
-
-# Compra completa do Pluggy versus parcela da fatura (30/08/2026)
-
-- Um parcelamento pode aparecer primeiro como um único registro do Pluggy pelo valor total da
-  compra e ainda estar ligado a apenas uma fatura importada. Não esperar duas faturas para
-  reconhecê-lo: quando `valor do Pluggy = valor do PDF × total de parcelas` (tolerância de um
-  real), o registro do Pluggy vira `somente_conciliacao` e a cobrança mensal do PDF passa a ser
-  o único lançamento financeiro.
-- Exemplo validado: ANJOS DE QUINTAL, compra total de R$ 2.160,00 em 6 parcelas. A fatura e o DRE
-  devem contabilizar R$ 360,00 por mês; R$ 2.160,00 permanece apenas como registro técnico da
-  compra e nunca pode ser somado novamente ao DRE.
-- Na primeira conversão de um agregado que ainda tinha somente uma linha oficial, preservar na
-  nova parcela a categoria, dimensões, observação pessoal e assinatura do OK já preenchidas pelo
-  usuário. Parcelas futuras permanecem independentes e não herdam automaticamente observação/OK.
-- Os selos `P` e `F` usam exclusivamente o tooltip global rápido de `topbar.js`; não criar um
-  segundo balão CSS local. Na classificação detalhada, atualizar imediatamente o texto
-  `Faltam: ...` a cada seleção, inclusive quando Projeto preencher Portfólio automaticamente,
-  mantendo a atualização do servidor como confirmação posterior.
-- Arquivos desta entrega: `views/relatorios.py`, `templates/lancamentos_fatura.html`,
-  `static/lancamentos_fatura.js`, testes estruturais e este documento. Após publicar, executar a
-  sincronização de parcelas autenticada e confirmar no ANJOS DE QUINTAL que `F` de R$ 360,00 é o
-  contabilizado/editável e `P` de R$ 2.160,00 é técnico/somente leitura.
-- O cursor dos selos `P` e `F` permanece normal; o tooltip rápido não transforma o selo em ajuda
-  clicável. Antes de enviar um OK, a tela aguarda a fila de salvamento automático do mesmo
-  lançamento, evitando o falso bloqueio logo após preencher o último campo.
-- Um status `PENDING` recente só bloqueia o OK enquanto a cobrança ainda não estiver conciliada a
-  um PDF oficial. A fatura conciliada encerra essa incerteza; nesse caso, o usuário pode conferir
-  normalmente. Se houver bloqueio real, a mensagem distingue classificação, rateio e pendência
-  bancária.
-- Categoria e valores de dimensão chegam ordenados do servidor. Quando Projeto ou Portfólio é
-  cadastrado diretamente em qualquer uma das duas visualizações, inserir/reidratar a opção em
-  ordem alfabética portuguesa, mantendo `(não definido)` no início e `+ Cadastrar novo` no fim.
-- Diferença real entre o valor oficial do PDF e o único lançamento contabilizado continua sendo
-  divergência vermelha e filtrável. A exceção não é ocultação: compra total do Pluggy igual a
-  parcela × quantidade é normalizada para uma parcela `F`; qualquer outra diferença permanece
-  obrigatoriamente para revisão.
-- Toda importação/reimportação de fatura agora chama a normalização de parcelamentos depois de
-  gravar os vínculos automáticos e antes do `commit`. Para dados históricos, a visão detalhada
-  oferece `Revisar parcelamentos`: é uma operação autenticada, idempotente e retorna à mesma
-  fatura. Ela não apaga registros; apenas separa compra técnica e cobranças mensais conforme o PDF.
-- A comparação do total usa a mesma tolerância de R$ 1,00 já adotada na conciliação, necessária
-  para arredondamentos mensais (por exemplo, R$ 91,15 × 3 versus total de R$ 273,41). Fora dessa
-  tolerância, não normalizar automaticamente: manter divergência vermelha para investigação.
-- Observações pessoais preenchidas em qualquer lançamento da família são compartilhadas com todas
-  as parcelas explicitamente ligadas ao mesmo agregado técnico. Uma edição humana passa a valer
-  para toda a família. Na recuperação histórica, preencher somente observações vazias e apenas
-  quando existir um único texto inequívoco, nunca apagando anotações diferentes já existentes.
-
-# Ordem universal de registros agrupados (31/08/2026)
-
-- Em qualquer visualização que apresente vários registros vinculados e uma classificação comum,
-  mostrar primeiro todos os lançamentos, um abaixo do outro e na ordem recebida. A regra não é
-  exclusiva do filtro de divergências. Os detalhes técnicos expansíveis permanecem imediatamente
-  abaixo do lançamento ao qual pertencem.
-- A tabela única de classificação do lançamento contabilizado e editável aparece somente depois
-  do último registro. Não intercalar a classificação entre o primeiro registro e os registros
-  técnicos seguintes, pois isso dificulta comparar candidatos em divergências.
-
-# Auditoria de padronização — Unicred Conjunta, julho e agosto de 2026 (31/08/2026)
-
-Levantamento somente de leitura. São propostas pendentes de aprovação; não alterar os dados nem
-criar regras automáticas a partir desta seção sem nova confirmação do usuário.
-
-- Foram avaliadas 333 linhas oficiais: 118 de julho e 215 de agosto. As únicas duas linhas sem
-  classificação são os pagamentos recebidos, que são informativos e devem continuar assim.
-- As 23 famílias de parcelas presentes nos dois meses conservaram Categoria, Responsável, Projeto
-  e Portfólio. A única variação encontrada foi textual na observação do EVENTIM (`iron maidem`,
-  `Iron maiden` e `iron maiden`).
-- Cobranças idênticas que variaram de classificação entre os meses: anuidades Unicred, STUDIOJULIA
-  R$ 35,00, APPLE.COM/BILL R$ 5,90, LISCIA R$ 50,00 e DL*GOOGLE R$ 14,99. Exigir decisão de
-  contexto antes de automatizar; descrição sozinha não basta para Apple/Google.
-- GUILHERMEDASILVA já apresenta um padrão de valor útil e coerente: R$ 40,00 como Água e R$ 125,00
-  ou R$ 185,00 como Gás; todos Família / Casa / Vida Familiar.
-- Projeto e Portfólio quase sempre formam pares estáveis. Exceções a revisar: `reformas` aparece
-  uma vez em Vida Familiar e 13 vezes em Imóveis; `Compras Pessoais` aparece 31 vezes em Vida
-  Familiar e 7 vezes em Viagens.
-- Nomes candidatos a normalização editorial: `reformas`, `bgs 2026`, `viagem atacama`,
-  `Colegio Salvatoriano`, `Jantas`; não renomear até o usuário aprovar os nomes finais.
-- Contextos que precisam de decisão funcional antes de virar regra: Farmácia em Casa versus Saúde;
-  Beleza em Saúde versus Compras Pessoais; ingressos/hospedagem do Iron Maiden em
-  Compras Pessoais / Viagens; tarifas do cartão em Casa versus Compras Pessoais.
-
-## Decisões aprovadas para publicação
-
-- Farmácia cotidiana passa de Casa para Saúde; projetos explícitos de viagem ou cirurgia são
-  preservados. LISCIA e STUDIOJULIA passam a Beleza / Andrea / Compras Pessoais / Vida Familiar.
-- Anuidades e bonificações Unicred passam a Tarifas do Cartão / Família / Serviços Financeiros /
-  Vida Familiar. EVENTIM e SAN JUAN ligados ao show passam ao projeto Iron Maiden 2026 e
-  Portfólio Eventos, com observação `Iron Maiden`.
-- Normalizar os nomes aprovados e ligar cada Projeto ao seu Portfólio padrão. `Reformas da casa`
-  sempre aponta para Imóveis.
-- Criar regras apenas para descrições invariantes nos dois meses: ACOUGUE CARNE FRESCA,
-  SUPERVIZA e SUPERMERCADO VIDE -> Mercado / Família / Casa / Vida Familiar. Não criar regra
-  genérica para Apple, Google, Mercado Livre, combustível, mecânica, estorno ou IOF.
-- Tudo está na migração 35, que preserva OK e limita as reclassificações às faturas Unicred
-  Conjunta de julho e agosto/2026. Em 31/08/2026 o usuário informou que marcou mais quatro
-  lançamentos como OK e aprovou seguir com os demais ainda pendentes; a migração não altera
-  nenhuma marcação de conferência.
-- A validação pós-publicação mostrou que algumas linhas contabilizam diretamente o registro P do
-  Pluggy, sem `transacao_id_criado`. A migração 36 repete as decisões sobre todos os registros
-  explicitamente presentes em `fatura_vinculo`, inclusive descrições parceladas de LISCIA. Não
-  agrupa por semelhança e continua sem alterar qualquer OK.
-
-# Expansão da classificação para todo o histórico Unicred (31/08/2026)
-
-- Após validar julho e agosto, o usuário aprovou replicar os padrões para todos os meses do Cartão
-  de Crédito Unicred · Conjunta, preenchendo o máximo possível sem adivinhar casos ambíguos.
-- A migração 37 executa novamente o consenso das famílias oficiais de parcelas e as regras
-  automáticas cadastradas. Só campos vazios ou lançamentos ainda não tratados por regra recebem
-  dados; categoria manual, lançamentos com OK e suspeitas de duplicidade nunca são sobrescritos.
-- Tanto o consenso das famílias quanto a aplicação das regras recebem explicitamente o
-  `account_id` da Unicred Conjunta. Não aplicar esta expansão em outra origem por efeito colateral.
-- Categoria, Responsável, Projeto, Portfólio e Observação pertencem à família da compra parcelada.
-  Quando uma observação pessoal é editada em qualquer parcela, a API a replica imediatamente para
-  todas as parcelas explicitamente ligadas ao mesmo agregado. Na recuperação histórica, só copiar
-  quando houver um único texto inequívoco e apenas para observações vazias.
-
-# Tarifas, bonificações e estornos (31/08/2026)
-
-- Anuidade, tarifa e a respectiva bonificação não são IOF. No Cartão de Crédito Unicred ·
-  Conjunta, `ANUIDADE` e `Est.Tarifa manutencao de conta` usam **Tarifas do Cartão / Família /
-  Serviços Financeiros / Vida Familiar**, tanto no histórico quanto nas novas sincronizações.
-- A cobrança entra como despesa e o crédito/bonificação reduz a mesma despesa. Manter as duas
-  linhas para auditoria e conciliação; elas se anulam no DRE quando os valores forem iguais.
-- IOF só pode ser atribuído por regra quando a descrição mencionar IOF explicitamente. Nunca
-  inferir IOF pelo sinal negativo, pelas palavras tarifa, anuidade, bonificação ou estorno.
-- Regras que poderiam confundir uma conta corrente com um cartão devem ter origem vinculada. A
-  coluna `regra_classificacao.account_id` limita a regra à origem quando preenchida; regra sem
-  origem continua geral.
-- Para outros estornos/cancelamentos/bonificações, herdar a classificação do original apenas
-  quando houver exatamente um candidato: mesma origem, mesmo cartão quando informado, valor
-  exatamente oposto e distância máxima de 30 dias. Persistir o vínculo em `estorno_origem_id`.
-  Se houver zero ou mais de um candidato, não adivinhar e deixar para revisão manual.
-- A herança copia Categoria, Responsável, Projeto e Portfólio, mas nunca copia Observação pessoal
-  nem marca OK. A migração 38 corrige todo o histórico aprovado e cria as regras permanentes.
-
-# Pesquisa da visualização detalhada e revisão de parcelas (31/08/2026)
-
-- A visualização detalhada por fatura possui pesquisa local própria. Ela filtra somente as linhas
-  já carregadas da fatura e do Status selecionado, considerando descrição do PDF, titular, cartão,
-  valores, registros P/F, classificação escolhida e observação. A linha principal e todos os seus
-  registros agregados formam um bloco: aparecem ou somem juntos. `Esc` limpa a pesquisa.
-- `Revisar parcelamentos` não é uma consulta sem efeito. Ele corrige o regime de caixa quando o
-  Pluggy trouxe a compra inteira em um único registro: marca o total como registro técnico
-  `somente_conciliacao` e cria uma transação contabilizada para cada parcela, no mês e valor do
-  PDF. Isso redistribui o DRE entre meses. Categoria, dimensões e observação disponíveis são
-  preservadas; o primeiro trabalho humano pode ser transferido com segurança.
-- A revisão é idempotente: `fatura_linha.transacao_id_criado` impede criar a mesma parcela duas
-  vezes. O botão pode ser executado novamente para tratar novas famílias detectadas. Toda execução
-  fica no log de auditoria. O rótulo continua curto, mas o tooltip deve explicar o impacto real.
-- Antes de executar, a tela chama a mesma rotina em modo `preview`, estritamente somente leitura.
-  O botão fica desativado quando não houver pendências; quando houver, mostra quantas compras e
-  parcelas serão afetadas e exige confirmação explícita com aviso de impacto no DRE mensal.
-- A revisão manual é limitada ao cartão da fatura aberta. A importação automática também passa o
-  `account_id` da fatura recém-importada. Nunca usar o botão de uma origem para revisar silenciosamente
-  parcelamentos de outros cartões ou contas.
-
-# Consenso Unicred de junho, julho e agosto para o histórico (31/08/2026)
-
-- Junho/2026 foi revisado pelo usuário e passou a compor, junto com julho e agosto, a base de
-  referência das classificações do Cartão de Crédito Unicred · Conjunta. As três faturas possuem
-  478 linhas oficiais; somente os pagamentos informativos ficam sem classificação financeira.
-- A migração 39 cria regras restritas à Unicred para descrições que permaneceram coerentes:
-  SUPERVIZA, MP*PRODUTOS, HIPERCENTER UNIVERSIDAD, HAVAN VIDEIRA, FARM GEREMIAS - CENTRO,
-  CATIVA, HNA*OBOTICARIO, IEAS, AZULEQVY2E, CASA DE CARNES 95 LTDA ME, DM*SPOTIFY,
-  STUDIOJULIA, SESI FARMACIA FM, GMGODONTOLOGIA, CIDATEC e SUPERMERCADO ITAL.
-- No histórico anterior a junho/2026, aplicar esses padrões somente quando a classificação estiver
-  incompleta. Preencher Categoria e somente dimensões ausentes; nunca substituir uma classificação
-  já completa, nunca mudar OK e nunca copiar ou apagar Observação pessoal.
-- Não transformar em regra descrições cujo contexto pode variar apesar de repetirem, especialmente
-  postos de combustível. `AUTO POSTO CAMPO DO ARE` apareceu como BRDrive na referência, mas pode
-  representar gasto pessoal em outro mês e foi deliberadamente excluído da automação.
-- Observações divergentes em uma mesma descrição (por exemplo, compras diferentes na HAVAN) não
-  fazem parte dessas regras. A classificação pode ser comum sem misturar o motivo pessoal da compra.
-
-# Organização compacta da fatura detalhada (31/08/2026)
-
-- O cabeçalho superior da visualização detalhada começa à esquerda com `Fatura <mês> de <ano>`.
-  Imediatamente ao lado, na mesma linha, exibir o início e fim do ciclo e o vencimento. Manter o
-  cabeçalho baixo; o acesso à conciliação permanece alinhado à direita.
-- Os controles Cartão, Fatura e Status e a alternância Resumida/Detalhada pertencem à mesma linha
-  flexível. Em telas estreitas podem quebrar naturalmente, sem sobreposição.
-- A explicação dos registros P/F e o controle seguro de revisão de parcelamentos ficam no rodapé,
-  depois da tabela. A tarefa principal — filtrar, comparar e classificar lançamentos — vem antes.
-- O OK continua individual por parcela/mês. Replicar classificação ou observação nunca replica OK.
-
-# Fechamento Unicred e conferência inicial do DRE (31/08/2026)
-
-- Na fatura de agosto, `MP*REGIBARBERSHOP` (R$ 70,00) e `GUILHERMEDASILVA`
-  (R$ 185,00) possuíam dois registros Pluggy com o mesmo instante, cartão e valor. Há uma única
-  cobrança oficial no PDF, um registro contabilizado e o outro continua preservado para auditoria.
-  Esse cenário é eco técnico, não divergência; não apagar nem somar os dois registros.
-- A equivalência só elimina o alerta quando data/hora, valor e final do cartão coincidem. Valores,
-  horários ou cartões diferentes continuam exigindo validação humana.
-- Retrato das faturas: junho R$ 16.492,58 (37 classificações e 83 OK pendentes), julho
-  R$ 16.543,97 (classificação completa e 4 OK pendentes) e agosto R$ 18.821,76
-  (classificação completa e 1 OK pendente). Não marcar OK automaticamente.
-- Os três totais oficiais estão integralmente classificados como despesa no DRE e sem valor fora
-  do DRE. O DRE mensal geral é maior porque reúne todas as contas e cartões; comparar a parcela da
-  Unicred pelos cartões da própria fatura, não com o total geral do mês.
-- O DRE 2026 ainda mostra muitos lançamentos sem categoria oriundos das demais contas. Resolver a
-  Unicred não autoriza classificar esses registros de outras origens com as mesmas regras.
-
-# Vínculo corrigido — Mercado Livre 5x R$ 32,80 (31/08/2026)
-
-- A parcela 1/5 de `MERCADOLIVRE*COMPRAS` foi ligada incorretamente a `YELLOW BOX PIZZARIA` porque
-  ambas resultavam em R$ 164,00. Coincidência de valor total nunca é prova suficiente de família.
-- O registro técnico correto é `MERCADOLIVRE*COM CURITIBA`, R$ 164,00. As parcelas 2/5 e 3/5 já
-  confirmavam a classificação compartilhada: Utilidades Domésticas / Família / Reformas da casa /
-  Imóveis, observação pessoal `Resina Epoxi mesa`. A migração 40 aplica isso à parcela 1/5, sem OK.
-- O conciliador de parcelamentos agora exige, além do valor total, ao menos um token significativo
-  do estabelecimento em comum entre a linha do PDF e o registro agregado do Pluggy.
-
-# Conferência contínua no filtro Pendentes de OK (31/08/2026)
-
-- Na visualização detalhada, o filtro `Pendentes de OK` funciona como fila. Depois que o servidor
-  confirma o OK, atualizar cartões e contadores e remover imediatamente a linha e seus detalhes,
-  sem recarregar a página e sem perder a posição de rolagem.
-- A remoção automática só ocorre nesse filtro e somente após resposta bem-sucedida da API. Nos
-  demais filtros, marcar OK mantém o lançamento visível e apenas atualiza seu estado.
-
-# Classificação integral compartilhada nas parcelas (31/08/2026)
-
-- Categoria, Responsável, Projeto, Portfólio e Observação pertencem à compra parcelada inteira.
-  Ao editar qualquer um desses campos em uma parcela, sincronizar com todas as demais parcelas da
-  família o conjunto completo já definido no lançamento editado, não somente o campo do evento.
-- A família continua sendo determinada exclusivamente pelos vínculos persistidos da fatura com o
-  agregado técnico. Nunca formar família apenas por descrição, data ou valor semelhante.
-- Uma limpeza feita explicitamente pelo usuário também é compartilhada. Campos ainda vazios que
-  não foram alterados não apagam dados existentes. O OK permanece sempre individual por parcela.
-
-# Ordenação da tabela detalhada (31/08/2026)
-
-- Na visualização detalhada, os cabeçalhos Data, Descrição no PDF, Titular/Cartão, Parcela, Valor
-  PDF, Classificação e OK são ordenáveis. O primeiro clique ordena crescente e o seguinte inverte
-  para decrescente, com seta indicando o estado.
-- Ordenar é local e não recarrega a página. O bloco de registros e detalhes permanece imediatamente
-  abaixo do lançamento principal correspondente. A pesquisa atual continua aplicada após ordenar.
-
-# Correção ILLUMINATO e trava de associações (31/08/2026)
-
-- A cobrança `ILLUMINATO BAR E TRATT`, de 21/04/2026 e R$ 157,30, existe tanto no PDF oficial
-  quanto no Pluggy e é um único lançamento real. Classificação aprovada: Restaurantes / Ronaldo /
-  Viagem Gramado / Viagens. Não alterar automaticamente Observação nem OK.
-- Uma revisão antiga associou incorretamente `LISCIA`, de R$ 107,50, ao registro ILLUMINATO e
-  deixou a cobrança oficial sem lançamento contabilizado. A migração 41 desfaz apenas esse vínculo,
-  restaura o ILLUMINATO como contabilizado e preserva os dois registros para classificação correta.
-- Antes de gravar qualquer `substituido_por`, validar novamente conta, proximidade de data,
-  estabelecimento e valor. Compras positivas exigem pelo menos dois termos significativos do
-  estabelecimento em comum. Diferença compatível com valor total só é aceita quando forma um número
-  inteiro plausível de parcelas. Pagamentos/créditos sem termos comuns exigem mesmo dia e mesmo valor.
-
-# Modelo de seleção pesquisável (31/08/2026)
-
-- Categoria, Responsável, Projeto e Portfólio usam primeiro o componente compartilhado
-  `static/combobox.js` nas visualizações resumida e detalhada. O `<select>` original continua como
-  fonte de verdade, para preservar APIs, permissões, validações e salvamento automático existentes.
-- A pesquisa filtra por qualquer parte do texto, sem diferenciar acentos ou caixa. Setas percorrem,
-  Enter confirma, Tab confirma a opção destacada e segue ao próximo campo, Shift+Tab volta e Escape
-  cancela. Nunca criar ou escolher silenciosamente uma opção que não esteja destacada.
-- Projeto continua preenchendo seu Portfólio padrão e ambos os campos visuais precisam refletir a
-  mudança sem recarregar a página. Projeto e Portfólio preservam a opção de cadastro rápido.
-- O piloto foi aprovado e expandido. O mesmo componente é o padrão obrigatório para seleções pesquisáveis
-  de todas as telas atuais e novas do Pé de Meia, exceto filtros de navegação explicitamente nativos.
-- O campo nativo fica preservado tecnicamente, mas oculto também da árvore de acessibilidade; leitores
-  de tela e navegação por teclado devem encontrar somente o novo combobox, sem controles duplicados.
-- Linguagem visual escolhida pelo usuário: `Linha precisa`, refinada depois para `Sombra flutuante` neutra.
-  O estado final usa campo transparente e compacto, sombra mínima, hover/foco cinza, chevron discreto e menu
-  compacto. Não exibir o texto `Enter`; a tecla continua funcional. Manter essa linguagem nas novas telas.
-- Refinamento aprovado: substituir a transparência por cinza quente muito suave (`--field-soft`), mantendo
-  a linha inferior. Texto com 12,5px nos editores e 11,5px dentro da tabela compacta, equivalentes aos
-  tamanhos anteriores aos comboboxes. O fundo obrigatório continua suave e a linha vermelha informa a falta.
-- Refinamento posterior aprovado: `--field-soft` deve reutilizar exatamente o cinza do fundo geral (`--bg`),
-  atualmente `#f7f7f5`. Os campos ficam mais baixos (32px), com raio mínimo de 3px e linha de foco de 1px,
-  evitando aparência de caixa alta ou borda pesada.
-- Refinamento visual mais recente, que substitui o anterior: opção `Sombra flutuante`. Os campos pesquisáveis
-  usam altura de 28px, fundo transparente, borda normalmente invisível e sombra mínima. No hover ou foco,
-  recebem fundo azul quase branco, contorno azul translúcido, sombra suave e escala de 1,012. Campos obrigatórios
-  incompletos mantêm sinalização vermelha discreta e ganham realce vermelho suave no hover/foco.
-- Ajuste posterior aprovado: reduzir os campos pesquisáveis para 26px e diminuir o preenchimento interno para
-  `1px 21px 1px 5px`. O hover/foco deixa de usar azul e passa a usar cinza neutro (`#f2f2f0`), contorno cinza
-  translúcido e sombra neutra. O movimento de escala e o tratamento vermelho dos obrigatórios são mantidos.
-- Expansão para todo o projeto: o componente pesquisável deve melhorar automaticamente qualquer `select` com
-  `data-pdm-combobox` ou carregamento tardio por `data-lazy-options`. Não usar quantidade de opções como critério
-  automático: isso quebrou o alinhamento dos filtros Fatura e Status. Seletores de navegação, como cartão, fatura,
-  status, ano e tipo, continuam nativos e podem ser protegidos explicitamente com `data-pdm-native`.
-  O observador global também aplica o padrão a seletores inseridos dinamicamente após a abertura da página.
-- Auditoria pós-expansão: os filtros nativos e os campos pesquisáveis não devem causar largura maior que o
-  contêiner nem rolagem horizontal adicional. Em `/pendencias`, scripts de ações em lote precisam verificar se
-  `formLote` existe, pois a seção é condicional e pode não ser renderizada quando não há categorias pendentes.
-
-# Estado consolidado para retomada (01/09/2026)
-
-## Publicado, definido e validado
-
-- A visualização de lançamentos possui modos Resumida e Detalhada. As duas usam o mesmo lançamento real,
-  a mesma classificação e o mesmo OK; alterar em uma tela deve refletir na outra sem criar controles paralelos.
-- A visualização Detalhada do cartão organiza cada cobrança do PDF com todos os registros agregados em sequência
-  e, somente depois deles, apresenta a classificação compartilhada. Clicar na linha ou no sinal abre e fecha o
-  conjunto. Registros `F` vêm da fatura e registros `P` vêm do Pluggy, com dica imediata e cursor normal.
-- Categoria, Responsável, Projeto e Portfólio são obrigatórios para liberar o OK. A mensagem de pendência deve ser
-  atualizada imediatamente durante o preenchimento, sem recarregar a página. Observação continua opcional.
-- O OK é individual por lançamento. No filtro `Pendentes de OK`, ao marcar, a linha sai da fila somente depois da
-  confirmação do servidor, preservando filtros e posição de rolagem.
-- Alterações de classificação e observação salvam automaticamente. Em famílias parceladas confirmadas por vínculos
-  persistidos, Categoria, Responsável, Projeto, Portfólio e Observação são compartilhados entre todas as parcelas;
-  o OK nunca é propagado automaticamente.
-- Observações pessoais ficam no campo Observação. Mensagens técnicas do sistema, como origem no PDF, geração de
-  parcela e motivo de agregação, ficam em informação interna separada e oculta por padrão. Nunca apagar ou misturar
-  as observações manuais já registradas.
-- O PDF oficial define as cobranças da fatura. Apenas o lançamento real editável entra nos cálculos e no DRE; os
-  demais agregados são registros técnicos de auditoria. Investimentos permanecem fora do DRE. Diferenças de até
-  R$ 1,00 podem ser tratadas como arredondamento; acima disso permanecem divergência vermelha para revisão.
-- Cabeçalhos da tabela detalhada podem ordenar Data, Descrição, Titular/Cartão, Parcela, Valor, Classificação e OK,
-  alternando crescente e decrescente sem separar os registros agregados de seu lançamento principal.
-- A pesquisa da visualização detalhada filtra lançamentos como na resumida. Cartão, Fatura e Status permanecem
-  seletores nativos; campos de classificação usam o combobox pesquisável compartilhado e ordenado alfabeticamente.
-- O cabeçalho da fatura mostra `Fatura <mês> de <ano>` à esquerda e, ao lado, início, fim do ciclo e vencimento.
-  Ao abrir o cartão, selecionar por padrão a fatura mais recente disponível.
-- O filtro Status da tela resumida não exibe mais o texto redundante `Status`; a caixa continua funcional e possui
-  nome acessível para tecnologias assistivas.
-- Toda publicação deve atualizar este `CLAUDE.md` com decisões, comportamento entregue, validações e pendências.
-
-## Automação aprovada para Cartão de Crédito Unicred · Conjunta
-
-- Escopo exclusivo da conta `b6243125-dca2-42b2-8c20-0825782c6d8d`; não reutilizar regras desta origem em outros
-  cartões ou contas sem revisão própria.
-- A migração 42 criou `cartao.classificacao_backup_v42` e 11 regras futuras baseadas em referências OK, completas,
-  idênticas e sem ambiguidade: PANIFICADORA E CONFEIT, MP*PRODUTOS/MP *PRODUTOS, RENNER, DM*SPOTIFY/DM *SPOTIFY,
-  RELOJOARIA PASQUAL, SAN JUAN EXECUTIVE, AUTO POSTO CAMPO DO ARE, CERVEJARIAREDUTO, FARRANZO VIDEIRA, BIG FRUTAS
-  e ESSENZA AROMAS. `ESTACAO` ficou excluído por conflito com `HIPER CENTER ESTACAO`.
-- A aplicação preenche somente campos vazios em lançamentos reais, ativos e ainda não conferidos. Nunca substitui
-  classificação divergente, Observação, OK, duplicados confirmados, registros técnicos ou lançamentos substituídos.
-- Auditoria da execução: versão 42; 160 dimensões, 35 categorias e 42 referências preenchidas; 11 regras criadas;
-  nenhuma propagação adicional de parcela foi necessária. As 20 faturas Unicred de jan/2025 a ago/2026 já estavam
-  conciliadas, portanto nenhum vínculo novo foi criado.
-
-## O que ficou para avaliar
-
-- Revisar manualmente os lançamentos ainda sem classificação na Unicred Conjunta. Há grupos com apenas uma referência
-  OK e descrições genéricas ou ambíguas; não criar regra automática até existir evidência suficiente e consistente.
-- Revisar famílias parceladas que ainda não possuam vínculo explícito. Não agrupá-las apenas por descrição, data ou
-  valor parecido e nunca marcar OK automaticamente.
-- Conferir mês a mês se total do PDF, lançamentos reais contabilizados e DRE fecham, destacando vínculo ausente,
-  classificação incompleta e divergência de valor como problemas diferentes.
-- Depois de concluir a Unicred Conjunta, criar regras independentes para outros cartões e contas correntes. Não
-  transportar classificações automaticamente entre origens.
-- A visualização detalhada inclui uma `Fatura em andamento` para o ciclo atual ainda sem PDF. Ela lista somente os
-  lançamentos reais do Pluggy desde o fim da última fatura oficial e permite Categoria, Responsável, Projeto,
-  Portfólio e Observação, mas nunca apresenta total ou conciliação como oficiais. Os valores são identificados como
-  provisórios. Ao importar o PDF, os vínculos passam a usar as mesmas transações e preservam todo o trabalho manual.
-- Em cartão de crédito, uma nova marcação de OK exige vínculo persistido com uma linha de fatura em PDF. Portanto,
-  o OK fica visivelmente desabilitado na fatura em andamento e a API também recusa tentativas vindas de outra tela
-  ou chamada direta. A classificação pode ser preparada antes do fechamento, mas a conferência só ocorre depois da
-  conciliação. OKs históricos já existentes não são apagados automaticamente.
-- Na tela resumida, o status pendente do banco continua bloqueando o OK e aparecendo na legenda/dica, mas não colore
-  mais o fundo da linha de amarelo. A linha permanece transparente para reduzir ruído visual.
-- Links da fatura em andamento devem gerar `andamento=1&account_id=<conta>` como dois parâmetros reais. Nunca montar
-  `&amp;` dentro de uma expressão Jinja autoescapada, pois isso produz `&amp;` literal no endereço e perde a conta.
-- Horários do cartão Unicred Conjunta vindos do Pluggy possuem diferença comprovada de +3 horas. Referência validada
-  na Visa: DELTA VIDEIRA, R$ 220,01, 13/08/2026 às 15:49, que o sistema mostrava como 18:49. A migração 43 guarda o
-  estado anterior em `cartao.horario_backup_v43` e subtrai três horas apenas de registros Pluggy dessa conta.
-- O worker aplica a mesma normalização a novas sincronizações do cartão de crédito Unicred, impedindo que o horário
-  errado retorne. Registros exatamente às 00:00 são preservados porque normalmente representam somente uma data,
-  não um horário de compra. A correção não altera categoria, dimensões, Observação, OK, valores ou vínculos.
-- Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
-  margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.
-
-# Resumo mestre para a próxima retomada (01/09/2026, após migração 43)
-
-## Estado publicado
-
-- Produção: `https://pedemeia.brdrive.net`. Repositório: `ronaldinhodelima/pe-de-meia`, branch `main`, publicação
-  pelo fluxo configurado no Coolify. Projeto/ambiente de referência: Ronaldinho. Não alterar acessos administrativos
-  antigos, senha mínima de seis caracteres ou o uso de Gunicorn sem nova autorização do usuário.
-- Sessões possuem expiração de 24 horas e suporte a cookies. E-mail operacional confirmado:
-  `ronaldo@brdrive.net`. Logs ficam dentro de Relatórios e devem registrar acessos, sincronizações, alterações,
-  regras, migrações, resultados e falhas sem expor segredos.
-- Antes de alterações de dados em lote, criar ponto de reversão no mesmo PostgreSQL. O usuário dispensou teste de
-  restauração neste momento, mas isso não dispensa backup. Nunca apagar lançamentos do Pluggy: preservar a origem
-  para auditoria e marcar duplicidade/substituição apenas quando houver decisão explícita ou prova segura.
-- Cada deploy precisa atualizar este arquivo. A validação mínima atual é executar a suíte completa, verificar
-  `git diff --check` e conferir a tela afetada em produção. Estado após a correção de horário: 252 testes aprovados
-  e 6 condicionais ignorados.
-
-## Regras financeiras que não podem regredir
-
-- DRE considera todo lançamento real, independentemente de `POSTED` ou da data atual. Natureza `investimento`
-  continua fora do DRE. Duplicados confirmados, registros somente para conciliação e lançamentos substituídos não
-  entram nos totais. Cards de receitas/despesas/resultado usam exatamente essa mesma regra.
-- O PDF é a autoridade da fatura fechada. Uma linha oficial pode ter vários registros agregados, mas apenas um
-  lançamento real editável é contabilizado. Registros técnicos continuam visíveis com procedência `P` (Pluggy) ou
-  `F` (fatura), sem duplicar DRE ou classificação.
-- Categoria, Responsável, Projeto e Portfólio são obrigatórios. Observação é pessoal e opcional. Informações criadas
-  pelo sistema ficam em `observacao_sistema`, ocultas por padrão. Alterar qualquer campo nunca desmarca OK.
-- Projeto aplica automaticamente seu Portfólio padrão. Listas de seleção ficam em ordem alfabética. Projeto e
-  Portfólio permitem cadastro rápido e aplicação imediata sem sair da tela.
-- Em famílias parceladas comprovadas por vínculos persistidos, compartilhar Categoria, Responsável, Projeto,
-  Portfólio e Observação entre parcelas. Não compartilhar OK. Não inferir família apenas por descrição, valor ou
-  coincidência matemática.
-- Diferença de valor de até R$ 1,00 pode ser arredondamento; acima disso é divergência vermelha. Mesmo abaixo do
-  limite, preservar os valores originais e nunca esconder uma diferença de vínculo ou quantidade de lançamentos.
-
-## Interfaces consolidadas
-
-- Lançamentos Resumidos e Detalhados são duas visualizações do mesmo dado. A Resumida privilegia classificação
-  rápida; a Detalhada privilegia fatura, procedência, registros agregados e auditoria. Ambas salvam nos mesmos campos.
-- Na Resumida, linhas com OK usam cinza-claro. Lançamentos pendentes no banco não recebem mais fundo amarelo;
-  permanecem transparentes e identificados por legenda/dica. O rótulo visual `Status` foi removido, mantendo nome
-  acessível. Voltar/avançar no navegador deve respeitar filtros, datas, telas anteriores e posição de rolagem.
-- Na Detalhada, pesquisa, filtros clicáveis nos cards e ordenação por todos os cabeçalhos funcionam sem desmontar o
-  grupo. A ordem é: lançamento principal, registros agregados um abaixo do outro, detalhes de cada registro e,
-  por último, editor único da classificação. O OK atualizado no filtro pendente remove a linha sem recarregar.
-- Comboboxes pesquisáveis filtram durante a digitação, ignoram acentos/caixa e aceitam setas, Enter, Tab,
-  Shift+Tab e Escape. O visual final tem 26px, campo transparente, hover/foco cinza e margens laterais mínimas;
-  não mostrar o lembrete textual `Enter`. Cartão, Fatura, Status, ano e tipo permanecem seletores nativos.
-
-## Fatura em andamento e fechamento futuro
-
-- Para o ciclo ainda sem PDF, a Detalhada abre por padrão `Fatura Setembro de 2026 · Em andamento`. O período começa
-  no dia posterior ao fim da última fatura oficial e termina na data atual. A tela mostra lançamentos do Pluggy,
-  total provisório, DRE provisório, classificação e pendências, sempre com aviso de que o PDF ainda não existe.
-- Durante o ciclo podem ser alterados Categoria, Responsável, Projeto, Portfólio e Observação. O OK fica desabilitado
-  na interface e protegido no servidor. Em qualquer tela, um novo OK de cartão de crédito exige vínculo persistido
-  com uma linha do PDF. A importação futura deve preservar todo o trabalho antecipado e conciliar as linhas oficiais
-  com as mesmas transações, destacando ausências, sobras e valores diferentes.
-- Links para a fatura atual usam dois parâmetros reais: `andamento=1&account_id=<conta>`. O seletor e a seta seguinte
-  devem abrir setembro sem `&amp;` literal. Ao fechar/importar setembro, ela deixa de ser provisória e o próximo ciclo
-  passa a ser a nova fatura em andamento.
-
-## Correção de horário Unicred
-
-- Diferença confirmada pela Visa: `DELTA VIDEIRA`, R$ 220,01, cartão adicional de Andrea, ocorreu em 13/08/2026 às
-  15:49; o sistema mostrava 18:49. A migração 43 corrigiu em menos três horas somente os registros Pluggy do Cartão
-  de Crédito Unicred · Conjunta e guardou o estado anterior em `cartao.horario_backup_v43`.
-- Horários exatamente `00:00` permanecem intactos porque normalmente representam apenas uma data bancária. O worker
-  aplica a mesma normalização somente a novas transações de cartão Unicred, impedindo que a sincronização restaure
-  o erro. A referência DELTA foi conferida em produção após a publicação e passou a mostrar `15:49`.
-- Não aplicar automaticamente essa correção a Nubank, contas correntes ou outras origens. Primeiro validar um evento
-  concreto no aplicativo da respectiva instituição, pois cada conector pode tratar timezone de maneira diferente.
-
-## Próximas etapas acordadas
-
-1. Continuar classificando a fatura de setembro em andamento, sem OK, usando o histórico seguro da Unicred e sem
-   sobrescrever decisões manuais. Revisar descrições ambíguas e grupos com apenas uma evidência antes de criar regra.
-2. Quando o PDF de setembro estiver disponível, importar, consolidar com as transações já classificadas, conferir
-   vínculos/valores/itens ausentes e somente então liberar e concluir os OKs.
-3. Terminar a revisão mês a mês da Unicred Conjunta: total do PDF, único lançamento real contabilizado, DRE, fora do
-   DRE, classificação, parcelamentos, agregados e divergências. Não marcar OK automaticamente.
-4. Depois da Unicred, revisar separadamente outros cartões e contas correntes. Criar regras e eventuais correções de
-   horário específicas por origem; nunca copiar em massa a lógica da Unicred sem validação.
-5. Em uma etapa futura, testar formalmente a restauração dos backups e revisar a política de retenção dos logs. Essa
-   tarefa está registrada, mas foi adiada pelo usuário e não bloqueia a classificação financeira atual.
-
-## Retrato da Unicred Conjunta, fatura a fatura — 01/09/2026
-
-Levantado direto dos cards da tela detalhada, nas 20 faturas de jan/2025 a ago/2026.
-Serve de linha de base: comparar antes/depois de qualquer mexida no matcher ou na classificação.
-
-**Conciliação — RESOLVIDO em 01/09/2026 pela migração 44 (ver abaixo). As 20 faturas voltaram
-a fechar 100%, com zero divergência.** O retrato do problema, que valia antes da correção, era:
-
-**4 faturas não fechavam 100%** (o registro anterior de "20/20 fechando"
-não vale mais depois das reimportações; conferir sempre na tela, não no histórico):
-
-| Fatura | Linhas | Sem vínculo | Divergências |
-|---|---|---|---|
-| Janeiro/2026 | 134 / 135 | R$ 584,83 | 1 |
-| Dezembro/2025 | 124 / 125 | R$ 83,30 | 1 |
-| Outubro/2025 | 133 / 135 | R$ 373,75 | 2 |
-| Setembro/2025 | 143 / 144 | R$ 125,50 | 1 |
-
-Total pendente de vínculo: **R$ 1.167,38 em 5 linhas**. Todas as outras 16 faturas fecham
-com "Falta vincular: R$ 0,00" e zero divergência.
-
-**Classificação — o gargalo real está em 2025.** De ago/2026 para trás a cobertura despenca:
-ago/26 e jul/26 e jun/26 estão 100%; mai/26 128/138; abr/26 54/102; mar/26 42/115; e todo o
-histórico de 2025 fica entre 23/135 (out/25) e 44/125 (dez/25). São em boa parte os lançamentos
-criados a partir da fatura, que nascem sem categoria e **entram no DRE como despesa por padrão**
-(`NATUREZA_PADRAO`). É a pendência de maior impacto no número hoje.
-
-**OK** está zerado em todo o histórico de 2025 e parcial em 2026 — esperado, é assinatura humana
-e ninguém além do usuário marca.
-
-### Correção publicada em 01/09/2026
-
-`/lancamentos/fatura` sem `account_id` na URL caía em `contas_credito[0][0]` — a primeira conta
-de crédito da lista, que é o **Nubank Andrea, sem nenhuma fatura importada**. A tela abria só com
-"Nenhuma fatura importada foi encontrada para este cartão" e, pior, o seletor de cartão **só
-existe dentro do `{% if fatura %}`** — ou seja, sem saída para trocar de cartão. Agora
-`_conta_credito_padrao()` escolhe a conta de crédito com a fatura mais recente e o seletor
-aparece também no estado de erro. Teste de regressão em `tests/test_estrutura.py`.
-
-## A marca de agregado que nunca era retirada — migração 44 (01/09/2026)
-
-**O defeito.** `somente_conciliacao` só era POSTA, nunca retirada.
-`_sincronizar_parcelas_de_agregado` marca como agregado a transação vinculada a 2+ linhas de
-fatura — mas quando o conjunto de vínculos muda depois (refazer vínculos, reenvio de PDF,
-desvincular na mão), ela deixa de ser agregado e **continuava fora do resultado para sempre**,
-sem nenhuma parcela ocupando o lugar dela. O `UPDATE` só tinha `SET somente_conciliacao = true`.
-
-**O estrago.** Cinco compras **à vista** (não parceladas, nada a ver com agregado) sumiram do
-DRE — R$ 1.167,38:
-
-| Fatura | Data | Descrição | Valor |
-|---|---|---|---|
-| Janeiro/2026 | 23/12/2025 | SUPERVIZA (Andrea) | R$ 584,83 |
-| Dezembro/2025 | 14/11/2025 | DELTA VIDEIRA (Ronaldo) | R$ 83,30 |
-| Outubro/2025 | 14/09/2025 | SUPERVIZA (Andrea) | R$ 268,75 |
-| Outubro/2025 | 08/10/2025 | MP *PRODUTOS (Ronaldo) | R$ 105,00 |
-| Setembro/2025 | 27/08/2025 | POSTO CANOAS (Ronaldo) | R$ 125,50 |
-
-**Como se manifestava — e por que era difícil de ver.** A linha do PDF *tinha* vínculo, com um
-lançamento do Pluggy correto (POSTED, valor e data idênticos). Mas esse único vínculo era
-inelegível, então a detalhada não achava lançamento principal e escrevia **"Validar: falta
-vínculo"** — mensagem enganosa: não faltava vínculo, faltava um lançamento **contabilizável**.
-Pior, as duas telas discordavam: a conciliação dizia "0 sem vínculo · 0 órfão do Pluggy" (o
-`tem_vinculo` dela é `bool(vinculos) or bool(transacao_id_criado)`, que não olha elegibilidade)
-enquanto a detalhada acusava divergência. **Ao investigar divergência entre as duas telas,
-lembrar que elas medem coisas diferentes: a conciliação mede se a linha tem vínculo; a detalhada
-mede se sobrou um lançamento que conta.**
-
-**A correção.** `_sincronizar_parcelas_de_agregado` agora também desmarca, com uma trava:
-**nunca desmarcar quem já teve parcela gerada a partir das suas linhas** (`transacao_id_criado`
-preenchido) — se as parcelas existem, são elas que contam e o agregado tem que continuar fora,
-senão a despesa conta duas vezes. O retorno antecipado "sem agregado nenhum" passou a valer só
-para a prévia, porque sem agregado ainda pode haver marca obsoleta a retirar.
-
-A migração 44 corrigiu o dado já gravado, guardando reversão em `cartao.agregado_backup_v44`.
-Auditoria: **5 lançamentos devolvidos, exatamente os 5 previstos**. Depois dela as 20 faturas
-fecham 100% e o DRE de cada uma bate com o total do PDF — exceto maio/2026, onde R$ 66,55 estão
-legitimamente em "Fora do DRE" por natureza (18.746,38 + 66,55 = 18.812,93).
-
-**Lição para o próximo estado que tire lançamento do resultado:** todo estado desses precisa do
-caminho de volta desde o início. Um estado que só se aplica e nunca se retira vira dado perdido
-silencioso — não dá erro, não aparece em teste, e só é encontrado meses depois por quem for
-conferir fatura a fatura.
-
-## Consenso dos OK publicado em 2025 — migração 45 (01/09/2026)
-
-### Como o consenso é apurado (e por que campo a campo)
-
-Aprende **só com lançamento conferido** — OK é a assinatura humana, então é a única fonte de
-verdade sobre o que significa cada gasto. Exige **unanimidade e no mínimo duas evidências**.
-
-A diferença para a migração 42: o consenso é apurado **campo a campo**, não pelo conjunto.
-Um lojista pode ter categoria consensual e nenhum projeto consensual — é exatamente o caso do
-posto de combustível, que abastece o Jeep (Ronaldo) e o Tracker (Andrea): `Combustível` é
-unânime, `Projeto` nunca será. Exigir o conjunto inteiro jogava fora a categoria junto.
-
-**Canonização do lojista.** A mesma loja chega com e sem o sufixo de cidade/país
-(`DELTA VIDEIRA` e `DELTA VIDEIRA VIDEIRA BR`). O agrupamento usa a menor chave que seja
-prefixo da outra, **cortando sempre em limite de palavra** — sem isso `ESTACAO` engoliria
-`HIPER CENTER ESTACAO`, que é outra loja. Sem canonizar, o alcance caía pela metade.
-
-**Nunca propaga projeto que começa com "Viagem ".** Projeto de viagem é evento datado: o mesmo
-hotel ou o mesmo Uber reaparece em outra viagem e o projeto antigo fica errado.
-
-**Resultado medido:** 112 lojistas com consenso · **174 lançamentos de 2025 tocados** ·
-102 categorias e 242 dimensões preenchidas · +6 dimensões propagadas a parcelas.
-Reversão em `cartao.classificacao_backup_v45`.
-
-**Validação:** as 20 faturas seguem fechando 100%, e o **Despesas no DRE de todas as 20 ficou
-idêntico ao centavo**. Isso não era garantido de graça — definir categoria também define
-natureza, e uma categoria de natureza neutra tiraria o lançamento do resultado. Conferir esse
-número é obrigatório em qualquer rodada de classificação em massa.
-
-### Seis padrões recusados na revisão, mesmo com OK unânime
-
-Consenso unânime não é prova de acerto — pode ser erro repetido. Estes foram reprovados um a um
-e estão na lista `recusados_v45`; propagar multiplicaria o erro:
-
-| Padrão | Consenso nos OK | Por que foi recusado |
-|---|---|---|
-| LETICIAKAYSER | Juros Cobrados (10 OK) | nome de pessoa; se for empréstimo real, o usuário confirma |
-| POUSADA FOGO*RESE | Combustível | pousada não é posto |
-| CATIVA | Viagem (31 OK) | é loja de roupas |
-| MP *REGIBARBERSHOP | Serviços **e** Beleza | a mesma barbearia nas duas grafias, com categorias diferentes |
-| ESTACAO | — | ambíguo, já recusado na migração 42 |
-
-## Varredura das divergências dentro dos OK — 01/09/2026
-
-2.959 lançamentos com OK na Unicred Conjunta. **64 lojistas têm categoria divergente entre os
-próprios OK.** Nem toda divergência é erro — são três fenômenos diferentes:
-
-**1. "Categoria + IOF" — legítimo, não mexer (a maioria dos 64).** Toda compra internacional
-gera duas linhas: a compra e o IOF. `NUNA RESTAURANT :: 1x Restaurantes / 1x IOF` está certo.
-O mesmo vale para `Juros Cobrados` ao lado da compra parcelada. **Não tratar como divergência
-em nenhuma varredura futura** — o nome do estabelecimento é o mesmo, o lançamento não é.
-
-**2. Divergência legítima de dimensão.** `DELTA VIDEIRA` tem Jeep e Tracker; `UNICRED TAG` tem
-uma viagem diferente em cada pedágio. Categoria é consensual, Projeto não é — e não deve ser.
-
-**3. Divergência real, esperando decisão do usuário:**
-
-| Lojista | OK divergentes | Observação |
-|---|---|---|
-| LISCIA | 20x Saúde / 16x Beleza | genuinamente ambíguo |
-| PANIFICADORA E CONFEIT | 29x Mercado / 12x Restaurantes | **a regra da migração 42 gravou `Eating out` (Restaurantes) — a minoria** |
-| MP *PRODUTOS | 14x Compras / 13x Restaurantes | **idem: a regra 42 gravou `Eating out`** |
-| APPLE.COM/BILL | 12x Compras / 10x Serviços Digitais | |
-| AQUAMATER | 14x Academia / 1x Escola | o "Escola" parece engano |
-| TOTAL SPORTES | 5x Mercado / 2x Dentista / 1x Artigos Esportivos | "Dentista" numa loja de esportes |
-| GUILHERMEDASILVA | 49x Água / 13x Gás / **1x Compras** | Água/Gás é a regra por valor já aprovada; o "Compras" é o engano |
-| MITRADIOCESANADE | 5x Doações / 1x Restaurantes | |
-| ALLSMART | 3x Serviços / 2x Utilidades / 1x Telecom | |
-
-**Duas regras ativas da migração 42 contradizem a maioria dos OK** (PANIFICADORA e MP *PRODUTOS,
-ambas gravadas como `Eating out` enquanto os OK majoritários dizem Mercado/Compras). Isso não
-foi alterado — regra em produção só muda com decisão do usuário.
-
-### O achado maior: 1.639 dos 2.959 OK estão incompletos
-
-| Ano | OK | Incompletos |
-|---|---|---|
-| 2024 | 67 | 55 |
-| 2025 | 1.639 | 1.225 |
-| 2026 | 1.253 | 359 |
-
-**885 estão sem categoria nenhuma** — e categoria vazia entra no DRE como despesa por padrão
-(`NATUREZA_PADRAO`). São OKs anteriores à regra de obrigatoriedade dos quatro campos; o
-CLAUDE.md já registra que "OKs históricos não são apagados automaticamente".
-
-**Nada foi preenchido neles, de propósito.** A migração 45 só toca lançamento **não conferido**,
-seguindo a migração 42. Preencher por baixo de um OK mudaria o que o usuário assinou —
-é decisão dele, não do Claude. É a maior pendência aberta de qualidade de dado hoje.
+4. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria e o que
+   sobrou entra no DRE como despesa por padrão.
+
+**Não transportar regras entre origens.** Criar regras e eventuais correções de horário
+específicas por origem; nunca copiar em massa a lógica da Unicred sem validação própria.
+
+## 11.5 Ideias guardadas
+
+**Lançamentos recorrentes / previstos.** Gastos que se repetem em valor e intervalo fixos — mesada
+de R$ 100 semanal, assinaturas, seguros, parcelas. O sistema só registra o que já aconteceu.
+Valeria marcar o lançamento como recorrente e **projetar os próximos com base no histórico**, para
+saber o compromisso do mês antes de ele acontecer.
+
+**Depreciação de bens.** Hoje bens ficam fora do resultado e não geram despesa. Só entraria para
+bens que perdem valor com o tempo — terreno não deprecia.
+
+---
+
+# 12. Histórico de migrações relevantes
+
+Consultar `cartao.schema_version` e o audit log para o estado real. Migração **nunca é reescrita**.
+
+| # | O que fez |
+|---|---|
+| 23 | `fatura_vinculo` — relação N:N entre linha da fatura e transação |
+| 24 | `somente_conciliacao` + regime de caixa para parcelamento |
+| 25 | `substituido_por` — vínculo 1-para-1 de mesmo evento |
+| 29–31 | unifica o OK em `transacao.conferida`; importa os ajustes antigos para a tela nova |
+| 32–33 | separa observação pessoal de `observacao_sistema` |
+| 35–41 | padronização e correções pontuais da Unicred (ILLUMINATO, Mercado Livre, estornos) |
+| 42 | primeiro consenso dos OK: 11 regras, backup em `classificacao_backup_v42` |
+| 43 | corrige −3h nos horários Pluggy da Unicred; backup em `horario_backup_v43` |
+| 44 | devolve ao DRE o agregado que não é mais agregado (§6.6); `agregado_backup_v44` |
+| 45 | publica em 2025 o consenso dos OK; `classificacao_backup_v45` |
+| 46 | aplica as decisões do usuário sobre lojistas divergentes (§8.4); `classificacao_backup_v46` |
+| 47 | trata `valor_id` NULL como vazio e completa a classificação; `classificacao_backup_v47` |
