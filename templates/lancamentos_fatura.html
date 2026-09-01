@@ -29,7 +29,7 @@
   .fatura-tabela tr[data-toggle-linha]:hover{background:var(--accent-soft)}
   .fatura-tabela tr.fatura-ok[data-toggle-linha]:hover{background:var(--line)}
 
-  .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
+  .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:17px;line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
   .expande:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 
   .estado{display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:400;background:var(--bg);border:1px solid var(--line)}
@@ -40,19 +40,22 @@
   .quem{display:flex;align-items:center;gap:7px}
   .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:9px;font-weight:500;flex:none}
 
-  .vinculos-detalhe{background:#fafaf8}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:7px;transition:background-color .12s}
+  .vinculos-detalhe{background:var(--bg)}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:7px;transition:background-color .12s}
   .vinculo-grid.principal{background:var(--good-soft)}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid.tecnico:hover{background:var(--bg)}.vinculo-grid small{display:block;color:var(--ink-faint)}
 
-  .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px}.editor-financeiro select,.editor-financeiro input{width:100%;transition:border-color .12s,box-shadow .12s}
+  .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px}
+  .editor-financeiro select,.editor-financeiro input{width:100%;transition:border-color .12s,box-shadow .12s}
+  .editor-financeiro input[type=text]{padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:13.5px;background:var(--surface);color:var(--ink);font-family:inherit;box-sizing:border-box}
+  .editor-financeiro input[type=text]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 
-  .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:11px;font-weight:500;background:#eef2ff;color:#4058a8;border:1px solid #cad3f6;cursor:default;transition:transform .12s}
+  .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:11px;font-weight:500;background:var(--accent-soft);color:var(--accent-strong);border:1px solid transparent;cursor:default;transition:transform .12s}
   .fonte-badge:hover{transform:scale(1.12)}
-  .fonte-badge.fatura{background:#f2eefe;color:#694ea4;border-color:#d7ccef}
+  .fonte-badge.fatura{background:var(--neutro-soft);color:var(--neutro);border-color:transparent}
 
   .status-salvamento{align-self:end;min-height:20px;font-size:12px;color:var(--ink-faint)}.status-salvamento.erro{color:var(--bad)}
-  .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:17px;line-height:1;cursor:pointer;border-radius:5px;transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:#e8eaed;color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
-  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:#f5f5f3;border-radius:6px;padding:8px;color:var(--ink-soft)}
-  .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--bad);font-weight:500}
+  .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:17px;line-height:1;cursor:pointer;border-radius:5px;transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:var(--raise);color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
+  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:6px;padding:8px;color:var(--ink-soft)}
+  .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--ink-faint);font-weight:400}
   .ok-lancamento{width:19px;height:19px;cursor:pointer}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;transition:border-color .12s,box-shadow .12s}.busca-fatura input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.busca-fatura span{font-size:12px;color:var(--ink-faint)}

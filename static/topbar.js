@@ -117,3 +117,25 @@ async function dispararSync() {
   }
 }
 syncCarregarStatus();
+
+// ---- modo escuro: "sistema" (padrao) segue o SO; o botao grava a escolha ----
+function temaEfetivo() {
+  var atual = document.documentElement.getAttribute('data-theme');
+  if (atual === 'dark' || atual === 'light') return atual;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function atualizarIconeTema() {
+  var btn = document.getElementById('temaToggle');
+  if (!btn) return;
+  var escuro = temaEfetivo() === 'dark';
+  btn.textContent = escuro ? '☀️' : '🌙';
+  btn.title = escuro ? 'Mudar para modo claro' : 'Mudar para modo escuro';
+  btn.setAttribute('aria-label', btn.title);
+}
+function alternarTema() {
+  var novo = temaEfetivo() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', novo);
+  try { localStorage.setItem('pdm_tema', novo === 'dark' ? 'escuro' : 'claro'); } catch (e) {}
+  atualizarIconeTema();
+}
+atualizarIconeTema();

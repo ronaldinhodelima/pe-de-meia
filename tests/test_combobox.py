@@ -41,7 +41,7 @@ def test_layout_sombra_flutuante_e_compacto():
     assert "padding:7px 4px" in css
     assert "box-shadow:0 1px 3px rgba(20,20,20,.08)!important" in css
     assert ".pdm-combobox-input:hover,.pdm-combobox-input:focus" in css
-    assert "background:#f2f2f0!important" in css
+    assert "background:var(--raise)!important" in css
     assert "border-color:rgba(92,95,102,.24)!important" in css
     assert "transform:scale(1.012)" in css
     assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css

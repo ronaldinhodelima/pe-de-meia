@@ -4248,10 +4248,12 @@ def topbar_html(titulo, ativo=None):
             <span id="syncTexto">Verificando...</span>
             <button class="sync-btn" id="syncBtn" onclick="dispararSync()">Atualizar agora</button>
           </div>''' if pode("sincronizar") else ""}
+          <button type="button" class="tema-toggle" id="temaToggle" onclick="alternarTema()"
+                  title="Alternar modo escuro" aria-label="Alternar modo escuro">🌙</button>
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js"></script>
+      <script src="/static/topbar.js?v=20260901-3"></script>
     """
 
 
@@ -4268,10 +4270,10 @@ def _barra_html(realizado, teto):
     if teto_num <= 0:
         return ""
     pct = min(realizado_num / teto_num * 100, 999)
-    cor = "#2e8b3d" if pct < 70 else ("#d68a00" if pct < 100 else "#c0392b")
+    cor = "var(--good)" if pct < 70 else ("var(--warn)" if pct < 100 else "var(--bad)")
     largura = min(pct, 100)
     return (
-        f'<div style="background:#eee;border-radius:4px;height:8px;margin-top:4px;overflow:hidden">'
+        f'<div style="background:var(--raise);border-radius:4px;height:8px;margin-top:4px;overflow:hidden">'
         f'<div style="background:{cor};width:{largura:.0f}%;height:100%"></div></div>'
         f'<div style="font-size:11px;color:{cor};margin-top:2px">{pct:.0f}% do teto</div>'
     )

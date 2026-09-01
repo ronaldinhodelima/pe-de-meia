@@ -27,6 +27,58 @@
     --shadow-1: 0 1px 2px rgba(22,32,58,.05), 0 1px 1px rgba(22,32,58,.04);
     --shadow-2: 0 12px 28px rgba(22,32,58,.12), 0 2px 6px rgba(22,32,58,.06);
   }
+  /* Modo escuro: "system" (padrao, sem atributo) segue prefers-color-scheme;
+     o botao de tema no topbar grava data-theme e vence os dois lados. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a0f1e;
+      --surface: #111830;
+      --raise: #1a2340;
+      --ink: #e7ebf6;
+      --ink-soft: #9aa6c0;
+      --ink-faint: #5f6b88;
+      --line: #242e4e;
+      --line-soft: #1a2340;
+      --accent: #2dd4bf;
+      --accent-strong: #5eead4;
+      --accent-soft: rgba(45,212,191,.16);
+      --field-soft: var(--bg);
+      --good: #34d399;
+      --good-soft: rgba(52,211,153,.14);
+      --bad: #f87171;
+      --bad-soft: rgba(248,113,113,.14);
+      --warn: #e3b341;
+      --warn-soft: rgba(227,179,65,.14);
+      --neutro: #a599f2;
+      --neutro-soft: rgba(165,153,242,.16);
+      --shadow-1: 0 1px 2px rgba(0,0,0,.3);
+      --shadow-2: 0 16px 32px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0f1e;
+    --surface: #111830;
+    --raise: #1a2340;
+    --ink: #e7ebf6;
+    --ink-soft: #9aa6c0;
+    --ink-faint: #5f6b88;
+    --line: #242e4e;
+    --line-soft: #1a2340;
+    --accent: #2dd4bf;
+    --accent-strong: #5eead4;
+    --accent-soft: rgba(45,212,191,.16);
+    --field-soft: var(--bg);
+    --good: #34d399;
+    --good-soft: rgba(52,211,153,.14);
+    --bad: #f87171;
+    --bad-soft: rgba(248,113,113,.14);
+    --warn: #e3b341;
+    --warn-soft: rgba(227,179,65,.14);
+    --neutro: #a599f2;
+    --neutro-soft: rgba(165,153,242,.16);
+    --shadow-1: 0 1px 2px rgba(0,0,0,.3);
+    --shadow-2: 0 16px 32px rgba(0,0,0,.45);
+  }
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
@@ -34,6 +86,9 @@
     margin: 0;
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
+  }
+  body, .topbar, .card, table, .modal, input, select, .dropdown-content {
+    transition: background-color .18s ease, border-color .18s ease, color .18s ease;
   }
 
   /* ---------- topbar ---------- */
@@ -54,6 +109,14 @@
   .marca-pagina { font-size: 12.5px; color: var(--ink-faint); }
   .topbar a { color: var(--ink-soft); text-decoration: none; font-size: 13.5px; transition: color .15s; }
   .topbar a:hover { color: var(--ink); }
+
+  /* ---------- alternador de tema ---------- */
+  .tema-toggle {
+    width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--raise); color: var(--ink-soft); cursor: pointer;
+    display: grid; place-items: center; font-size: 14px; transition: border-color .12s, color .12s;
+  }
+  .tema-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
   .wrap { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
 
@@ -79,7 +142,7 @@
     color: var(--ink);
   }
   select:focus, input:not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:26px;box-sizing:border-box;border:1px solid transparent!important;border-radius:5px!important;padding:1px 18px 1px 3px!important;background:transparent!important;box-shadow:0 1px 3px rgba(20,20,20,.08)!important;color:var(--ink);font-size:12.5px;cursor:text;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}.pdm-combobox-input:hover,.pdm-combobox-input:focus{background:#f2f2f0!important;border-color:rgba(92,95,102,.24)!important;box-shadow:0 3px 10px rgba(20,20,20,.11)!important;transform:scale(1.012)}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:11px;pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--ink-soft)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(27,31,36,.13);padding:2px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:7px 4px;border-radius:6px;font-size:12.5px;line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-color:rgba(194,60,52,.45)!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:hover,.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-color:rgba(194,60,52,.75)!important;background:#fdf5f4!important;box-shadow:0 3px 10px rgba(194,60,52,.12)!important}
+  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:26px;box-sizing:border-box;border:1px solid transparent!important;border-radius:5px!important;padding:1px 18px 1px 3px!important;background:transparent!important;box-shadow:0 1px 3px rgba(20,20,20,.08)!important;color:var(--ink);font-size:12.5px;cursor:text;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}.pdm-combobox-input:hover,.pdm-combobox-input:focus{background:var(--raise)!important;border-color:rgba(92,95,102,.24)!important;box-shadow:0 3px 10px rgba(20,20,20,.11)!important;transform:scale(1.012)}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:11px;pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--ink-soft)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(27,31,36,.13);padding:2px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:7px 4px;border-radius:6px;font-size:12.5px;line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-color:rgba(194,60,52,.45)!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:hover,.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-color:rgba(194,60,52,.75)!important;background:var(--bad-soft)!important;box-shadow:0 3px 10px rgba(194,60,52,.12)!important}
   /* checkbox usa outline em vez de box-shadow: dentro de celula de tabela com
      overflow:hidden (ver td[data-col] mais abaixo), o box-shadow fica cortado
      e o foco por Tab passa a ser invisivel - so aparecia em navegadores que
@@ -95,8 +158,8 @@
   tbody tr:hover { background: var(--accent-soft); }
   tr.conferida:hover { background: var(--line); }
   tr.duplicada td { text-decoration: line-through; color: var(--ink-faint); }
-  tr.duplicada { background: #faf6ee; }
-  tr.duplicada:hover { background: #f4ecdb; }
+  tr.duplicada { background: var(--warn-soft); }
+  tr.duplicada:hover { background: var(--warn-soft); }
   /* lancamento ainda PENDING no banco: o Pluggy pode trocar valor/data ou ate
      reemitir com outro id ate a fatura fechar - por isso o OK fica bloqueado
      enquanto durar (ver checkbox conf-check em index.html) */
@@ -137,15 +200,15 @@
   table.compacta .cel-dim { width: 116px; }
   table.compacta select { width: 100%; max-width: 100%; padding: 4px 5px; font-size: 11.5px; border-radius: 5px; box-sizing: border-box; }
   table.compacta .obs-input { padding: 4px 6px; font-size: 11.5px; }
-  .rateio-toggle,.tecnico-toggle { width:22px;height:22px;margin-right:6px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--accent);font-weight:700;cursor:pointer; }
-  .rateio-row { background:#f7f8fa; cursor:default; }
-  .rateio-row:hover { background:#f7f8fa; }
+  .rateio-toggle,.tecnico-toggle { width:22px;height:22px;margin-right:6px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--accent);font-weight:700;cursor:pointer; }
+  .rateio-row { background:var(--raise); cursor:default; }
+  .rateio-row:hover { background:var(--raise); }
   .rateio-row td { color:var(--ink-soft); border-top-style:dashed; }
-  .rateio-row.rateio-alterado { background:#fff8e8; }
-  .rateio-row.rateio-alterado:hover { background:#fff8e8; }
+  .rateio-row.rateio-alterado { background:var(--warn-soft); }
+  .rateio-row.rateio-alterado:hover { background:var(--warn-soft); }
   .rateio-row input,.rateio-row select { width:100%;max-width:100%;box-sizing:border-box; }
-  .rateio-row .rateio-valor-inline,.rateio-row .rateio-obs-inline { padding:4px 5px;font-size:11.5px;border:1px solid var(--line);border-radius:5px;background:#fff; }
-  .rateio-row .rateio-salvar-inline { width:22px;height:22px;padding:0;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--accent);font-size:13px;font-weight:700;line-height:20px;cursor:pointer; }
+  .rateio-row .rateio-valor-inline,.rateio-row .rateio-obs-inline { padding:4px 5px;font-size:11.5px;border:1px solid var(--line);border-radius:5px;background:var(--surface); }
+  .rateio-row .rateio-salvar-inline { width:22px;height:22px;padding:0;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--accent);font-size:13px;font-weight:700;line-height:20px;cursor:pointer; }
   .rateio-row .rateio-salvar-inline:hover { border-color:var(--accent);background:var(--accent-soft); }
   .rateio-row .rateio-salvar-inline:disabled { color:var(--ink-faint);background:var(--bg);cursor:not-allowed;opacity:.65; }
   .rateio-row.rateio-invalido,.rateio-row.rateio-invalido:hover { background:var(--bad-soft); }
@@ -154,7 +217,7 @@
   .rateio-resumo:empty { display:none; }
   .rateio-resumo.invalido { color:#c23c34;font-weight:600; }
   .rateio-seta { color:var(--accent);font-weight:700;margin-right:5px; }
-  .tecnico-row,.tecnico-row:hover { background:#f7f8fa; }
+  .tecnico-row,.tecnico-row:hover { background:var(--raise); }
   .tecnico-row td { color:var(--ink-soft);border-top-style:dashed; }
   .tecnico-row .cel-desc { text-decoration:none; }
   .modal-rateio { margin:3px 0 0;padding:10px 0 0;border:0;border-top:1px solid var(--line-soft);background:transparent; }
@@ -459,7 +522,7 @@ tr.fora-resultado { opacity: .62; }
 tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-color: #bbb; }
 .selo-fora {
   font-size: 10px; text-transform: uppercase; letter-spacing: .3px;
-  background: #eceff3; color: #667; border: 1px solid #dde1e7;
+  background: var(--raise); color: var(--ink-faint); border: 1px solid var(--line);
   border-radius: 4px; padding: 1px 5px; margin-left: 6px;
   white-space: nowrap; text-decoration: none; display: inline-block;
 }

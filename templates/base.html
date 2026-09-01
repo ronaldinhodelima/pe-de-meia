@@ -14,6 +14,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ titulo }} · Pé de Meia</title>
+  <script>
+    // Aplica o tema salvo ANTES do CSS pintar a tela, para nao piscar o tema
+    // errado. "system" (sem atributo) segue prefers-color-scheme do SO.
+    (function () {
+      try {
+        var tema = localStorage.getItem('pdm_tema');
+        if (tema === 'claro') document.documentElement.setAttribute('data-theme', 'light');
+        else if (tema === 'escuro') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) {}
+    })();
+  </script>
   <link rel="icon" type="image/png" sizes="256x256" href="/static/favicon.png?v=20260830">
   <link rel="shortcut icon" type="image/png" href="/favicon.ico?v=20260830">
   <link rel="apple-touch-icon" href="/static/favicon.png?v=20260830">
