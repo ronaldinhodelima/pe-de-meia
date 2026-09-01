@@ -8,6 +8,7 @@
     --line-soft: #f0f0ee;
     --accent: #2f5fdb;
     --accent-soft: #eef2fd;
+    --field-soft: #f3f3f0;
     --good: #1f8a53;
     --good-soft: #eaf6ef;
     --bad: #c23c34;
@@ -69,7 +70,7 @@
     color: var(--ink);
   }
   select:focus, input:not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:36px;box-sizing:border-box;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important;padding:5px 25px 4px 2px!important;background:transparent!important;box-shadow:none!important;color:var(--ink);cursor:text;transition:border-color .14s ease}.pdm-combobox-input:focus{border-bottom:2px solid var(--accent)!important;box-shadow:none!important}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:12px;pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--accent)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(27,31,36,.13);padding:4px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:8px 9px;border-radius:6px;font-size:13px;line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-opcao.ativo::after{content:'Enter ↵';color:var(--ink-faint);font-size:10px;white-space:nowrap}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-bottom-color:#c23c34!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-bottom-color:var(--accent)!important}
+  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:36px;box-sizing:border-box;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:5px 5px 0 0!important;padding:5px 25px 4px 8px!important;background:var(--field-soft)!important;box-shadow:none!important;color:var(--ink);font-size:12.5px;cursor:text;transition:border-color .14s ease}.pdm-combobox-input:focus{border-bottom:2px solid var(--accent)!important;box-shadow:none!important}.pdm-combobox::after{content:'⌄';position:absolute;right:7px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:12px;pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--accent)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(27,31,36,.13);padding:4px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:8px 9px;border-radius:6px;font-size:12.5px;line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-opcao.ativo::after{content:'Enter ↵';color:var(--ink-faint);font-size:10px;white-space:nowrap}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-bottom-color:#c23c34!important;background:var(--field-soft)!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-bottom-color:var(--accent)!important}
   /* checkbox usa outline em vez de box-shadow: dentro de celula de tabela com
      overflow:hidden (ver td[data-col] mais abaixo), o box-shadow fica cortado
      e o foco por Tab passa a ser invisivel - so aparecia em navegadores que
@@ -104,6 +105,7 @@
   table.compacta { table-layout: fixed; font-size: 12.5px; width: max-content; min-width: 100%; }
   table.compacta th { padding: 8px 8px; font-size: 10px; }
   table.compacta td { padding: 5px 8px; font-size: 12.5px; }
+  table.compacta .pdm-combobox-input { font-size: 11.5px; }
   table.compacta .cel-data { width: 78px; color: var(--ink-soft); font-size: 11.5px; line-height: 1.25; }
   table.compacta .cel-data { position:relative;padding-left:14px; }
   .linha-indicadores { position:absolute;left:3px;top:5px;bottom:5px;width:7px;display:flex;flex-direction:column;justify-content:center;gap:2px; }

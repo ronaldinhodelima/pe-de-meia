@@ -34,3 +34,7 @@ def test_layout_linha_precisa_e_minimalista():
     assert "border-bottom:2px solid var(--accent)" in css
     assert "box-shadow:none!important" in css
     assert ".pdm-combobox-opcao.ativo::after{content:'Enter ↵'" in css
+    assert "--field-soft: #f3f3f0" in css
+    assert "background:var(--field-soft)!important" in css
+    assert "font-size:12.5px" in css
+    assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css

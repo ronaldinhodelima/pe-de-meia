@@ -1598,6 +1598,9 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   obrigatório para seleções pesquisáveis de todas as telas atuais e novas do Pé de Meia.
 - O campo nativo fica preservado tecnicamente, mas oculto também da árvore de acessibilidade; leitores
   de tela e navegação por teclado devem encontrar somente o novo combobox, sem controles duplicados.
-- Linguagem visual escolhida pelo usuário: `Linha precisa`. Os comboboxes usam superfície transparente,
+- Linguagem visual escolhida pelo usuário: `Linha precisa`. Os comboboxes usam cinza quente suave,
   uma linha inferior neutra, foco azul sem caixa/sombra pesada, chevron discreto e menu compacto. Exibir
   `Enter ↵` apenas na opção ativa. Manter essa linguagem ao expandir o componente para outras telas.
+- Refinamento aprovado: substituir a transparência por cinza quente muito suave (`--field-soft`), mantendo
+  a linha inferior. Texto com 12,5px nos editores e 11,5px dentro da tabela compacta, equivalentes aos
+  tamanhos anteriores aos comboboxes. O fundo obrigatório continua suave e a linha vermelha informa a falta.
