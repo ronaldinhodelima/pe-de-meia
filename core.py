@@ -3314,6 +3314,42 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (43);")
             conn.commit()
 
+        if versao_atual < 44:
+            # `somente_conciliacao` so era POSTO, nunca retirado. Quando o
+            # conjunto de vinculos mudava (refazer vinculos, reenvio de PDF,
+            # desvincular na mao), a transacao deixava de ser agregado e ficava
+            # fora do DRE para sempre, sem nenhuma parcela ocupando o lugar
+            # dela. Cinco compras A VISTA sumiram assim do resultado
+            # (R$ 1.167,38: SUPERVIZA, DELTA VIDEIRA, MP *PRODUTOS,
+            # POSTO CANOAS - faturas 09/2025, 10/2025, 12/2025 e 01/2026).
+            # Retira a marca so de quem hoje atende UMA linha de fatura e nao
+            # tem nenhuma parcela gerada a partir das suas linhas; havendo
+            # parcela, sao elas que contam e o agregado segue fora.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.agregado_backup_v44 AS "
+                "SELECT t.transacao_id, t.account_id, t.somente_conciliacao, now() AS backup_em "
+                "FROM cartao.transacao t WHERE t.somente_conciliacao;"
+            )
+            cur.execute(
+                "UPDATE cartao.transacao t SET somente_conciliacao=false, atualizado_em=now() "
+                "WHERE t.somente_conciliacao "
+                "AND (SELECT COUNT(DISTINCT v.fatura_linha_id) FROM cartao.fatura_vinculo v "
+                "     WHERE v.transacao_id=t.transacao_id) = 1 "
+                "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+                " JOIN cartao.fatura_linha fl ON fl.id=v.fatura_linha_id "
+                " WHERE v.transacao_id=t.transacao_id AND fl.transacao_id_criado IS NOT NULL);"
+            )
+            devolvidos_v44 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Devolve ao DRE agregado que nao e mais agregado',"
+                "jsonb_build_object('versao',44,'lancamentos_devolvidos',%s,"
+                "'backup','cartao.agregado_backup_v44'));",
+                (devolvidos_v44,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (44);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

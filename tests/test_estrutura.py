@@ -824,3 +824,35 @@ def test_cartao_padrao_da_fatura_prefere_conta_com_fatura_importada():
     assert view.count("account_id = _conta_credito_padrao(cur, contas_credito)") == 2
     # o seletor de cartao tem que existir tambem no estado de erro
     assert template.count('id="faturaConta"') == 2
+
+
+def test_marca_de_agregado_tem_caminho_de_volta():
+    """`somente_conciliacao` precisa poder ser retirada, nao so posta.
+
+    A marca so era aplicada. Quando o conjunto de vinculos mudava (refazer
+    vinculos, reenvio de PDF, desvincular na mao), a transacao deixava de ser
+    agregado e continuava fora do DRE para sempre, sem nenhuma parcela no lugar
+    dela — cinco compras a vista sumiram do resultado (R$ 1.167,38).
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    nucleo = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "SET somente_conciliacao = false" in view
+    assert "desmarcados_agora" in view
+    # a trava: nao desmarcar quem ja teve parcela gerada, senao conta duas vezes
+    trecho = view[view.index("SET somente_conciliacao = false"):]
+    trecho = trecho[:trecho.index("desmarcados = ")]
+    assert "fl.transacao_id_criado IS NOT NULL" in trecho
+    assert "NOT EXISTS" in trecho
+    # a correcao pontual do dado que ja estava errado, com ponto de reversao
+    assert "versao_atual < 44" in nucleo
+    assert "cartao.agregado_backup_v44" in nucleo
+
+
+def test_sincronizacao_de_parcelas_nao_aborta_sem_agregado():
+    """Sem agregado ainda pode haver marca obsoleta para retirar.
+
+    O retorno antecipado pulava o UPDATE de desmarcacao; so a previa pode sair
+    cedo, porque ela e' estritamente somente leitura.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    assert "if not agregados and preview:" in view

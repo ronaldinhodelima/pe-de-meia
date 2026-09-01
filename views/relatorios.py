@@ -1809,9 +1809,11 @@ def _sincronizar_parcelas_de_agregado(cur, usuario, account_id=None, preview=Fal
     )
     agregados_info = {str(r["transacao_id"]): dict(r) for r in cur.fetchall()}
     agregados = list(agregados_info)
-    if not agregados:
+    if not agregados and preview:
         return {"agregados": 0, "parcelas_pendentes": 0, "parcelas_criadas": 0,
-                "preview": bool(preview)}
+                "preview": True}
+    # Sem nenhum agregado a execucao continua de proposito: ainda pode haver
+    # marca obsoleta de agregado para retirar (ver o UPDATE de desmarcacao).
 
     # Conta antes de alterar. O mesmo levantamento alimenta a confirmação da
     # interface e impede que o usuário confirme uma operação de impacto incerto.
@@ -1836,6 +1838,30 @@ def _sincronizar_parcelas_de_agregado(cur, usuario, account_id=None, preview=Fal
         (agregados,),
     )
     marcados = cur.rowcount or 0
+
+    # E o caminho de volta. A marca so era posta, nunca retirada: quando o
+    # conjunto de vinculos muda (refazer vinculos, reenvio de PDF, desvincular
+    # na mao), a transacao deixa de ser agregado e continuava `somente
+    # conciliacao` para sempre - fora do DRE, sem nenhuma parcela cobrindo o
+    # lugar dela. Foi assim que 5 compras A VISTA sumiram do resultado
+    # (R$ 1.167,38, faturas 09/2025, 10/2025, 12/2025 e 01/2026).
+    # Trava: so desmarca quando NENHUMA linha vinculada a ela ja virou
+    # lancamento proprio. Se alguma virou, as parcelas e' que contam e o
+    # agregado tem que continuar fora, senao a despesa conta duas vezes.
+    cur.execute(
+        "UPDATE cartao.transacao t SET somente_conciliacao = false, atualizado_em = now() "
+        "WHERE t.somente_conciliacao "
+        "AND NOT (t.transacao_id = ANY(%s::uuid[])) "
+        "AND EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+        " WHERE v.transacao_id = t.transacao_id) "
+        "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v "
+        " JOIN cartao.fatura_linha fl ON fl.id = v.fatura_linha_id "
+        " WHERE v.transacao_id = t.transacao_id "
+        " AND fl.transacao_id_criado IS NOT NULL) "
+        + (" AND t.account_id=%s " if account_id else ""),
+        (agregados,) + escopo_params,
+    )
+    desmarcados = cur.rowcount or 0
 
     # linhas cobertas por um agregado e que ainda nao viraram lancamento
     cur.execute(
@@ -1914,6 +1940,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario, account_id=None, preview=Fal
     preenchidas = preencher_classificacao_vazia_parcelas(cur)
     return {
         "agregados": len(agregados), "marcados_agora": marcados,
+        "desmarcados_agora": desmarcados,
         "parcelas_pendentes": parcelas_pendentes, "parcelas_criadas": criadas,
         "classificacoes_preenchidas": preenchidas, "preview": False,
     }
