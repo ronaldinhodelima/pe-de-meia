@@ -1604,3 +1604,6 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - Refinamento aprovado: substituir a transparência por cinza quente muito suave (`--field-soft`), mantendo
   a linha inferior. Texto com 12,5px nos editores e 11,5px dentro da tabela compacta, equivalentes aos
   tamanhos anteriores aos comboboxes. O fundo obrigatório continua suave e a linha vermelha informa a falta.
+- Refinamento posterior aprovado: `--field-soft` deve reutilizar exatamente o cinza do fundo geral (`--bg`),
+  atualmente `#f7f7f5`. Os campos ficam mais baixos (32px), com raio mínimo de 3px e linha de foco de 1px,
+  evitando aparência de caixa alta ou borda pesada.

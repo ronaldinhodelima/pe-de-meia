@@ -31,10 +31,12 @@ def test_layout_linha_precisa_e_minimalista():
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
 
     assert ".pdm-combobox-input:focus" in css
-    assert "border-bottom:2px solid var(--accent)" in css
     assert "box-shadow:none!important" in css
     assert ".pdm-combobox-opcao.ativo::after{content:'Enter ↵'" in css
-    assert "--field-soft: #f3f3f0" in css
+    assert "--field-soft: var(--bg)" in css
     assert "background:var(--field-soft)!important" in css
     assert "font-size:12.5px" in css
+    assert "height:32px" in css
+    assert "border-radius:3px 3px 0 0!important" in css
+    assert ".pdm-combobox-input:focus{border-bottom:1px solid var(--accent)!important" in css
     assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css
