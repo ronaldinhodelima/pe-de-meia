@@ -2672,6 +2672,11 @@ def api_consenso_preview():
     nomes_dim = dict(cur.fetchall())
     cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
     nomes_valor = dict(cur.fetchall())
+    # Natureza junto: centro de custo so faz sentido em categoria de DESPESA
+    # (secao 4.1). Sem isso, pagamento de fatura entra na conta de pendencia
+    # como se fosse gasto a classificar, e o numero mente.
+    cur.execute("SELECT categoria,natureza FROM cartao.categoria_natureza;")
+    naturezas = dict(cur.fetchall())
 
     cur.execute(
         "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
@@ -2700,6 +2705,20 @@ def api_consenso_preview():
     def rotulo(campo):
         return "categoria" if campo == "cat" else nomes_dim.get(campo, str(campo))
 
+    # Lojista cujos proprios OK discordam sobre a categoria. O consenso descarta
+    # esse caso em silencio (nao ha unanimidade), entao ele nunca aparecia -
+    # e um deles esta errado, ou o lojista e mesmo ambiguo. Decisao do usuario.
+    votos_cat = {}
+    for _tid, descricao, categoria, conf, _ds in linhas:
+        if not conf or not categoria:
+            continue
+        alvo = votos_cat.setdefault(mapa[_loja_v45(descricao)], {})
+        alvo[categoria] = alvo.get(categoria, 0) + 1
+    divergentes = {
+        loja: dict(sorted(cats.items(), key=lambda x: -x[1]))
+        for loja, cats in sorted(votos_cat.items()) if len(cats) > 1
+    }
+
     ganho = {"lojista": {}, "categoria": {}}
     alvos = {"lojista": set(), "categoria": set()}
     incompletos = 0
@@ -2712,7 +2731,10 @@ def api_consenso_preview():
             incompletos += 1
             rotulos = ([] if categoria else ["categoria"]) + sorted(
                 rotulo(c) for c in faltando)
-            chave_sobra = f"{mapa[_loja_v45(descricao)]} · falta {', '.join(rotulos)}"
+            nat = naturezas.get(categoria) or ("(sem categoria)" if not categoria
+                                               else "(sem natureza)")
+            chave_sobra = (f"{mapa[_loja_v45(descricao)]} · {categoria or '-'} [{nat}]"
+                           f" · falta {', '.join(rotulos)}")
             sobra[chave_sobra] = sobra.get(chave_sobra, 0) + 1
         escolha_loja = por_loja.get(mapa[_loja_v45(descricao)], {})
         escolha_cat = por_cat.get(categoria, {}) if categoria else {}
@@ -2734,6 +2756,7 @@ def api_consenso_preview():
     return jsonify({
         "conta": conta, "anos": anos, "minimo_categoria": minimo_cat,
         "sobra_por_lojista": dict(sorted(sobra.items(), key=lambda x: -x[1])[:60]),
+        "categoria_divergente_entre_oks": divergentes,
         "lancamentos_avaliados": len(linhas),
         "classificacao_incompleta": incompletos,
         "lojistas_com_consenso": len(por_loja),
