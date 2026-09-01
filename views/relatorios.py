@@ -2703,10 +2703,17 @@ def api_consenso_preview():
     ganho = {"lojista": {}, "categoria": {}}
     alvos = {"lojista": set(), "categoria": set()}
     incompletos = 0
+    # O que sobra, agrupado por lojista e pelo conjunto exato de campos que
+    # falta: e essa lista, e nao o total, que diz onde vale decidir uma regra.
+    sobra = {}
     for tid, descricao, categoria, _conf, ds in linhas:
         faltando = [c for c in dims.values() if _dimensao_vazia(ds, c)]
         if not categoria or faltando:
             incompletos += 1
+            rotulos = ([] if categoria else ["categoria"]) + sorted(
+                rotulo(c) for c in faltando)
+            chave_sobra = f"{mapa[_loja_v45(descricao)]} · falta {', '.join(rotulos)}"
+            sobra[chave_sobra] = sobra.get(chave_sobra, 0) + 1
         escolha_loja = por_loja.get(mapa[_loja_v45(descricao)], {})
         escolha_cat = por_cat.get(categoria, {}) if categoria else {}
         for eixo, escolha in (("lojista", escolha_loja), ("categoria", escolha_cat)):
@@ -2726,6 +2733,7 @@ def api_consenso_preview():
     }
     return jsonify({
         "conta": conta, "anos": anos, "minimo_categoria": minimo_cat,
+        "sobra_por_lojista": dict(sorted(sobra.items(), key=lambda x: -x[1])[:60]),
         "lancamentos_avaliados": len(linhas),
         "classificacao_incompleta": incompletos,
         "lojistas_com_consenso": len(por_loja),
