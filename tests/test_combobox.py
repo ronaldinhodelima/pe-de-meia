@@ -25,3 +25,12 @@ def test_piloto_cobre_quatro_campos_nas_duas_visualizacoes():
     assert 'data-pdm-combobox data-dimensao=' in detalhada
     assert 'data-pdm-combobox aria-label="Categoria" class="cat-select' in resumida
     assert 'data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select' in resumida
+
+
+def test_layout_linha_precisa_e_minimalista():
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+
+    assert ".pdm-combobox-input:focus" in css
+    assert "border-bottom:2px solid var(--accent)" in css
+    assert "box-shadow:none!important" in css
+    assert ".pdm-combobox-opcao.ativo::after{content:'Enter ↵'" in css

@@ -1598,3 +1598,6 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   obrigatório para seleções pesquisáveis de todas as telas atuais e novas do Pé de Meia.
 - O campo nativo fica preservado tecnicamente, mas oculto também da árvore de acessibilidade; leitores
   de tela e navegação por teclado devem encontrar somente o novo combobox, sem controles duplicados.
+- Linguagem visual escolhida pelo usuário: `Linha precisa`. Os comboboxes usam superfície transparente,
+  uma linha inferior neutra, foco azul sem caixa/sombra pesada, chevron discreto e menu compacto. Exibir
+  `Enter ↵` apenas na opção ativa. Manter essa linguagem ao expandir o componente para outras telas.
