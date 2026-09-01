@@ -1800,3 +1800,39 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
    horário específicas por origem; nunca copiar em massa a lógica da Unicred sem validação.
 5. Em uma etapa futura, testar formalmente a restauração dos backups e revisar a política de retenção dos logs. Essa
    tarefa está registrada, mas foi adiada pelo usuário e não bloqueia a classificação financeira atual.
+
+## Retrato da Unicred Conjunta, fatura a fatura — 01/09/2026
+
+Levantado direto dos cards da tela detalhada, nas 20 faturas de jan/2025 a ago/2026.
+Serve de linha de base: comparar antes/depois de qualquer mexida no matcher ou na classificação.
+
+**Conciliação — 4 faturas ainda não fecham 100%** (o registro anterior de "20/20 fechando"
+não vale mais depois das reimportações; conferir sempre na tela, não no histórico):
+
+| Fatura | Linhas | Sem vínculo | Divergências |
+|---|---|---|---|
+| Janeiro/2026 | 134 / 135 | R$ 584,83 | 1 |
+| Dezembro/2025 | 124 / 125 | R$ 83,30 | 1 |
+| Outubro/2025 | 133 / 135 | R$ 373,75 | 2 |
+| Setembro/2025 | 143 / 144 | R$ 125,50 | 1 |
+
+Total pendente de vínculo: **R$ 1.167,38 em 5 linhas**. Todas as outras 16 faturas fecham
+com "Falta vincular: R$ 0,00" e zero divergência.
+
+**Classificação — o gargalo real está em 2025.** De ago/2026 para trás a cobertura despenca:
+ago/26 e jul/26 e jun/26 estão 100%; mai/26 128/138; abr/26 54/102; mar/26 42/115; e todo o
+histórico de 2025 fica entre 23/135 (out/25) e 44/125 (dez/25). São em boa parte os lançamentos
+criados a partir da fatura, que nascem sem categoria e **entram no DRE como despesa por padrão**
+(`NATUREZA_PADRAO`). É a pendência de maior impacto no número hoje.
+
+**OK** está zerado em todo o histórico de 2025 e parcial em 2026 — esperado, é assinatura humana
+e ninguém além do usuário marca.
+
+### Correção publicada em 01/09/2026
+
+`/lancamentos/fatura` sem `account_id` na URL caía em `contas_credito[0][0]` — a primeira conta
+de crédito da lista, que é o **Nubank Andrea, sem nenhuma fatura importada**. A tela abria só com
+"Nenhuma fatura importada foi encontrada para este cartão" e, pior, o seletor de cartão **só
+existe dentro do `{% if fatura %}`** — ou seja, sem saída para trocar de cartão. Agora
+`_conta_credito_padrao()` escolhe a conta de crédito com a fatura mais recente e o seletor
+aparece também no estado de erro. Teste de regressão em `tests/test_estrutura.py`.
