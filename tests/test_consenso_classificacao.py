@@ -105,3 +105,43 @@ def test_nome_do_lojista_ignora_prefixo_e_numero_de_parcela():
     assert _loja_v45("Parcela Lojista Visa - LISCIA") == "LISCIA"
     assert _loja_v45("A vista sem juros - Visa - LOJA X") == "LOJA X"
     assert _loja_v45("LISCIA Parc.2/2") == "LISCIA"
+
+
+def test_consenso_por_categoria_usa_so_conferidos_e_nao_decide_categoria():
+    """Segundo eixo: quando o lojista nao tem padrao, a categoria ainda pode ter."""
+    from core import _consenso_por_categoria
+    linhas = [
+        ("a", "Tarifas", True, {"1": 10, "2": 20}),
+        ("b", "Tarifas", True, {"1": 10, "2": 20}),
+        ("c", "Tarifas", True, {"1": 10, "2": 20}),
+        ("d", "Tarifas", False, {"1": 99}),   # sem OK nao vota
+        ("e", "Tarifas", None, {}),
+    ]
+    consenso = _consenso_por_categoria(linhas)
+    assert consenso["Tarifas"] == {1: 10, 2: 20}
+    assert "cat" not in consenso["Tarifas"], "a categoria e a chave, nunca a escolha"
+
+
+def test_consenso_por_categoria_exige_unanimidade_e_minimo_maior():
+    from core import _consenso_por_categoria
+    divergente = [
+        ("a", "Restaurantes", True, {"1": 10}),
+        ("b", "Restaurantes", True, {"1": 11}),
+        ("c", "Restaurantes", True, {"1": 10}),
+    ]
+    assert _consenso_por_categoria(divergente) == {}
+
+    poucas = [
+        ("a", "Restaurantes", True, {"1": 10}),
+        ("b", "Restaurantes", True, {"1": 10}),
+    ]
+    assert _consenso_por_categoria(poucas) == {}, "duas evidencias nao bastam por categoria"
+    assert _consenso_por_categoria(poucas, minimo=2) == {"Restaurantes": {1: 10}}
+
+
+def test_consenso_por_categoria_nunca_propaga_projeto_de_viagem():
+    from core import _consenso_por_categoria
+    linhas = [("a", "Hospedagem", True, {"2": 7}) for _ in range(4)]
+    consenso = _consenso_por_categoria(
+        linhas, dim_projeto=2, nomes_valor={7: "Viagem Atacama"})
+    assert consenso == {}

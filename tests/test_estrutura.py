@@ -133,6 +133,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/transacao/<transacao_id>/rateios",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
         "/api/categoria-lancamentos", "/api/dimensao-lancamentos",
+        "/api/classificacao/consenso-preview",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/lancamentos/fatura",

@@ -961,10 +961,20 @@ def _consenso_por_lojista(linhas, dim_projeto=None, nomes_valor=None,
             alvo.setdefault(chave, {})
             alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
 
+    return mapa, _apurar_consenso(votos, dim_projeto, nomes_valor, recusados, minimo)
+
+
+def _apurar_consenso(votos, dim_projeto=None, nomes_valor=None, recusados=(), minimo=2):
+    """Transforma contagem de votos em escolha, campo a campo.
+
+    Mora separado porque os dois eixos de consenso (por lojista e por
+    categoria) aplicam exatamente as mesmas travas: unanimidade, minimo de
+    evidencias, chave recusada na revisao humana e nunca projeto de viagem.
+    """
     nomes_valor = nomes_valor or {}
     consenso = {}
-    for loja, campos in votos.items():
-        if loja in recusados:
+    for chave_voto, campos in votos.items():
+        if chave_voto in recusados:
             continue
         escolha = {}
         for campo, contagem in campos.items():
@@ -978,8 +988,35 @@ def _consenso_por_lojista(linhas, dim_projeto=None, nomes_valor=None,
                 continue
             escolha[campo] = valor
         if escolha:
-            consenso[loja] = escolha
-    return mapa, consenso
+            consenso[chave_voto] = escolha
+    return consenso
+
+
+def _consenso_por_categoria(linhas, dim_projeto=None, nomes_valor=None,
+                            recusados=(), minimo=3):
+    """Consenso das DIMENSOES apurado por categoria, so entre conferidos.
+
+    Segundo eixo, complementar ao consenso por lojista: quando o lojista nao
+    tem padrao (aparece uma vez so, ou nunca foi conferido), a categoria ainda
+    pode ter. Ex.: tudo que foi conferido como "Tarifas do Cartao" tem o mesmo
+    Portfolio. Serve exatamente para o caso "so a categoria esta preenchida".
+
+    Nunca decide CATEGORIA - ela e a propria chave do agrupamento. O `minimo`
+    e mais alto que o do lojista porque a categoria e um agrupamento largo:
+    duas coincidencias dentro dela dizem muito menos que duas no mesmo lojista.
+    """
+    votos = {}
+    for _tid, categoria, conferida, dims in linhas:
+        if not conferida or not categoria:
+            continue
+        alvo = votos.setdefault(categoria, {})
+        for dim_id, valor_id in (dims or {}).items():
+            if valor_id is None:
+                continue
+            chave = int(dim_id)
+            alvo.setdefault(chave, {})
+            alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
+    return _apurar_consenso(votos, dim_projeto, nomes_valor, recusados, minimo)
 
 
 def preencher_classificacao_vazia_parcelas(cur, account_id=None):

@@ -39,6 +39,11 @@ from core import (
     registrar_mudanca_auditoria,
     requer,
     topbar_html,
+    _canonizar_v45,
+    _consenso_por_categoria,
+    _consenso_por_lojista,
+    _dimensao_vazia,
+    _loja_v45,
 )
 
 bp = Blueprint("relatorios", __name__)
@@ -2630,3 +2635,97 @@ def api_dimensao_lancamentos():
         }
         for r in rows
     ])
+
+
+@bp.route("/api/classificacao/consenso-preview")
+@requer("cadastros")
+def api_consenso_preview():
+    """Levanta, SEM GRAVAR NADA, o que o consenso dos OK ainda completaria.
+
+    Existe porque nao ha ambiente de staging: e a unica forma de olhar o dado
+    real antes de decidir uma alteracao em lote. Roda os dois eixos - por
+    lojista (o de sempre) e por categoria (novo, para quem so tem categoria) -
+    e devolve quantos lancamentos VAZIOS cada um preencheria, por campo.
+
+    Nunca escreve, nunca toca em `conferida`, nunca abre transacao de escrita.
+    """
+    conta = request.args.get("account_id") or "b6243125-dca2-42b2-8c20-0825782c6d8d"
+    anos = [int(a) for a in (request.args.get("anos") or "2025,2026").split(",") if a.strip()]
+    minimo_cat = max(2, int(request.args.get("minimo_categoria") or 3))
+    recusados = {"POUSADA FOGO*RESE", "ESTACAO"}
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id,nome FROM cartao.dimensao WHERE lower(nome) IN "
+        "('responsável','responsavel','projeto','portfólio','portfolio');"
+    )
+    dims = {chave_alfa(n): i for i, n in cur.fetchall()}
+    cur.execute("SELECT id,nome FROM cartao.dimensao WHERE id = ANY(%s);", (list(dims.values()),))
+    nomes_dim = dict(cur.fetchall())
+    cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+    nomes_valor = dict(cur.fetchall())
+
+    cur.execute(
+        "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+        "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+        " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+        " '{}'::jsonb) "
+        "FROM cartao.transacao t WHERE t.account_id=%s "
+        "AND COALESCE(t.duplicada,false)=false "
+        "AND COALESCE(t.somente_conciliacao,false)=false "
+        "AND t.substituido_por IS NULL "
+        f"AND EXTRACT(YEAR FROM {DATA_LOCAL_SQL}) = ANY(%s);",
+        (conta, anos),
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    dim_projeto = dims.get("projeto")
+    mapa, por_loja = _consenso_por_lojista(
+        linhas, dim_projeto=dim_projeto, nomes_valor=nomes_valor, recusados=recusados)
+    por_cat = _consenso_por_categoria(
+        [(l[0], l[2], l[3], l[4]) for l in linhas],
+        dim_projeto=dim_projeto, nomes_valor=nomes_valor, minimo=minimo_cat)
+
+    def rotulo(campo):
+        return "categoria" if campo == "cat" else nomes_dim.get(campo, str(campo))
+
+    ganho = {"lojista": {}, "categoria": {}}
+    alvos = {"lojista": set(), "categoria": set()}
+    incompletos = 0
+    for tid, descricao, categoria, _conf, ds in linhas:
+        faltando = [c for c in dims.values() if _dimensao_vazia(ds, c)]
+        if not categoria or faltando:
+            incompletos += 1
+        escolha_loja = por_loja.get(mapa[_loja_v45(descricao)], {})
+        escolha_cat = por_cat.get(categoria, {}) if categoria else {}
+        for eixo, escolha in (("lojista", escolha_loja), ("categoria", escolha_cat)):
+            for campo, valor in escolha.items():
+                vazio = (not categoria) if campo == "cat" else _dimensao_vazia(ds, campo)
+                if not vazio:
+                    continue
+                if eixo == "categoria" and campo == "cat":
+                    continue
+                chave = f"{rotulo(campo)} = {nomes_valor.get(valor, valor)}"
+                ganho[eixo][chave] = ganho[eixo].get(chave, 0) + 1
+                alvos[eixo].add(tid)
+
+    detalhe_cat = {
+        cat: {rotulo(c): nomes_valor.get(v, v) for c, v in escolha.items()}
+        for cat, escolha in sorted(por_cat.items())
+    }
+    return jsonify({
+        "conta": conta, "anos": anos, "minimo_categoria": minimo_cat,
+        "lancamentos_avaliados": len(linhas),
+        "classificacao_incompleta": incompletos,
+        "lojistas_com_consenso": len(por_loja),
+        "categorias_com_consenso": len(por_cat),
+        "consenso_por_categoria": detalhe_cat,
+        "preencheria_por_lojista": dict(sorted(ganho["lojista"].items(), key=lambda x: -x[1])),
+        "preencheria_por_categoria": dict(sorted(ganho["categoria"].items(), key=lambda x: -x[1])),
+        "lancamentos_alcancados_lojista": len(alvos["lojista"]),
+        "lancamentos_alcancados_categoria": len(alvos["categoria"]),
+        "lancamentos_alcancados_total": len(alvos["lojista"] | alvos["categoria"]),
+    })
