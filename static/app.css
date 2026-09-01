@@ -91,8 +91,7 @@
   /* lancamento ainda PENDING no banco: o Pluggy pode trocar valor/data ou ate
      reemitir com outro id ate a fatura fechar - por isso o OK fica bloqueado
      enquanto durar (ver checkbox conf-check em index.html) */
-  tr.pendente-banco { background: #fdf6e8; }
-  tr.pendente-banco:hover { background: #faecd0; }
+  tr.pendente-banco,tr.pendente-banco:hover { background: transparent; }
   .valor { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 500; }
 
   .obs-input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--ink); }

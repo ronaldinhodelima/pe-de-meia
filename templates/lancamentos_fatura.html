@@ -34,7 +34,7 @@
   {% if fatura_antiga %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_antiga.id }}" title="Fatura anterior">‹</a>{% else %}<span class="nav" style="opacity:.3">‹</span>{% endif %}
   <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}{% if fatura.em_andamento %} · Em andamento{% endif %}</h2>
   {% if fatura.periodo_inicio and fatura.periodo_fim %}<span class="fatura-ciclo">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% elif fatura.em_andamento %} · aguardando PDF oficial{% endif %}</span>{% endif %}
-  {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?{{ 'andamento=1&amp;account_id=' ~ account_id if fatura_nova.em_andamento else 'fatura_id=' ~ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
+  {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?{% if fatura_nova.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura_nova.id }}{% endif %}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
   {% if not fatura.em_andamento %}<a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn fatura-conciliacao" style="text-decoration:none">Ver conciliação do PDF</a>{% else %}<span class="estado fatura-conciliacao">Valores provisórios do Pluggy</span>{% endif %}
 </div>
 
@@ -60,7 +60,7 @@
   </select>
   <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
     <a href="{{ url_resumida }}">Resumida</a>
-    <a href="/lancamentos/fatura?{{ 'andamento=1&amp;account_id=' ~ account_id if fatura.em_andamento else 'fatura_id=' ~ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
+    <a href="/lancamentos/fatura?{% if fatura.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura.id }}{% endif %}" class="ativo" aria-current="page">Detalhada</a>
   </div>
 </div>
 

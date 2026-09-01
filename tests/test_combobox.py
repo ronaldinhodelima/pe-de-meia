@@ -90,3 +90,12 @@ def test_fatura_em_andamento_bloqueia_ok_e_preserva_edicao():
     assert "OK será liberado somente depois da importação e conciliação do PDF" in tela
     assert "not pode_conferir or fatura.em_andamento" in tela
     assert "fatura.value === 'andamento'" in js
+    assert "andamento=1&amp;account_id={{ account_id }}" in tela
+    assert "'andamento=1&amp;account_id=' ~ account_id" not in tela
+
+
+def test_pendente_banco_nao_colore_fundo_da_linha():
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+
+    assert "tr.pendente-banco,tr.pendente-banco:hover { background: transparent; }" in css
+    assert "tr.pendente-banco { background: #fdf6e8; }" not in css

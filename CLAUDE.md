@@ -1702,5 +1702,9 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   o OK fica visivelmente desabilitado na fatura em andamento e a API também recusa tentativas vindas de outra tela
   ou chamada direta. A classificação pode ser preparada antes do fechamento, mas a conferência só ocorre depois da
   conciliação. OKs históricos já existentes não são apagados automaticamente.
+- Na tela resumida, o status pendente do banco continua bloqueando o OK e aparecendo na legenda/dica, mas não colore
+  mais o fundo da linha de amarelo. A linha permanece transparente para reduzir ruído visual.
+- Links da fatura em andamento devem gerar `andamento=1&account_id=<conta>` como dois parâmetros reais. Nunca montar
+  `&amp;` dentro de uma expressão Jinja autoescapada, pois isso produz `&amp;` literal no endereço e perde a conta.
 - Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
   margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.
