@@ -314,24 +314,24 @@ def test_padronizacao_aprovada_fica_restrita_aos_ciclos_unicred_revisados():
     assert "ACOUGUE CARNE FRESCA" in trecho
     assert "SUPERVIZA" in trecho
     assert "SUPERMERCADO VIDE" in trecho
-    complemento = core.split("if versao_atual < 36:", 1)[1].split("cur.close()", 1)[0]
+    complemento = core.split("if versao_atual < 36:", 1)[1].split("if versao_atual < 37:", 1)[0]
     assert "cartao.fatura_vinculo" in complemento
     assert "fi.mes_referencia IN (7,8)" in complemento
     assert "t.conferida" not in complemento
     assert "LIKE 'LISCIA%%'" in complemento
-    historico = core.split("if versao_atual < 37:", 1)[1].split("cur.close()", 1)[0]
+    historico = core.split("if versao_atual < 37:", 1)[1].split("if versao_atual < 38:", 1)[0]
     assert "preencher_classificacao_vazia_parcelas(" in historico
     assert "account_id=conta_unicred" in historico
     assert "aplicar_regras(cur, account_id=conta_unicred)" in historico
     assert "t.conferida" not in historico
     assert 'escopo_sql = " AND t.account_id=%s "' in core
-    tarifas = core.split("if versao_atual < 38:", 1)[1].split("cur.close()", 1)[0]
+    tarifas = core.split("if versao_atual < 38:", 1)[1].split("if versao_atual < 39:", 1)[0]
     assert "account_id uuid" in tarifas
     assert "estorno_origem_id uuid" in tarifas
     assert "Credit card fees" in tarifas
     assert "Serviços Financeiros" in tarifas
     assert "t.conferida" not in tarifas
-    consenso = core.split("if versao_atual < 39:", 1)[1].split("cur.close()", 1)[0]
+    consenso = core.split("if versao_atual < 39:", 1)[1].split("if versao_atual < 40:", 1)[0]
     assert "fi.mes_referencia<=5" in consenso
     assert "d.obrigatoria" in consenso
     assert "account_id=%s" in consenso
@@ -652,6 +652,20 @@ def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
         f"blocos {versoes_bloco} mas gravam {sorted(versoes_gravadas)}"
     )
     assert len(versoes_gravadas) == len(set(versoes_gravadas)), "versao gravada mais de uma vez"
+
+
+def test_consenso_dos_ok_fica_restrito_a_unicred_e_preserva_dados_humanos():
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 42:", 1)[1].split("cur.close()", 1)[0]
+
+    assert 'conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"' in trecho
+    assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v42" in trecho
+    assert "t.conferida=false" in trecho
+    assert "NULLIF(t.categoria,'') IS NULL" in trecho
+    assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+    assert "t.observacao" in trecho
+    assert "ESTACAO\"" not in trecho
+    assert "INSERT INTO cartao.schema_version (versao) VALUES (42)" in trecho
 
 
 def test_menu_de_colunas_nao_depende_de_funcao_de_outra_tela():

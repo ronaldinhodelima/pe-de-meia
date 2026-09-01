@@ -774,6 +774,21 @@ Próximas frentes, nesta ordem:
    tipos com padrão conferido) e passaram por `aplicar_regras()`. O que sobrou sem categoria
    entra no DRE como despesa por padrão — revisar.
 
+### Consenso dos lançamentos com OK — Unicred Conjunta (01/09/2026)
+
+- Escopo obrigatório: somente `Cartão de Crédito Unicred · Conjunta`, account_id
+  `b6243125-dca2-42b2-8c20-0825782c6d8d`. Não aplicar às demais origens.
+- Foram lidas as 20 faturas de janeiro/2025 a agosto/2026: 2.658 lançamentos editáveis,
+  675 com OK e 789 sem categoria. Surgiram 59 descrições com consenso entre OK e pendentes.
+- A migração 42 aplica apenas 11 lojistas com pelo menos dois OK completos e idênticos, alcançando
+  até 109 pendentes antes das travas. `ESTACAO` foi descartado por ser substring ambígua de outros
+  estabelecimentos. Variantes com e sem espaço de `MP*PRODUTOS` e `DM*SPOTIFY` têm regras próprias.
+- A rotina cria backup reversível em `cartao.classificacao_backup_v42`, regras futuras restritas à
+  conta e completa somente campos vazios. Não altera OK, observação pessoal, duplicados confirmados,
+  registros somente de conciliação, substituídos ou qualquer classificação conflitante já preenchida.
+- Depois das regras, a classificação é propagada apenas por vínculos explícitos de família de parcelas.
+  Não criar vínculos de fatura por semelhança de descrição; as 20 faturas já estavam conciliadas.
+
 ### Ideias guardadas (decidir quando fizer sentido)
 
 **Lançamentos recorrentes / previstos.** Há gastos que se repetem em valor e
