@@ -1019,6 +1019,107 @@ def _consenso_por_categoria(linhas, dim_projeto=None, nomes_valor=None,
     return _apurar_consenso(votos, dim_projeto, nomes_valor, recusados, minimo)
 
 
+CONTA_UNICRED = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+LOJISTAS_RECUSADOS = ("POUSADA FOGO*RESE", "ESTACAO")
+CATEGORIAS_RECUSADAS = ("Leisure", "Insurance")
+
+
+def aplicar_consenso_classificacao(cur, account_id=None, preview=False):
+    """Completa campo VAZIO com o consenso dos OK, nos dois eixos.
+
+    Mora no modulo, e nao dentro de um bloco de migracao, porque a migracao 49
+    e a rota de reaplicar usam a mesma coisa - helper preso a um `if
+    versao_atual < N` some assim que o banco passa daquela versao.
+
+    Cada passada muda o resultado da seguinte: o consenso e apurado antes das
+    proprias gravacoes, e cresce a cada OK novo que o usuario assina. Por isso
+    isto e uma acao repetivel, nao uma migracao unica.
+
+    NUNCA toca em `conferida` nem em `observacao`, e nunca sobrescreve valor ja
+    preenchido. Com ``preview=True`` nao escreve nada: so conta.
+    """
+    account_id = account_id or CONTA_UNICRED
+    cur.execute(
+        "SELECT id,nome FROM cartao.dimensao WHERE lower(nome) IN "
+        "('responsável','responsavel','projeto','portfólio','portfolio');"
+    )
+    dims = {chave_alfa(n): i for i, n in cur.fetchall()}
+    cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+    nomes_valor = dict(cur.fetchall())
+
+    cur.execute(
+        "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+        "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+        " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+        " '{}'::jsonb) "
+        "FROM cartao.transacao t WHERE t.account_id=%s "
+        "AND COALESCE(t.duplicada,false)=false "
+        "AND COALESCE(t.somente_conciliacao,false)=false "
+        "AND t.substituido_por IS NULL;",
+        (account_id,),
+    )
+    linhas = cur.fetchall()
+    dim_projeto = dims.get("projeto")
+    mapa, por_loja = _consenso_por_lojista(
+        linhas, dim_projeto=dim_projeto, nomes_valor=nomes_valor,
+        recusados=set(LOJISTAS_RECUSADOS),
+    )
+    por_cat = _consenso_por_categoria(
+        [(l[0], l[2], l[3], l[4]) for l in linhas], dim_projeto=dim_projeto,
+        nomes_valor=nomes_valor, recusados=set(CATEGORIAS_RECUSADAS), minimo=3,
+    )
+
+    res = {"categorias": 0, "dimensoes": 0, "com_ok": set(), "sem_ok": set(),
+           "lojistas_com_consenso": len(por_loja),
+           "categorias_com_consenso": len(por_cat)}
+    for tid, descricao, categoria, conferida, ds in linhas:
+        onde = "com_ok" if conferida else "sem_ok"
+        escolha = dict(por_loja.get(mapa[_loja_v45(descricao)], {}))
+        if not categoria and escolha.get("cat"):
+            if preview:
+                res["categorias"] += 1
+                res[onde].add(tid)
+                categoria = escolha["cat"]
+            else:
+                cur.execute(
+                    "UPDATE cartao.transacao SET categoria=%s, atualizado_em=now() "
+                    "WHERE transacao_id=%s AND NULLIF(categoria,'') IS NULL;",
+                    (escolha["cat"], tid),
+                )
+                if cur.rowcount:
+                    res["categorias"] += 1
+                    res[onde].add(tid)
+                    categoria = escolha["cat"]
+
+        # O eixo do lojista e mais especifico e decide primeiro; o da categoria
+        # so entra onde ele nao tinha nada a dizer.
+        for campo, valor in (por_cat.get(categoria) or {}).items():
+            escolha.setdefault(campo, valor)
+
+        for campo, valor_id in escolha.items():
+            if campo == "cat" or not _dimensao_vazia(ds, campo):
+                continue
+            if preview:
+                res["dimensoes"] += 1
+                res[onde].add(tid)
+                continue
+            cur.execute(
+                "INSERT INTO cartao.transacao_dimensao "
+                "(transacao_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE "
+                "SET valor_id=EXCLUDED.valor_id "
+                "WHERE cartao.transacao_dimensao.valor_id IS NULL;",
+                (tid, campo, valor_id),
+            )
+            if cur.rowcount:
+                res["dimensoes"] += 1
+                res[onde].add(tid)
+
+    res["com_ok"] = len(res["com_ok"])
+    res["sem_ok"] = len(res["sem_ok"])
+    return res
+
+
 def preencher_classificacao_vazia_parcelas(cur, account_id=None):
     """Completa apenas campos vazios de parcelas ligadas ao mesmo agregado.
 
@@ -4061,6 +4162,34 @@ def migrate():
                  parcelas_v48["categorias"], parcelas_v48["dimensoes"]),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (48);")
+            conn.commit()
+
+        if versao_atual < 49:
+            # Segunda passada. A 48 apurou o consenso ANTES das proprias
+            # gravacoes, entao sobrou o que so passou a ter consenso depois
+            # dela (e os OKs novos assinados nesse meio tempo). Daqui em diante
+            # isso e acao repetivel em /pendencias, nao migracao.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v49 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.conferida,"
+                "t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s;",
+                (CONTA_UNICRED,),
+            )
+            r49 = aplicar_consenso_classificacao(cur, account_id=CONTA_UNICRED)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Segunda passada do consenso de classificacao',"
+                "jsonb_build_object('versao',49,'categorias',%s,'dimensoes',%s,"
+                "'tocados_com_ok',%s,'tocados_sem_ok',%s,'lojistas_com_consenso',%s,"
+                "'categorias_com_consenso',%s,'backup','cartao.classificacao_backup_v49'));",
+                (r49["categorias"], r49["dimensoes"], r49["com_ok"], r49["sem_ok"],
+                 r49["lojistas_com_consenso"], r49["categorias_com_consenso"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (49);")
             conn.commit()
 
         cur.close()

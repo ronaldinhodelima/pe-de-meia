@@ -776,6 +776,12 @@ Recusados nesse eixo, conferidos um a um na prévia: **`Leisure`** (tinha Portf�
 unânime, mas lazer local não é viagem — o show do Iron Maiden é "Eventos") e **`Insurance`**
 (tinha "Veículos", e seguro também pode ser de vida ou residencial).
 
+**Completar pela conferência é ação repetível, não migração.** O consenso é apurado ANTES das
+próprias gravações e cresce a cada OK novo assinado — cada passada muda o resultado da seguinte.
+Por isso `aplicar_consenso_classificacao()` mora no módulo e tem botão em `/pendencias`, com
+prévia obrigatória (`preview=True` faz `rollback`, não deixa rastro) antes de liberar o Aplicar.
+Resultado da 48: 184 dimensões e 16 categorias em 112 lançamentos, **`tocados_com_ok: 0`**.
+
 **A prévia é somente leitura:** `GET /api/classificacao/consenso-preview` mostra, sem gravar,
 quanto cada eixo preencheria por campo e o consenso achado em cada categoria. Como não há
 staging, é o único jeito de olhar o dado real antes de uma alteração em lote — usar sempre antes
@@ -1062,3 +1068,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 46 | aplica as decisões do usuário sobre lojistas divergentes (§8.4); `classificacao_backup_v46` |
 | 47 | trata `valor_id` NULL como vazio e completa a classificação; `classificacao_backup_v47` |
 | 48 | segundo eixo de consenso, por categoria; `classificacao_backup_v48` |
+| 49 | segunda passada do consenso; `classificacao_backup_v49` |

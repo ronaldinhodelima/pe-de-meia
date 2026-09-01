@@ -14,6 +14,21 @@
 {% endif %}
 
 <div class="cat-breakdown">
+  <h3>Completar pela conferência já feita</h3>
+  <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
+    Aprende <strong>só com lançamento que tem OK</strong>, exige unanimidade, e preenche
+    <strong>apenas campo vazio</strong> — nunca sobrescreve o que já está classificado e
+    <strong>nunca marca o OK</strong>. Cada OK novo que você assina aumenta o alcance, por isso
+    vale reaplicar de tempos em tempos. A prévia não grava nada.
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button type="button" class="ver-btn" id="consensoPrevia">Ver o que seria preenchido</button>
+    <button type="button" class="ver-btn" id="consensoAplicar" disabled>Aplicar</button>
+    <span id="consensoResultado" style="font-size:12.5px;color:var(--ink-soft)"></span>
+  </div>
+</div>
+
+<div class="cat-breakdown">
   <h3>Lançamentos sem categoria{% if pend.sem_categoria %} ({{ pend.sem_categoria }}){% endif %}</h3>
   {% if pend.sem_categoria %}
     <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
@@ -233,6 +248,60 @@
   document.addEventListener('change', function (e) {
     if (e.target.classList.contains('chk-lote')) atualizarContaLote();
   });
+  // Consenso: a previa e obrigatoria e o Aplicar so libera depois dela, com o
+  // numero na tela - mesma cautela do "Revisar parcelamentos".
+  (function () {
+    const btnPrevia = document.getElementById('consensoPrevia');
+    const btnAplicar = document.getElementById('consensoAplicar');
+    const saida = document.getElementById('consensoResultado');
+    if (!btnPrevia) return;
+    let previsto = null;
+
+    function resumo(d) {
+      if (!d.categorias && !d.dimensoes) return 'Nada a preencher: o consenso atual já foi todo aplicado.';
+      return d.categorias + ' categoria(s) e ' + d.dimensoes + ' campo(s) em '
+        + d.sem_ok + ' lançamento(s) sem OK'
+        + (d.com_ok ? ' e ' + d.com_ok + ' com OK (só campo vazio; o OK não é tocado)' : '')
+        + '.';
+    }
+    async function chamar(preview) {
+      const r = await fetch('/api/classificacao/reaplicar-consenso', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview: preview })
+      });
+      if (!r.ok) throw new Error('falha');
+      return r.json();
+    }
+    btnPrevia.addEventListener('click', async function () {
+      btnPrevia.disabled = true;
+      saida.textContent = 'Levantando...';
+      try {
+        previsto = await chamar(true);
+        saida.textContent = resumo(previsto);
+        btnAplicar.disabled = !(previsto.categorias || previsto.dimensoes);
+      } catch (e) {
+        saida.textContent = 'Falha ao levantar.';
+      } finally {
+        btnPrevia.disabled = false;
+      }
+    });
+    btnAplicar.addEventListener('click', async function () {
+      if (!previsto) return;
+      if (!confirm('Preencher ' + previsto.categorias + ' categoria(s) e '
+                   + previsto.dimensoes + ' campo(s) vazios? O OK não é alterado.')) return;
+      btnAplicar.disabled = true;
+      saida.textContent = 'Aplicando...';
+      try {
+        const d = await chamar(false);
+        saida.textContent = 'Aplicado: ' + resumo(d) + ' Recarregue para ver os números novos.';
+        previsto = null;
+      } catch (e) {
+        saida.textContent = 'Falha ao aplicar.';
+        btnAplicar.disabled = false;
+      }
+    });
+  })();
+
   const formLote = document.getElementById('formLote');
   if (formLote) {
     formLote.addEventListener('submit', function (e) {

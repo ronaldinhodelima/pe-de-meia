@@ -39,6 +39,8 @@ from core import (
     registrar_mudanca_auditoria,
     requer,
     topbar_html,
+    CONTA_UNICRED,
+    aplicar_consenso_classificacao,
     _canonizar_v45,
     _consenso_por_categoria,
     _consenso_por_lojista,
@@ -2735,3 +2737,41 @@ def api_consenso_preview():
         "lancamentos_alcancados_categoria": len(alvos["categoria"]),
         "lancamentos_alcancados_total": len(alvos["lojista"] | alvos["categoria"]),
     })
+
+
+@bp.route("/api/classificacao/reaplicar-consenso", methods=["POST"])
+@requer("cadastros")
+def api_reaplicar_consenso():
+    """Reaplica o consenso dos OK aos campos VAZIOS. Repetivel de proposito.
+
+    O consenso cresce a cada OK que o usuario assina, entao isto e uma acao de
+    tela, nao uma migracao unica. `preview: true` e estritamente somente
+    leitura - nao abre escrita e faz rollback ao final, por seguranca.
+
+    Nunca marca nem desmarca `conferida` (secao 1.2) e nunca escreve em
+    `observacao` (secao 7.3).
+    """
+    dados = request.get_json(silent=True) or {}
+    preview = bool(dados.get("preview"))
+    conta = dados.get("account_id") or CONTA_UNICRED
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        res = aplicar_consenso_classificacao(cur, account_id=conta, preview=preview)
+        if preview:
+            conn.rollback()
+        else:
+            conn.commit()
+            registrar_auditoria(
+                "alteracao", "Reaplica o consenso de classificacao",
+                detalhes={"account_id": conta, "categorias": res["categorias"],
+                          "dimensoes": res["dimensoes"], "tocados_com_ok": res["com_ok"],
+                          "tocados_sem_ok": res["sem_ok"]},
+            )
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+    return jsonify({"ok": True, "preview": preview, **res})

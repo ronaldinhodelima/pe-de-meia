@@ -134,6 +134,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
         "/api/categoria-lancamentos", "/api/dimensao-lancamentos",
         "/api/classificacao/consenso-preview",
+        "/api/classificacao/reaplicar-consenso",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/lancamentos/fatura",
@@ -1002,3 +1003,21 @@ def test_migracao_48_nao_encosta_no_ok_e_tem_ponto_de_reversao():
     assert "_dimensao_vazia" in bloco
     # os dois consensos recusados na revisao da previa
     assert '"Leisure"' in bloco and '"Insurance"' in bloco
+
+
+def test_reaplicar_consenso_e_repetivel_com_previa_e_sem_tocar_no_ok():
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    rota = view.split("def api_reaplicar_consenso", 1)[1]
+    assert 'methods=["POST"]' in view.split("def api_reaplicar_consenso", 1)[0][-200:], \
+        "gravar em lote nunca por GET"
+    assert "conn.rollback()" in rota, "a previa nao pode deixar rastro"
+    assert "registrar_auditoria" in rota
+    assert "conferida=" not in rota and "SET conferida" not in rota
+
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    helper = core.split("def aplicar_consenso_classificacao", 1)[1].split(
+        "def preencher_classificacao_vazia_parcelas", 1)[0]
+    assert "SET conferida" not in helper and "conferida=" not in helper
+    assert "SET observacao" not in helper
+    assert "NULLIF(categoria,'') IS NULL" in helper
+    assert "cartao.transacao_dimensao.valor_id IS NULL" in helper
