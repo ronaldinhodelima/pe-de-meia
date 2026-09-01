@@ -995,6 +995,41 @@ precisam de decisão caso a caso.
   classifica como "Parcela cobrada de novo" e oferece o vínculo — **falta só a decisão do
   usuário**, porque marcação de duplicidade é dele (§1.3).
 
+## 11.2-A Vínculos que ligam estabelecimentos diferentes (varredura de 01/09/2026)
+
+`GET /api/fatura/vinculos-suspeitos` lista, sem desfazer nada, os vínculos em que a linha da
+fatura e a transação não têm **um único termo do estabelecimento em comum**. É a armadilha nº 17
+da §6.5 aplicada para trás: a correção de lá passou a impedir vínculos novos, mas **não varreu os
+já gravados**.
+
+Resultado: 3.058 vínculos avaliados, **33 suspeitos**, 18 deles com agregado fora do DRE.
+
+**Três erros reais, todos com a mesma assinatura** — parcela × total bate com uma compra alheia
+dentro da tolerância de R$ 1,00:
+
+| Parcelas | Agregado a que grudaram | Diferença |
+|---|---|---|
+| TOTAL SPORTES 10 × R$ 44,99 = R$ 449,90 | ORAL UNIC ODONTOL R$ 450,00 | R$ 0,10 |
+| TOTAL SPORTES 10 × R$ 71,79 = R$ 717,90 | **SUPERVIZA R$ 718,40 (à vista)** | R$ 0,50 |
+| ATIVA 4 × R$ 65,62 = R$ 262,48 | **POSTOS NOTA LTDA R$ 262,04 (à vista)** | R$ 0,44 |
+
+SUPERVIZA e POSTOS NOTA são **"A vista sem juros"**: compra à vista não pode ser agregado de
+parcelamento de forma nenhuma, e as duas estão fora do resultado — **R$ 980,44**, mesma classe de
+defeito da §6.6. ORAL UNIC é "Parcelado Lojista", então pode ser agregado legítimo que ganhou
+vínculos errados **além** dos certos; conferir antes de concluir.
+
+**Três pares simplesmente trocados entre si**, mesmo valor, inócuos no total mas com a
+classificação indo para o lojista errado: MERCEA POMARES ↔ MERCEARIA SOUZA / Unicred TAG (R$ 3,50),
+XIMANGO ↔ ALLPARK (R$ 25,00), SMARTYZRBSB ↔ PANIFICADORA (R$ 40,00).
+
+**Falsos positivos conhecidos da varredura**, não mexer: `Pagamento Recebido` ↔ `Pag de Fatura Via
+Deb Aut` (§6.5 nº 12), `Anuidade - bonificação` ↔ `Est.Tarifa manutencao de conta` (§8.3), e
+grafias coladas que o tokenizador não casa (`PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE QUINTAL`,
+`CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA`).
+
+**Desfazer vínculo muda o que entra no DRE** — o agregado volta ou sai do resultado. É decisão do
+usuário, como a marcação de duplicidade (§1.3).
+
 ## 11.3 A validar com o usuário (dado que falta)
 
 **Andar de cima da residência alugado para a BRDrive.** A casa tem dois andares: a família mora no
@@ -1018,6 +1053,15 @@ revisar e marcar manualmente.
 **FARM GEREMIAS (Andrea)** 3× R$ 63,30 tem **dois agregados** (26/11/2025 e 10/07/2026, ambos
 R$ 189,90) e linhas duplicadas nas faturas. Pode ser duas compras iguais ou duplicidade da
 operadora.
+
+**Categorias que os OK do mesmo lojista contradizem.** `consenso-preview` devolve
+`categoria_divergente_entre_oks`. **A maioria é falso positivo**: o IOF chega com a mesma descrição
+do lojista, então `NOVOTEL` = Accomodation + `Tax on financial operations` são a compra e o IOF
+dela, ambos certos (§8.3). Divergências reais a decidir: AQUAMATER (Academia 14 × Shopping 1),
+AZULEQVY2E e LATAM AIR (Airport and airlines × Viagem), ORTOCLINICA (Healthcare × Hospital clinics
+and labs), GUILHERMEDASILVA (Agua 15 × Agua / Gas 8 — a categoria "Agua / Gas" parece resíduo de
+antes da regra por valor da §8.4). MERCADO*MERCADOLIVRE (Houseware 13 × Vehicle maintenance 6) é
+divergência **legítima**: marketplace, e a §8.4 manda não automatizar.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
