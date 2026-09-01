@@ -16,24 +16,17 @@
   .fatura-cards .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:var(--accent)}
   .fatura-cards .card:active{transform:translateY(0)}
   .fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
-  .fatura-cards .card-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .fatura-cards .card-topo .label{min-width:0}
-  .fatura-cards .card-icone{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;flex:none;background:var(--raise);color:var(--ink-faint)}
   .fatura-cards .card-ok .val{color:var(--good)}.fatura-cards .card-aviso .val{color:var(--warn)}.fatura-cards .card-erro .val{color:var(--bad)}.fatura-cards .card-fora .val{color:var(--neutro)}
-  .fatura-cards .card-ok .card-icone{background:var(--good-soft);color:var(--good)}
-  .fatura-cards .card-aviso .card-icone{background:var(--warn-soft);color:var(--warn)}
-  .fatura-cards .card-erro .card-icone{background:var(--bad-soft);color:var(--bad)}
-  .fatura-cards .card-fora .card-icone{background:var(--neutro-soft);color:var(--neutro)}
   .card-progresso{height:4px;border-radius:2px;background:var(--raise);margin-top:8px;overflow:hidden}
   .card-progresso i{display:block;height:100%;border-radius:2px;transition:width .4s ease}
   .card-ok .card-progresso i{background:var(--good)}.card-aviso .card-progresso i{background:var(--warn)}.card-erro .card-progresso i{background:var(--bad)}
 
   .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
   .fatura-tabela thead th{position:sticky;top:0;background:var(--surface);z-index:1;box-shadow:0 1px 0 var(--line)}
-  .fatura-tabela tr.fatura-ok{background:#f1f2f3}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 var(--warn)}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
+  .fatura-tabela tr.fatura-ok{background:var(--raise)}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 var(--warn)}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
   .fatura-tabela tr[data-toggle-linha]{cursor:pointer;transition:background-color .1s}
   .fatura-tabela tr[data-toggle-linha]:hover{background:var(--accent-soft)}
-  .fatura-tabela tr.fatura-ok[data-toggle-linha]:hover{background:#e7e9ec}
+  .fatura-tabela tr.fatura-ok[data-toggle-linha]:hover{background:var(--line)}
 
   .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
   .expande:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
@@ -106,16 +99,16 @@
 
 {% if fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não possui PDF oficial. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação do PDF.</div>{% endif %}
 <div class="cards fatura-cards">
-  <div class="card" data-filtro="todas"><div class="card-topo"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><span class="card-icone">📄</span></div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
-  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="card-topo"><div class="label">PDF oficial</div><span class="card-icone">⏳</span></div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="card-topo"><div class="label">Conciliação</div><span class="card-icone">🔗</span></div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}
-  <div class="card" data-filtro="dre"><div class="card-topo"><div class="label">Despesas no DRE</div><span class="card-icone">📉</span></div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
-  <div class="card card-fora" data-filtro="fora"><div class="card-topo"><div class="label">Fora do DRE</div><span class="card-icone">🧭</span></div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
+  <div class="card" data-filtro="todas"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">PDF oficial</div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}
+  <div class="card" data-filtro="dre"><div class="label">Despesas no DRE</div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
+  <div class="card card-fora" data-filtro="fora"><div class="label">Fora do DRE</div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
 </div>
 <div class="cards fatura-cards" style="margin-top:10px">
-  <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="card-topo"><div class="label">Classificação</div><span class="card-icone">🏷️</span></div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.classificadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
-  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="card-topo"><div class="label">OK dos lançamentos</div><span class="card-icone">✅</span></div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após PDF conciliado</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="card-topo"><div class="label">OK dos lançamentos</div><span class="card-icone">✅</span></div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
-  <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="card-topo"><div class="label">Divergências</div><span class="card-icone">⚠️</span></div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
-  <div class="card" data-filtro="multiplos"><div class="card-topo"><div class="label">Com agregados</div><span class="card-icone">🧩</span></div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
+  <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="label">Classificação</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.classificadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">OK dos lançamentos</div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após PDF conciliado</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
+  <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
+  <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
 </div>
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">

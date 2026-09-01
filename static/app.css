@@ -90,10 +90,10 @@
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
   th { text-align: left; background: var(--bg); padding: 11px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); font-weight: 500; border-bottom: 1px solid var(--line); }
   td { padding: 10px 12px; border-top: 1px solid var(--line-soft); font-size: 13.5px; vertical-align: middle; }
-  tr.conferida { background: #f1f2f3; }
+  tr.conferida { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
   tbody tr:hover { background: var(--accent-soft); }
-  tr.conferida:hover { background: #e7e9ec; }
+  tr.conferida:hover { background: var(--line); }
   tr.duplicada td { text-decoration: line-through; color: var(--ink-faint); }
   tr.duplicada { background: #faf6ee; }
   tr.duplicada:hover { background: #f4ecdb; }
