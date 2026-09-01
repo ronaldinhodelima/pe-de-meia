@@ -31,13 +31,14 @@ def test_layout_sombra_flutuante_e_compacto():
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
 
     assert ".pdm-combobox-input:focus" in css
-    assert ".pdm-combobox-opcao.ativo::after{content:'Enter ↵'" in css
+    assert "content:'Enter ↵'" not in css
     assert "--field-soft: var(--bg)" in css
     assert "background:transparent!important" in css
     assert "font-size:12.5px" in css
     assert "height:26px" in css
     assert "border-radius:5px!important" in css
-    assert "padding:1px 21px 1px 5px!important" in css
+    assert "padding:1px 18px 1px 3px!important" in css
+    assert "padding:7px 4px" in css
     assert "box-shadow:0 1px 3px rgba(20,20,20,.08)!important" in css
     assert ".pdm-combobox-input:hover,.pdm-combobox-input:focus" in css
     assert "background:#f2f2f0!important" in css

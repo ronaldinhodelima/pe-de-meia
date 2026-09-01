@@ -1694,3 +1694,11 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   classificação incompleta e divergência de valor como problemas diferentes.
 - Depois de concluir a Unicred Conjunta, criar regras independentes para outros cartões e contas correntes. Não
   transportar classificações automaticamente entre origens.
+- Proposta ainda não implementada: incluir na visualização detalhada uma `Fatura em andamento` para o ciclo atual
+  ainda sem PDF. Ela deve listar lançamentos reais do Pluggy dentro do ciclo estimado e permitir classificação,
+  Observação e OK, mas nunca apresentar total oficial, conciliação fechada ou linhas artificiais de PDF. Exibir um
+  aviso claro de que o período e os valores são provisórios. Quando o PDF oficial for importado, vincular suas linhas
+  aos lançamentos existentes, preservar todos os dados manuais e transformar a competência provisória em fatura
+  oficial; diferenças e itens ausentes permanecem para revisão. Confirmar este fluxo antes de implementar.
+- Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
+  margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.
