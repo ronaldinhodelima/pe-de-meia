@@ -1884,3 +1884,92 @@ legitimamente em "Fora do DRE" por natureza (18.746,38 + 66,55 = 18.812,93).
 caminho de volta desde o início. Um estado que só se aplica e nunca se retira vira dado perdido
 silencioso — não dá erro, não aparece em teste, e só é encontrado meses depois por quem for
 conferir fatura a fatura.
+
+## Consenso dos OK publicado em 2025 — migração 45 (01/09/2026)
+
+### Como o consenso é apurado (e por que campo a campo)
+
+Aprende **só com lançamento conferido** — OK é a assinatura humana, então é a única fonte de
+verdade sobre o que significa cada gasto. Exige **unanimidade e no mínimo duas evidências**.
+
+A diferença para a migração 42: o consenso é apurado **campo a campo**, não pelo conjunto.
+Um lojista pode ter categoria consensual e nenhum projeto consensual — é exatamente o caso do
+posto de combustível, que abastece o Jeep (Ronaldo) e o Tracker (Andrea): `Combustível` é
+unânime, `Projeto` nunca será. Exigir o conjunto inteiro jogava fora a categoria junto.
+
+**Canonização do lojista.** A mesma loja chega com e sem o sufixo de cidade/país
+(`DELTA VIDEIRA` e `DELTA VIDEIRA VIDEIRA BR`). O agrupamento usa a menor chave que seja
+prefixo da outra, **cortando sempre em limite de palavra** — sem isso `ESTACAO` engoliria
+`HIPER CENTER ESTACAO`, que é outra loja. Sem canonizar, o alcance caía pela metade.
+
+**Nunca propaga projeto que começa com "Viagem ".** Projeto de viagem é evento datado: o mesmo
+hotel ou o mesmo Uber reaparece em outra viagem e o projeto antigo fica errado.
+
+**Resultado medido:** 112 lojistas com consenso · **174 lançamentos de 2025 tocados** ·
+102 categorias e 242 dimensões preenchidas · +6 dimensões propagadas a parcelas.
+Reversão em `cartao.classificacao_backup_v45`.
+
+**Validação:** as 20 faturas seguem fechando 100%, e o **Despesas no DRE de todas as 20 ficou
+idêntico ao centavo**. Isso não era garantido de graça — definir categoria também define
+natureza, e uma categoria de natureza neutra tiraria o lançamento do resultado. Conferir esse
+número é obrigatório em qualquer rodada de classificação em massa.
+
+### Seis padrões recusados na revisão, mesmo com OK unânime
+
+Consenso unânime não é prova de acerto — pode ser erro repetido. Estes foram reprovados um a um
+e estão na lista `recusados_v45`; propagar multiplicaria o erro:
+
+| Padrão | Consenso nos OK | Por que foi recusado |
+|---|---|---|
+| LETICIAKAYSER | Juros Cobrados (10 OK) | nome de pessoa; se for empréstimo real, o usuário confirma |
+| POUSADA FOGO*RESE | Combustível | pousada não é posto |
+| CATIVA | Viagem (31 OK) | é loja de roupas |
+| MP *REGIBARBERSHOP | Serviços **e** Beleza | a mesma barbearia nas duas grafias, com categorias diferentes |
+| ESTACAO | — | ambíguo, já recusado na migração 42 |
+
+## Varredura das divergências dentro dos OK — 01/09/2026
+
+2.959 lançamentos com OK na Unicred Conjunta. **64 lojistas têm categoria divergente entre os
+próprios OK.** Nem toda divergência é erro — são três fenômenos diferentes:
+
+**1. "Categoria + IOF" — legítimo, não mexer (a maioria dos 64).** Toda compra internacional
+gera duas linhas: a compra e o IOF. `NUNA RESTAURANT :: 1x Restaurantes / 1x IOF` está certo.
+O mesmo vale para `Juros Cobrados` ao lado da compra parcelada. **Não tratar como divergência
+em nenhuma varredura futura** — o nome do estabelecimento é o mesmo, o lançamento não é.
+
+**2. Divergência legítima de dimensão.** `DELTA VIDEIRA` tem Jeep e Tracker; `UNICRED TAG` tem
+uma viagem diferente em cada pedágio. Categoria é consensual, Projeto não é — e não deve ser.
+
+**3. Divergência real, esperando decisão do usuário:**
+
+| Lojista | OK divergentes | Observação |
+|---|---|---|
+| LISCIA | 20x Saúde / 16x Beleza | genuinamente ambíguo |
+| PANIFICADORA E CONFEIT | 29x Mercado / 12x Restaurantes | **a regra da migração 42 gravou `Eating out` (Restaurantes) — a minoria** |
+| MP *PRODUTOS | 14x Compras / 13x Restaurantes | **idem: a regra 42 gravou `Eating out`** |
+| APPLE.COM/BILL | 12x Compras / 10x Serviços Digitais | |
+| AQUAMATER | 14x Academia / 1x Escola | o "Escola" parece engano |
+| TOTAL SPORTES | 5x Mercado / 2x Dentista / 1x Artigos Esportivos | "Dentista" numa loja de esportes |
+| GUILHERMEDASILVA | 49x Água / 13x Gás / **1x Compras** | Água/Gás é a regra por valor já aprovada; o "Compras" é o engano |
+| MITRADIOCESANADE | 5x Doações / 1x Restaurantes | |
+| ALLSMART | 3x Serviços / 2x Utilidades / 1x Telecom | |
+
+**Duas regras ativas da migração 42 contradizem a maioria dos OK** (PANIFICADORA e MP *PRODUTOS,
+ambas gravadas como `Eating out` enquanto os OK majoritários dizem Mercado/Compras). Isso não
+foi alterado — regra em produção só muda com decisão do usuário.
+
+### O achado maior: 1.639 dos 2.959 OK estão incompletos
+
+| Ano | OK | Incompletos |
+|---|---|---|
+| 2024 | 67 | 55 |
+| 2025 | 1.639 | 1.225 |
+| 2026 | 1.253 | 359 |
+
+**885 estão sem categoria nenhuma** — e categoria vazia entra no DRE como despesa por padrão
+(`NATUREZA_PADRAO`). São OKs anteriores à regra de obrigatoriedade dos quatro campos; o
+CLAUDE.md já registra que "OKs históricos não são apagados automaticamente".
+
+**Nada foi preenchido neles, de propósito.** A migração 45 só toca lançamento **não conferido**,
+seguindo a migração 42. Preencher por baixo de um OK mudaria o que o usuário assinou —
+é decisão dele, não do Claude. É a maior pendência aberta de qualidade de dado hoje.
