@@ -27,16 +27,17 @@ def test_piloto_cobre_quatro_campos_nas_duas_visualizacoes():
     assert 'data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select' in resumida
 
 
-def test_layout_linha_precisa_e_minimalista():
+def test_layout_sombra_flutuante_e_compacto():
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
 
     assert ".pdm-combobox-input:focus" in css
-    assert "box-shadow:none!important" in css
     assert ".pdm-combobox-opcao.ativo::after{content:'Enter ↵'" in css
     assert "--field-soft: var(--bg)" in css
-    assert "background:var(--field-soft)!important" in css
+    assert "background:transparent!important" in css
     assert "font-size:12.5px" in css
-    assert "height:32px" in css
-    assert "border-radius:3px 3px 0 0!important" in css
-    assert ".pdm-combobox-input:focus{border-bottom:1px solid var(--accent)!important" in css
+    assert "height:28px" in css
+    assert "border-radius:5px!important" in css
+    assert "box-shadow:0 1px 3px rgba(20,20,20,.08)!important" in css
+    assert ".pdm-combobox-input:hover,.pdm-combobox-input:focus" in css
+    assert "transform:scale(1.012)" in css
     assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css

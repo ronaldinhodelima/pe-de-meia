@@ -1607,3 +1607,7 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - Refinamento posterior aprovado: `--field-soft` deve reutilizar exatamente o cinza do fundo geral (`--bg`),
   atualmente `#f7f7f5`. Os campos ficam mais baixos (32px), com raio mínimo de 3px e linha de foco de 1px,
   evitando aparência de caixa alta ou borda pesada.
+- Refinamento visual mais recente, que substitui o anterior: opção `Sombra flutuante`. Os campos pesquisáveis
+  usam altura de 28px, fundo transparente, borda normalmente invisível e sombra mínima. No hover ou foco,
+  recebem fundo azul quase branco, contorno azul translúcido, sombra suave e escala de 1,012. Campos obrigatórios
+  incompletos mantêm sinalização vermelha discreta e ganham realce vermelho suave no hover/foco.
