@@ -225,7 +225,7 @@
               {% if pode_editar_conciliacao or pode_criar_lancamento %}
               <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 {% if pode_editar_conciliacao %}
-                <select class="vincular-orfa" style="padding:5px 7px;font-size:12px;max-width:320px">
+                <select data-pdm-combobox aria-label="Lançamento para vincular" class="vincular-orfa" style="padding:5px 7px;font-size:12px;max-width:320px">
                   <option value="">escolha o lançamento…</option>
                   {% for o in resultado.orfas %}
                     <option value="{{ o.transacao_id }}">{{ o.data.strftime('%d/%m') }} · {{ o.descricao }} · {{ o.valor|moeda }}</option>
@@ -234,7 +234,7 @@
                 <button type="button" class="ver-btn" onclick="vincularLinha(this)">Vincular</button>
                 {% endif %}
                 {% if pode_criar_lancamento %}
-                <select class="fatura-categoria" style="padding:5px 7px;font-size:12px">
+                <select data-pdm-combobox aria-label="Categoria" class="fatura-categoria" style="padding:5px 7px;font-size:12px">
                   {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
                 </select>
                 <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
@@ -272,7 +272,7 @@
             <td>
               {% if pode_editar_conciliacao %}
               <div style="display:flex;gap:6px;align-items:center">
-                <select class="vincular-linha-alvo" style="padding:5px 7px;font-size:12px;max-width:340px">
+                <select data-pdm-combobox aria-label="Linha para vincular" class="vincular-linha-alvo" style="padding:5px 7px;font-size:12px;max-width:340px">
                   <option value="">escolha a linha da fatura…</option>
                   {% for l in resultado.linhas %}
                     <option value="{{ l.id }}">{{ l.data.strftime('%d/%m') }} · {{ l.descricao }} · {{ l.valor|moeda }}{{ ' (já vinculada)' if l.tem_vinculo }}</option>

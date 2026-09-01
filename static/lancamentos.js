@@ -498,13 +498,13 @@ function renderizarRateioModal() {
     let dimsHtml = '';
     Object.entries(window.configLancamentos.dimensoes || {}).forEach(([dimId, valores]) => {
       const nome = (window.configLancamentos.dimensoes_nomes || {})[dimId] || 'Dimensão';
-      dimsHtml += '<div class="row"><span>' + escHtml(nome) + '</span><span><select class="rateio-dim" data-dim="' + escHtml(dimId) + '">' +
+      dimsHtml += '<div class="row"><span>' + escHtml(nome) + '</span><span><select data-pdm-combobox class="rateio-dim" data-dim="' + escHtml(dimId) + '">' +
         opcoesRateio(valores, (p.dims || {})[dimId], '(nao definido)') + '</select></span></div>';
     });
     partesHtml += '<div class="modal-rateio-parte" data-indice="' + indice + '">' +
       '<div class="rateio-parte-titulo"><span>Parte ' + (indice + 1) + '</span><strong>' + (rateioRascunhoModal.length > 2 ? '<button type="button" class="ver-btn" onclick="removerParteRateio(' + indice + ')">Remover</button>' : '') + '</strong></div>' +
       '<div class="row"><span>Valor (R$)</span><span><input class="rateio-valor" type="number" min="0.01" step="0.01" value="' + Number(p.valor || 0).toFixed(2) + '" oninput="atualizarFechamentoRateio()"></span></div>' +
-      '<div class="row"><span>Categoria</span><span><select class="rateio-categoria">' + opcoesRateio(categorias, p.categoria, '(sem categoria)') + '</select></span></div>' +
+      '<div class="row"><span>Categoria</span><span><select data-pdm-combobox aria-label="Categoria" class="rateio-categoria">' + opcoesRateio(categorias, p.categoria, '(sem categoria)') + '</select></span></div>' +
       dimsHtml +
       '<div class="row"><span>Observação</span><span><input class="rateio-observacao" maxlength="500" value="' + escHtml(p.observacao || '') + '"></span></div>' +
       '</div>';

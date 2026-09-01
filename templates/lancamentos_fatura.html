@@ -40,15 +40,15 @@
 
 <div class="fatura-filtros">
   <label>Cartão</label>
-  <select id="faturaConta">
+  <select id="faturaConta" data-pdm-native>
     {% for aid, curto, completo, _, _ in contas_credito %}<option value="{{ aid }}" {{ 'selected' if aid==account_id }}>{{ completo }}</option>{% endfor %}
   </select>
   <label>Fatura</label>
-  <select id="faturaSelecionada">
+  <select id="faturaSelecionada" data-pdm-native>
     {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}</option>{% endfor %}
   </select>
   <label>Status</label>
-  <select id="faturaStatus">
+  <select id="faturaStatus" data-pdm-native>
     <option value="todas" {{ 'selected' if status=='todas' }}>Todas as linhas</option>
     <option value="pendente_classificacao" {{ 'selected' if status=='pendente_classificacao' }}>Pendentes de classificação</option>
     <option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>

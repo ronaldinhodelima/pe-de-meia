@@ -91,7 +91,7 @@
           <form method="post" style="display:inline-block">
             <input type="hidden" name="acao" value="mapear_categoria">
             <input type="hidden" name="subgrupo_id" value="{{ s.id }}">
-            <select name="categoria" onchange="this.form.submit()"
+            <select name="categoria" data-pdm-combobox aria-label="Categoria" onchange="this.form.submit()"
                     style="padding:4px 6px;border:1px solid #ccc;border-radius:6px;font-size:12px;color:var(--ink-faint)">
               <option value="">+ vincular categoria…</option>
               {# Uma categoria so pode estar em um subgrupo (a chave primaria da
@@ -151,7 +151,7 @@
       <form method="post" style="display:inline">
         <input type="hidden" name="acao" value="mapear_categoria">
         <input type="hidden" name="categoria" value="{{ c.chave }}">
-        <select name="subgrupo_id" onchange="this.form.submit()"
+        <select name="subgrupo_id" data-pdm-combobox aria-label="Subgrupo" onchange="this.form.submit()"
                 style="padding:5px 7px;border:1px solid #ccc;border-radius:6px;font-size:12px">
           <option value="">vincular a…</option>
           {% for g in grupos %}

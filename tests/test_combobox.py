@@ -49,8 +49,16 @@ def test_layout_sombra_flutuante_e_compacto():
 def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():
     js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
 
-    assert "select.options.length >= 7" in js
     assert "select.hasAttribute('data-lazy-options')" in js
     assert "select.matches('[data-pdm-native], [multiple]')" in js
     assert "escopo.querySelectorAll('select')" in js
     assert "new MutationObserver(function (mudancas)" in js
+    assert "select.options.length >= 7" not in js
+
+
+def test_filtros_de_navegacao_da_fatura_permanecem_nativos():
+    tela = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+
+    assert '<select id="faturaConta" data-pdm-native>' in tela
+    assert '<select id="faturaSelecionada" data-pdm-native>' in tela
+    assert '<select id="faturaStatus" data-pdm-native>' in tela

@@ -20,7 +20,7 @@
       </select>
     </label>
     <label style="font-size:12px">Usuário<br>
-      <select name="usuario" style="min-width:140px">
+      <select name="usuario" data-pdm-combobox aria-label="Usuário" style="min-width:140px">
         <option value="">Todos</option>
         {% for item in usuarios %}<option value="{{ item }}" {{ 'selected' if filtros.usuario == item }}>{{ item }}</option>{% endfor %}
       </select>

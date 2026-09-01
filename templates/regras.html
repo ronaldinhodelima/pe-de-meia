@@ -2,7 +2,7 @@
 
 {# select de categoria, reaproveitado pelo form de criar e pelo de editar #}
 {% macro sel_categoria(selecionado=None) %}
-  <select name="categoria" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+  <select name="categoria" data-pdm-combobox aria-label="Categoria" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
     {% for c in categorias %}
       <option value="{{ c.chave }}" {{ 'selected' if c.chave == selecionado }}>{{ c.nome }}</option>
     {% endfor %}
@@ -14,7 +14,7 @@
   {% for d in dimensoes %}
     <div>
       <label style="font-size:12px;color:#888;display:block">{{ d.nome }}</label>
-      <select name="dim_{{ d.id }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+      <select name="dim_{{ d.id }}" data-pdm-combobox aria-label="{{ d.nome }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
         <option value="">(nao definir)</option>
         {% for v in valores_por_dim.get(d.id, []) %}
           <option value="{{ v.id }}" {{ 'selected' if selecionados.get(d.id) == v.id }}>{{ v.nome }}</option>

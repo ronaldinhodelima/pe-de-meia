@@ -20,8 +20,7 @@
 
   function deveMelhorar(select) {
     if (!select || select.matches('[data-pdm-native], [multiple]')) return false;
-    if (select.hasAttribute('data-pdm-combobox') || select.hasAttribute('data-lazy-options')) return true;
-    return select.options.length >= 7;
+    return select.hasAttribute('data-pdm-combobox') || select.hasAttribute('data-lazy-options');
   }
 
   function melhorarSelect(select) {

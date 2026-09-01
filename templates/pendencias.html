@@ -34,7 +34,7 @@
               <form method="post" style="display:flex;gap:6px;align-items:center">
                 <input type="hidden" name="acao" value="definir_categoria_lancamento">
                 <input type="hidden" name="transacao_id" value="{{ m.id }}">
-                <select name="categoria" required style="padding:5px 7px;font-size:12px;min-width:190px">
+                <select name="categoria" data-pdm-combobox aria-label="Categoria" required style="padding:5px 7px;font-size:12px;min-width:190px">
                   <option value="">escolha…</option>
                   {% for c in categorias_pendencia %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
                 </select>
@@ -142,7 +142,7 @@
             <form method="post" style="display:flex;gap:6px;align-items:center">
               <input type="hidden" name="acao" value="vincular_centro">
               <input type="hidden" name="categoria" value="{{ c }}">
-              <select name="subgrupo_id" style="padding:5px 7px;font-size:12px">
+              <select name="subgrupo_id" data-pdm-combobox aria-label="Subgrupo" style="padding:5px 7px;font-size:12px">
                 <option value="">escolha o subgrupo…</option>
                 {% for g in grupos %}
                   {% if subgrupos_por_grupo.get(g.id) %}

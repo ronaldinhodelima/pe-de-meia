@@ -31,7 +31,7 @@
   </div>
   <div>
     <label>Status</label>
-    <select id="statusInput" onchange="aplicarFiltros()">
+    <select id="statusInput" data-pdm-native onchange="aplicarFiltros()">
       <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
       <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes de conferência</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
@@ -68,7 +68,7 @@
       <option value="entrada">Entrada</option>
     </select>
     <input type="number" id="manualValor" step="0.01" min="0.01" placeholder="Valor (R$)" required style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:130px">
-    <select id="manualCategoria" style="padding:7px 9px">
+    <select id="manualCategoria" data-pdm-combobox aria-label="Categoria" style="padding:7px 9px">
       {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
     </select>
     <button type="submit">Adicionar</button>
@@ -157,7 +157,7 @@
         <td class="cel-data" data-col="data"></td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }} — Parte {{ loop.index }}"><span class="rateio-seta">↳</span> {{ r.descricao }} — Parte {{ loop.index }}</td>
         <td class="cel-origem" data-col="origem">Rateio interno</td>
-        <td class="cel-dim" data-col="categoria"><select class="rateio-cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar }}><option value="{{ parte.categoria }}" selected>{{ parte.categoria_nome }}</option></select></td>
+        <td class="cel-dim" data-col="categoria"><select data-pdm-combobox class="rateio-cat-select" data-lazy-options="categoria" {{ 'disabled' if not pode_editar }}><option value="{{ parte.categoria }}" selected>{{ parte.categoria_nome }}</option></select></td>
         {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}"><select class="rateio-dim-select" data-dim="{{ d.id }}" data-lazy-options="dimensao" {{ 'disabled' if not pode_editar }}><option value="{{ parte.dims.get(d.id) or '' }}" selected>{{ parte.dims_rotulos.get(d.id) }}</option></select></td>{% endfor %}
         <td class="valor cel-valor" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline{{ '' if r.rateio_valido else ' invalido' }}" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar }}></td>
         <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." {{ 'disabled' if not pode_editar }}></td>
@@ -197,7 +197,7 @@
        Categoria, dimensoes, Observacao e OK. #}
     <div class="row">
       <span>Categoria</span>
-      <span><select id="modalCategoria" onchange="salvarCategoriaModal()"
+      <span><select id="modalCategoria" data-pdm-combobox aria-label="Categoria" onchange="salvarCategoriaModal()"
                     {{ 'disabled' if not pode_editar }} style="padding:5px 7px;max-width:230px">
         <option value="">(sem categoria)</option>
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
@@ -207,7 +207,7 @@
       {% for d in dimensoes %}
       <div class="row">
         <span>{{ d.nome }}</span>
-        <span><select class="dim-select modal-dim-select" data-dim="{{ d.id }}"
+        <span><select data-pdm-combobox class="dim-select modal-dim-select" data-dim="{{ d.id }}"
                       data-lazy-options="dimensao" onchange="salvarDimensaoModal(this)"
                       {{ 'disabled' if not pode_editar }}>
           <option value="">(nao definido)</option>
