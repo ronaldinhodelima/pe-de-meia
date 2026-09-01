@@ -363,7 +363,7 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     assert 'class="visao-lancamentos"' in filtros
     cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
     assert "Ciclo" in cabecalho
-    assert "PDF oficial" not in cabecalho
+    assert "PDF oficial</span>" not in cabecalho
     assert 'id="buscaFatura"' in template
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     assert "textoFiltravelDoGrupo" in js

@@ -16,7 +16,10 @@
   const fatura = document.getElementById('faturaSelecionada');
   const status = document.getElementById('faturaStatus');
   if (conta) conta.addEventListener('change', () => ir({account_id: conta.value, fatura_id: null, status: 'todas'}));
-  if (fatura) fatura.addEventListener('change', () => ir({fatura_id: fatura.value, account_id: null, status: 'todas'}));
+  if (fatura) fatura.addEventListener('change', () => {
+    if (fatura.value === 'andamento') ir({andamento: '1', fatura_id: null, status: 'todas'});
+    else ir({fatura_id: fatura.value, andamento: null, account_id: null, status: 'todas'});
+  });
   if (status) status.addEventListener('change', () => ir({status: status.value}));
   document.addEventListener('click', evento => {
     const card = evento.target.closest('[data-filtro]');

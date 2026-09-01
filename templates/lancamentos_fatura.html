@@ -32,10 +32,10 @@
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
 <div class="fatura-cabecalho">
   {% if fatura_antiga %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_antiga.id }}" title="Fatura anterior">‹</a>{% else %}<span class="nav" style="opacity:.3">‹</span>{% endif %}
-  <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}</h2>
-  {% if fatura.periodo_inicio and fatura.periodo_fim %}<span class="fatura-ciclo">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% endif %}</span>{% endif %}
-  {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
-  <a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn fatura-conciliacao" style="text-decoration:none">Ver conciliação do PDF</a>
+  <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}{% if fatura.em_andamento %} · Em andamento{% endif %}</h2>
+  {% if fatura.periodo_inicio and fatura.periodo_fim %}<span class="fatura-ciclo">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% elif fatura.em_andamento %} · aguardando PDF oficial{% endif %}</span>{% endif %}
+  {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?{{ 'andamento=1&amp;account_id=' ~ account_id if fatura_nova.em_andamento else 'fatura_id=' ~ fatura_nova.id }}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
+  {% if not fatura.em_andamento %}<a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn fatura-conciliacao" style="text-decoration:none">Ver conciliação do PDF</a>{% else %}<span class="estado fatura-conciliacao">Valores provisórios do Pluggy</span>{% endif %}
 </div>
 
 <div class="fatura-filtros">
@@ -45,43 +45,44 @@
   </select>
   <label>Fatura</label>
   <select id="faturaSelecionada" data-pdm-native>
-    {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}</option>{% endfor %}
+    {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{{ ' · Em andamento' if item.em_andamento else '' }}</option>{% endfor %}
   </select>
   <label>Status</label>
   <select id="faturaStatus" data-pdm-native>
     <option value="todas" {{ 'selected' if status=='todas' }}>Todas as linhas</option>
     <option value="pendente_classificacao" {{ 'selected' if status=='pendente_classificacao' }}>Pendentes de classificação</option>
-    <option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>
+    {% if not fatura.em_andamento %}<option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>{% endif %}
     <option value="dre" {{ 'selected' if status=='dre' }}>Despesas no DRE</option>
     <option value="fora" {{ 'selected' if status=='fora' }}>Fora do DRE</option>
-    <option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
+    {% if not fatura.em_andamento %}<option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
     <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
-    <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>
+    <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>{% endif %}
   </select>
   <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
     <a href="{{ url_resumida }}">Resumida</a>
-    <a href="/lancamentos/fatura?fatura_id={{ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
+    <a href="/lancamentos/fatura?{{ 'andamento=1&amp;account_id=' ~ account_id if fatura.em_andamento else 'fatura_id=' ~ fatura.id }}" class="ativo" aria-current="page">Detalhada</a>
   </div>
 </div>
 
+{% if fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não possui PDF oficial. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação do PDF.</div>{% endif %}
 <div class="cards fatura-cards">
-  <div class="card" data-filtro="todas"><div class="label">Total oficial</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} linhas cobradas no PDF</div></div>
-  <div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div></div>
+  <div class="card" data-filtro="todas"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">PDF oficial</div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div></div>{% endif %}
   <div class="card" data-filtro="dre"><div class="label">Despesas no DRE</div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
   <div class="card card-fora" data-filtro="fora"><div class="label">Fora do DRE</div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
 </div>
 <div class="cards fatura-cards" style="margin-top:10px">
   <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="label">Classificação</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div></div>
-  <div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">OK dos lançamentos</div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após PDF conciliado</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div></div>
   <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
-  <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>
+  <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
 </div>
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
   <span id="buscaFaturaContador" aria-live="polite"></span>
 </div>
 <div class="tabela-scroll">
-<table class="compacta fatura-tabela"><thead><tr><th></th><th data-ordenar="data" tabindex="0">Data</th><th data-ordenar="descricao" tabindex="0">Descrição no PDF</th><th data-ordenar="titular" tabindex="0">Titular / cartão</th><th data-ordenar="parcela" tabindex="0">Parcela</th><th data-ordenar="valor" tabindex="0">Valor PDF</th><th data-ordenar="classificacao" tabindex="0">Classificação</th><th data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
+<table class="compacta fatura-tabela"><thead><tr><th></th><th data-ordenar="data" tabindex="0">Data</th><th data-ordenar="descricao" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição no PDF' }}</th><th data-ordenar="titular" tabindex="0">Titular / cartão</th><th data-ordenar="parcela" tabindex="0">Parcela</th><th data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor PDF' }}</th><th data-ordenar="classificacao" tabindex="0">Classificação</th><th data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
     <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
@@ -90,7 +91,7 @@
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
     <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
-    <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir }} title="OK do lançamento{% if linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
+    <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir or fatura.em_andamento }} title="{{ 'OK liberado somente após o PDF ser conciliado' if fatura.em_andamento else 'OK do lançamento' }}{% if not fatura.em_andamento and linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
   </tr>
   {% if linha.vinculos %}<tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="8">
     {% for v in linha.vinculos %}
@@ -130,8 +131,8 @@
 {% else %}<tr><td colspan="8" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
 </tbody></table></div>
 <div class="rodape-fatura">
-  <div class="ajuda-fatura">O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.</div>
-  {% if pode_editar %}<div class="revisao-parcelas">
+  <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando o PDF oficial for importado.{% else %}O PDF define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
+  {% if pode_editar and not fatura.em_andamento %}<div class="revisao-parcelas">
     <button type="button" class="ver-btn" id="revisarParcelamentos" data-fatura-id="{{ fatura.id }}" aria-label="Revisar parcelamentos" title="Analisa primeiro e só corrige após confirmação" disabled>Verificando parcelamentos…</button>
     <span id="revisarParcelamentosStatus" style="font-size:12px;color:var(--ink-faint)" aria-live="polite"></span>
   </div>{% endif %}
@@ -143,4 +144,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260831-7"></script>{% endblock %}
+{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260901-1"></script>{% endblock %}

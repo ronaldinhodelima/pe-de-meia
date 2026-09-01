@@ -754,6 +754,151 @@ def _candidatos_fatura_equivalentes(candidatos):
     return len(assinaturas) == 1
 
 
+def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
+    """Mostra o ciclo atual do Pluggy sem fingir que ja existe um PDF oficial."""
+    cur.execute(
+        "SELECT * FROM cartao.fatura_importada WHERE account_id=%s "
+        "ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC LIMIT 1;",
+        (account_id,),
+    )
+    ultima = cur.fetchone()
+    if not ultima or not ultima["periodo_fim"]:
+        return None
+    inicio = ultima["periodo_fim"] + timedelta(days=1)
+    hoje = datetime.now(FUSO_LOCAL).date()
+    mes = ultima["mes_referencia"] + 1
+    ano = ultima["ano_referencia"]
+    if mes == 13:
+        mes, ano = 1, ano + 1
+
+    cur.execute(
+        "SELECT t.transacao_id, t.data_transacao, t.descricao, t.descricao_bruta, "
+        "COALESCE(t.valor_brl,t.valor_original) AS valor, t.valor_original, t.moeda_original, "
+        "t.categoria, t.observacao, t.observacao_sistema, t.conferida, t.conferida_por, "
+        "t.conferida_em, t.numero_cartao_final, t.parcela_atual, t.parcela_total, t.status, t.tipo, "
+        "t.sincronizado_em, t.primeiro_sincronizado_em, false AS duplicada, NULL AS substituido_por, "
+        "false AS somente_conciliacao, " + NATUREZA_SQL + " AS natureza_efetiva "
+        "FROM cartao.transacao t " + JOIN_NATUREZA + " WHERE t.account_id=%s "
+        "AND (" + DATA_LOCAL_SQL + ")::date >= %s AND (" + DATA_LOCAL_SQL + ")::date <= %s "
+        "AND COALESCE(t.duplicada,false)=false AND t.substituido_por IS NULL "
+        "AND COALESCE(t.somente_conciliacao,false)=false ORDER BY t.data_transacao, t.transacao_id;",
+        (account_id, inicio, hoje),
+    )
+    transacoes = [dict(r) for r in cur.fetchall()]
+    ids = [r["transacao_id"] for r in transacoes]
+
+    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
+    dimensoes = cur.fetchall()
+    obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
+    nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
+    ids_dimensoes = {chave_alfa(d["nome"]): d["id"] for d in dimensoes}
+    cur.execute(
+        "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
+        "FROM cartao.dimensao_valor ORDER BY nome;"
+    )
+    valores_por_dim, projeto_portfolio_map = {}, {}
+    for valor in cur.fetchall():
+        valores_por_dim.setdefault(valor["dimensao_id"], []).append(valor)
+        if valor["portfolio_valor_id"]:
+            projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
+    dims_por_tx = {}
+    if ids:
+        cur.execute(
+            "SELECT transacao_id, dimensao_id, valor_id FROM cartao.transacao_dimensao "
+            "WHERE transacao_id IN %s;", (tuple(ids),),
+        )
+        for row in cur.fetchall():
+            dims_por_tx.setdefault(str(row["transacao_id"]), {})[row["dimensao_id"]] = row["valor_id"]
+
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
+    categorias_db = {r["categoria"] for r in cur.fetchall()}
+    categorias = sorted(
+        (categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
+    cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
+    nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
+
+    linhas, total, total_dre, total_fora, classificadas = [], Decimal("0"), Decimal("0"), Decimal("0"), 0
+    for indice, tx in enumerate(transacoes, 1):
+        tid = str(tx["transacao_id"])
+        tx["transacao_id"] = tid
+        tx["data_local"] = data_hora_local(tx.pop("data_transacao"))
+        tx["conferida_local"] = data_hora_local(tx.pop("conferida_em"))
+        tx["sincronizado_local"] = data_hora_local(tx.pop("sincronizado_em"))
+        tx["primeiro_sincronizado_local"] = data_hora_local(tx.pop("primeiro_sincronizado_em"))
+        tx["elegivel"] = True
+        tx["principal"], tx["tecnico"], tx["fonte"], tx["fonte_nome"] = True, False, "P", "Pluggy"
+        tx["dims"] = dims_por_tx.get(tid, {})
+        tx["rateado"] = False
+        faltando = ([] if tx["categoria"] else ["Categoria"]) + [
+            nomes_dimensoes[d] for d in obrigatorias if not tx["dims"].get(d)
+        ]
+        completo = not faltando
+        classificadas += int(completo)
+        valor = Decimal(str(tx["valor"] or 0))
+        total += valor
+        if tx["natureza_efetiva"] == "despesa":
+            total_dre += valor
+        else:
+            total_fora += valor
+        linhas.append({
+            "id": "andamento-" + str(indice), "data": tx["data_local"].date(),
+            "descricao": tx["descricao"], "titular": None,
+            "parcela_atual": tx["parcela_atual"], "parcela_total": tx["parcela_total"],
+            "valor": valor, "pagamento": False, "vinculos": [tx], "principal": tx,
+            "multiplos": False, "requer_validacao": False, "validacao_motivos": [],
+            "faltando": faltando, "classificada": completo, "conferida": bool(tx["conferida"]),
+            "natureza_estado": "dre" if tx["natureza_efetiva"] == "despesa" else "fora",
+            "natureza_rotulo": NATUREZAS.get(tx["natureza_efetiva"], tx["natureza_efetiva"]),
+            "cartao_final": tx["numero_cartao_final"],
+            "cartao_nome": nomes_cartao.get(tx["numero_cartao_final"]),
+            "estado": "andamento",
+        })
+
+    status = request.args.get("status", "todas")
+    if status not in {"todas", "pendente_classificacao", "dre", "fora"}:
+        status = "todas"
+    linhas_visiveis = [l for l in linhas if (
+        status == "todas" or
+        (status == "pendente_classificacao" and not l["classificada"]) or
+        (status == "dre" and l["natureza_estado"] == "dre") or
+        (status == "fora" and l["natureza_estado"] == "fora")
+    )]
+    fatura = {
+        "id": "andamento", "mes_referencia": mes, "ano_referencia": ano,
+        "periodo_inicio": inicio, "periodo_fim": hoje, "vencimento": None,
+        "em_andamento": True,
+    }
+    oficiais = []
+    cur.execute(
+        "SELECT id, mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;", (account_id,),
+    )
+    oficiais = cur.fetchall()
+    config = {
+        "pode_editar": pode("lancamentos_editar"), "pode_conferir": False,
+        "em_andamento": True, "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
+        "projeto_portfolio_map": projeto_portfolio_map,
+        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
+        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
+    }
+    return render_template(
+        "lancamentos_fatura.html", titulo="Fatura em andamento",
+        topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
+        fatura_nova=None, fatura_antiga=oficiais[0] if oficiais else None,
+        faturas=[fatura] + oficiais, conta=contas_by_id.get(account_id),
+        contas_credito=contas_credito, account_id=account_id, linhas=linhas_visiveis,
+        categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
+        dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
+        totais={"pdf": total, "dre": total_dre, "fora": total_fora, "pendente": sum(abs(l["valor"]) for l in linhas if not l["classificada"]), "pendente_ok": Decimal("0"), "sem_vinculo": Decimal("0"), "divergencia": Decimal("0")},
+        contagens={"linhas": len(linhas), "vinculadas": len(linhas), "classificadas": classificadas, "conferidas": 0, "multiplos": 0, "pendente_classificacao": len(linhas)-classificadas, "pendente_ok": 0, "divergencias": 0},
+        config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
+        url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={hoje.isoformat()}&origem={account_id}&status=todas",
+        pode_editar=pode("lancamentos_editar"), pode_conferir=False,
+    )
+
+
 @bp.route("/lancamentos/fatura")
 @requer("lancamentos_ver")
 def lancamentos_por_fatura():
@@ -781,6 +926,22 @@ def lancamentos_por_fatura():
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
     account_id = request.args.get("account_id") or ""
     fatura_id = request.args.get("fatura_id", type=int)
+    em_andamento = request.args.get("andamento") == "1"
+
+    if not account_id and contas_credito:
+        account_id = contas_credito[0][0]
+    if em_andamento:
+        resposta = _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id)
+        if resposta is not None:
+            cur.close()
+            conn.close()
+            return resposta
+    if not fatura_id and "fatura_id" not in request.args:
+        resposta = _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id)
+        if resposta is not None:
+            cur.close()
+            conn.close()
+            return resposta
 
     if fatura_id:
         cur.execute(
@@ -814,7 +975,7 @@ def lancamentos_por_fatura():
         )
 
     cur.execute(
-        "SELECT id, mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "SELECT id, mes_referencia, ano_referencia, periodo_fim FROM cartao.fatura_importada "
         "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;",
         (account_id,),
     )
@@ -823,6 +984,14 @@ def lancamentos_por_fatura():
     pos = ids_faturas.index(fatura_id)
     fatura_nova = faturas[pos - 1] if pos > 0 else None
     fatura_antiga = faturas[pos + 1] if pos + 1 < len(faturas) else None
+    if faturas and faturas[0].get("periodo_fim"):
+        prox_mes, prox_ano = faturas[0]["mes_referencia"] + 1, faturas[0]["ano_referencia"]
+        if prox_mes == 13:
+            prox_mes, prox_ano = 1, prox_ano + 1
+        provisoria = {"id": "andamento", "mes_referencia": prox_mes, "ano_referencia": prox_ano, "em_andamento": True}
+        if pos == 0:
+            fatura_nova = provisoria
+        faturas = [provisoria] + faturas
 
     cur.execute(
         "SELECT fl.* FROM cartao.fatura_linha fl WHERE fl.fatura_id=%s "
@@ -1430,7 +1599,8 @@ def update_transacao(transacao_id):
     # tela, duas abas podem alterar campos diferentes sem uma apagar a outra.
     cur.execute(
         "SELECT conferida, conferida_por, COALESCE(duplicada, false), "
-        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original), status, data_transacao "
+        "categoria, observacao, natureza, COALESCE(valor_brl,valor_original), status, data_transacao, "
+        "(SELECT tipo FROM cartao.conta c WHERE c.account_id=cartao.transacao.account_id) "
         "FROM cartao.transacao WHERE transacao_id = %s FOR UPDATE;",
         (transacao_id,),
     )
@@ -1586,11 +1756,18 @@ def update_transacao(transacao_id):
         pendente_banco = not bool(cur.fetchone()[0])
     alterando_conferencia = "conferida" in data
     conferida_solicitada = bool(data.get("conferida")) if alterando_conferencia else conferida_atual
+    sem_pdf_conciliado = False
+    if alterando_conferencia and conferida_solicitada and transacao[9] == "CREDIT":
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM cartao.fatura_vinculo WHERE transacao_id=%s);",
+            (transacao_id,),
+        )
+        sem_pdf_conciliado = not bool(cur.fetchone()[0])
     # Campos obrigatorios (e o status pendente) bloqueiam somente uma NOVA
     # marcacao de OK. Uma edicao de categoria/dimensao/observacao jamais pode
     # desmarcar um OK ja existente.
     bloqueada = (
-        bool(faltando or rateio_invalido or pendente_banco)
+        bool(faltando or rateio_invalido or pendente_banco or sem_pdf_conciliado)
         and alterando_conferencia and conferida_solicitada
     )
     conferida_final = conferida_solicitada and not bloqueada if alterando_conferencia else conferida_atual
@@ -1709,6 +1886,7 @@ def update_transacao(transacao_id):
         "faltando": faltando,
         "rateio_invalido": rateio_invalido,
         "pendente_banco": pendente_banco,
+        "sem_pdf_conciliado": sem_pdf_conciliado,
         # A tela sincroniza estes dois estados depois de QUALQUER edicao. Assim
         # nunca mostra OK/duplicidade diferentes do que esta salvo no banco.
         "conferida": conferida_final,

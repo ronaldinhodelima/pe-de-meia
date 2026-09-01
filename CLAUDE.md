@@ -1694,11 +1694,13 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   classificação incompleta e divergência de valor como problemas diferentes.
 - Depois de concluir a Unicred Conjunta, criar regras independentes para outros cartões e contas correntes. Não
   transportar classificações automaticamente entre origens.
-- Proposta ainda não implementada: incluir na visualização detalhada uma `Fatura em andamento` para o ciclo atual
-  ainda sem PDF. Ela deve listar lançamentos reais do Pluggy dentro do ciclo estimado e permitir classificação,
-  Observação e OK, mas nunca apresentar total oficial, conciliação fechada ou linhas artificiais de PDF. Exibir um
-  aviso claro de que o período e os valores são provisórios. Quando o PDF oficial for importado, vincular suas linhas
-  aos lançamentos existentes, preservar todos os dados manuais e transformar a competência provisória em fatura
-  oficial; diferenças e itens ausentes permanecem para revisão. Confirmar este fluxo antes de implementar.
+- A visualização detalhada inclui uma `Fatura em andamento` para o ciclo atual ainda sem PDF. Ela lista somente os
+  lançamentos reais do Pluggy desde o fim da última fatura oficial e permite Categoria, Responsável, Projeto,
+  Portfólio e Observação, mas nunca apresenta total ou conciliação como oficiais. Os valores são identificados como
+  provisórios. Ao importar o PDF, os vínculos passam a usar as mesmas transações e preservam todo o trabalho manual.
+- Em cartão de crédito, uma nova marcação de OK exige vínculo persistido com uma linha de fatura em PDF. Portanto,
+  o OK fica visivelmente desabilitado na fatura em andamento e a API também recusa tentativas vindas de outra tela
+  ou chamada direta. A classificação pode ser preparada antes do fechamento, mas a conferência só ocorre depois da
+  conciliação. OKs históricos já existentes não são apagados automaticamente.
 - Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
   margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.

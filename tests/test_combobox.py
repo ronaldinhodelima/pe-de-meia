@@ -77,3 +77,16 @@ def test_pendencias_nao_registra_evento_em_formulario_ausente():
 
     assert "const formLote = document.getElementById('formLote');" in tela
     assert "if (formLote)" in tela
+
+
+def test_fatura_em_andamento_bloqueia_ok_e_preserva_edicao():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    tela = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+
+    assert "def _render_fatura_em_andamento" in view
+    assert 'sem_pdf_conciliado = not bool(cur.fetchone()[0])' in view
+    assert "faltando or rateio_invalido or pendente_banco or sem_pdf_conciliado" in view
+    assert "OK será liberado somente depois da importação e conciliação do PDF" in tela
+    assert "not pode_conferir or fatura.em_andamento" in tela
+    assert "fatura.value === 'andamento'" in js
