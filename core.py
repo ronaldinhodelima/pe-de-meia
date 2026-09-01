@@ -3350,6 +3350,175 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (44);")
             conn.commit()
 
+        if versao_atual < 45:
+            # Publica em 2025 o consenso que o usuario ja assinou com OK.
+            # Aprende SO com lancamento conferido, exige unanimidade e pelo
+            # menos duas evidencias, e decide CAMPO A CAMPO: um lojista pode
+            # ter consenso de categoria e nenhum de projeto (o posto abastece
+            # o Jeep e o Tracker). Preenche apenas campo vazio de lancamento
+            # NAO conferido - OK e assinatura humana, e nada aqui marca,
+            # desmarca ou altera lancamento ja conferido.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+
+            def _loja_v45(descricao):
+                texto = " ".join((descricao or "").split()).upper()
+                corte = texto.rfind(" - ")
+                if corte >= 0:
+                    texto = texto[corte + 3:]
+                pos = texto.find("PARC.")
+                if pos < 0:
+                    pos = texto.find("PARC ")
+                if pos >= 0:
+                    resto = texto[pos:].split(" ", 1)
+                    texto = texto[:pos] + (resto[1] if len(resto) > 1 else "")
+                return " ".join(texto.split()).strip()
+
+            # A mesma loja chega com e sem o sufixo de cidade/pais
+            # ("DELTA VIDEIRA" e "DELTA VIDEIRA VIDEIRA BR"). Canoniza pela
+            # menor chave que seja prefixo da outra, sempre cortando em limite
+            # de palavra - assim ESTACAO nunca engole HIPER CENTER ESTACAO.
+            def _canonizar_v45(chaves):
+                curtas = sorted({c for c in chaves if len(c) >= 6}, key=len)
+                mapa = {}
+                for chave in chaves:
+                    melhor = chave
+                    for curta in curtas:
+                        if (len(curta) < len(melhor) and chave.startswith(curta)
+                                and len(chave) > len(curta) and chave[len(curta)] == " "):
+                            melhor = curta
+                    mapa[chave] = melhor
+                return mapa
+
+            # Padroes que a revisao de 01/09/2026 recusou um a um, mesmo com OK
+            # unanime: sao erro ja gravado, e propagar multiplicaria o erro.
+            recusados_v45 = {
+                "LETICIAKAYSER",        # nome de pessoa marcado como Juros Cobrados
+                "POUSADA FOGO*RESE",    # pousada marcada como Combustivel
+                "CATIVA",               # loja de roupas marcada como Viagem
+                "MP *REGIBARBERSHOP",   # a mesma barbearia como Servicos e como Beleza
+                "MP*REGIBARBERSHOP",
+                "ESTACAO",              # ambiguo, ja recusado na migracao 42
+            }
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v45 = {chave_alfa(n): i for i, n in cur.fetchall()}
+            dim_proj_v45 = dims_v45.get("projeto")
+
+            cur.execute(
+                "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                " '{}'::jsonb), "
+                "(t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::date "
+                "FROM cartao.transacao t WHERE t.account_id=%s "
+                "AND COALESCE(t.duplicada,false)=false "
+                "AND COALESCE(t.somente_conciliacao,false)=false "
+                "AND t.substituido_por IS NULL;",
+                (conta_unicred,),
+            )
+            linhas_v45 = cur.fetchall()
+            mapa_v45 = _canonizar_v45({_loja_v45(r[1]) for r in linhas_v45})
+
+            votos_v45 = {}
+            for _tid, descricao, categoria, conferida, dims, _dia in linhas_v45:
+                if not conferida:
+                    continue
+                alvo = votos_v45.setdefault(mapa_v45[_loja_v45(descricao)], {})
+                if categoria:
+                    alvo.setdefault("cat", {})
+                    alvo["cat"][categoria] = alvo["cat"].get(categoria, 0) + 1
+                for dim_id, valor_id in (dims or {}).items():
+                    if valor_id is None:
+                        continue
+                    chave = int(dim_id)
+                    alvo.setdefault(chave, {})
+                    alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
+
+            cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+            nome_valor_v45 = dict(cur.fetchall())
+            consenso_v45 = {}
+            for loja, campos in votos_v45.items():
+                if loja in recusados_v45:
+                    continue
+                escolha = {}
+                for campo, contagem in campos.items():
+                    if len(contagem) != 1:
+                        continue  # OKs divergem entre si: nao ha consenso a publicar
+                    valor, vezes = next(iter(contagem.items()))
+                    if vezes < 2:
+                        continue  # uma evidencia so nao e padrao
+                    # Projeto de viagem e evento datado: o mesmo fornecedor
+                    # reaparece em outra viagem e o projeto antigo fica errado.
+                    if (campo == dim_proj_v45 and dim_proj_v45 is not None
+                            and str(nome_valor_v45.get(valor, "")).upper().startswith("VIAGEM ")):
+                        continue
+                    escolha[campo] = valor
+                if escolha:
+                    consenso_v45[loja] = escolha
+
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v45 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.categoria_manual,"
+                "t.conferida,t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s AND t.conferida=false "
+                "AND (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::date "
+                "< date '2026-01-01';",
+                (conta_unicred,),
+            )
+
+            cats_v45 = 0
+            dims_gravadas_v45 = 0
+            tocados_v45 = set()
+            for tid, descricao, categoria, conferida, dims, dia in linhas_v45:
+                if conferida or not dia or dia.year >= 2026:
+                    continue
+                escolha = consenso_v45.get(mapa_v45[_loja_v45(descricao)])
+                if not escolha:
+                    continue
+                if not categoria and escolha.get("cat"):
+                    cur.execute(
+                        "UPDATE cartao.transacao SET categoria=%s, atualizado_em=now() "
+                        "WHERE transacao_id=%s AND NULLIF(categoria,'') IS NULL "
+                        "AND conferida=false;",
+                        (escolha["cat"], tid),
+                    )
+                    if cur.rowcount:
+                        cats_v45 += 1
+                        tocados_v45.add(tid)
+                for campo, valor_id in escolha.items():
+                    if campo == "cat" or str(campo) in (dims or {}):
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;",
+                        (tid, campo, valor_id),
+                    )
+                    if cur.rowcount:
+                        dims_gravadas_v45 += 1
+                        tocados_v45.add(tid)
+
+            parcelas_v45 = preencher_classificacao_vazia_parcelas(cur, account_id=conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Publica em 2025 o consenso dos OK Unicred',"
+                "jsonb_build_object('versao',45,'lojistas_com_consenso',%s,"
+                "'lancamentos_tocados',%s,'categorias',%s,'dimensoes',%s,"
+                "'padroes_recusados',%s,'parcelas_categorias',%s,'parcelas_dimensoes',%s,"
+                "'backup','cartao.classificacao_backup_v45'));",
+                (len(consenso_v45), len(tocados_v45), cats_v45, dims_gravadas_v45,
+                 sorted(recusados_v45), parcelas_v45["categorias"],
+                 parcelas_v45["dimensoes"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (45);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

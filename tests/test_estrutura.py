@@ -656,7 +656,9 @@ def test_migracoes_sao_sequenciais_e_registradas_uma_vez():
 
 def test_consenso_dos_ok_fica_restrito_a_unicred_e_preserva_dados_humanos():
     texto = (RAIZ / "core.py").read_text(encoding="utf-8")
-    trecho = texto.split("if versao_atual < 42:", 1)[1].split("cur.close()", 1)[0]
+    # delimitado no bloco seguinte, e nao em cur.close(): senao o trecho engole
+    # as migracoes 43+ e as asserts passam a falar de codigo de outra migracao
+    trecho = texto.split("if versao_atual < 42:", 1)[1].split("if versao_atual < 43:", 1)[0]
 
     assert 'conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"' in trecho
     assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v42" in trecho
@@ -856,3 +858,44 @@ def test_sincronizacao_de_parcelas_nao_aborta_sem_agregado():
     """
     view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     assert "if not agregados and preview:" in view
+
+
+def test_consenso_publicado_em_2025_aprende_so_com_ok_e_nao_toca_conferido():
+    """A migracao 45 publica em 2025 o que o usuario ja assinou com OK.
+
+    As travas que nao podem cair: aprende so de conferido, exige unanimidade e
+    2+ evidencias, preenche so campo vazio de lancamento NAO conferido, tem
+    ponto de reversao e recusa os padroes que a revisao humana reprovou.
+    """
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 45:", 1)[1].split("VALUES (45)", 1)[0]
+
+    assert 'conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"' in trecho
+    assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v45" in trecho
+    # so aprende de quem tem OK
+    assert "if not conferida:" in trecho and "continue" in trecho
+    # unanimidade e duas evidencias
+    assert "if len(contagem) != 1:" in trecho
+    assert "if vezes < 2:" in trecho
+    # nunca escreve por cima nem toca conferido
+    assert "NULLIF(categoria,'') IS NULL" in trecho
+    assert "AND conferida=false" in trecho
+    assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+    # escopo 2025 e padroes reprovados na revisao
+    assert "dia.year >= 2026" in trecho
+    for reprovado in ("LETICIAKAYSER", "POUSADA FOGO*RESE", "CATIVA", "ESTACAO"):
+        assert reprovado in trecho
+    # projeto de viagem e evento datado: nunca propagar
+    assert 'startswith("VIAGEM ")' in trecho
+
+
+def test_canonizacao_de_lojista_corta_em_limite_de_palavra():
+    """ESTACAO nao pode engolir HIPER CENTER ESTACAO.
+
+    Sem o corte em limite de palavra, uma chave curta vira prefixo de outra
+    loja sem relacao nenhuma e as duas passam a compartilhar classificacao.
+    """
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("def _canonizar_v45(", 1)[1].split("return mapa", 1)[0]
+    assert 'chave[len(curta)] == " "' in trecho
+    assert "chave.startswith(curta)" in trecho
