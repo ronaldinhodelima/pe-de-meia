@@ -968,3 +968,20 @@ def test_migracao_47_trata_valor_nulo_como_dimensao_vazia():
     assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v47" in trecho
     for proibido in ("SET conferida", "conferida=true", "conferida_por="):
         assert proibido not in trecho
+
+
+def test_cartao_pendente_explica_por_que_falta_o_titular_na_fatura_em_andamento():
+    """"-" mudo escondia que o Pluggy so nao mandou o metadado ainda.
+
+    Titular completo (nome impresso) so existe no PDF - Pluggy nunca manda
+    isso por transacao. O final do cartao (creditCardMetadata.cardNumber) as
+    vezes falta enquanto a compra esta PENDING (assinaturas, cobranca
+    internacional) e costuma aparecer quando o Pluggy confirma o POSTED. Sem
+    aviso, a tela parecia ter um dado faltando por erro do sistema.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert '"cartao_aguardando": not tx["numero_cartao_final"]' in view
+    assert 'linha["cartao_aguardando"] = False' in view  # fatura fechada: nunca se aplica
+    assert template.count("cartao_aguardando") == 2  # celula da tabela + painel expandido
+    assert "cartão pendente" in template

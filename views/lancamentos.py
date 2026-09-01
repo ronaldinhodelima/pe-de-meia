@@ -842,9 +842,15 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
             total_dre += valor
         else:
             total_fora += valor
+        # Titular (nome completo do portador) so existe impresso no PDF - o
+        # Pluggy nunca manda isso por transacao, so o final do cartao via
+        # creditCardMetadata. Enquanto a compra esta PENDING, alguns lojistas
+        # (assinaturas, cobranca internacional) chegam sem esse metadado
+        # ainda; ele costuma aparecer quando o Pluggy confirma o POSTED.
         linhas.append({
             "id": "andamento-" + str(indice), "data": tx["data_local"].date(),
             "descricao": tx["descricao"], "titular": None,
+            "cartao_aguardando": not tx["numero_cartao_final"],
             "parcela_atual": tx["parcela_atual"], "parcela_total": tx["parcela_total"],
             "valor": valor, "pagamento": False, "vinculos": [tx], "principal": tx,
             "multiplos": False, "requer_validacao": False, "validacao_motivos": [],
@@ -1170,6 +1176,10 @@ def lancamentos_por_fatura():
             None,
         )
         linha["cartao_final"] = final_cartao
+        # Na fatura fechada o titular vem do PDF, entao "aguardando" nunca
+        # se aplica aqui - so na fatura em andamento, onde a unica fonte e
+        # o metadado do Pluggy.
+        linha["cartao_aguardando"] = False
         linha["cartao_nome"] = (
             nomes_cartao.get(final_cartao) or (f"final {final_cartao}" if final_cartao else None)
         )

@@ -87,7 +87,7 @@
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
     <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
     <td>{{ linha.data.strftime('%d/%m/%Y') }}</td>
-    <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% endif %}</td>
+    <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% elif linha.cartao_aguardando %}<small style="display:block;color:var(--ink-faint)" data-tip="O Pluggy ainda não confirmou o final do cartão desta compra — costuma aparecer quando a cobrança deixa de ser pendente.">cartão pendente</small>{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
     <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
@@ -97,7 +97,7 @@
     {% for v in linha.vinculos %}
       <div class="vinculo-bloco">
       <div class="vinculo-grid {{ 'principal' if v.principal else 'tecnico' }}">
-        <div><span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span><b style="display:inline">{{ v.descricao }}</b><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button><small>{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% endif %}</small></div>
+        <div><span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span><b style="display:inline">{{ v.descricao }}</b><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button><small>{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% elif linha.cartao_aguardando %} · cartão pendente (o Pluggy ainda não confirmou){% endif %}</small></div>
         <div>{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</div>
         <div class="valor">{{ v.valor|moeda }}</div>
         <div>{% if v.principal %}<span class="estado ok">contabilizado e editável</span>{% else %}<span class="estado">registro técnico · somente leitura</span>{% endif %}</div>
