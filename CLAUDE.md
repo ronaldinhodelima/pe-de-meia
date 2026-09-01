@@ -1611,3 +1611,6 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   usam altura de 28px, fundo transparente, borda normalmente invisível e sombra mínima. No hover ou foco,
   recebem fundo azul quase branco, contorno azul translúcido, sombra suave e escala de 1,012. Campos obrigatórios
   incompletos mantêm sinalização vermelha discreta e ganham realce vermelho suave no hover/foco.
+- Ajuste posterior aprovado: reduzir os campos pesquisáveis para 26px e diminuir o preenchimento interno para
+  `1px 21px 1px 5px`. O hover/foco deixa de usar azul e passa a usar cinza neutro (`#f2f2f0`), contorno cinza
+  translúcido e sombra neutra. O movimento de escala e o tratamento vermelho dos obrigatórios são mantidos.
