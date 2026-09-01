@@ -1619,3 +1619,6 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   automático: isso quebrou o alinhamento dos filtros Fatura e Status. Seletores de navegação, como cartão, fatura,
   status, ano e tipo, continuam nativos e podem ser protegidos explicitamente com `data-pdm-native`.
   O observador global também aplica o padrão a seletores inseridos dinamicamente após a abertura da página.
+- Auditoria pós-expansão: os filtros nativos e os campos pesquisáveis não devem causar largura maior que o
+  contêiner nem rolagem horizontal adicional. Em `/pendencias`, scripts de ações em lote precisam verificar se
+  `formLote` existe, pois a seção é condicional e pode não ser renderizada quando não há categorias pendentes.

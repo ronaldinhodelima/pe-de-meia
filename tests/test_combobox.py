@@ -62,3 +62,10 @@ def test_filtros_de_navegacao_da_fatura_permanecem_nativos():
     assert '<select id="faturaConta" data-pdm-native>' in tela
     assert '<select id="faturaSelecionada" data-pdm-native>' in tela
     assert '<select id="faturaStatus" data-pdm-native>' in tela
+
+
+def test_pendencias_nao_registra_evento_em_formulario_ausente():
+    tela = (RAIZ / "templates" / "pendencias.html").read_text(encoding="utf-8")
+
+    assert "const formLote = document.getElementById('formLote');" in tela
+    assert "if (formLote)" in tela

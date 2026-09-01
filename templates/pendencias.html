@@ -233,11 +233,14 @@
   document.addEventListener('change', function (e) {
     if (e.target.classList.contains('chk-lote')) atualizarContaLote();
   });
-  document.getElementById('formLote').addEventListener('submit', function (e) {
-    if (!document.querySelectorAll('.chk-lote:checked').length) {
-      e.preventDefault();
-      alert('Marque ao menos uma categoria.');
-    }
-  });
+  const formLote = document.getElementById('formLote');
+  if (formLote) {
+    formLote.addEventListener('submit', function (e) {
+      if (!document.querySelectorAll('.chk-lote:checked').length) {
+        e.preventDefault();
+        alert('Marque ao menos uma categoria.');
+      }
+    });
+  }
 </script>
 {% endblock %}
