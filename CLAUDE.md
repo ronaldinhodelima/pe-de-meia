@@ -959,7 +959,9 @@ precisam de decisão caso a caso.
 ## 11.2 Pendências que dependem do usuário
 
 - **Rotar o token do Coolify.** Foi colado no chat em 21/08/2026 e deve ser considerado
-  comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo.
+  comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo. **Aconteceu de novo em
+  01/09/2026**, outro token colado em texto puro no chat para investigar um deploy travado — mesma
+  regra se aplica, esse também precisa ser rotacionado.
 - **Revisar `/pendencias`.** Categoria sem natureza assume `despesa` e pode inflar o DRE. Abrir a
   tela antes de agir — os números mudam conforme o Pluggy traz categorias.
 - **Classificar o que não tem consenso**, caso a caso, principalmente pedágio, combustível e
