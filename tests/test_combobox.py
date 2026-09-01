@@ -64,6 +64,13 @@ def test_filtros_de_navegacao_da_fatura_permanecem_nativos():
     assert '<select id="faturaStatus" data-pdm-native>' in tela
 
 
+def test_filtro_status_resumido_nao_repete_rotulo_visual():
+    tela = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert '<label>Status</label>' not in tela
+    assert '<select id="statusInput" data-pdm-native aria-label="Status"' in tela
+
+
 def test_pendencias_nao_registra_evento_em_formulario_ausente():
     tela = (RAIZ / "templates" / "pendencias.html").read_text(encoding="utf-8")
 

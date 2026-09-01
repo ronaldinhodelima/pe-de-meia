@@ -1637,3 +1637,60 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - Auditoria pós-expansão: os filtros nativos e os campos pesquisáveis não devem causar largura maior que o
   contêiner nem rolagem horizontal adicional. Em `/pendencias`, scripts de ações em lote precisam verificar se
   `formLote` existe, pois a seção é condicional e pode não ser renderizada quando não há categorias pendentes.
+
+# Estado consolidado para retomada (01/09/2026)
+
+## Publicado, definido e validado
+
+- A visualização de lançamentos possui modos Resumida e Detalhada. As duas usam o mesmo lançamento real,
+  a mesma classificação e o mesmo OK; alterar em uma tela deve refletir na outra sem criar controles paralelos.
+- A visualização Detalhada do cartão organiza cada cobrança do PDF com todos os registros agregados em sequência
+  e, somente depois deles, apresenta a classificação compartilhada. Clicar na linha ou no sinal abre e fecha o
+  conjunto. Registros `F` vêm da fatura e registros `P` vêm do Pluggy, com dica imediata e cursor normal.
+- Categoria, Responsável, Projeto e Portfólio são obrigatórios para liberar o OK. A mensagem de pendência deve ser
+  atualizada imediatamente durante o preenchimento, sem recarregar a página. Observação continua opcional.
+- O OK é individual por lançamento. No filtro `Pendentes de OK`, ao marcar, a linha sai da fila somente depois da
+  confirmação do servidor, preservando filtros e posição de rolagem.
+- Alterações de classificação e observação salvam automaticamente. Em famílias parceladas confirmadas por vínculos
+  persistidos, Categoria, Responsável, Projeto, Portfólio e Observação são compartilhados entre todas as parcelas;
+  o OK nunca é propagado automaticamente.
+- Observações pessoais ficam no campo Observação. Mensagens técnicas do sistema, como origem no PDF, geração de
+  parcela e motivo de agregação, ficam em informação interna separada e oculta por padrão. Nunca apagar ou misturar
+  as observações manuais já registradas.
+- O PDF oficial define as cobranças da fatura. Apenas o lançamento real editável entra nos cálculos e no DRE; os
+  demais agregados são registros técnicos de auditoria. Investimentos permanecem fora do DRE. Diferenças de até
+  R$ 1,00 podem ser tratadas como arredondamento; acima disso permanecem divergência vermelha para revisão.
+- Cabeçalhos da tabela detalhada podem ordenar Data, Descrição, Titular/Cartão, Parcela, Valor, Classificação e OK,
+  alternando crescente e decrescente sem separar os registros agregados de seu lançamento principal.
+- A pesquisa da visualização detalhada filtra lançamentos como na resumida. Cartão, Fatura e Status permanecem
+  seletores nativos; campos de classificação usam o combobox pesquisável compartilhado e ordenado alfabeticamente.
+- O cabeçalho da fatura mostra `Fatura <mês> de <ano>` à esquerda e, ao lado, início, fim do ciclo e vencimento.
+  Ao abrir o cartão, selecionar por padrão a fatura mais recente disponível.
+- O filtro Status da tela resumida não exibe mais o texto redundante `Status`; a caixa continua funcional e possui
+  nome acessível para tecnologias assistivas.
+- Toda publicação deve atualizar este `CLAUDE.md` com decisões, comportamento entregue, validações e pendências.
+
+## Automação aprovada para Cartão de Crédito Unicred · Conjunta
+
+- Escopo exclusivo da conta `b6243125-dca2-42b2-8c20-0825782c6d8d`; não reutilizar regras desta origem em outros
+  cartões ou contas sem revisão própria.
+- A migração 42 criou `cartao.classificacao_backup_v42` e 11 regras futuras baseadas em referências OK, completas,
+  idênticas e sem ambiguidade: PANIFICADORA E CONFEIT, MP*PRODUTOS/MP *PRODUTOS, RENNER, DM*SPOTIFY/DM *SPOTIFY,
+  RELOJOARIA PASQUAL, SAN JUAN EXECUTIVE, AUTO POSTO CAMPO DO ARE, CERVEJARIAREDUTO, FARRANZO VIDEIRA, BIG FRUTAS
+  e ESSENZA AROMAS. `ESTACAO` ficou excluído por conflito com `HIPER CENTER ESTACAO`.
+- A aplicação preenche somente campos vazios em lançamentos reais, ativos e ainda não conferidos. Nunca substitui
+  classificação divergente, Observação, OK, duplicados confirmados, registros técnicos ou lançamentos substituídos.
+- Auditoria da execução: versão 42; 160 dimensões, 35 categorias e 42 referências preenchidas; 11 regras criadas;
+  nenhuma propagação adicional de parcela foi necessária. As 20 faturas Unicred de jan/2025 a ago/2026 já estavam
+  conciliadas, portanto nenhum vínculo novo foi criado.
+
+## O que ficou para avaliar
+
+- Revisar manualmente os lançamentos ainda sem classificação na Unicred Conjunta. Há grupos com apenas uma referência
+  OK e descrições genéricas ou ambíguas; não criar regra automática até existir evidência suficiente e consistente.
+- Revisar famílias parceladas que ainda não possuam vínculo explícito. Não agrupá-las apenas por descrição, data ou
+  valor parecido e nunca marcar OK automaticamente.
+- Conferir mês a mês se total do PDF, lançamentos reais contabilizados e DRE fecham, destacando vínculo ausente,
+  classificação incompleta e divergência de valor como problemas diferentes.
+- Depois de concluir a Unicred Conjunta, criar regras independentes para outros cartões e contas correntes. Não
+  transportar classificações automaticamente entre origens.

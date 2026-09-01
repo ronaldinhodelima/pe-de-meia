@@ -30,8 +30,7 @@
     <input type="date" id="dataFimInput" value="{{ data_fim }}" onchange="aplicarFiltros(true)">
   </div>
   <div>
-    <label>Status</label>
-    <select id="statusInput" data-pdm-native onchange="aplicarFiltros()">
+    <select id="statusInput" data-pdm-native aria-label="Status" onchange="aplicarFiltros()">
       <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
       <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes de conferência</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
