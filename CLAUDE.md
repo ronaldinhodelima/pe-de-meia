@@ -1609,13 +1609,13 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   cancela. Nunca criar ou escolher silenciosamente uma opção que não esteja destacada.
 - Projeto continua preenchendo seu Portfólio padrão e ambos os campos visuais precisam refletir a
   mudança sem recarregar a página. Projeto e Portfólio preservam a opção de cadastro rápido.
-- Este piloto deve ser validado antes da expansão. Uma vez aprovado, o mesmo componente será o padrão
-  obrigatório para seleções pesquisáveis de todas as telas atuais e novas do Pé de Meia.
+- O piloto foi aprovado e expandido. O mesmo componente é o padrão obrigatório para seleções pesquisáveis
+  de todas as telas atuais e novas do Pé de Meia, exceto filtros de navegação explicitamente nativos.
 - O campo nativo fica preservado tecnicamente, mas oculto também da árvore de acessibilidade; leitores
   de tela e navegação por teclado devem encontrar somente o novo combobox, sem controles duplicados.
-- Linguagem visual escolhida pelo usuário: `Linha precisa`. Os comboboxes usam cinza quente suave,
-  uma linha inferior neutra, foco azul sem caixa/sombra pesada, chevron discreto e menu compacto. Exibir
-  `Enter ↵` apenas na opção ativa. Manter essa linguagem ao expandir o componente para outras telas.
+- Linguagem visual escolhida pelo usuário: `Linha precisa`, refinada depois para `Sombra flutuante` neutra.
+  O estado final usa campo transparente e compacto, sombra mínima, hover/foco cinza, chevron discreto e menu
+  compacto. Não exibir o texto `Enter`; a tecla continua funcional. Manter essa linguagem nas novas telas.
 - Refinamento aprovado: substituir a transparência por cinza quente muito suave (`--field-soft`), mantendo
   a linha inferior. Texto com 12,5px nos editores e 11,5px dentro da tabela compacta, equivalentes aos
   tamanhos anteriores aos comboboxes. O fundo obrigatório continua suave e a linha vermelha informa a falta.
@@ -1714,3 +1714,89 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   não um horário de compra. A correção não altera categoria, dimensões, Observação, OK, valores ou vínculos.
 - Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
   margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.
+
+# Resumo mestre para a próxima retomada (01/09/2026, após migração 43)
+
+## Estado publicado
+
+- Produção: `https://pedemeia.brdrive.net`. Repositório: `ronaldinhodelima/pe-de-meia`, branch `main`, publicação
+  pelo fluxo configurado no Coolify. Projeto/ambiente de referência: Ronaldinho. Não alterar acessos administrativos
+  antigos, senha mínima de seis caracteres ou o uso de Gunicorn sem nova autorização do usuário.
+- Sessões possuem expiração de 24 horas e suporte a cookies. E-mail operacional confirmado:
+  `ronaldo@brdrive.net`. Logs ficam dentro de Relatórios e devem registrar acessos, sincronizações, alterações,
+  regras, migrações, resultados e falhas sem expor segredos.
+- Antes de alterações de dados em lote, criar ponto de reversão no mesmo PostgreSQL. O usuário dispensou teste de
+  restauração neste momento, mas isso não dispensa backup. Nunca apagar lançamentos do Pluggy: preservar a origem
+  para auditoria e marcar duplicidade/substituição apenas quando houver decisão explícita ou prova segura.
+- Cada deploy precisa atualizar este arquivo. A validação mínima atual é executar a suíte completa, verificar
+  `git diff --check` e conferir a tela afetada em produção. Estado após a correção de horário: 252 testes aprovados
+  e 6 condicionais ignorados.
+
+## Regras financeiras que não podem regredir
+
+- DRE considera todo lançamento real, independentemente de `POSTED` ou da data atual. Natureza `investimento`
+  continua fora do DRE. Duplicados confirmados, registros somente para conciliação e lançamentos substituídos não
+  entram nos totais. Cards de receitas/despesas/resultado usam exatamente essa mesma regra.
+- O PDF é a autoridade da fatura fechada. Uma linha oficial pode ter vários registros agregados, mas apenas um
+  lançamento real editável é contabilizado. Registros técnicos continuam visíveis com procedência `P` (Pluggy) ou
+  `F` (fatura), sem duplicar DRE ou classificação.
+- Categoria, Responsável, Projeto e Portfólio são obrigatórios. Observação é pessoal e opcional. Informações criadas
+  pelo sistema ficam em `observacao_sistema`, ocultas por padrão. Alterar qualquer campo nunca desmarca OK.
+- Projeto aplica automaticamente seu Portfólio padrão. Listas de seleção ficam em ordem alfabética. Projeto e
+  Portfólio permitem cadastro rápido e aplicação imediata sem sair da tela.
+- Em famílias parceladas comprovadas por vínculos persistidos, compartilhar Categoria, Responsável, Projeto,
+  Portfólio e Observação entre parcelas. Não compartilhar OK. Não inferir família apenas por descrição, valor ou
+  coincidência matemática.
+- Diferença de valor de até R$ 1,00 pode ser arredondamento; acima disso é divergência vermelha. Mesmo abaixo do
+  limite, preservar os valores originais e nunca esconder uma diferença de vínculo ou quantidade de lançamentos.
+
+## Interfaces consolidadas
+
+- Lançamentos Resumidos e Detalhados são duas visualizações do mesmo dado. A Resumida privilegia classificação
+  rápida; a Detalhada privilegia fatura, procedência, registros agregados e auditoria. Ambas salvam nos mesmos campos.
+- Na Resumida, linhas com OK usam cinza-claro. Lançamentos pendentes no banco não recebem mais fundo amarelo;
+  permanecem transparentes e identificados por legenda/dica. O rótulo visual `Status` foi removido, mantendo nome
+  acessível. Voltar/avançar no navegador deve respeitar filtros, datas, telas anteriores e posição de rolagem.
+- Na Detalhada, pesquisa, filtros clicáveis nos cards e ordenação por todos os cabeçalhos funcionam sem desmontar o
+  grupo. A ordem é: lançamento principal, registros agregados um abaixo do outro, detalhes de cada registro e,
+  por último, editor único da classificação. O OK atualizado no filtro pendente remove a linha sem recarregar.
+- Comboboxes pesquisáveis filtram durante a digitação, ignoram acentos/caixa e aceitam setas, Enter, Tab,
+  Shift+Tab e Escape. O visual final tem 26px, campo transparente, hover/foco cinza e margens laterais mínimas;
+  não mostrar o lembrete textual `Enter`. Cartão, Fatura, Status, ano e tipo permanecem seletores nativos.
+
+## Fatura em andamento e fechamento futuro
+
+- Para o ciclo ainda sem PDF, a Detalhada abre por padrão `Fatura Setembro de 2026 · Em andamento`. O período começa
+  no dia posterior ao fim da última fatura oficial e termina na data atual. A tela mostra lançamentos do Pluggy,
+  total provisório, DRE provisório, classificação e pendências, sempre com aviso de que o PDF ainda não existe.
+- Durante o ciclo podem ser alterados Categoria, Responsável, Projeto, Portfólio e Observação. O OK fica desabilitado
+  na interface e protegido no servidor. Em qualquer tela, um novo OK de cartão de crédito exige vínculo persistido
+  com uma linha do PDF. A importação futura deve preservar todo o trabalho antecipado e conciliar as linhas oficiais
+  com as mesmas transações, destacando ausências, sobras e valores diferentes.
+- Links para a fatura atual usam dois parâmetros reais: `andamento=1&account_id=<conta>`. O seletor e a seta seguinte
+  devem abrir setembro sem `&amp;` literal. Ao fechar/importar setembro, ela deixa de ser provisória e o próximo ciclo
+  passa a ser a nova fatura em andamento.
+
+## Correção de horário Unicred
+
+- Diferença confirmada pela Visa: `DELTA VIDEIRA`, R$ 220,01, cartão adicional de Andrea, ocorreu em 13/08/2026 às
+  15:49; o sistema mostrava 18:49. A migração 43 corrigiu em menos três horas somente os registros Pluggy do Cartão
+  de Crédito Unicred · Conjunta e guardou o estado anterior em `cartao.horario_backup_v43`.
+- Horários exatamente `00:00` permanecem intactos porque normalmente representam apenas uma data bancária. O worker
+  aplica a mesma normalização somente a novas transações de cartão Unicred, impedindo que a sincronização restaure
+  o erro. A referência DELTA foi conferida em produção após a publicação e passou a mostrar `15:49`.
+- Não aplicar automaticamente essa correção a Nubank, contas correntes ou outras origens. Primeiro validar um evento
+  concreto no aplicativo da respectiva instituição, pois cada conector pode tratar timezone de maneira diferente.
+
+## Próximas etapas acordadas
+
+1. Continuar classificando a fatura de setembro em andamento, sem OK, usando o histórico seguro da Unicred e sem
+   sobrescrever decisões manuais. Revisar descrições ambíguas e grupos com apenas uma evidência antes de criar regra.
+2. Quando o PDF de setembro estiver disponível, importar, consolidar com as transações já classificadas, conferir
+   vínculos/valores/itens ausentes e somente então liberar e concluir os OKs.
+3. Terminar a revisão mês a mês da Unicred Conjunta: total do PDF, único lançamento real contabilizado, DRE, fora do
+   DRE, classificação, parcelamentos, agregados e divergências. Não marcar OK automaticamente.
+4. Depois da Unicred, revisar separadamente outros cartões e contas correntes. Criar regras e eventuais correções de
+   horário específicas por origem; nunca copiar em massa a lógica da Unicred sem validação.
+5. Em uma etapa futura, testar formalmente a restauração dos backups e revisar a política de retenção dos logs. Essa
+   tarefa está registrada, mas foi adiada pelo usuário e não bloqueia a classificação financeira atual.
