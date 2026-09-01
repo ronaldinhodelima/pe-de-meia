@@ -234,10 +234,12 @@ function renderChart(grupos, ehPeriodo) {
   const valores = grupos.map(g => g.total);
   // linha do tempo (mes a mes) fica melhor como linha; os demais, como barras
   const tipo = ehPeriodo ? 'line' : 'bar';
+  const corAcento = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0e7490';
+  const corAcentoSuave = getComputedStyle(document.documentElement).getPropertyValue('--accent-soft').trim() || '#e0f4f6';
   const dataset = ehPeriodo
-    ? { label: 'Total (R$)', data: valores, borderColor: '#2e6fd6', backgroundColor: 'rgba(46,111,214,.12)',
-         fill: true, tension: .3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#2e6fd6', borderWidth: 2 }
-    : { label: 'Total (R$)', data: valores, backgroundColor: '#2e6fd6', borderRadius: 4, maxBarThickness: 46 };
+    ? { label: 'Total (R$)', data: valores, borderColor: corAcento, backgroundColor: corAcentoSuave,
+         fill: true, tension: .3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: corAcento, borderWidth: 2 }
+    : { label: 'Total (R$)', data: valores, backgroundColor: corAcento, borderRadius: 4, maxBarThickness: 46 };
 
   if (chartInstance && chartTipoAtual === tipo) {
     chartInstance.data.labels = labels;

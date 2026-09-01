@@ -76,9 +76,9 @@
 </div>
 
 <div class="cards">
-  <div class="card"><div class="label" title="Somente receitas contabilizadas no DRE">Receitas no DRE</div><div class="val" style="color:#1f8a53">{{ receita_mes|moeda }}</div></div>
-  <div class="card"><div class="label" title="Somente despesas contabilizadas no DRE; investimentos continuam fora">Despesas no DRE</div><div class="val" style="color:#c23c34">{{ gasto_real|moeda }}</div></div>
-  <div class="card"><div class="label" title="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ '#1f8a53' if resultado_mes >= 0 else '#c23c34' }}">{{ resultado_mes|moeda }}</div></div>
+  <div class="card"><div class="label" title="Somente receitas contabilizadas no DRE">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div></div>
+  <div class="card"><div class="label" title="Somente despesas contabilizadas no DRE; investimentos continuam fora">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div></div>
+  <div class="card"><div class="label" title="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ 'var(--good)' if resultado_mes >= 0 else 'var(--bad)' }}">{{ resultado_mes|moeda }}</div></div>
   <div class="card">
     <div class="label" title="Contabilizados / todos os registros recebidos no período">Lançamentos do período</div>
     <div class="val">{{ total_reais }} / {{ total_recebidos }}</div>
