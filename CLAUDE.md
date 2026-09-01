@@ -1027,6 +1027,12 @@ Deb Aut` (§6.5 nº 12), `Anuidade - bonificação` ↔ `Est.Tarifa manutencao d
 grafias coladas que o tokenizador não casa (`PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE QUINTAL`,
 `CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA`).
 
+**Corrigido pela migração 50** (aprovada pelo usuário em 01/09/2026), sobre uma **lista explícita**
+de estabelecimentos — a varredura tem falsos positivos legítimos que não podem ser desfeitos. Ela
+apaga só os vínculos cruzados e depois reavalia quem ainda é agregado, mantendo a trava da §6.6:
+**nunca desmarcar quem já gerou parcela**. Os três pares trocados voltam a ficar sem vínculo; o
+vínculo automático da tela de conciliação os refaz certos, porque agora a regra do token existe.
+
 **Desfazer vínculo muda o que entra no DRE** — o agregado volta ou sai do resultado. É decisão do
 usuário, como a marcação de duplicidade (§1.3).
 
@@ -1113,3 +1119,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 47 | trata `valor_id` NULL como vazio e completa a classificação; `classificacao_backup_v47` |
 | 48 | segundo eixo de consenso, por categoria; `classificacao_backup_v48` |
 | 49 | segunda passada do consenso; `classificacao_backup_v49` |
+| 50 | desfaz vínculos entre estabelecimentos diferentes; `vinculo_backup_v50` + `agregado_backup_v50` |

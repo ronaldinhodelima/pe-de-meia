@@ -41,6 +41,8 @@ from core import (
     topbar_html,
     CONTA_UNICRED,
     aplicar_consenso_classificacao,
+    _normalizar_desc,
+    _tokens_significativos,
     _canonizar_v45,
     _consenso_por_categoria,
     _consenso_por_lojista,
@@ -1391,29 +1393,6 @@ def criar_lancamento_de_fatura(linha_id):
     finally:
         cur.close()
         conn.close()
-
-
-def _normalizar_desc(texto):
-    return re.sub(r"\s+", " ", (texto or "")).strip().upper()
-
-
-# Palavras que aparecem em quase toda descricao do Pluggy e nao identificam
-# estabelecimento nenhum - nao podem sustentar um par sozinhas.
-_TOKENS_GENERICOS = {
-    "COMPRA", "EXTERIOR", "VISA", "LOJISTA", "PARCELA", "PARCELADO", "VISTA",
-    "JUROS", "SEM", "CARTAO", "CREDITO", "DEBITO", "TRANSACOES", "INTERNACIONAL",
-    "NACIONAL", "PAGAMENTO", "ESTORNO", "CANCELAMENTO",
-}
-
-
-def _tokens_significativos(descricao):
-    """Tokens que identificam o estabelecimento, sem o prefixo generico.
-
-    O Pluggy grava o MESMO evento com prefixos diferentes ("Compra Exterior
-    R$ - Visa - X" e "Compra Exterior - Visa - X ...COMUS"), entao comparar a
-    descricao inteira nunca casa o par."""
-    brutos = re.findall(r"[A-Za-zÀ-Ú0-9]{4,}", _normalizar_desc(descricao))
-    return {t for t in brutos if t not in _TOKENS_GENERICOS and not t.isdigit()}
 
 
 def _par_substituicao_compativel(origem, destino):

@@ -9,6 +9,7 @@ import hashlib
 import html
 import json
 import logging
+import re
 import secrets
 import unicodedata
 import uuid
@@ -1017,6 +1018,29 @@ def _consenso_por_categoria(linhas, dim_projeto=None, nomes_valor=None,
             alvo.setdefault(chave, {})
             alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
     return _apurar_consenso(votos, dim_projeto, nomes_valor, recusados, minimo)
+
+
+def _normalizar_desc(texto):
+    return re.sub(r"\s+", " ", (texto or "")).strip().upper()
+
+
+# Palavras que aparecem em quase toda descricao do Pluggy e nao identificam
+# estabelecimento nenhum - nao podem sustentar um par sozinhas.
+_TOKENS_GENERICOS = {
+    "COMPRA", "EXTERIOR", "VISA", "LOJISTA", "PARCELA", "PARCELADO", "VISTA",
+    "JUROS", "SEM", "CARTAO", "CREDITO", "DEBITO", "TRANSACOES", "INTERNACIONAL",
+    "NACIONAL", "PAGAMENTO", "ESTORNO", "CANCELAMENTO",
+}
+
+
+def _tokens_significativos(descricao):
+    """Tokens que identificam o estabelecimento, sem o prefixo generico.
+
+    O Pluggy grava o MESMO evento com prefixos diferentes ("Compra Exterior
+    R$ - Visa - X" e "Compra Exterior - Visa - X ...COMUS"), entao comparar a
+    descricao inteira nunca casa o par."""
+    brutos = re.findall(r"[A-Za-zÀ-Ú0-9]{4,}", _normalizar_desc(descricao))
+    return {t for t in brutos if t not in _TOKENS_GENERICOS and not t.isdigit()}
 
 
 CONTA_UNICRED = "b6243125-dca2-42b2-8c20-0825782c6d8d"
@@ -4190,6 +4214,102 @@ def migrate():
                  r49["lojistas_com_consenso"], r49["categorias_com_consenso"]),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (49);")
+            conn.commit()
+
+        if versao_atual < 50:
+            # Desfaz os vinculos que ligam estabelecimentos DIFERENTES. E a
+            # armadilha 17 da secao 6.5 aplicada para tras: a correcao de la
+            # impediu vinculos novos, mas nunca varreu os ja gravados.
+            #
+            # Todos tem a mesma assinatura - parcela x total bate com uma
+            # compra alheia dentro da tolerancia de R$ 1,00:
+            #   TOTAL SPORTES 10x 44,99 = 449,90 -> ORAL UNIC ODONTOL  450,00
+            #   TOTAL SPORTES 10x 71,79 = 717,90 -> SUPERVIZA          718,40
+            #   ATIVA          4x 65,62 = 262,48 -> POSTOS NOTA LTDA   262,04
+            # SUPERVIZA e POSTOS NOTA sao "A vista sem juros": compra a vista
+            # nao pode ser agregado de parcelamento, e as duas estavam fora do
+            # resultado - R$ 980,44 (mesma classe de defeito da secao 6.6).
+            #
+            # A lista e explicita de proposito. A varredura tem falsos
+            # positivos legitimos que NAO podem ser desfeitos: "Pagamento
+            # Recebido" x "Pag de Fatura Via Deb Aut" (6.5 n.12) e
+            # "Anuidade - bonificacao" x "Est.Tarifa manutencao" (8.3) sao o
+            # mesmo evento com descricoes sem nenhuma palavra em comum.
+            alvos_v50 = (
+                "ORAL UNIC ODONTOL", "SUPERVIZA", "POSTOS NOTA",
+                "MERCEARIA SOUZA", "MERCEA POMARES", "XIMANGO", "ALLPARK",
+                "SMARTYZRBSB", "PANIFICADORA",
+            )
+            cur.execute(
+                "SELECT fv.id, fv.transacao_id::text, t.descricao AS t_desc, "
+                "COALESCE(fl.descricao_base, fl.descricao) AS l_desc "
+                "FROM cartao.fatura_vinculo fv "
+                "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+                "JOIN cartao.transacao t ON t.transacao_id=fv.transacao_id "
+                "WHERE t.account_id=%s;",
+                (CONTA_UNICRED,),
+            )
+            remover_v50 = []
+            for vid, tid, t_desc, l_desc in cur.fetchall():
+                alvo = _normalizar_desc(t_desc)
+                if not any(a in alvo for a in alvos_v50):
+                    continue
+                tk_t = _tokens_significativos(t_desc)
+                tk_l = _tokens_significativos(l_desc)
+                if tk_t and tk_l and not (tk_t & tk_l):
+                    remover_v50.append((vid, tid))
+
+            ids_v50 = [v for v, _t in remover_v50]
+            afetadas_v50 = sorted({t for _v, t in remover_v50})
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.vinculo_backup_v50 AS "
+                "SELECT fv.*, now() AS backup_em FROM cartao.fatura_vinculo fv "
+                "WHERE fv.id = ANY(%s);",
+                (ids_v50,),
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.agregado_backup_v50 AS "
+                "SELECT transacao_id, somente_conciliacao, conferida, now() AS backup_em "
+                "FROM cartao.transacao WHERE transacao_id::text = ANY(%s);",
+                (afetadas_v50,),
+            )
+            if ids_v50:
+                cur.execute("DELETE FROM cartao.fatura_vinculo WHERE id = ANY(%s);", (ids_v50,))
+
+            # Sem os vinculos errados, quem nao e mais agregado volta ao
+            # resultado. A trava da secao 6.6 continua valendo: NUNCA desmarcar
+            # quem ja gerou parcela a partir das proprias linhas - se as
+            # parcelas existem, sao elas que contam.
+            devolvidos_v50 = 0
+            for tid in afetadas_v50:
+                cur.execute(
+                    "SELECT COUNT(*), COUNT(fl.transacao_id_criado) "
+                    "FROM cartao.fatura_vinculo fv "
+                    "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+                    "WHERE fv.transacao_id::text=%s;",
+                    (tid,),
+                )
+                vinculos, com_parcela = cur.fetchone()
+                if vinculos >= 2 or com_parcela:
+                    continue
+                cur.execute(
+                    "UPDATE cartao.transacao SET somente_conciliacao=false, "
+                    "atualizado_em=now() WHERE transacao_id::text=%s "
+                    "AND COALESCE(somente_conciliacao,false)=true;",
+                    (tid,),
+                )
+                devolvidos_v50 += cur.rowcount
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Desfaz vinculos entre estabelecimentos diferentes',"
+                "jsonb_build_object('versao',50,'vinculos_removidos',%s,"
+                "'transacoes_afetadas',%s,'devolvidos_ao_dre',%s,"
+                "'backup_vinculos','cartao.vinculo_backup_v50',"
+                "'backup_agregado','cartao.agregado_backup_v50'));",
+                (len(ids_v50), len(afetadas_v50), devolvidos_v50),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (50);")
             conn.commit()
 
         cur.close()

@@ -1022,3 +1022,17 @@ def test_reaplicar_consenso_e_repetivel_com_previa_e_sem_tocar_no_ok():
     assert "SET observacao" not in helper
     assert "NULLIF(categoria,'') IS NULL" in helper
     assert "cartao.transacao_dimensao.valor_id IS NULL" in helper
+
+
+def test_migracao_50_desfaz_so_a_lista_explicita_e_respeita_a_trava_da_6_6():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = core.split("if versao_atual < 50:", 1)[1].split("cur.close()", 1)[0]
+    assert "vinculo_backup_v50" in bloco and "agregado_backup_v50" in bloco
+    assert "SET conferida" not in bloco and "conferida=" not in bloco
+    # os falsos positivos legitimos nao podem estar na lista de alvos
+    alvos = bloco.split("alvos_v50 = (", 1)[1].split(")", 1)[0]
+    for legitimo in ("Pagamento", "Anuidade", "ANJOS", "ZANELATTO"):
+        assert legitimo.upper() not in alvos.upper(), legitimo
+    # trava da 6.6: nunca desmarcar quem ja gerou parcela
+    assert "transacao_id_criado" in bloco
+    assert "if vinculos >= 2 or com_parcela:" in bloco
