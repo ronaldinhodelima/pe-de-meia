@@ -1614,3 +1614,7 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 - Ajuste posterior aprovado: reduzir os campos pesquisáveis para 26px e diminuir o preenchimento interno para
   `1px 21px 1px 5px`. O hover/foco deixa de usar azul e passa a usar cinza neutro (`#f2f2f0`), contorno cinza
   translúcido e sombra neutra. O movimento de escala e o tratamento vermelho dos obrigatórios são mantidos.
+- Expansão para todo o projeto: o componente pesquisável deve melhorar automaticamente qualquer `select` com
+  `data-pdm-combobox`, carregamento tardio por `data-lazy-options` ou sete opções ou mais. Seletores curtos, como
+  status, ano e tipo, continuam nativos. Use `data-pdm-native` quando uma lista longa precisar permanecer nativa.
+  O observador global também aplica o padrão a seletores inseridos dinamicamente após a abertura da página.

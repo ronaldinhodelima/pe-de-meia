@@ -7,7 +7,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 def test_componente_pesquisavel_preserva_select_e_fluxo_de_teclado():
     js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
 
-    assert "select[data-pdm-combobox]" in js
+    assert "select.hasAttribute('data-pdm-combobox')" in js
     assert "normalize('NFD')" in js
     assert ".includes(termo)" in js
     for tecla in ("ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"):
@@ -44,3 +44,13 @@ def test_layout_sombra_flutuante_e_compacto():
     assert "border-color:rgba(92,95,102,.24)!important" in css
     assert "transform:scale(1.012)" in css
     assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css
+
+
+def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():
+    js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
+
+    assert "select.options.length >= 7" in js
+    assert "select.hasAttribute('data-lazy-options')" in js
+    assert "select.matches('[data-pdm-native], [multiple]')" in js
+    assert "escopo.querySelectorAll('select')" in js
+    assert "new MutationObserver(function (mudancas)" in js

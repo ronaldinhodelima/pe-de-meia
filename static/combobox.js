@@ -18,12 +18,21 @@
     if (typeof window.hidratarSelect === 'function') window.hidratarSelect(select);
   }
 
+  function deveMelhorar(select) {
+    if (!select || select.matches('[data-pdm-native], [multiple]')) return false;
+    if (select.hasAttribute('data-pdm-combobox') || select.hasAttribute('data-lazy-options')) return true;
+    return select.options.length >= 7;
+  }
+
   function melhorarSelect(select) {
     if (!select || select.dataset.comboboxPronto === '1') return;
     select.dataset.comboboxPronto = '1';
 
     var wrapper = document.createElement('div');
     wrapper.className = 'pdm-combobox';
+    ['width', 'minWidth', 'maxWidth'].forEach(function (propriedade) {
+      if (select.style[propriedade]) wrapper.style[propriedade] = select.style[propriedade];
+    });
     var input = document.createElement('input');
     input.type = 'text';
     input.className = 'pdm-combobox-input';
@@ -165,7 +174,13 @@
   }
 
   function iniciar(raiz) {
-    (raiz || document).querySelectorAll('select[data-pdm-combobox]').forEach(melhorarSelect);
+    var escopo = raiz || document;
+    if (escopo.matches && escopo.matches('select') && deveMelhorar(escopo)) melhorarSelect(escopo);
+    if (escopo.querySelectorAll) {
+      escopo.querySelectorAll('select').forEach(function (select) {
+        if (deveMelhorar(select)) melhorarSelect(select);
+      });
+    }
   }
 
   document.addEventListener('mousedown', function (evento) {
@@ -191,7 +206,17 @@
       lista.style.width = caixa.width + 'px';
     });
   }, true);
-  document.addEventListener('DOMContentLoaded', function () { iniciar(document); });
+  document.addEventListener('DOMContentLoaded', function () {
+    iniciar(document);
+    new MutationObserver(function (mudancas) {
+      mudancas.forEach(function (mudanca) {
+        if (mudanca.target && mudanca.target.matches && mudanca.target.matches('select')) iniciar(mudanca.target);
+        mudanca.addedNodes.forEach(function (no) {
+          if (no.nodeType === 1) iniciar(no);
+        });
+      });
+    }).observe(document.body, {childList: true, subtree: true});
+  });
   window.pdmCombobox = {
     iniciar: iniciar,
     normalizar: normalizar,
