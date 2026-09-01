@@ -765,6 +765,22 @@ reaparece em outra viagem e o projeto antigo fica errado.
 Aplica **apenas em campo vazio**, e vazio inclui `transacao_dimensao` com `valor_id` NULL. O
 `ON CONFLICT` faz `DO UPDATE ... WHERE valor_id IS NULL`, nunca sobrescrevendo valor preenchido.
 
+**Segundo eixo: consenso por categoria (`_consenso_por_categoria`).** Resolve o caso "só a
+categoria está preenchida": quem tem OK dentro de uma categoria decide o Responsável/Projeto/
+Portfólio unânime **dela**. Mesmas travas do eixo do lojista, com **mínimo de 3 evidências** — a
+categoria é um agrupamento largo, e duas coincidências nela dizem menos que duas no mesmo lojista.
+Nunca decide categoria, que é a própria chave. O eixo do lojista é mais específico e decide
+primeiro; o da categoria só entra onde ele não tinha nada a dizer.
+
+Recusados nesse eixo, conferidos um a um na prévia: **`Leisure`** (tinha Portfólio "Viagens"
+unânime, mas lazer local não é viagem — o show do Iron Maiden é "Eventos") e **`Insurance`**
+(tinha "Veículos", e seguro também pode ser de vida ou residencial).
+
+**A prévia é somente leitura:** `GET /api/classificacao/consenso-preview` mostra, sem gravar,
+quanto cada eixo preencheria por campo e o consenso achado em cada categoria. Como não há
+staging, é o único jeito de olhar o dado real antes de uma alteração em lote — usar sempre antes
+de escrever a próxima migração de classificação.
+
 **Consenso unânime não é prova de acerto** — pode ser erro repetido. Padrões reprovados na revisão
 humana de 01/09/2026 ficam na lista de recusados: `POUSADA FOGO*RESE` (pousada marcada como
 Combustível) e `ESTACAO` (ambíguo, recusado desde a migração 42).
@@ -1045,3 +1061,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 45 | publica em 2025 o consenso dos OK; `classificacao_backup_v45` |
 | 46 | aplica as decisões do usuário sobre lojistas divergentes (§8.4); `classificacao_backup_v46` |
 | 47 | trata `valor_id` NULL como vazio e completa a classificação; `classificacao_backup_v47` |
+| 48 | segundo eixo de consenso, por categoria; `classificacao_backup_v48` |

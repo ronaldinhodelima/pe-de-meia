@@ -2653,6 +2653,11 @@ def api_consenso_preview():
     anos = [int(a) for a in (request.args.get("anos") or "2025,2026").split(",") if a.strip()]
     minimo_cat = max(2, int(request.args.get("minimo_categoria") or 3))
     recusados = {"POUSADA FOGO*RESE", "ESTACAO"}
+    # Mesmos recusados da migracao 48: lazer local nao e viagem e seguro nem
+    # sempre e de veiculo. A previa precisa mostrar o que de fato seria gravado.
+    recusados_cat = {"Leisure", "Insurance"}
+    if request.args.get("sem_recusa") == "1":
+        recusados_cat = set()
 
     conn = get_conn()
     cur = conn.cursor()
@@ -2687,7 +2692,8 @@ def api_consenso_preview():
         linhas, dim_projeto=dim_projeto, nomes_valor=nomes_valor, recusados=recusados)
     por_cat = _consenso_por_categoria(
         [(l[0], l[2], l[3], l[4]) for l in linhas],
-        dim_projeto=dim_projeto, nomes_valor=nomes_valor, minimo=minimo_cat)
+        dim_projeto=dim_projeto, nomes_valor=nomes_valor,
+        recusados=recusados_cat, minimo=minimo_cat)
 
     def rotulo(campo):
         return "categoria" if campo == "cat" else nomes_dim.get(campo, str(campo))

@@ -986,3 +986,19 @@ def test_cartao_pendente_explica_por_que_falta_o_titular_na_fatura_em_andamento(
     assert 'linha["cartao_aguardando"] = False' in view  # fatura fechada: nunca se aplica
     assert template.count("cartao_aguardando") == 2  # celula da tabela + painel expandido
     assert "cartão pendente" in template
+
+
+def test_migracao_48_nao_encosta_no_ok_e_tem_ponto_de_reversao():
+    """O OK e assinatura humana (secao 1.2) e alteracao em lote precisa de backup."""
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = core.split("if versao_atual < 48:", 1)[1].split("cur.close()", 1)[0]
+    assert "classificacao_backup_v48" in bloco, "sem ponto de reversao"
+    assert "SET conferida" not in bloco
+    assert "conferida=" not in bloco
+    assert "SET observacao" not in bloco, "observacao pertence ao usuario"
+    # so preenche vazio: nunca sobrescreve valor ja escolhido
+    assert "NULLIF(categoria,'') IS NULL" in bloco
+    assert "cartao.transacao_dimensao.valor_id IS NULL" in bloco
+    assert "_dimensao_vazia" in bloco
+    # os dois consensos recusados na revisao da previa
+    assert '"Leisure"' in bloco and '"Insurance"' in bloco

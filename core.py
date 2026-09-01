@@ -3952,6 +3952,117 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (47);")
             conn.commit()
 
+        if versao_atual < 48:
+            # Dois eixos. O de lojista e o de sempre (aqui ele recolhe os OKs
+            # novos desde a 47). O de CATEGORIA e o que resolve o caso "so a
+            # categoria esta preenchida": herda de quem tem OK naquela mesma
+            # categoria o Responsavel/Projeto/Portfolio unanime DELA.
+            #
+            # Recusados no eixo de categoria, conferidos um a um na previa:
+            #  - "Leisure" tinha Portfolio "Viagens" unanime, mas lazer local
+            #    nao e viagem: o show do Iron Maiden e "Eventos" (secao 8.4).
+            #  - "Insurance" tinha Portfolio "Veiculos", e seguro tambem pode
+            #    ser de vida ou residencial. Sao poucos: ficam para decisao.
+            # Consenso unanime nao e prova de acerto - pode ser erro repetido.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            recusados_loja_v48 = {"POUSADA FOGO*RESE", "ESTACAO"}
+            recusados_cat_v48 = {"Leisure", "Insurance"}
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v48 = {chave_alfa(n): i for i, n in cur.fetchall()}
+            cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+            nomes_v48 = dict(cur.fetchall())
+
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v48 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.conferida,"
+                "t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s;",
+                (conta_unicred,),
+            )
+
+            cur.execute(
+                "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                " '{}'::jsonb) "
+                "FROM cartao.transacao t WHERE t.account_id=%s "
+                "AND COALESCE(t.duplicada,false)=false "
+                "AND COALESCE(t.somente_conciliacao,false)=false "
+                "AND t.substituido_por IS NULL;",
+                (conta_unicred,),
+            )
+            linhas_v48 = cur.fetchall()
+            dim_projeto_v48 = dims_v48.get("projeto")
+            mapa_v48, loja_v48 = _consenso_por_lojista(
+                linhas_v48, dim_projeto=dim_projeto_v48, nomes_valor=nomes_v48,
+                recusados=recusados_loja_v48,
+            )
+            cat_v48 = _consenso_por_categoria(
+                [(l[0], l[2], l[3], l[4]) for l in linhas_v48],
+                dim_projeto=dim_projeto_v48, nomes_valor=nomes_v48,
+                recusados=recusados_cat_v48, minimo=3,
+            )
+
+            cats_v48 = 0
+            dims_v48_gravadas = 0
+            tocados_v48 = {"com_ok": set(), "sem_ok": set()}
+            for tid, descricao, categoria, conferida, dims in linhas_v48:
+                onde = "com_ok" if conferida else "sem_ok"
+                escolha = dict(loja_v48.get(mapa_v48[_loja_v45(descricao)], {}))
+                if not categoria and escolha.get("cat"):
+                    cur.execute(
+                        "UPDATE cartao.transacao SET categoria=%s, atualizado_em=now() "
+                        "WHERE transacao_id=%s AND NULLIF(categoria,'') IS NULL;",
+                        (escolha["cat"], tid),
+                    )
+                    if cur.rowcount:
+                        cats_v48 += 1
+                        tocados_v48[onde].add(tid)
+                        categoria = escolha["cat"]
+
+                # O eixo do lojista e mais especifico e decide primeiro; o da
+                # categoria so entra onde ele nao tinha nada a dizer.
+                for campo, valor in (cat_v48.get(categoria) or {}).items():
+                    escolha.setdefault(campo, valor)
+
+                for campo, valor_id in escolha.items():
+                    if campo == "cat" or not _dimensao_vazia(dims, campo):
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE "
+                        "SET valor_id=EXCLUDED.valor_id "
+                        "WHERE cartao.transacao_dimensao.valor_id IS NULL;",
+                        (tid, campo, valor_id),
+                    )
+                    if cur.rowcount:
+                        dims_v48_gravadas += 1
+                        tocados_v48[onde].add(tid)
+
+            parcelas_v48 = preencher_classificacao_vazia_parcelas(cur, account_id=conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Consenso por categoria completa a classificacao',"
+                "jsonb_build_object('versao',48,'lojistas_com_consenso',%s,"
+                "'categorias_com_consenso',%s,'categorias',%s,'dimensoes',%s,"
+                "'tocados_com_ok',%s,'tocados_sem_ok',%s,"
+                "'parcelas_categorias',%s,'parcelas_dimensoes',%s,"
+                "'backup','cartao.classificacao_backup_v48'));",
+                (len(loja_v48), len(cat_v48), cats_v48, dims_v48_gravadas,
+                 len(tocados_v48["com_ok"]), len(tocados_v48["sem_ok"]),
+                 parcelas_v48["categorias"], parcelas_v48["dimensoes"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (48);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
