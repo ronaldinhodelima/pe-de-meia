@@ -1806,7 +1806,10 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
 Levantado direto dos cards da tela detalhada, nas 20 faturas de jan/2025 a ago/2026.
 Serve de linha de base: comparar antes/depois de qualquer mexida no matcher ou na classificação.
 
-**Conciliação — 4 faturas ainda não fecham 100%** (o registro anterior de "20/20 fechando"
+**Conciliação — RESOLVIDO em 01/09/2026 pela migração 44 (ver abaixo). As 20 faturas voltaram
+a fechar 100%, com zero divergência.** O retrato do problema, que valia antes da correção, era:
+
+**4 faturas não fechavam 100%** (o registro anterior de "20/20 fechando"
 não vale mais depois das reimportações; conferir sempre na tela, não no histórico):
 
 | Fatura | Linhas | Sem vínculo | Divergências |
@@ -1836,3 +1839,48 @@ de crédito da lista, que é o **Nubank Andrea, sem nenhuma fatura importada**. 
 existe dentro do `{% if fatura %}`** — ou seja, sem saída para trocar de cartão. Agora
 `_conta_credito_padrao()` escolhe a conta de crédito com a fatura mais recente e o seletor
 aparece também no estado de erro. Teste de regressão em `tests/test_estrutura.py`.
+
+## A marca de agregado que nunca era retirada — migração 44 (01/09/2026)
+
+**O defeito.** `somente_conciliacao` só era POSTA, nunca retirada.
+`_sincronizar_parcelas_de_agregado` marca como agregado a transação vinculada a 2+ linhas de
+fatura — mas quando o conjunto de vínculos muda depois (refazer vínculos, reenvio de PDF,
+desvincular na mão), ela deixa de ser agregado e **continuava fora do resultado para sempre**,
+sem nenhuma parcela ocupando o lugar dela. O `UPDATE` só tinha `SET somente_conciliacao = true`.
+
+**O estrago.** Cinco compras **à vista** (não parceladas, nada a ver com agregado) sumiram do
+DRE — R$ 1.167,38:
+
+| Fatura | Data | Descrição | Valor |
+|---|---|---|---|
+| Janeiro/2026 | 23/12/2025 | SUPERVIZA (Andrea) | R$ 584,83 |
+| Dezembro/2025 | 14/11/2025 | DELTA VIDEIRA (Ronaldo) | R$ 83,30 |
+| Outubro/2025 | 14/09/2025 | SUPERVIZA (Andrea) | R$ 268,75 |
+| Outubro/2025 | 08/10/2025 | MP *PRODUTOS (Ronaldo) | R$ 105,00 |
+| Setembro/2025 | 27/08/2025 | POSTO CANOAS (Ronaldo) | R$ 125,50 |
+
+**Como se manifestava — e por que era difícil de ver.** A linha do PDF *tinha* vínculo, com um
+lançamento do Pluggy correto (POSTED, valor e data idênticos). Mas esse único vínculo era
+inelegível, então a detalhada não achava lançamento principal e escrevia **"Validar: falta
+vínculo"** — mensagem enganosa: não faltava vínculo, faltava um lançamento **contabilizável**.
+Pior, as duas telas discordavam: a conciliação dizia "0 sem vínculo · 0 órfão do Pluggy" (o
+`tem_vinculo` dela é `bool(vinculos) or bool(transacao_id_criado)`, que não olha elegibilidade)
+enquanto a detalhada acusava divergência. **Ao investigar divergência entre as duas telas,
+lembrar que elas medem coisas diferentes: a conciliação mede se a linha tem vínculo; a detalhada
+mede se sobrou um lançamento que conta.**
+
+**A correção.** `_sincronizar_parcelas_de_agregado` agora também desmarca, com uma trava:
+**nunca desmarcar quem já teve parcela gerada a partir das suas linhas** (`transacao_id_criado`
+preenchido) — se as parcelas existem, são elas que contam e o agregado tem que continuar fora,
+senão a despesa conta duas vezes. O retorno antecipado "sem agregado nenhum" passou a valer só
+para a prévia, porque sem agregado ainda pode haver marca obsoleta a retirar.
+
+A migração 44 corrigiu o dado já gravado, guardando reversão em `cartao.agregado_backup_v44`.
+Auditoria: **5 lançamentos devolvidos, exatamente os 5 previstos**. Depois dela as 20 faturas
+fecham 100% e o DRE de cada uma bate com o total do PDF — exceto maio/2026, onde R$ 66,55 estão
+legitimamente em "Fora do DRE" por natureza (18.746,38 + 66,55 = 18.812,93).
+
+**Lição para o próximo estado que tire lançamento do resultado:** todo estado desses precisa do
+caminho de volta desde o início. Um estado que só se aplica e nunca se retira vira dado perdido
+silencioso — não dá erro, não aparece em teste, e só é encontrado meses depois por quem for
+conferir fatura a fatura.
