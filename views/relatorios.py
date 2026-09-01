@@ -2806,3 +2806,67 @@ def api_reaplicar_consenso():
         cur.close()
         conn.close()
     return jsonify({"ok": True, "preview": preview, **res})
+
+
+@bp.route("/api/fatura/vinculos-suspeitos")
+@requer("cadastros")
+def api_vinculos_suspeitos():
+    """Vinculos em que a linha da fatura e a transacao NAO tem um unico termo
+    do estabelecimento em comum. Somente leitura: levanta, nao desfaz nada.
+
+    E a armadilha 17 da secao 6.5 aplicada para tras: coincidencia de valor
+    nunca e prova de familia. O caso que a revelou de novo: TOTAL SPORTES
+    10x R$ 44,99 (= R$ 449,90) grudado no agregado ORAL UNIC ODONTOL de
+    R$ 450,00 - R$ 0,10 de diferenca, dentro da tolerancia de R$ 1,00.
+
+    Nao desfaz porque desfazer vinculo mexe no que entra no DRE (o agregado
+    volta ou sai do resultado) e isso e decisao do usuario.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT fv.id AS vinculo_id, fv.origem, fi.mes_referencia, "
+        "fl.descricao AS linha_descricao, "
+        "COALESCE(fl.descricao_base, fl.descricao) AS linha_base, "
+        "fl.valor AS linha_valor, fl.parcela_total, "
+        "t.transacao_id::text AS transacao_id, t.descricao AS transacao_descricao, "
+        "COALESCE(t.valor_brl,t.valor_original) AS transacao_valor, "
+        "COALESCE(t.somente_conciliacao,false) AS agregado, t.conferida "
+        "FROM cartao.fatura_vinculo fv "
+        "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+        "JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+        "JOIN cartao.transacao t ON t.transacao_id=fv.transacao_id "
+        "ORDER BY fi.mes_referencia;"
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    suspeitos = []
+    for r in linhas:
+        tokens_linha = _tokens_significativos(r["linha_base"])
+        tokens_trans = _tokens_significativos(r["transacao_descricao"])
+        # Sem token de nenhum lado nao da para afirmar nada: fica de fora para
+        # nao gerar falso positivo em descricao curta ou toda generica.
+        if not tokens_linha or not tokens_trans:
+            continue
+        if tokens_linha & tokens_trans:
+            continue
+        suspeitos.append({
+            "vinculo_id": r["vinculo_id"], "origem": r["origem"],
+            "fatura": str(r["mes_referencia"]),
+            "linha": r["linha_descricao"],
+            "linha_valor": float(r["linha_valor"] or 0),
+            "parcela_total": r["parcela_total"],
+            "transacao": r["transacao_descricao"],
+            "transacao_valor": float(r["transacao_valor"] or 0),
+            "transacao_id": r["transacao_id"],
+            "agregado_fora_do_dre": bool(r["agregado"]),
+            "conferida": bool(r["conferida"]),
+        })
+    return jsonify({
+        "vinculos_avaliados": len(linhas),
+        "suspeitos": len(suspeitos),
+        "com_agregado_fora_do_dre": sum(1 for s in suspeitos if s["agregado_fora_do_dre"]),
+        "detalhe": suspeitos[:200],
+    })
