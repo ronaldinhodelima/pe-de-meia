@@ -899,6 +899,24 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
     )
 
 
+def _conta_credito_padrao(cur, contas_credito):
+    """Cartao aberto quando a URL nao diz qual.
+
+    A primeira conta da lista pode nao ter nenhuma fatura importada — e ai a
+    tela abria vazia, sem seletor, sem saida. Prefere o cartao que ja tem
+    fatura; se nenhum tiver, mantem o primeiro.
+    """
+    ids = [c[0] for c in contas_credito]
+    cur.execute(
+        "SELECT account_id::text AS account_id FROM cartao.fatura_importada "
+        "WHERE account_id::text = ANY(%s) "
+        "ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC LIMIT 1;",
+        (ids,),
+    )
+    linha = cur.fetchone()
+    return linha["account_id"] if linha else ids[0]
+
+
 @bp.route("/lancamentos/fatura")
 @requer("lancamentos_ver")
 def lancamentos_por_fatura():
@@ -929,7 +947,7 @@ def lancamentos_por_fatura():
     em_andamento = request.args.get("andamento") == "1"
 
     if not account_id and contas_credito:
-        account_id = contas_credito[0][0]
+        account_id = _conta_credito_padrao(cur, contas_credito)
     if em_andamento:
         resposta = _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id)
         if resposta is not None:
@@ -954,7 +972,7 @@ def lancamentos_por_fatura():
             account_id = str(fatura["account_id"])
     else:
         if not account_id and contas_credito:
-            account_id = contas_credito[0][0]
+            account_id = _conta_credito_padrao(cur, contas_credito)
         cur.execute(
             "SELECT f.*, c.tipo FROM cartao.fatura_importada f "
             "JOIN cartao.conta c ON c.account_id=f.account_id "

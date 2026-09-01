@@ -808,3 +808,19 @@ def test_dica_automatica_so_no_que_esta_cortado():
     assert "function larguraDoTexto" in js, "precisa medir, nao marcar tudo"
     # roda ao ativar, ao esconder coluna e ao redimensionar
     assert js.count("atualizarDicasDeTruncamento(table)") >= 3
+
+
+def test_cartao_padrao_da_fatura_prefere_conta_com_fatura_importada():
+    """Abrir /lancamentos/fatura sem account_id nao pode cair em cartao vazio.
+
+    A primeira conta de credito da lista pode nunca ter tido fatura importada
+    (Nubank). Nesse caso a tela abria so com a mensagem de erro e sem seletor
+    de cartao — sem saida para trocar para a Unicred.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "def _conta_credito_padrao(" in view
+    assert "contas_credito[0][0]" not in view
+    assert view.count("account_id = _conta_credito_padrao(cur, contas_credito)") == 2
+    # o seletor de cartao tem que existir tambem no estado de erro
+    assert template.count('id="faturaConta"') == 2

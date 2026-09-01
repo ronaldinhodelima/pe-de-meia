@@ -139,6 +139,12 @@
 </div>
 <script type="application/json" data-config-fatura>{{ config_json|safe }}</script>
 {% else %}
+<div class="fatura-filtros">
+  <label for="faturaConta">Cartão</label>
+  <select id="faturaConta" data-pdm-native>
+    {% for aid, curto, completo, _, _ in contas_credito %}<option value="{{ aid }}" {{ 'selected' if aid==account_id }}>{{ completo }}</option>{% endfor %}
+  </select>
+</div>
 <div class="aviso-erro">{{ erro }}</div>
 <p><a href="/relatorios/conciliar-fatura">Importar ou abrir uma fatura conciliada</a></p>
 {% endif %}
