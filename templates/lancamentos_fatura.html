@@ -2,7 +2,6 @@
 
 {% block head_extra %}
 <style>
-  :root{--warn:#a3690b;--warn-soft:#fbf1e2;--neutro:#665b88;--neutro-soft:#f1eef8}
   .fatura-cabecalho{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;min-height:42px}
   .fatura-cabecalho h2{margin:0;font-size:17px;line-height:1.15}
   .fatura-cabecalho .nav{font-size:16px;text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink);transition:background-color .12s,border-color .12s}
@@ -14,12 +13,19 @@
 
   /* cards de status: hover eleva o card e mostra que e clicavel (filtra a tabela) */
   .fatura-cards .card{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
-  .fatura-cards .card:hover{transform:translateY(-1px);box-shadow:var(--shadow-1);border-color:var(--ink-faint)}
+  .fatura-cards .card:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:var(--accent)}
   .fatura-cards .card:active{transform:translateY(0)}
   .fatura-cards .card.ativo{outline:2px solid var(--accent);outline-offset:-2px}
+  .fatura-cards .card-topo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .fatura-cards .card-topo .label{min-width:0}
+  .fatura-cards .card-icone{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;flex:none;background:var(--raise);color:var(--ink-faint)}
   .fatura-cards .card-ok .val{color:var(--good)}.fatura-cards .card-aviso .val{color:var(--warn)}.fatura-cards .card-erro .val{color:var(--bad)}.fatura-cards .card-fora .val{color:var(--neutro)}
-  .card-progresso{height:4px;border-radius:2px;background:var(--line-soft);margin-top:8px;overflow:hidden}
-  .card-progresso i{display:block;height:100%;border-radius:2px;transition:width .3s ease}
+  .fatura-cards .card-ok .card-icone{background:var(--good-soft);color:var(--good)}
+  .fatura-cards .card-aviso .card-icone{background:var(--warn-soft);color:var(--warn)}
+  .fatura-cards .card-erro .card-icone{background:var(--bad-soft);color:var(--bad)}
+  .fatura-cards .card-fora .card-icone{background:var(--neutro-soft);color:var(--neutro)}
+  .card-progresso{height:4px;border-radius:2px;background:var(--raise);margin-top:8px;overflow:hidden}
+  .card-progresso i{display:block;height:100%;border-radius:2px;transition:width .4s ease}
   .card-ok .card-progresso i{background:var(--good)}.card-aviso .card-progresso i{background:var(--warn)}.card-erro .card-progresso i{background:var(--bad)}
 
   .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
@@ -32,24 +38,27 @@
   .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:17px;line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
   .expande:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 
-  .estado{display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--line)}
+  .estado{display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:400;background:var(--bg);border:1px solid var(--line)}
   .estado.dre{color:var(--bad);background:var(--bad-soft);border-color:transparent}
   .estado.fora{color:var(--neutro);background:var(--neutro-soft);border-color:transparent}
   .estado.ok{color:var(--good);background:var(--good-soft);border-color:transparent}
+
+  .quem{display:flex;align-items:center;gap:7px}
+  .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:9px;font-weight:500;flex:none}
 
   .vinculos-detalhe{background:#fafaf8}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:7px;transition:background-color .12s}
   .vinculo-grid.principal{background:var(--good-soft)}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid.tecnico:hover{background:var(--bg)}.vinculo-grid small{display:block;color:var(--ink-faint)}
 
   .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px}.editor-financeiro select,.editor-financeiro input{width:100%;transition:border-color .12s,box-shadow .12s}
 
-  .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:11px;font-weight:700;background:#eef2ff;color:#4058a8;border:1px solid #cad3f6;cursor:default;transition:transform .12s}
+  .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:11px;font-weight:500;background:#eef2ff;color:#4058a8;border:1px solid #cad3f6;cursor:default;transition:transform .12s}
   .fonte-badge:hover{transform:scale(1.12)}
   .fonte-badge.fatura{background:#f2eefe;color:#694ea4;border-color:#d7ccef}
 
   .status-salvamento{align-self:end;min-height:20px;font-size:12px;color:var(--ink-faint)}.status-salvamento.erro{color:var(--bad)}
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:17px;line-height:1;cursor:pointer;border-radius:5px;transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:#e8eaed;color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:#f5f5f3;border-radius:6px;padding:8px;color:var(--ink-soft)}
-  .classificacao-faltando{border-color:#c23c34!important;background:#fbeceb!important}.editor-financeiro label.obrigatorio{color:#a63832;font-weight:600}
+  .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--bad);font-weight:500}
   .ok-lancamento{width:19px;height:19px;cursor:pointer}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;transition:border-color .12s,box-shadow .12s}.busca-fatura input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.busca-fatura span{font-size:12px;color:var(--ink-faint)}
@@ -97,16 +106,16 @@
 
 {% if fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não possui PDF oficial. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação do PDF.</div>{% endif %}
 <div class="cards fatura-cards">
-  <div class="card" data-filtro="todas"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
-  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">PDF oficial</div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}
-  <div class="card" data-filtro="dre"><div class="label">Despesas no DRE</div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
-  <div class="card card-fora" data-filtro="fora"><div class="label">Fora do DRE</div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
+  <div class="card" data-filtro="todas"><div class="card-topo"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><span class="card-icone">📄</span></div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="card-topo"><div class="label">PDF oficial</div><span class="card-icone">⏳</span></div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="card-topo"><div class="label">Conciliação</div><span class="card-icone">🔗</span></div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}
+  <div class="card" data-filtro="dre"><div class="card-topo"><div class="label">Despesas no DRE</div><span class="card-icone">📉</span></div><div class="val">{{ totais.dre|moeda }}</div><div class="card-explicacao">consumo e despesas</div></div>
+  <div class="card card-fora" data-filtro="fora"><div class="card-topo"><div class="label">Fora do DRE</div><span class="card-icone">🧭</span></div><div class="val">{{ totais.fora|moeda }}</div><div class="card-explicacao">investimentos e outras naturezas</div></div>
 </div>
 <div class="cards fatura-cards" style="margin-top:10px">
-  <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="label">Classificação</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.classificadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
-  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">OK dos lançamentos</div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após PDF conciliado</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
-  <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
-  <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
+  <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="card-topo"><div class="label">Classificação</div><span class="card-icone">🏷️</span></div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.classificadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="card-topo"><div class="label">OK dos lançamentos</div><span class="card-icone">✅</span></div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após PDF conciliado</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="card-topo"><div class="label">OK dos lançamentos</div><span class="card-icone">✅</span></div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
+  <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="card-topo"><div class="label">Divergências</div><span class="card-icone">⚠️</span></div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
+  <div class="card" data-filtro="multiplos"><div class="card-topo"><div class="label">Com agregados</div><span class="card-icone">🧩</span></div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
 </div>
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
@@ -118,7 +127,9 @@
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
     <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
     <td>{{ linha.data.strftime('%d/%m/%Y') }}</td>
-    <td class="desc">{{ linha.descricao }}</td><td>{{ linha.titular or '-' }}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% elif linha.cartao_aguardando %}<small style="display:block;color:var(--ink-faint)" data-tip="O Pluggy ainda não confirmou o final do cartão desta compra — costuma aparecer quando a cobrança deixa de ser pendente.">cartão pendente</small>{% endif %}</td>
+    <td class="desc">{{ linha.descricao }}</td>
+    {% set cartao_info %}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% elif linha.cartao_aguardando %}<small style="display:block;color:var(--ink-faint)" data-tip="O Pluggy ainda não confirmou o final do cartão desta compra — costuma aparecer quando a cobrança deixa de ser pendente.">cartão pendente</small>{% endif %}{% endset %}
+    <td>{% if linha.titular %}<div class="quem"><span class="avatar-titular">{{ linha.titular[:2]|upper }}</span><div>{{ linha.titular }}{{ cartao_info|safe }}</div></div>{% else %}-{{ cartao_info|safe }}{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
     <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
