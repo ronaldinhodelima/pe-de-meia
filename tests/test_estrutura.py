@@ -899,3 +899,55 @@ def test_canonizacao_de_lojista_corta_em_limite_de_palavra():
     trecho = texto.split("def _canonizar_v45(", 1)[1].split("return mapa", 1)[0]
     assert 'chave[len(curta)] == " "' in trecho
     assert "chave.startswith(curta)" in trecho
+
+
+def test_helpers_de_lojista_ficam_no_modulo_e_nao_dentro_da_migracao():
+    """Helper usado por mais de uma migracao nao pode morar dentro de um bloco.
+
+    `_loja_v45` e `_canonizar_v45` nasceram dentro do `if versao_atual < 45`.
+    Num banco que ja estava na versao 45 aquele bloco nao roda, e a migracao 46
+    quebrava com NameError - erro que so aparece no banco ja migrado, nunca num
+    banco novo, que e onde os testes normalmente olham.
+    """
+    import ast as _ast
+    arvore = _ast.parse((RAIZ / "core.py").read_text(encoding="utf-8"))
+    topo = {
+        n.name for n in arvore.body
+        if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+    }
+    assert "_loja_v45" in topo
+    assert "_canonizar_v45" in topo
+
+
+def test_decisoes_do_usuario_valem_contra_o_consenso_mas_nunca_mexem_no_ok():
+    """Migracao 46: o usuario decidiu, um a um, os lojistas divergentes.
+
+    Aqui a decisao dele sobrescreve categoria mesmo em lancamento conferido -
+    foi ele quem definiu. O que NAO pode acontecer em hipotese nenhuma e o
+    codigo tocar em `conferida`, `conferida_por` ou `conferida_em`.
+    """
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 46:", 1)[1].split("VALUES (46)", 1)[0]
+
+    assert "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v46" in trecho
+    for decidido in ("CATIVA", "LETICIAKAYSER", "LISCIA", "TOTAL SPORTES",
+                     "PANIFICADORA E CONFEIT", "APPLE.COM/BILL"):
+        assert decidido in trecho
+    # observacao do usuario so entra onde esta vazia
+    assert "NULLIF(observacao,'') IS NULL" in trecho
+    # completar OK preenche so campo vazio
+    assert "NULLIF(categoria,'') IS NULL" in trecho
+    assert "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING" in trecho
+    # o OK e' intocavel
+    for proibido in ("SET conferida", "conferida=true", "conferida = true",
+                     "conferida_por=", "conferida_em="):
+        assert proibido not in trecho, f"a migracao 46 nao pode escrever {proibido}"
+
+
+def test_regra_do_guilherme_respeita_o_limite_de_120_reais():
+    """Abaixo de R$120 e Agua, acima e Gas. R$120,00 exatos seguem sem decisao."""
+    texto = (RAIZ / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 46:", 1)[1].split("VALUES (46)", 1)[0]
+    assert '("Agua", "<")' in trecho
+    assert '("Agua / Gas", ">")' in trecho
+    assert '"<=" ' not in trecho and '">=" ' not in trecho

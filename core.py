@@ -886,6 +886,45 @@ def login_required(view):
     return wrapped
 
 
+def _loja_v45(descricao):
+    """Nome do estabelecimento dentro da descricao do Pluggy.
+
+    Mora no modulo, e nao dentro de um bloco de migracao, porque mais de uma
+    migracao usa: definida dentro do `if versao_atual < 45`, ela sumia assim
+    que o banco passava da versao 45 e a migracao seguinte quebrava.
+    """
+    texto = " ".join((descricao or "").split()).upper()
+    corte = texto.rfind(" - ")
+    if corte >= 0:
+        texto = texto[corte + 3:]
+    pos = texto.find("PARC.")
+    if pos < 0:
+        pos = texto.find("PARC ")
+    if pos >= 0:
+        resto = texto[pos:].split(" ", 1)
+        texto = texto[:pos] + (resto[1] if len(resto) > 1 else "")
+    return " ".join(texto.split()).strip()
+
+
+def _canonizar_v45(chaves):
+    """Agrupa a mesma loja escrita com e sem o sufixo de cidade/pais.
+
+    "DELTA VIDEIRA" e "DELTA VIDEIRA VIDEIRA BR" sao a mesma coisa. Usa a menor
+    chave que seja prefixo da outra, cortando SEMPRE em limite de palavra -
+    sem isso "ESTACAO" engoliria "HIPER CENTER ESTACAO", que e outra loja.
+    """
+    curtas = sorted({c for c in chaves if len(c) >= 6}, key=len)
+    mapa = {}
+    for chave in chaves:
+        melhor = chave
+        for curta in curtas:
+            if (len(curta) < len(melhor) and chave.startswith(curta)
+                    and len(chave) > len(curta) and chave[len(curta)] == " "):
+                melhor = curta
+        mapa[chave] = melhor
+    return mapa
+
+
 def preencher_classificacao_vazia_parcelas(cur, account_id=None):
     """Completa apenas campos vazios de parcelas ligadas ao mesmo agregado.
 
@@ -3360,34 +3399,8 @@ def migrate():
             # desmarca ou altera lancamento ja conferido.
             conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
 
-            def _loja_v45(descricao):
-                texto = " ".join((descricao or "").split()).upper()
-                corte = texto.rfind(" - ")
-                if corte >= 0:
-                    texto = texto[corte + 3:]
-                pos = texto.find("PARC.")
-                if pos < 0:
-                    pos = texto.find("PARC ")
-                if pos >= 0:
-                    resto = texto[pos:].split(" ", 1)
-                    texto = texto[:pos] + (resto[1] if len(resto) > 1 else "")
-                return " ".join(texto.split()).strip()
-
-            # A mesma loja chega com e sem o sufixo de cidade/pais
-            # ("DELTA VIDEIRA" e "DELTA VIDEIRA VIDEIRA BR"). Canoniza pela
-            # menor chave que seja prefixo da outra, sempre cortando em limite
-            # de palavra - assim ESTACAO nunca engole HIPER CENTER ESTACAO.
-            def _canonizar_v45(chaves):
-                curtas = sorted({c for c in chaves if len(c) >= 6}, key=len)
-                mapa = {}
-                for chave in chaves:
-                    melhor = chave
-                    for curta in curtas:
-                        if (len(curta) < len(melhor) and chave.startswith(curta)
-                                and len(chave) > len(curta) and chave[len(curta)] == " "):
-                            melhor = curta
-                    mapa[chave] = melhor
-                return mapa
+            # `_loja_v45` e `_canonizar_v45` vivem no modulo: mais de uma
+            # migracao usa, e aqui dentro elas sumiam depois da versao 45.
 
             # Padroes que a revisao de 01/09/2026 recusou um a um, mesmo com OK
             # unanime: sao erro ja gravado, e propagar multiplicaria o erro.
@@ -3517,6 +3530,234 @@ def migrate():
                  parcelas_v45["dimensoes"]),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (45);")
+            conn.commit()
+
+        if versao_atual < 46:
+            # Decisoes que o usuario tomou em 01/09/2026, uma a uma, sobre os
+            # lojistas cujos OK divergiam entre si. Aqui a fonte NAO e o
+            # consenso: e a decisao dele, que vale inclusive contra a maioria
+            # dos OK ja gravados (LISCIA tinha 20 "Saude" e ele definiu Beleza;
+            # PANIFICADORA tinha 29 "Mercado" e ele definiu Restaurantes).
+            # Por isso esta migracao corrige tambem lancamento CONFERIDO -
+            # sem nunca marcar, desmarcar ou mexer em quem assinou o OK.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+
+            # (padrao, categoria, responsavel, projeto, observacao)
+            # None = o usuario nao definiu; nao inventar. LISCIA nao leva
+            # responsavel porque a depilacao pode ser de Ronaldo, Amanda ou
+            # Andrea - definir um seria falsear o dado.
+            decisoes_v46 = (
+                ("CATIVA", "Viagem", None, None, None),
+                ("LETICIAKAYSER", "Beleza", "Andrea", "Compras Pessoais", None),
+                ("MP *REGIBARBERSHOP", "Beleza", "Ronaldo", "Compras Pessoais", None),
+                ("MP*REGIBARBERSHOP", "Beleza", "Ronaldo", "Compras Pessoais", None),
+                ("LISCIA", "Beleza", None, None, None),
+                ("MP *PRODUTOS", "Eating out", "Ronaldo", "Refeições fora", "futebol quarta"),
+                ("MP*PRODUTOS", "Eating out", "Ronaldo", "Refeições fora", "futebol quarta"),
+                ("APPLE.COM/BILL", "Digital services", None, None, None),
+                ("TOTAL SPORTES", "Clothing", None, None, None),
+                ("PANIFICADORA E CONFEIT", "Eating out", None, "Refeições fora", None),
+            )
+
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v46 = {chave_alfa(n): i for i, n in cur.fetchall()}
+            cur.execute("SELECT id,dimensao_id,nome FROM cartao.dimensao_valor;")
+            valores_v46 = {(d, chave_alfa(n)): i for i, d, n in cur.fetchall()}
+
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v46 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.categoria_manual,"
+                "t.observacao,t.conferida,t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s;",
+                (conta_unicred,),
+            )
+
+            cats_v46 = 0
+            dims_v46_gravadas = 0
+            obs_v46 = 0
+            for padrao, categoria, responsavel, projeto, observacao in decisoes_v46:
+                alvo_v46 = (
+                    " FROM cartao.transacao t WHERE t.account_id=%s "
+                    " AND t.descricao ILIKE '%%' || %s || '%%' "
+                    " AND COALESCE(t.duplicada,false)=false "
+                    " AND COALESCE(t.somente_conciliacao,false)=false "
+                    " AND t.substituido_por IS NULL "
+                )
+                # Categoria: decisao do usuario sobrescreve o que estava la.
+                cur.execute(
+                    "UPDATE cartao.transacao SET categoria=%s, categoria_manual=true, "
+                    "atualizado_em=now() WHERE transacao_id IN "
+                    "(SELECT t.transacao_id" + alvo_v46 + ") AND categoria IS DISTINCT FROM %s;",
+                    (categoria, conta_unicred, padrao, categoria),
+                )
+                cats_v46 += max(cur.rowcount, 0)
+
+                for dim_nome, valor_nome in (
+                    ("responsavel", responsavel), ("projeto", projeto)
+                ):
+                    if not valor_nome:
+                        continue
+                    dim_id = dims_v46.get(dim_nome)
+                    valor_id = valores_v46.get((dim_id, chave_alfa(valor_nome)))
+                    if not dim_id or not valor_id:
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) "
+                        "SELECT t.transacao_id::text,%s,%s" + alvo_v46 +
+                        " ON CONFLICT (transacao_id,dimensao_id) "
+                        " DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                        (dim_id, valor_id, conta_unicred, padrao),
+                    )
+                    dims_v46_gravadas += max(cur.rowcount, 0)
+
+                # Observacao e do usuario: so escreve onde esta vazia, nunca
+                # por cima de uma anotacao que ele mesmo tenha feito.
+                if observacao:
+                    cur.execute(
+                        "UPDATE cartao.transacao SET observacao=%s, atualizado_em=now() "
+                        "WHERE transacao_id IN (SELECT t.transacao_id" + alvo_v46 + ") "
+                        "AND NULLIF(observacao,'') IS NULL;",
+                        (observacao, conta_unicred, padrao),
+                    )
+                    obs_v46 += max(cur.rowcount, 0)
+
+            # GuilhermeDaSilva: a regra por valor ja estava aprovada (abaixo de
+            # R$120 e Agua, acima e Gas). Aqui so conserta o que ficou fora
+            # dela. R$120,00 exatos seguem sem decisao e nao sao tocados.
+            for chave_cat, comparador in (("Agua", "<"), ("Agua / Gas", ">")):
+                cur.execute(
+                    "UPDATE cartao.transacao SET categoria=%s, categoria_manual=true, "
+                    "atualizado_em=now() WHERE account_id=%s "
+                    "AND descricao ILIKE '%%GuilhermeDaSilva%%' "
+                    "AND COALESCE(duplicada,false)=false "
+                    "AND COALESCE(somente_conciliacao,false)=false "
+                    "AND substituido_por IS NULL "
+                    "AND ABS(COALESCE(valor_brl,valor_original)) " + comparador + " 120.00 "
+                    "AND categoria IS DISTINCT FROM %s;",
+                    (chave_cat, conta_unicred, chave_cat),
+                )
+                cats_v46 += max(cur.rowcount, 0)
+
+            for dim_nome, valor_nome in (
+                ("responsavel", "Família"), ("projeto", "Casa"), ("portfolio", "Vida Familiar")
+            ):
+                dim_id = dims_v46.get(dim_nome)
+                valor_id = valores_v46.get((dim_id, chave_alfa(valor_nome)))
+                if not dim_id or not valor_id:
+                    continue
+                cur.execute(
+                    "INSERT INTO cartao.transacao_dimensao (transacao_id,dimensao_id,valor_id) "
+                    "SELECT transacao_id::text,%s,%s FROM cartao.transacao "
+                    "WHERE account_id=%s AND descricao ILIKE '%%GuilhermeDaSilva%%' "
+                    "AND COALESCE(duplicada,false)=false "
+                    "AND COALESCE(somente_conciliacao,false)=false AND substituido_por IS NULL "
+                    "ON CONFLICT (transacao_id,dimensao_id) DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                    (dim_id, valor_id, conta_unicred),
+                )
+                dims_v46_gravadas += max(cur.rowcount, 0)
+
+            # Autorizacao explicita do usuario em 01/09/2026: completar campo
+            # VAZIO tambem em lancamento que ja tem OK, usando o historico dos
+            # iguais ou equivalentes. O OK nunca e tocado - so deixa de estar
+            # incompleto. Reaproveita o consenso apurado na migracao 45.
+            cur.execute(
+                "SELECT t.transacao_id::text, t.descricao, t.categoria, t.conferida, "
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                " '{}'::jsonb) "
+                "FROM cartao.transacao t WHERE t.account_id=%s "
+                "AND COALESCE(t.duplicada,false)=false "
+                "AND COALESCE(t.somente_conciliacao,false)=false "
+                "AND t.substituido_por IS NULL;",
+                (conta_unicred,),
+            )
+            linhas_v46 = cur.fetchall()
+            mapa_v46 = _canonizar_v45({_loja_v45(r[1]) for r in linhas_v46})
+            votos_v46 = {}
+            for _tid, descricao, categoria, conferida, dims in linhas_v46:
+                if not conferida:
+                    continue
+                alvo = votos_v46.setdefault(mapa_v46[_loja_v45(descricao)], {})
+                if categoria:
+                    alvo.setdefault("cat", {})
+                    alvo["cat"][categoria] = alvo["cat"].get(categoria, 0) + 1
+                for dim_id, valor_id in (dims or {}).items():
+                    if valor_id is None:
+                        continue
+                    chave = int(dim_id)
+                    alvo.setdefault(chave, {})
+                    alvo[chave][valor_id] = alvo[chave].get(valor_id, 0) + 1
+
+            cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+            nomes_v46 = dict(cur.fetchall())
+            dim_proj_v46 = dims_v46.get("projeto")
+            consenso_v46 = {}
+            for loja, campos in votos_v46.items():
+                escolha = {}
+                for campo, contagem in campos.items():
+                    if len(contagem) != 1:
+                        continue
+                    valor, vezes = next(iter(contagem.items()))
+                    if vezes < 2:
+                        continue
+                    if (campo == dim_proj_v46 and dim_proj_v46 is not None
+                            and str(nomes_v46.get(valor, "")).upper().startswith("VIAGEM ")):
+                        continue
+                    escolha[campo] = valor
+                if escolha:
+                    consenso_v46[loja] = escolha
+
+            cats_ok_v46 = 0
+            dims_ok_v46 = 0
+            tocados_ok_v46 = set()
+            for tid, descricao, categoria, conferida, dims in linhas_v46:
+                if not conferida:
+                    continue  # os nao conferidos ja foram na migracao 45
+                escolha = consenso_v46.get(mapa_v46[_loja_v45(descricao)])
+                if not escolha:
+                    continue
+                if not categoria and escolha.get("cat"):
+                    cur.execute(
+                        "UPDATE cartao.transacao SET categoria=%s, atualizado_em=now() "
+                        "WHERE transacao_id=%s AND NULLIF(categoria,'') IS NULL;",
+                        (escolha["cat"], tid),
+                    )
+                    if cur.rowcount:
+                        cats_ok_v46 += 1
+                        tocados_ok_v46.add(tid)
+                for campo, valor_id in escolha.items():
+                    if campo == "cat" or str(campo) in (dims or {}):
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                        "ON CONFLICT (transacao_id,dimensao_id) DO NOTHING;",
+                        (tid, campo, valor_id),
+                    )
+                    if cur.rowcount:
+                        dims_ok_v46 += 1
+                        tocados_ok_v46.add(tid)
+
+            parcelas_v46 = preencher_classificacao_vazia_parcelas(cur, account_id=conta_unicred)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Decisoes do usuario e completude dos OK Unicred',"
+                "jsonb_build_object('versao',46,'decisoes',%s,'categorias_corrigidas',%s,"
+                "'dimensoes_corrigidas',%s,'observacoes',%s,'ok_completados',%s,"
+                "'ok_categorias',%s,'ok_dimensoes',%s,'parcelas_categorias',%s,"
+                "'parcelas_dimensoes',%s,'backup','cartao.classificacao_backup_v46'));",
+                (len(decisoes_v46), cats_v46, dims_v46_gravadas, obs_v46,
+                 len(tocados_ok_v46), cats_ok_v46, dims_ok_v46,
+                 parcelas_v46["categorias"], parcelas_v46["dimensoes"]),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (46);")
             conn.commit()
 
         cur.close()
