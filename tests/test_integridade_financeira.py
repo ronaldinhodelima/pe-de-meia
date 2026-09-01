@@ -37,6 +37,17 @@ def test_sync_aceita_correcao_de_horario_do_pluggy_no_mesmo_id():
     assert "data_transacao = EXCLUDED.data_transacao" in trecho_update
 
 
+def test_migracao_corrige_historico_unicred_com_backup_e_sem_mexer_em_meia_noite():
+    texto = (Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
+    trecho = texto.split("if versao_atual < 43:", 1)[1].split("cur.close()", 1)[0]
+
+    assert "cartao.horario_backup_v43" in trecho
+    assert "data_transacao=t.data_transacao-interval '3 hours'" in trecho
+    assert "COALESCE(t.importado,false)=false" in trecho
+    assert "time '00:00:00'" in trecho
+    assert "INSERT INTO cartao.schema_version (versao) VALUES (43)" in trecho
+
+
 def test_regra_automatica_nao_sobrescreve_categoria_manual():
     texto = (Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
     trecho = texto.split("def aplicar_regras", 1)[1].split("DUPLICADA_OBS_PADRAO", 1)[0]

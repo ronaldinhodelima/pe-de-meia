@@ -3282,6 +3282,38 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (42);")
             conn.commit()
 
+        if versao_atual < 43:
+            # A Visa confirmou um caso de controle: DELTA VIDEIRA em 13/08/2026
+            # ocorreu as 15:49, enquanto o timestamp do Pluggy aparecia como
+            # 18:49. Corrige apenas o cartao Unicred Conjunta e somente registros
+            # vindos do Pluggy. Horarios 00:00 representam data sem hora confiavel
+            # e ficam intactos para nao migrar ao dia anterior.
+            conta_unicred = "b6243125-dca2-42b2-8c20-0825782c6d8d"
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.horario_backup_v43 AS "
+                "SELECT t.transacao_id,t.account_id,t.data_transacao,now() AS backup_em "
+                "FROM cartao.transacao t WHERE t.account_id=%s "
+                "AND COALESCE(t.importado,false)=false "
+                "AND (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::time <> time '00:00:00';",
+                (conta_unicred,),
+            )
+            cur.execute(
+                "UPDATE cartao.transacao t SET data_transacao=t.data_transacao-interval '3 hours', "
+                "atualizado_em=now() WHERE t.account_id=%s AND COALESCE(t.importado,false)=false "
+                "AND (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::time <> time '00:00:00';",
+                (conta_unicred,),
+            )
+            corrigidos_v43 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Correcao de horario Unicred',"
+                "jsonb_build_object('versao',43,'lancamentos_corrigidos',%s,"
+                "'preservado_meia_noite',true,'referencia','DELTA 13/08/2026 15:49'));",
+                (corrigidos_v43,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (43);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

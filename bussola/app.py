@@ -4,7 +4,7 @@ import time
 import threading
 import traceback
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 import psycopg2
@@ -338,8 +338,26 @@ def upsert_account(cur, item_id, acc):
     )
 
 
-def upsert_transaction(cur, tx):
+def _data_transacao_pluggy(valor, corrigir_horario=False):
+    """Normaliza o caso Unicred em que o Pluggy entrega hora com +3h.
+
+    Meia-noite costuma significar apenas uma data bancaria, sem horario real;
+    desloca-la mudaria indevidamente o dia civil.
+    """
+    if not valor or not corrigir_horario:
+        return valor
+    try:
+        instante = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return valor
+    if instante.hour == 0 and instante.minute == 0 and instante.second == 0:
+        return valor
+    return instante - timedelta(hours=3)
+
+
+def upsert_transaction(cur, tx, corrigir_horario=False):
     meta = tx.get("creditCardMetadata") or {}
+    data_transacao = _data_transacao_pluggy(tx.get("date"), corrigir_horario)
 
     # Se esta transacao ja estava marcada como conferida (o OK e uma assinatura
     # humana), guardamos o estado anterior para comparar depois do UPDATE. O OK
@@ -387,7 +405,7 @@ def upsert_transaction(cur, tx):
             tx.get("amount"),
             tx.get("currencyCode"),
             tx.get("amountInAccountCurrency"),
-            tx.get("date"),
+            data_transacao,
             tx.get("category"),
             tx.get("categoryId"),
             tx.get("status"),
@@ -407,7 +425,7 @@ def upsert_transaction(cur, tx):
             valor_antigo is not None and valor_novo is not None
             and abs(valor_antigo - float(valor_novo)) > 0.01
         )
-        data_mudou = tx.get("date") and antes[2] and str(antes[2]) != str(tx.get("date"))
+        data_mudou = data_transacao and antes[2] and str(antes[2]) != str(data_transacao)
         if valor_mudou or data_mudou:
             cur.execute(
                 "INSERT INTO cartao.audit_log (usuario, acao, recurso, recurso_id, sucesso, detalhes) "
@@ -419,7 +437,7 @@ def upsert_transaction(cur, tx):
                         "valor_antes": valor_antigo,
                         "valor_depois": valor_novo,
                         "data_antes": str(antes[2]) if antes[2] else None,
-                        "data_depois": tx.get("date"),
+                        "data_depois": str(data_transacao) if data_transacao else None,
                         "status_antes": antes[4],
                         "status_depois": tx.get("status"),
                     }),
@@ -587,8 +605,11 @@ def _run_sync_unlocked(origem="manual"):
                 novas_item = atualizadas_item = 0
                 for acc in contas:
                     novas_conta = atualizadas_conta = 0
+                    corrigir_horario = (
+                        acc.get("type") == "CREDIT" and "unicred" in nome_conexao.lower()
+                    )
                     for tx in fetch_all_transactions(api_key, acc["id"]):
-                        if upsert_transaction(cur, tx):
+                        if upsert_transaction(cur, tx, corrigir_horario=corrigir_horario):
                             novas_conta += 1
                         else:
                             atualizadas_conta += 1

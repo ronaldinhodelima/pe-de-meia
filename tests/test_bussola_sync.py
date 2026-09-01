@@ -122,6 +122,15 @@ def test_pluggy_importa_ids_distintos_sem_marcar_duplicidade(monkeypatch):
     assert "duplicada" not in inserts[0][0].lower()
 
 
+def test_unicred_corrige_tres_horas_mas_preserva_meia_noite(monkeypatch):
+    worker = carregar_worker(monkeypatch)
+
+    corrigida = worker._data_transacao_pluggy("2026-08-13T18:49:00+00:00", True)
+    assert corrigida.isoformat() == "2026-08-13T15:49:00+00:00"
+    assert worker._data_transacao_pluggy("2026-08-13T00:00:00+00:00", True) == "2026-08-13T00:00:00+00:00"
+    assert worker._data_transacao_pluggy("2026-08-13T18:49:00+00:00", False) == "2026-08-13T18:49:00+00:00"
+
+
 def test_falha_de_uma_conexao_nao_impede_as_demais_e_gera_aviso(monkeypatch):
     worker = carregar_worker(monkeypatch)
 

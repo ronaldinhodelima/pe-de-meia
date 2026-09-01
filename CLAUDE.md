@@ -1706,5 +1706,11 @@ criar regras automáticas a partir desta seção sem nova confirmação do usuá
   mais o fundo da linha de amarelo. A linha permanece transparente para reduzir ruído visual.
 - Links da fatura em andamento devem gerar `andamento=1&account_id=<conta>` como dois parâmetros reais. Nunca montar
   `&amp;` dentro de uma expressão Jinja autoescapada, pois isso produz `&amp;` literal no endereço e perde a conta.
+- Horários do cartão Unicred Conjunta vindos do Pluggy possuem diferença comprovada de +3 horas. Referência validada
+  na Visa: DELTA VIDEIRA, R$ 220,01, 13/08/2026 às 15:49, que o sistema mostrava como 18:49. A migração 43 guarda o
+  estado anterior em `cartao.horario_backup_v43` e subtrai três horas apenas de registros Pluggy dessa conta.
+- O worker aplica a mesma normalização a novas sincronizações do cartão de crédito Unicred, impedindo que o horário
+  errado retorne. Registros exatamente às 00:00 são preservados porque normalmente representam somente uma data,
+  não um horário de compra. A correção não altera categoria, dimensões, Observação, OK, valores ou vínculos.
 - Refinamento visual aprovado nos seletores pesquisáveis: não mostrar o lembrete `Enter` nas opções. Reduzir as
   margens laterais do campo e do menu aberto, preservando as setas, Enter e Tab como comandos de teclado.
