@@ -43,6 +43,7 @@ from core import (
     aplicar_consenso_classificacao,
     _normalizar_desc,
     _tokens_significativos,
+    exige_dimensoes,
     _canonizar_v45,
     _consenso_por_categoria,
     _consenso_por_lojista,
@@ -2714,7 +2715,11 @@ def api_consenso_preview():
     # falta: e essa lista, e nao o total, que diz onde vale decidir uma regra.
     sobra = {}
     for tid, descricao, categoria, _conf, ds in linhas:
-        faltando = [c for c in dims.values() if _dimensao_vazia(ds, c)]
+        # Mesma regra das telas: natureza neutra nao exige dimensao (secao 4.1).
+        # Sem isto este levantamento contava pagamento de fatura como pendencia
+        # e discordava de /lancamentos - o erro da secao 6.5 n.10.
+        exige = exige_dimensoes(naturezas.get(categoria)) if categoria else True
+        faltando = [c for c in dims.values() if exige and _dimensao_vazia(ds, c)]
         if not categoria or faltando:
             incompletos += 1
             rotulos = ([] if categoria else ["categoria"]) + sorted(
