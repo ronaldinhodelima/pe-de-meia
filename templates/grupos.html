@@ -23,7 +23,7 @@
   <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input type="hidden" name="acao" value="criar_grupo">
     <input name="nome" placeholder="Nome do centro de custo"
-           style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:260px">
+           style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:260px">
     <button type="submit" class="btn-primario">
       Criar
     </button>
@@ -50,7 +50,7 @@
             <input type="hidden" name="acao" value="editar_grupo">
             <input type="hidden" name="grupo_id" value="{{ g.id }}">
             <input name="nome" value="{{ g.nome }}"
-                   style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);font-weight:var(--peso-destaque);font-size:var(--fonte-lg);width:260px">
+                   style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);font-weight:var(--peso-destaque);font-size:var(--fonte-lg);width:260px">
             <button type="submit" class="ver-btn">Salvar</button>
           </form>
         </td>
@@ -71,7 +71,7 @@
             <input type="hidden" name="acao" value="editar_subgrupo">
             <input type="hidden" name="subgrupo_id" value="{{ s.id }}">
             <input name="nome" value="{{ s.nome }}"
-                   style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:200px">
+                   style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-xs);width:200px">
             <button type="submit" class="ver-btn">Salvar</button>
           </form>
         </td>
@@ -92,7 +92,7 @@
             <input type="hidden" name="acao" value="mapear_categoria">
             <input type="hidden" name="subgrupo_id" value="{{ s.id }}">
             <select name="categoria" data-pdm-combobox aria-label="Categoria" onchange="this.form.submit()"
-                    style="padding:4px 6px;border:1px solid #ccc;border-radius:var(--radius-xs);font-size:var(--fonte-sm);color:var(--ink-faint)">
+                    style="padding:4px 6px;border:1px solid var(--line);border-radius:var(--radius-xs);font-size:var(--fonte-sm);color:var(--ink-faint)">
               <option value="">+ vincular categoria…</option>
               {# Uma categoria so pode estar em um subgrupo (a chave primaria da
                  tabela e a categoria). Escolher uma que ja esta vinculada MOVE ela
@@ -127,7 +127,7 @@
             <input type="hidden" name="acao" value="criar_subgrupo">
             <input type="hidden" name="grupo_id" value="{{ g.id }}">
             <input name="nome" placeholder="Novo subgrupo"
-                   style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:200px">
+                   style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-xs);width:200px">
             <button type="submit" class="ver-btn">+ Adicionar subgrupo</button>
           </form>
         </td>
@@ -152,7 +152,7 @@
         <input type="hidden" name="acao" value="mapear_categoria">
         <input type="hidden" name="categoria" value="{{ c.chave }}">
         <select name="subgrupo_id" data-pdm-combobox aria-label="Subgrupo" onchange="this.form.submit()"
-                style="padding:5px 7px;border:1px solid #ccc;border-radius:var(--radius-xs);font-size:var(--fonte-sm)">
+                style="padding:5px 7px;border:1px solid var(--line);border-radius:var(--radius-xs);font-size:var(--fonte-sm)">
           <option value="">vincular a…</option>
           {% for g in grupos %}
             {% if subgrupos_por_grupo.get(g.id) %}

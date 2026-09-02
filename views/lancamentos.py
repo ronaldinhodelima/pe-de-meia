@@ -8,6 +8,7 @@ import psycopg2.extras
 from flask import Blueprint, request, session, jsonify, render_template
 
 from core import (
+    valor_pt,
     EXIGE_DIMENSOES_SQL,
     exige_dimensoes,
     CATEGORIAS_EXTRA,
@@ -467,12 +468,12 @@ def index():
         # cartao de credito: exibicao tradicional (sem sinal). conta corrente/manual: entrada/saida
         if eh_nao_credito:
             sinal = "-" if r["tipo"] == "DEBIT" else "+"
-            cor_valor = "color:#c23c34" if r["tipo"] == "DEBIT" else "color:#1f8a53"
-            valor_fmt = f'{sinal} R$ {abs(r["valor"]):,.2f}'
+            cor_valor = "color:var(--bad)" if r["tipo"] == "DEBIT" else "color:var(--good)"
+            valor_fmt = f'{sinal} R$ {valor_pt(abs(r["valor"]))}'
             valor_sort = -abs(r["valor"]) if sinal == "-" else abs(r["valor"])
         else:
             cor_valor = ""
-            valor_fmt = f'R$ {r["valor"]:,.2f}'
+            valor_fmt = f'R$ {valor_pt(r["valor"])}'
             valor_sort = r["valor"]
 
         dims_sel = {d["id"]: mapa_dim_transacao.get((str(rid), d["id"])) for d in dimensoes}
@@ -482,11 +483,11 @@ def index():
             valor_parte = parte["valor_brl"]
             if eh_nao_credito:
                 sinal_parte = "-" if valor_parte < 0 else "+"
-                cor_parte = "color:#c23c34" if valor_parte < 0 else "color:#1f8a53"
-                valor_parte_fmt = f'{sinal_parte} R$ {abs(valor_parte):,.2f}'
+                cor_parte = "color:var(--bad)" if valor_parte < 0 else "color:var(--good)"
+                valor_parte_fmt = f'{sinal_parte} R$ {valor_pt(abs(valor_parte))}'
             else:
                 cor_parte = ""
-                valor_parte_fmt = f'R$ {abs(valor_parte):,.2f}'
+                valor_parte_fmt = f'R$ {valor_pt(abs(valor_parte))}'
             rateios_ui.append({
                 "id": parte["id"],
                 "valor": float(abs(valor_parte)),
@@ -593,7 +594,7 @@ def index():
             "descricao": desc,
             "categoria": cat_pt_puro(r["categoria"]),
             "valor": valor_fmt,
-            "valor_original": f'{r["valor_original"]:,.2f} {r["moeda_original"] or ""}' if r["valor_original"] is not None else "-",
+            "valor_original": f'{valor_pt(r["valor_original"])} {r["moeda_original"] or ""}' if r["valor_original"] is not None else "-",
             "status": r["status"] or "-",
             "tipo": r["tipo"] or "-",
             "origem": origem_full,
@@ -1515,9 +1516,9 @@ def detalhes_transacao(transacao_id):
         "descricao": r["descricao"] or "-",
         "categoria": r["categoria"] or "",
         "categoria_nome": cat_pt_puro(r["categoria"]),
-        "valor": f'R$ {float(r["valor"] or 0):,.2f}',
+        "valor": f'R$ {valor_pt(float(r["valor"] or 0))}',
         "valor_original": (
-            f'{float(r["valor_original"]):,.2f} {r["moeda_original"] or ""}'.strip()
+            f'{valor_pt(float(r["valor_original"]))} {r["moeda_original"] or ""}'.strip()
             if r["valor_original"] is not None else "-"
         ),
         "status": r["status"] or "-",

@@ -7,6 +7,7 @@ import psycopg2.extras
 from flask import Blueprint, request, render_template, jsonify
 
 from core import (
+    valor_pt,
     CATEGORIAS_EXTRA,
     CATEGORIAS_NEUTRAS_PADRAO,
     CATEGORIAS_OCULTAS,
@@ -97,11 +98,6 @@ def _categorias_para_regras():
         - CATEGORIAS_OCULTAS,
         key=lambda c: chave_alfa(cat_pt_puro(c)),
     )
-
-
-def _valor_pt(valor):
-    texto = f"{valor:,.2f}"
-    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 @bp.route("/dimensoes", methods=["GET", "POST"])
@@ -562,7 +558,7 @@ def regras_view():
             "valor_operador": r["valor_operador"] or "",
             "valor_limite": float(r["valor_limite"]) if r["valor_limite"] is not None else None,
             "valor_condicao": (
-                f'{OPERADORES_VALOR[r["valor_operador"]][0]} R$ {_valor_pt(r["valor_limite"])}'
+                f'{OPERADORES_VALOR[r["valor_operador"]][0]} R$ {valor_pt(r["valor_limite"])}'
                 if r["valor_operador"] in OPERADORES_VALOR and r["valor_limite"] is not None else "qualquer valor"
             ),
             "dims_txt": ", ".join(dims_txt) or "-",

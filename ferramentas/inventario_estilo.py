@@ -19,7 +19,7 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 
 # O que se espera que venha de token, e o padrao que denuncia o valor cru.
 PROPRIEDADES = {
-    "cor": re.compile(r"(?<![\w-])(?:color|background|background-color|border-color|fill|stroke)\s*:\s*([^;{}]+)"),
+    "cor": re.compile(r"(?<![\w-])(?:color|background|background-color|border|border-color|outline|fill|stroke)\s*:\s*([^;{}]+)"),
     "raio": re.compile(r"(?<![\w-])border-radius\s*:\s*([^;{}]+)"),
     "sombra": re.compile(r"(?<![\w-])box-shadow\s*:\s*([^;{}]+)"),
     "tamanho_fonte": re.compile(r"(?<![\w-])font-size\s*:\s*([^;{}]+)"),
@@ -53,6 +53,10 @@ def fontes():
     for caminho in sorted((RAIZ / "templates").glob("*.html")):
         yield caminho
     yield RAIZ / "core.py"
+    # views/ tambem montam style= inline: os dois #c23c34 do valor do
+    # lancamento moravam ali, invisiveis para a varredura anterior.
+    for caminho in sorted((RAIZ / "views").glob("*.py")):
+        yield caminho
 
 
 def analisar():

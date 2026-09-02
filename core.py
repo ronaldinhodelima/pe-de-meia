@@ -4924,8 +4924,18 @@ def topbar_html(titulo, ativo=None):
     """
 
 
+def valor_pt(valor):
+    """Numero no formato brasileiro: 1.234,56.
+
+    O `,.2f` do Python e ingles (1,234.56) e a interface e em portugues
+    (secao 1.5). Existia so em views/cadastros.py, entao o resto do sistema
+    imprimia "R$ 200.00" - visivel no modal de detalhes do lancamento.
+    """
+    return f"{valor:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
 def _fmt_moeda(v):
-    return f"R$ {v:,.2f}"
+    return f"R$ {valor_pt(v)}"
 
 
 def _barra_html(realizado, teto):

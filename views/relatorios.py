@@ -11,6 +11,7 @@ from flask import Blueprint, Response, request, jsonify, render_template, sessio
 
 from fatura_unicred import extrair_fatura, FaturaInvalida
 from core import (
+    valor_pt,
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT_DB,
@@ -1639,7 +1640,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             if dias <= 5:
                 item["motivo"] = (
                     f"Registrado {dias} dia(s) do lançamento da compra inteira de "
-                    f"{casado['base']} ({casado['parcela_total']}x de R$ {casado['valor']:,.2f}) — "
+                    f"{casado['base']} ({casado['parcela_total']}x de R$ {valor_pt(casado['valor'])}) — "
                     f"é a mesma compra gravada duas vezes pelo Pluggy, na autorização e "
                     f"depois já consolidada como parcelamento."
                 )
@@ -1649,7 +1650,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             else:
                 item["motivo"] = (
                     f"Repete uma parcela de {casado['base']} ({casado['parcela_total']}x de "
-                    f"R$ {casado['valor']:,.2f}), cobrada {dias} dias depois da compra. A compra "
+                    f"R$ {valor_pt(casado['valor'])}), cobrada {dias} dias depois da compra. A compra "
                     f"inteira já está lançada e fora do resultado, e a fatura já cobre "
                     f"{casado['linhas']} parcela(s) — essa cobrança a mais não existe na fatura."
                 )
@@ -1723,7 +1724,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         if alvo:
             item["motivo"] = (
                 f"Mesma compra de {alvo['descricao_base']} ({alvo['parcela_total']}x de "
-                f"R$ {alvo['valor_parcela']:,.2f}) gravada duas vezes pelo Pluggy, com "
+                f"R$ {valor_pt(alvo['valor_parcela'])}) gravada duas vezes pelo Pluggy, com "
                 f"{abs((alvo['data'] - r['data_local']).days)} dia(s) de diferença. A linha da "
                 f"fatura já está vinculada à outra gravação."
             )

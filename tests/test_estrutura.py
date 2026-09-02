@@ -1151,6 +1151,22 @@ def test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema():
                 desenha = True
             if desenha:
                 culpados.append(nome + ": " + " ".join(regra.split())[:90])
+
+    # A varredura acima so enxerga regra CSS (com chaves). O atributo style= de
+    # um <input type=checkbox> nao tem chaves e passava batido: era assim que
+    # `style="width:15px;height:15px;accent-color:var(--accent)"` desenhava a
+    # caixa de "Marcar como duplicada" por fora do bloco unico, na mesma sessao
+    # em que a regra foi declarada obrigatoria.
+    for pasta, padrao in (("templates", "*.html"), ("static", "*.js")):
+        for caminho in sorted((RAIZ / pasta).glob(padrao)):
+            texto = caminho.read_text(encoding="utf-8")
+            for tag in re.findall(r"<input[^>]*>", texto):
+                if "checkbox" not in tag:
+                    continue
+                estilo = re.search(r'style\s*=\s*"([^"]*)"', tag)
+                if estilo and re.search(propriedades, estilo.group(1)):
+                    culpados.append(f"{pasta}/{caminho.name}: {estilo.group(1)[:70]}")
+
     assert not culpados, (
         "checkbox so pode ser desenhado no bloco unico do app.css: " + str(culpados)
     )
@@ -1222,3 +1238,22 @@ def test_descricao_so_muda_em_lancamento_manual():
     assert 'escopo = " AND account_id = %s" if "descricao" in data else ""' in bloco
     assert "extra = [CONTA_MANUAL_ID]" in bloco
     assert "{escopo}" in bloco
+
+
+def test_valor_e_impresso_no_formato_brasileiro():
+    """A interface e em portugues (secao 1.5) e o `,.2f` do Python e ingles.
+
+    O modal de detalhes mostrava "- R$ 200.00" e "-200.00 BRL": o helper certo
+    existia, mas morava dentro de views/cadastros.py e nenhuma outra tela o
+    enxergava. Agora e do core, e nenhuma view volta a formatar na mao.
+    """
+    from core import valor_pt
+
+    assert valor_pt(200) == "200,00"
+    assert valor_pt(-200) == "-200,00"
+    assert valor_pt(1234.56) == "1.234,56"
+    assert valor_pt(1234567.8) == "1.234.567,80"
+
+    for caminho in sorted((RAIZ / "views").glob("*.py")):
+        texto = caminho.read_text(encoding="utf-8")
+        assert ",.2f" not in texto, f"{caminho.name} formata valor na mao"

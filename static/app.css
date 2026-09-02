@@ -13,6 +13,7 @@
     --accent: #0e7490;
     --accent-strong: #0b5b73;
     --accent-soft: #e0f4f6;
+    --accent-line: #b9dfe4;
     --selecao: #52a7ba;
     --selecao-forte: #3f93a6;
     --selecao-suave: rgba(82, 167, 186, .18);
@@ -22,8 +23,10 @@
     --field-soft: var(--bg);
     --good: #059669;
     --good-soft: #e4f5ee;
+    --good-line: #cfe9d9;
     --bad: #dc2626;
     --bad-soft: #fbe7e6;
+    --bad-line: #efb3ae;
     --warn: #b5730a;
     --warn-soft: #fbf0dd;
     --neutro: #6d5fd6;
@@ -65,6 +68,7 @@
       --accent: #2dd4bf;
       --accent-strong: #5eead4;
       --accent-soft: rgba(45,212,191,.16);
+      --accent-line: rgba(45,212,191,.40);
       --selecao: #4bbccd;
       --selecao-forte: #6fd0de;
       --selecao-suave: rgba(75, 188, 205, .20);
@@ -74,8 +78,10 @@
       --field-soft: var(--bg);
       --good: #34d399;
       --good-soft: rgba(52,211,153,.14);
+      --good-line: rgba(52,211,153,.38);
       --bad: #f87171;
       --bad-soft: rgba(248,113,113,.14);
+      --bad-line: rgba(248,113,113,.38);
       --warn: #e3b341;
       --warn-soft: rgba(227,179,65,.14);
       --neutro: #a599f2;
@@ -99,6 +105,7 @@
     --accent: #2dd4bf;
     --accent-strong: #5eead4;
     --accent-soft: rgba(45,212,191,.16);
+      --accent-line: rgba(45,212,191,.40);
     --selecao: #4bbccd;
     --selecao-forte: #6fd0de;
     --selecao-suave: rgba(75, 188, 205, .20);
@@ -108,8 +115,10 @@
     --field-soft: var(--bg);
     --good: #34d399;
     --good-soft: rgba(52,211,153,.14);
+      --good-line: rgba(52,211,153,.38);
     --bad: #f87171;
     --bad-soft: rgba(248,113,113,.14);
+    --bad-line: rgba(248,113,113,.38);
     --warn: #e3b341;
     --warn-soft: rgba(227,179,65,.14);
     --neutro: #a599f2;
@@ -322,7 +331,7 @@
   .chips-sel { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .chip-tag {
     display: inline-flex; align-items: center; gap: 5px; background: var(--accent-soft); color: var(--accent);
-    border: 1px solid #b9dfe4; border-radius: var(--radius-lg); padding: 3px 8px; font-size: var(--fonte-xs); font-weight: var(--peso-medio); max-width: 190px;
+    border: 1px solid var(--accent-line); border-radius: var(--radius-lg); padding: 3px 8px; font-size: var(--fonte-xs); font-weight: var(--peso-medio); max-width: 190px;
   }
   .chip-tag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip-tag b { cursor: pointer; font-weight: var(--peso-destaque); opacity: .65; }
@@ -330,6 +339,11 @@
 
   .btn-perigo { background: var(--bad); color: #fff; border: none; padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--fonte-md); font-weight: var(--peso-medio); }
   .btn-perigo:hover { opacity: .88; }
+  /* O gatilho de uma acao destrutiva nao e a acao: ele so abre a
+     confirmacao. Vermelho solido ali grita antes de haver erro nenhum
+     (secao 7.6) - o solido fica para o botao Confirmar. */
+  .btn-perigo.leve { background: transparent; color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad-line); }
+  .btn-perigo.leve:hover:not(:disabled) { background: var(--bad-soft); box-shadow: inset 0 0 0 1px var(--bad); opacity: 1; }
 
   /* ---------- selo do banco ---------- */
   .selo {
@@ -355,8 +369,8 @@
   .tag-ativo { background: var(--good-soft); color: var(--good); }
   .tag-inativo { background: var(--bad-soft); color: var(--bad); }
   .aviso-ok, .aviso-erro { padding: 11px 15px; border-radius: var(--radius); font-size: var(--fonte-md); margin-bottom: 16px; }
-  .aviso-ok { background: var(--good-soft); color: var(--good); border: 1px solid #cfe9d9; }
-  .aviso-erro { background: var(--bad-soft); color: var(--bad); border: 1px solid #f2d3d0; }
+  .aviso-ok { background: var(--good-soft); color: var(--good); border: 1px solid var(--good-line); }
+  .aviso-erro { background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad-line); }
   button:disabled { opacity: .45; cursor: not-allowed; }
 
   /* ---------- tooltip proprio (o nativo do navegador demora ~1s) ---------- */
@@ -445,7 +459,7 @@
   .modal-conferencia small { color: var(--ink-soft); white-space: nowrap; }
   .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: 20px; line-height: 1; transition: color .15s; }
   .modal .close:hover { color: var(--ink); }
-  .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid #efb3ae; border-radius: var(--radius-sm); background: var(--bad-soft); }
+  .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid var(--bad-line); border-radius: var(--radius-sm); background: var(--bad-soft); }
   .modal-confirmacao[hidden] { display: none; }
   .modal-confirmacao strong { display: block; color: var(--bad); font-size: var(--fonte-md); }
   .modal-confirmacao-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 11px; }

@@ -111,7 +111,7 @@ class TestConciliacaoFatura:
         assert "ciclo 10/07/2026" not in html
         assert "Despesas no DRE" in html
         assert "Fora do DRE" in html
-        assert "R$ 80.00" in html and "R$ 20.00" in html
+        assert "R$ 80,00" in html and "R$ 20,00" in html
 
     def test_setas_de_mes_guardam_a_posicao_da_pagina(self):
         template = (

@@ -70,10 +70,10 @@ class TestJsonScript:
 
 class TestFmtMoeda:
     def test_formata_com_duas_casas_e_separador_de_milhar(self):
-        assert core._fmt_moeda(1234.5) == "R$ 1,234.50"
+        assert core._fmt_moeda(1234.5) == "R$ 1.234,50"
 
     def test_valor_negativo(self):
-        assert core._fmt_moeda(-50) == "R$ -50.00"
+        assert core._fmt_moeda(-50) == "R$ -50,00"
 
 
 class TestBarraHtml:

@@ -302,8 +302,7 @@
     </div>
     <div class="row">
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--ink)">
-        <input type="checkbox" id="modalDup" onchange="toggleDuplicadaModal()"
-               style="width:15px;height:15px;accent-color:var(--accent)">
+        <input type="checkbox" id="modalDup" onchange="toggleDuplicadaModal()">
         Marcar como duplicada
       </label>
     </div>
@@ -316,7 +315,7 @@
       </div>
     </div>
     <div id="modalAcoes" style="margin-top:14px;display:none">
-      <button type="button" class="btn-perigo" onclick="excluirManual()" {{ 'disabled' if not pode_manual }}>Excluir lançamento</button>
+      <button type="button" class="btn-perigo leve" onclick="excluirManual()" {{ 'disabled' if not pode_manual }}>Excluir lançamento</button>
       <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:7px">Só lançamentos manuais ou importados de arquivo podem ser excluídos.</div>
     </div>
   </div>

@@ -139,7 +139,10 @@ silêncio: `table.compacta input[type=checkbox]` é mais específico que uma cla
 14px dentro da tabela e 16px fora, com o CSS parecendo certo nas duas leituras. Precisa de outra
 caixa em algum lugar? Mude no bloco único, para todas.
 `tests/test_estrutura.py::test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema` varre
-templates, CSS e `core.py` e falha se aparecer uma segunda regra.
+templates, CSS e `core.py` e falha se aparecer uma segunda regra. **E varre também o
+atributo `style=` de cada `<input type=checkbox>`:** ele não tem chaves, então escapava da varredura
+de regras CSS — foi por esse furo que a caixa "Marcar como duplicada" do modal de detalhes seguiu
+com desenho próprio (`accent-color`) no mesmo dia em que a regra foi declarada obrigatória.
 
 **O JS da visão detalhada usa parâmetro de versão no `src`.** Sempre renovar quando o
 comportamento mudar, evitando HTML novo com script antigo no cache.
@@ -825,6 +828,17 @@ desfez uma decisão geral sem nenhum erro aparente: `table.compacta input[type=c
 14px dentro da tabela, 16px fora), `table.ajustavel th[data-col]` (cabeçalho de volta ao negrito)
 e `.perm-item input`/`label.chip-opt input` (checkbox redesenhado). **Sempre medir o valor
 computado no navegador** — nenhum dos três aparecia lendo o código.
+
+**Contorno semântico também é token.** `--accent-line`, `--good-line` e `--bad-line` existem
+porque três bordas estavam em cor fixa (`#b9dfe4`, `#cfe9d9`, `#efb3ae`) sobre fundo que já era
+token — no escuro o fundo mudava e o contorno não. Junto com elas foram 28 campos de cadastro com
+`border:1px solid #ccc`, em 6 telas.
+
+**Valor sempre por `valor_pt()` do `core`.** O `,.2f` do Python é inglês (`1,234.56`) e a interface
+é em português. O helper existia, mas dentro de `views/cadastros.py`, onde nenhuma outra tela o
+enxergava: o modal de detalhes mostrava `- R$ 200.00` e a conciliação, `R$ 80.00`. Dois testes
+chegaram a **fixar o formato errado** como esperado — teste que copia o comportamento em vez de
+cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
 fora do sistema. Eram 522 em 01/09/2026; hoje são 53, e o que restou é intenção (círculos `50%`,
