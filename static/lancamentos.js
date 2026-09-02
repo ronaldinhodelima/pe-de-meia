@@ -1063,6 +1063,13 @@ atualizarBotaoDetalhado();
       atualizarBarra();
     });
   }
+  const btnTudo = document.getElementById('loteTodosFiltro');
+  if (btnTudo) {
+    btnTudo.addEventListener('click', function () {
+      linhasSelecionaveis().forEach(cb => { cb.checked = true; });
+      atualizarBarra();
+    });
+  }
   btnLimpar.addEventListener('click', function () {
     linhasSelecionaveis().forEach(cb => { cb.checked = false; });
     atualizarBarra();
@@ -1088,57 +1095,35 @@ atualizarBotaoDetalhado();
   }
 
   btnSalvar.addEventListener('click', async function () {
-    const alvos = selecionados();
-    if (!alvos.length) return;
+    const linhas = selecionados().map(cb => cb.closest('tr'));
+    if (!linhas.length) return;
     const base = montarPayload();
-    const substituiObs = document.getElementById('loteObsSubstitui').checked;
     if (!Object.keys(base).length) {
       alert('Escolha ao menos um campo para aplicar.');
       return;
     }
-    if (!confirm('Aplicar aos ' + alvos.length + ' lançamentos selecionados?')) return;
+    if (!confirm('Aplicar aos ' + linhas.length + ' lançamentos selecionados?')) return;
 
     btnSalvar.disabled = true;
     saida.hidden = false;
-    const falhas = [];
-    let aplicados = 0;
-    for (let i = 0; i < alvos.length; i++) {
-      const tr = alvos[i].closest('tr');
-      const id = tr.dataset.id;
-      saida.textContent = 'Aplicando ' + (i + 1) + ' de ' + alvos.length + '...';
-      const payload = Object.assign({}, base);
-      if ('_observacao' in payload) {
-        delete payload._observacao;
-        const campo = tr.querySelector('.obs-input');
-        const vazia = !campo || !campo.value.trim();
-        if (substituiObs || vazia) payload.observacao = base._observacao;
-      }
-      if (!Object.keys(payload).length) continue;
-      try {
-        const r = await fetch('/api/transacao/' + encodeURIComponent(id), {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload)
-        });
-        const d = await r.json();
-        if (!d.ok) { falhas.push(descricaoCurta(tr) + ': ' + (d.erro || 'falha')); continue; }
-        aplicarNaLinha(tr, payload, d);
-        if (d.bloqueada) {
-          falhas.push(descricaoCurta(tr) + ': OK recusado — ' +
-            (d.rateio_invalido ? 'rateio incompleto'
-             : d.pendente_banco ? 'ainda pendente no banco'
-             : d.sem_pdf_conciliado ? 'sem vínculo com a fatura em PDF'
-             : 'faltam campos obrigatórios'));
-        }
-        aplicados++;
-      } catch (e) {
-        falhas.push(descricaoCurta(tr) + ': erro de rede');
-      }
-    }
+    const alvos = linhas.map(function (tr) {
+      const campo = tr.querySelector('.obs-input');
+      return {
+        id: tr.dataset.id,
+        descricao: descricaoCurta(tr),
+        observacaoAtual: campo ? campo.value : '',
+        aplicar: function (payload, d) { aplicarNaLinha(tr, payload, d); },
+      };
+    });
+    const r = await window.pdmLote.aplicar(alvos, base, {
+      substituirObservacao: document.getElementById('loteObsSubstitui').checked,
+      progresso: function (feitos, total) {
+        saida.textContent = 'Aplicando ' + feitos + ' de ' + total + '...';
+      },
+    });
     btnSalvar.disabled = false;
-    let texto = aplicados + ' de ' + alvos.length + ' atualizados.';
-    if (falhas.length) texto += ' Não foi possível em ' + falhas.length + ': ' + falhas.join(' · ');
-    saida.textContent = texto;
-    saida.className = 'barra-lote-resultado' + (falhas.length ? ' com-falha' : '');
+    saida.textContent = r.texto;
+    saida.className = 'barra-lote-resultado' + (r.falhas.length ? ' com-falha' : '');
   });
 
   function descricaoCurta(tr) {

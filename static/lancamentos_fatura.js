@@ -450,4 +450,105 @@
     });
   });
 
+
+  // ---- Edicao em lote -----------------------------------------------------
+  // Mesma barra da Resumida e o MESMO nucleo (static/lote.js), que por sua vez
+  // usa o MESMO POST /api/transacao/<id> de uma edicao normal. Nenhuma regra
+  // e reimplementada aqui.
+  (function () {
+    const barra = document.getElementById('barraLote');
+    if (!barra || !window.pdmLote) return;
+    const contagem = document.getElementById('loteContagem');
+    const saida = document.getElementById('loteResultado');
+    const btnSalvar = document.getElementById('loteSalvar');
+
+    function selecionaveis() {
+      // Respeita a pesquisa local: a busca esconde o grupo inteiro, e o lote
+      // nunca pode alcancar linha que o usuario nao esta vendo.
+      return [...document.querySelectorAll('tr[data-linha] .sel-fatura')]
+        .filter(cb => {
+          const tr = cb.closest('tr');
+          return tr && !tr.hidden && tr.style.display !== 'none';
+        });
+    }
+    function marcados() { return selecionaveis().filter(cb => cb.checked); }
+    function atualizar() {
+      const n = marcados().length;
+      barra.hidden = n === 0;
+      contagem.textContent = n === 1 ? '1 lançamento selecionado'
+                                     : n + ' lançamentos selecionados';
+    }
+
+    document.addEventListener('change', evento => {
+      if (evento.target.classList && evento.target.classList.contains('sel-fatura')) atualizar();
+    });
+    const btnTudo = document.getElementById('loteTodosFiltro');
+    if (btnTudo) btnTudo.addEventListener('click', () => {
+      selecionaveis().forEach(cb => { cb.checked = true; });
+      atualizar();
+    });
+    document.getElementById('loteLimpar').addEventListener('click', () => {
+      selecionaveis().forEach(cb => { cb.checked = false; });
+      atualizar();
+      saida.hidden = true;
+    });
+
+    function montarPayload() {
+      const payload = {};
+      const cat = document.getElementById('loteCategoria');
+      if (cat && cat.value) payload.categoria = cat.value;
+      const dims = {};
+      barra.querySelectorAll('.lote-dim').forEach(sel => {
+        if (sel.value) dims[sel.dataset.dim] = sel.value;
+      });
+      if (Object.keys(dims).length) payload.dimensoes = dims;
+      const obs = document.getElementById('loteObservacao');
+      if (obs && obs.value.trim()) payload._observacao = obs.value.trim();
+      const ok = document.getElementById('loteOk');
+      // Marca o OK; NUNCA desmarca - retirar assinatura e um a um (secao 1.2).
+      if (ok && ok.checked) payload.conferida = true;
+      return payload;
+    }
+
+    btnSalvar.addEventListener('click', async () => {
+      const alvos = marcados().map(cb => {
+        const tr = cb.closest('tr');
+        const editor = document.querySelector('[data-editor="' + CSS.escape(cb.dataset.selLancamento) + '"]');
+        const campoObs = editor && editor.querySelector('[data-campo="observacao"]');
+        const desc = tr.querySelector('.desc');
+        return {
+          id: cb.dataset.selLancamento,
+          descricao: (desc ? desc.textContent : '').trim().slice(0, 40),
+          observacaoAtual: campoObs ? campoObs.value : '',
+        };
+      });
+      if (!alvos.length) return;
+      const base = montarPayload();
+      if (!Object.keys(base).length) {
+        alert('Escolha ao menos um campo para aplicar.');
+        return;
+      }
+      if (!confirm('Aplicar aos ' + alvos.length + ' lançamentos selecionados?')) return;
+
+      btnSalvar.disabled = true;
+      saida.hidden = false;
+      const r = await window.pdmLote.aplicar(alvos, base, {
+        substituirObservacao: document.getElementById('loteObsSubstitui').checked,
+        progresso: (feitos, total) => {
+          saida.textContent = 'Aplicando ' + feitos + ' de ' + total + '...';
+        },
+      });
+      // A tela nao infere o resultado: recarrega o estado real do servidor,
+      // que e quem decide "Faltam:", natureza e OK de cada linha.
+      await atualizarResumoPagina(false);
+      btnSalvar.disabled = false;
+      saida.textContent = r.texto;
+      saida.className = 'barra-lote-resultado' + (r.falhas.length ? ' com-falha' : '');
+      atualizar();
+    });
+
+    atualizar();
+    const busca = document.querySelector('.busca-fatura input');
+    if (busca) busca.addEventListener('input', () => setTimeout(atualizar, 0));
+  })();
 })();

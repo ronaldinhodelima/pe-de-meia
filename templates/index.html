@@ -116,6 +116,7 @@
   <div class="barra-lote-topo">
     <strong id="loteContagem">0 selecionados</strong>
     <span class="barra-lote-ajuda">Campo deixado em <em>(não alterar)</em> não é tocado.</span>
+    <button type="button" class="ver-btn" id="loteTodosFiltro" data-tip="Marca todas as linhas que o filtro e a pesquisa atuais estão mostrando">Selecionar tudo do filtro</button>
     <button type="button" class="ver-btn" id="loteLimpar">Limpar seleção</button>
   </div>
   <div class="barra-lote-campos">
@@ -298,5 +299,6 @@
 {# lancamentos.js le estes dois blocos em vez de receber o dado interpolado #}
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
+<script src="/static/lote.js?v=20260901-1"></script>
 <script src="/static/lancamentos.js?v=20260901-lote"></script>
 {% endblock %}

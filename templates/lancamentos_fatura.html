@@ -119,10 +119,50 @@
   <span id="buscaFaturaContador" aria-live="polite"></span>
 </div>
 <div class="tabela-scroll">
+{% if pode_editar %}
+<div id="barraLote" class="barra-lote" hidden aria-live="polite">
+  <div class="barra-lote-topo">
+    <strong id="loteContagem">0 selecionados</strong>
+    <span class="barra-lote-ajuda">Campo deixado em <em>(não alterar)</em> não é tocado.</span>
+    <button type="button" class="ver-btn" id="loteTodosFiltro" data-tip="Marca todas as linhas que a pesquisa atual está mostrando">Selecionar tudo do filtro</button>
+    <button type="button" class="ver-btn" id="loteLimpar">Limpar seleção</button>
+  </div>
+  <div class="barra-lote-campos">
+    <label>Categoria
+      <select data-pdm-combobox id="loteCategoria">
+        <option value="" selected>(não alterar)</option>
+        {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
+      </select>
+    </label>
+    {% for d in dimensoes %}
+    <label>{{ d.nome }}
+      <select data-pdm-combobox class="lote-dim" data-dim="{{ d.id }}">
+        <option value="" selected>(não alterar)</option>
+        {% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}">{{ rotulo_dim(val) }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endfor %}
+    <label class="barra-lote-obs">Observação
+      <input type="text" id="loteObservacao" maxlength="500" placeholder="(não alterar)">
+    </label>
+    <label class="barra-lote-inline" data-tip="Só preenche quem está sem observação. A observação é pessoal e não pode ser sobrescrita sem intenção.">
+      <input type="checkbox" id="loteObsSubstitui"> substituir observação existente
+    </label>
+    {% if pode_conferir and not fatura.em_andamento %}
+    <label class="barra-lote-inline" data-tip="Marca o OK dos selecionados. Cada um passa pelas mesmas validações da linha; quem não puder é listado no fim.">
+      <input type="checkbox" id="loteOk"> marcar OK
+    </label>
+    {% endif %}
+    <button type="button" class="ver-btn primario" id="loteSalvar">Salvar nos selecionados</button>
+  </div>
+  <div id="loteResultado" class="barra-lote-resultado" hidden></div>
+</div>
+{% endif %}
+
 <table class="compacta fatura-tabela"><thead><tr><th></th><th data-ordenar="data" tabindex="0">Data</th><th data-ordenar="descricao" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição no PDF' }}</th><th data-ordenar="titular" tabindex="0">Titular / cartão</th><th data-ordenar="parcela" tabindex="0">Parcela</th><th data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor PDF' }}</th><th data-ordenar="classificacao" tabindex="0">Classificação</th><th data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}" data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}">
-    <td>{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
+    <td class="cel-sel-fatura">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}{% if linha.vinculos %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="Exibir lançamentos agregados">+</button>{% endif %}</td>
     <td>{{ linha.data.strftime('%d/%m/%Y') }}</td>
     <td class="desc">{{ linha.descricao }}</td>
     {% set cartao_info %}{% if linha.cartao_nome %}<small style="display:block;color:var(--ink-faint)">{{ linha.cartao_nome }}</small>{% elif linha.cartao_aguardando %}<small style="display:block;color:var(--ink-faint)" data-tip="O Pluggy ainda não confirmou o final do cartão desta compra — costuma aparecer quando a cobrança deixa de ser pendente.">cartão pendente</small>{% endif %}{% endset %}
@@ -189,4 +229,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lancamentos_fatura.js?v=20260901-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260901-1"></script><script src="/static/lancamentos_fatura.js?v=20260901-lote"></script>{% endblock %}

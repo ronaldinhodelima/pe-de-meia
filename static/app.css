@@ -589,3 +589,5 @@ tr:hover .sel-check { outline: 2px solid var(--accent-soft); outline-offset: 1px
   line-height: 1.5;
 }
 .barra-lote-resultado.com-falha { color: var(--warn); background: var(--warn-soft); }
+.cel-sel-fatura { white-space: nowrap; }
+.cel-sel-fatura .sel-fatura { margin-right: 4px; accent-color: var(--accent); cursor: pointer; }

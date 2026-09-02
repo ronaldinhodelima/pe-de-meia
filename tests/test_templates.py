@@ -391,36 +391,45 @@ class TestRelatorios:
 class TestEdicaoEmLote:
     """A barra de lote nao pode virar um caminho paralelo de gravacao."""
 
+    def nucleo(self):
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        return (raiz / "static" / "lote.js").read_text(encoding="utf-8")
+
     def test_nao_existe_endpoint_de_lote(self):
         """Cada selecionado passa pelo MESMO POST de uma linha.
 
         Um segundo caminho de escrita divergiria das validacoes - foi assim que
         nasceram os 57 falsos pendentes da secao 6.5 n.10.
         """
+        nucleo = self.nucleo()
+        assert "/api/transacao/' + encodeURIComponent(alvo.id)" in nucleo
+        assert nucleo.count("fetch(") == 1, "um unico ponto de gravacao"
+
+    def test_o_nucleo_e_compartilhado_pelas_duas_telas(self):
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
-        lote = js.split("// Edicao em lote", 1)[1]
-        assert "/api/transacao/' + encodeURIComponent(id)" in lote
-        assert "lote" not in lote.split("fetch('")[1].split("'")[0].lower()
+        for tela in ("index.html", "lancamentos_fatura.html"):
+            html = (raiz / "templates" / tela).read_text(encoding="utf-8")
+            assert "/static/lote.js" in html, tela
+        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / js).read_text(encoding="utf-8")
+            assert "window.pdmLote.aplicar" in texto, js
 
     def test_lote_nunca_desmarca_ok(self):
         """Retirar assinatura exige confirmacao um a um (secao 1.2)."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
-        lote = js.split("// Edicao em lote", 1)[1]
-        assert "payload.conferida = true" in lote
-        assert "payload.conferida = false" not in lote
-        assert "confirmar_desmarcacao" not in lote
+        for js in ("lote.js", "lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / js).read_text(encoding="utf-8")
+            trecho = texto.split("Edicao em lote", 1)[-1] if js != "lote.js" else texto
+            assert "conferida = false" not in trecho, js
+            assert "confirmar_desmarcacao" not in trecho, js
 
     def test_lote_nao_sobrescreve_observacao_sem_intencao(self):
         """A observacao pertence ao usuario (secao 7.3)."""
-        import pathlib
-        raiz = pathlib.Path(__file__).resolve().parent.parent
-        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
-        lote = js.split("// Edicao em lote", 1)[1]
-        assert "substituiObs || vazia" in lote
+        nucleo = self.nucleo()
+        assert "opcoes.substituirObservacao || !(alvo.observacaoAtual" in nucleo
 
     def test_coluna_de_selecao_participa_do_layout_da_tabela(self):
         """tabelas.js indexa por data-col: sem ele a coluna some ao reordenar."""
