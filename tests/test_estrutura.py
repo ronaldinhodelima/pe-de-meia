@@ -540,7 +540,7 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert "conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido" in js
     assert "data-rateio-total" in template
     assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
-    assert template.index('id="modalDup"') < template.index('id="modalRateioBox"')
+    assert template.index('id="modalConferida"') < template.index('id="modalRateioBox"')
     assert 'class="rateio-salvar-inline"' in template and '>✓</button>' in template
     assert "rateio-parte-titulo" in js
     assert "el.textContent = fecha ? ''" in js
@@ -775,12 +775,6 @@ def test_aviso_de_duplicadas_usa_a_mesma_normalizacao_da_validacao():
     codigo = (RAIZ / "views" / "cadastros.py").read_text(encoding="utf-8")
     assert "por_nome.setdefault(chave_alfa(c[\"nome\"])" in codigo
     assert "por_nome.setdefault(c[\"nome\"]" not in codigo
-
-
-def test_status_duplicada_filtra_somente_itens_ja_marcados():
-    codigo = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    assert 'status == "duplicada"' in codigo
-    assert 'where.append("COALESCE(t.duplicada, false) = true")' in codigo
 
 
 def test_ocultar_coluna_vence_a_regra_defensiva_do_cabecalho():
@@ -1115,6 +1109,39 @@ def test_migracao_53_troca_duplicada_por_mesmo_evento_sem_mover_o_dre():
     assert "substituido_por IS NULL" in bloco
     # valida o par antes de gravar (secao 4.3)
     assert "a.account_id=b.account_id" in bloco
+
+
+def test_marcar_como_duplicada_nao_existe_mais_em_lugar_nenhum():
+    """Decisao de 02/09/2026: a marcacao saiu da interface e da API.
+
+    Pela secao 4.3, `duplicada` e o estado que SOBRA - mesma cobranca duas
+    vezes, sem estorno e sem par identificavel. Na pratica todo caso real tinha
+    par e era `substituido_por`, que aponta qual registro conta e tem caminho de
+    volta; `duplicada` so escondia o lancamento sem dizer por quem.
+
+    A COLUNA continua existindo e continua excluindo do resultado - ela faz
+    parte de `elegivel`, e tirar isso faria consultas que hoje excluem
+    duplicados passarem a inclui-los em silencio.
+    """
+    lanc = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    index = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+    # nada grava a coluna
+    assert 'sets.append("duplicada' not in lanc
+    assert '"duplicada" in data' not in lanc
+    assert "confirmar_duplicada" not in lanc and "confirmar_duplicada" not in js
+    # o controle nao existe mais na tela
+    assert "modalDup" not in index and "modalDup" not in js
+    assert "Marcar como duplicada" not in index
+    assert "dup-check" not in index and "dup-check" not in js
+    # nem o filtro de status
+    assert 'status == "duplicada"' not in lanc
+    assert 'value="duplicada"' not in index
+
+    # mas a coluna segue tirando do resultado
+    assert "COALESCE(t.duplicada, false) = false" in lanc
+    assert 'item["duplicada"]' in lanc, "duplicada ainda define `elegivel`"
 
 
 def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():

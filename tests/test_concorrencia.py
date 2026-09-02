@@ -16,16 +16,18 @@ def test_tela_envia_apenas_o_campo_que_foi_alterado():
     assert "anterior.catch(() => {}).then" in trecho
 
 
-def test_ok_e_duplicidade_exigem_confirmacao_sem_repetir_detalhes():
+def test_desmarcar_o_ok_exige_confirmacao_sem_repetir_detalhes():
+    """So sobrou a desmarcacao do OK: a marcacao como duplicada saiu da
+    interface em 02/09/2026 (secao 4.3)."""
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
 
     assert "abrirConfirmacaoModal('desconferir')" in js
-    assert "abrirConfirmacaoModal('duplicar')" in js
+    assert "abrirConfirmacaoModal('duplicar')" not in js
     assert "modalConfirmacaoResumo" not in js
     assert "el.checked = true" in js, "o clique de desmarcar deve ser desfeito ate confirmar"
     assert "if ('conferida' in d)" in js, "toda edicao deve sincronizar o OK retornado pelo banco"
     assert "payload.confirmar_desmarcacao = true" in js
-    assert "payload.confirmar_duplicada = true" in js
+    assert "confirmar_duplicada" not in js
     assert "if (fecharJanela) fecharModal();" in js
 
 
@@ -51,7 +53,7 @@ def test_auditoria_de_lancamento_guarda_valores_anteriores_e_novos():
 
     assert 'getattr(g, "audit_alteracoes", {})' in app
     assert 'alteracoes[str(campo)[:100]] = {"antes": antes, "depois": depois}' in core
-    for campo in ("Conferida", "Duplicada", "Observação", "Natureza"):
+    for campo in ("Conferida", "Observação", "Natureza"):
         assert f'registrar_mudanca_auditoria("{campo}"' in lancamentos
     assert '"Categoria",' in lancamentos
 

@@ -176,7 +176,7 @@ def index():
     status = request.args.get("status", "todas")
     if status not in (
         "todas", "pendente", "conferida", "pendente_banco", "duplicidade",
-        "duplicada", "fora_resultado", "somente_conciliacao", "substituido",
+        "fora_resultado", "somente_conciliacao", "substituido",
         "rateio_incompleto",
     ):
         status = "todas"
@@ -249,8 +249,6 @@ def index():
             params.append(tuple(ids_suspeitos))
         else:
             where.append("false")
-    elif status == "duplicada":
-        where.append("COALESCE(t.duplicada, false) = true")
     elif status == "pendente_banco":
         where.append("upper(COALESCE(t.status,'')) = 'PENDING'")
     elif status == "fora_resultado":
@@ -1453,7 +1451,7 @@ def excluir_lancamento_manual(transacao_id):
         if str(row[0]) != CONTA_MANUAL_ID and not row[1]:
             return jsonify({
                 "ok": False,
-                "erro": "Só é possível excluir lançamentos manuais ou importados de arquivo. Este veio da sincronização com o banco e voltaria na próxima atualização — marque como duplicada se quiser ignorá-lo.",
+                "erro": "Só é possível excluir lançamentos manuais ou importados de arquivo. Este veio da sincronização com o banco e voltaria na próxima atualização — se ele repete um lançamento que já existe, aponte a substituição nos detalhes.",
             }), 400
 
         cur.execute("DELETE FROM cartao.transacao_dimensao WHERE transacao_id = %s;", (str(transacao_id),))
@@ -1724,20 +1722,6 @@ def update_transacao(transacao_id):
             "erro": "Confirme a desmarcação do OK nos detalhes do lançamento.",
         }), 409
 
-    if (
-        "duplicada" in data
-        and not bool(transacao[2])
-        and bool(data.get("duplicada"))
-        and data.get("confirmar_duplicada") is not True
-    ):
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return jsonify({
-            "ok": False,
-            "erro": "Confirme a marcação como duplicada nos detalhes do lançamento.",
-        }), 409
-
     dimensoes_enviadas = data.get("dimensoes") or {}
     dimensoes_validadas = []
     for dim_id_str, valor_id in dimensoes_enviadas.items():
@@ -1883,9 +1867,16 @@ def update_transacao(transacao_id):
             "conferida_em = CASE WHEN %s THEN now() ELSE NULL END",
         ]
         valores += [conferida_final, conferida_final, session.get("user"), conferida_final]
-    if "duplicada" in data:
-        sets.append("duplicada = %s")
-        valores.append(bool(data.get("duplicada")))
+    # `duplicada` NAO e' mais gravavel. A marcacao saiu da interface em
+    # 02/09/2026: pela secao 4.3 ela e' o estado que SOBRA - mesma cobranca duas
+    # vezes, sem estorno e sem par identificavel -, e na pratica todo caso real
+    # tinha par e era `substituido_por`, que diz qual registro conta e tem
+    # caminho de volta. O campo enviado por uma tela antiga e ignorado de
+    # proposito, em vez de dar erro.
+    #
+    # A COLUNA continua existindo e continua excluindo do resultado: ela faz
+    # parte da definicao de `elegivel`, e tirar isso agora faria consultas que
+    # hoje excluem duplicados passarem a inclui-los em silencio.
     if "observacao" in data:
         sets.append("observacao = %s")
         valores.append(data.get("observacao"))
@@ -1959,11 +1950,11 @@ def update_transacao(transacao_id):
         session.get("user") if "conferida" in data and conferida_final
         else (None if "conferida" in data else transacao[1])
     )
-    duplicada_final = bool(data.get("duplicada")) if "duplicada" in data else bool(transacao[2])
+    # O estado nunca muda mais por aqui: a resposta devolve o que esta no banco,
+    # para a tela nao inferir nada por conta propria.
+    duplicada_final = bool(transacao[2])
     if "conferida" in data:
         registrar_mudanca_auditoria("Conferida", bool(transacao[0]), conferida_final)
-    if "duplicada" in data:
-        registrar_mudanca_auditoria("Duplicada", bool(transacao[2]), duplicada_final)
     if "observacao" in data:
         registrar_mudanca_auditoria("Observação", transacao[4], data.get("observacao"))
     if "categoria" in data:

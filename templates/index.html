@@ -36,7 +36,6 @@
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
       <option value="pendente_banco" {{ 'selected' if status == 'pendente_banco' }}>Pendentes no banco</option>
       <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
-      <option value="duplicada" {{ 'selected' if status == 'duplicada' }}>Duplicados confirmados</option>
       <option value="fora_resultado" {{ 'selected' if status == 'fora_resultado' }}>Fora do resultado</option>
       <option value="somente_conciliacao" {{ 'selected' if status == 'somente_conciliacao' }}>Somente conciliação</option>
       <option value="substituido" {{ 'selected' if status == 'substituido' }}>Substituídos por outro</option>
@@ -132,7 +131,6 @@
     <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')"><i class="linha-ponto conferida"></i>Conferido</button>
     <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')"><i class="linha-ponto pendente-banco"></i>Pendente no banco</button>
     <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')"><i class="linha-ponto suspeita"></i>Possível duplicidade</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicada')"><i class="linha-ponto duplicada"></i>Duplicado confirmado</button>
     <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')"><i class="linha-ponto fora"></i>Fora do resultado</button>
     <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')"><i class="linha-ponto rateio"></i>Rateio incompleto</button>
   </div>
@@ -215,7 +213,7 @@
         <td class="cel-check" data-col="check"><input class="conf-check" type="checkbox" {{ 'checked' if r.conferida }}
           {{ 'disabled' if not pode_conferir or (r.rateios and not r.rateio_valido) or (r.pendente_bloqueia_ok and not r.conferida) }}
           data-tip="{{ 'Feche o rateio antes de marcar OK' if r.rateios and not r.rateio_valido else ('Pendente no banco — aguarde confirmar para marcar OK' if r.pendente_bloqueia_ok else ('Pendente há mais de 30 dias — o Pluggy provavelmente não atualizou o status, dá pra conferir' if r.pendente_banco else 'Confirmado pelo banco')) }}">
-          <input class="dup-check" type="checkbox" {{ 'checked' if r.duplicada }} hidden></td>
+</td>
         <td class="cel-status" data-col="status"><span class="status" id="status-{{ r.id }}">ok</span></td>
       </tr>
       {% for parte in r.rateios %}
@@ -300,12 +298,6 @@
           <option value="nao">Não</option>
         </select></span></span>
     </div>
-    <div class="row">
-      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--ink)">
-        <input type="checkbox" id="modalDup" onchange="toggleDuplicadaModal()">
-        Marcar como duplicada
-      </label>
-    </div>
     <div id="modalRateioBox" class="modal-rateio"></div>
     <div id="modalConfirmacao" class="modal-confirmacao" hidden>
       <strong id="modalConfirmacaoTitulo"></strong>
@@ -327,5 +319,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260901-1"></script>
-<script src="/static/lancamentos.js?v=20260902-3"></script>
+<script src="/static/lancamentos.js?v=20260902-4"></script>
 {% endblock %}

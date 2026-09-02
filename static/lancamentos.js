@@ -331,9 +331,7 @@ function detalheAtualModal() {
 function sincronizarControlesModal() {
   const d = detalheAtualModal();
   const conf = document.getElementById('modalConferida');
-  const dup = document.getElementById('modalDup');
   if (conf) conf.value = d._conferida ? 'sim' : 'nao';
-  if (dup) dup.checked = !!d._duplicada;
   const conferidaPor = document.getElementById('modalConferidaPor');
   const usuarioConferencia = d.conferida_por && d.conferida_por !== '-' ? d.conferida_por : '';
   conferidaPor.textContent = usuarioConferencia ? 'por ' + usuarioConferencia : '';
@@ -574,13 +572,8 @@ function abrirConfirmacaoModal(acao) {
   const painel = document.getElementById('modalConfirmacao');
   const titulo = document.getElementById('modalConfirmacaoTitulo');
   const botao = document.getElementById('modalConfirmarBtn');
-  if (acao === 'desconferir') {
-    titulo.textContent = 'Confirmar desmarcação do OK?';
-    botao.textContent = 'Sim, desmarcar OK';
-  } else {
-    titulo.textContent = 'Confirmar lançamento como duplicado?';
-    botao.textContent = 'Sim, marcar duplicada';
-  }
+  titulo.textContent = 'Confirmar desmarcação do OK?';
+  botao.textContent = 'Sim, desmarcar OK';
   painel.hidden = false;
 }
 
@@ -603,10 +596,6 @@ function confirmarAcaoModal() {
     const confCheck = tr.querySelector('.conf-check');
     confCheck.checked = false;
     salvar(idAtualModal, confCheck, {confirmarDesmarcacao: true}).then(sincronizarControlesModal);
-  } else if (acao === 'duplicar') {
-    const dupCheck = tr.querySelector('.dup-check');
-    dupCheck.checked = true;
-    salvar(idAtualModal, dupCheck, {confirmarDuplicada: true}).then(sincronizarControlesModal);
   }
 }
 
@@ -673,21 +662,6 @@ function salvarObservacaoModal() {
   const obsLinha = tr.querySelector('.obs-input');
   obsLinha.value = document.getElementById('modalObservacao').value;
   salvar(idAtualModal, obsLinha).then(sincronizarControlesModal);
-}
-function toggleDuplicadaModal() {
-  if (!idAtualModal) return;
-  const marcado = document.getElementById('modalDup').checked;
-  const d = detalheAtualModal();
-  if (!d._duplicada && marcado) {
-    document.getElementById('modalDup').checked = false;
-    abrirConfirmacaoModal('duplicar');
-    return;
-  }
-  const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
-  if (!tr) return;
-  const dupCheck = tr.querySelector('.dup-check');
-  dupCheck.checked = marcado;
-  salvar(idAtualModal, dupCheck).then(sincronizarControlesModal);
 }
 function fecharModal() {
   document.getElementById('modalBg').classList.remove('show');
@@ -985,11 +959,8 @@ function salvar(id, el, opcoes) {
   else if (el.matches('.dim-select')) payload.dimensoes = {[el.dataset.dim]: el.value || null};
   else if (el.matches('.conf-check')) payload.conferida = el.checked;
   else if (el.matches('.obs-input')) payload.observacao = el.value;
-  else if (el.matches('.dup-check')) {
-    payload.duplicada = el.checked;
-  } else return;
+  else return;
   if (opcoes.confirmarDesmarcacao) payload.confirmar_desmarcacao = true;
-  if (opcoes.confirmarDuplicada) payload.confirmar_duplicada = true;
   const anterior = filaSalvar[id] || Promise.resolve();
   // Uma falha anterior não pode bloquear para sempre os próximos salvamentos.
   const atual = anterior.catch(() => {}).then(() => fetch('/api/transacao/' + id, {
@@ -1011,13 +982,6 @@ function salvar(id, el, opcoes) {
           detalhe.conferida = confFinal ? 'Sim' : 'Não';
           detalhe.conferida_por = d.conferida_por || '-';
         }
-      }
-      if ('duplicada' in d) {
-        const dupFinal = !!d.duplicada;
-        tr.querySelector('.dup-check').checked = dupFinal;
-        tr.classList.toggle('duplicada', dupFinal);
-        const detalhe = window.detalhes[id];
-        if (detalhe) detalhe._duplicada = dupFinal;
       }
       if ('observacao' in payload && window.detalhes[id]) {
         window.detalhes[id].observacao = payload.observacao || '-';
@@ -1045,11 +1009,8 @@ function salvar(id, el, opcoes) {
   }).catch(() => {
     const detalhe = window.detalhes[id] || {};
     const conf = tr.querySelector('.conf-check');
-    const dup = tr.querySelector('.dup-check');
     if (conf) conf.checked = !!detalhe._conferida;
-    if (dup) dup.checked = !!detalhe._duplicada;
     tr.classList.toggle('conferida', !!detalhe._conferida);
-    tr.classList.toggle('duplicada', !!detalhe._duplicada);
     const s = document.getElementById('status-' + id);
     if (s) {
       s.textContent = 'erro ao salvar';
