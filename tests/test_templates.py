@@ -276,9 +276,10 @@ class TestIndex:
 
     def test_sem_lancamentos_mostra_aviso_com_colspan_certo(self, ctx):
         html = self.render([])
-        # 8 colunas fixas + 1 dimensao
-        assert 'colspan="9"' in html
+        # 8 colunas fixas + 1 dimensao + a coluna de selecao para quem edita
+        assert 'colspan="10"' in html
         assert "Nenhum lançamento neste filtro." in html
+        assert 'colspan="9"' in self.render([], pode_editar=False)
 
     def test_natureza_fluxo_nao_aparece_no_modal(self, ctx):
         # 'fluxo' e o padrao (direcao decide), nao faz sentido escolher na mao
@@ -385,3 +386,45 @@ class TestRelatorios:
         html = render_template("relatorios.html", **self.BASE)
         assert "não são despesa" in html
         assert 'href="/categorias"' in html
+
+
+class TestEdicaoEmLote:
+    """A barra de lote nao pode virar um caminho paralelo de gravacao."""
+
+    def test_nao_existe_endpoint_de_lote(self):
+        """Cada selecionado passa pelo MESMO POST de uma linha.
+
+        Um segundo caminho de escrita divergiria das validacoes - foi assim que
+        nasceram os 57 falsos pendentes da secao 6.5 n.10.
+        """
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+        lote = js.split("// Edicao em lote", 1)[1]
+        assert "/api/transacao/' + encodeURIComponent(id)" in lote
+        assert "lote" not in lote.split("fetch('")[1].split("'")[0].lower()
+
+    def test_lote_nunca_desmarca_ok(self):
+        """Retirar assinatura exige confirmacao um a um (secao 1.2)."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+        lote = js.split("// Edicao em lote", 1)[1]
+        assert "payload.conferida = true" in lote
+        assert "payload.conferida = false" not in lote
+        assert "confirmar_desmarcacao" not in lote
+
+    def test_lote_nao_sobrescreve_observacao_sem_intencao(self):
+        """A observacao pertence ao usuario (secao 7.3)."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+        lote = js.split("// Edicao em lote", 1)[1]
+        assert "substituiObs || vazia" in lote
+
+    def test_coluna_de_selecao_participa_do_layout_da_tabela(self):
+        """tabelas.js indexa por data-col: sem ele a coluna some ao reordenar."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        html = (raiz / "templates" / "index.html").read_text(encoding="utf-8")
+        assert html.count('data-col="sel"') == 4, "cabecalho, linha, rateio e tecnica"

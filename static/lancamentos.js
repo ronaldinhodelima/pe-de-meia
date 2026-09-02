@@ -1013,3 +1013,234 @@ function salvarManual(e) {
 }
 atualizarChipLabels();
 atualizarBotaoDetalhado();
+
+// ---------------------------------------------------------------------------
+// Edicao em lote
+//
+// Decisao de arquitetura: NAO existe endpoint de lote. Cada selecionado passa
+// pelo MESMO POST /api/transacao/<id> que a edicao de uma linha - com as mesmas
+// validacoes, a mesma auditoria e a mesma propagacao para familia de parcelas.
+// Um caminho paralelo de gravacao inevitavelmente divergiria das regras, que e
+// exatamente como nasceram os 57 falsos pendentes (secao 6.5 n.10).
+// O preco e uma requisicao por lancamento; em troca, nenhuma regra e duplicada.
+(function () {
+  const barra = document.getElementById('barraLote');
+  if (!barra) return;
+  const tabela = document.getElementById('tabela-lancamentos');
+  const contagem = document.getElementById('loteContagem');
+  const saida = document.getElementById('loteResultado');
+  const btnSalvar = document.getElementById('loteSalvar');
+  const btnLimpar = document.getElementById('loteLimpar');
+  const todos = document.getElementById('loteTodos');
+
+  function linhasSelecionaveis() {
+    // "visivel" respeita a pesquisa local e os filtros de coluna: selecionar
+    // todos nunca alcanca linha que o usuario nao esta vendo.
+    return [...tabela.querySelectorAll('tbody tr[data-id] .sel-check')]
+      .filter(cb => !cb.disabled && cb.closest('tr').style.display !== 'none'
+                    && !cb.closest('tr').hidden);
+  }
+  function selecionados() {
+    return linhasSelecionaveis().filter(cb => cb.checked);
+  }
+  function atualizarBarra() {
+    const n = selecionados().length;
+    barra.hidden = n === 0;
+    contagem.textContent = n === 1 ? '1 lançamento selecionado' : n + ' lançamentos selecionados';
+    const total = linhasSelecionaveis().length;
+    if (todos) {
+      todos.checked = n > 0 && n === total;
+      todos.indeterminate = n > 0 && n < total;
+    }
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList && e.target.classList.contains('sel-check')) atualizarBarra();
+  });
+  if (todos) {
+    todos.addEventListener('change', function () {
+      linhasSelecionaveis().forEach(cb => { cb.checked = todos.checked; });
+      atualizarBarra();
+    });
+  }
+  btnLimpar.addEventListener('click', function () {
+    linhasSelecionaveis().forEach(cb => { cb.checked = false; });
+    atualizarBarra();
+    saida.hidden = true;
+  });
+
+  function montarPayload() {
+    const payload = {};
+    const cat = document.getElementById('loteCategoria');
+    if (cat && cat.value) payload.categoria = cat.value;
+    const dims = {};
+    document.querySelectorAll('#barraLote .lote-dim').forEach(function (sel) {
+      if (sel.value) dims[sel.dataset.dim] = sel.value;
+    });
+    if (Object.keys(dims).length) payload.dimensoes = dims;
+    const obs = document.getElementById('loteObservacao');
+    if (obs && obs.value.trim()) payload._observacao = obs.value.trim();
+    const ok = document.getElementById('loteOk');
+    // Marcar OK em lote e uma acao humana deliberada. DESMARCAR nunca entra
+    // aqui: retirar uma assinatura exige confirmacao um a um (secao 1.2).
+    if (ok && ok.checked) payload.conferida = true;
+    return payload;
+  }
+
+  btnSalvar.addEventListener('click', async function () {
+    const alvos = selecionados();
+    if (!alvos.length) return;
+    const base = montarPayload();
+    const substituiObs = document.getElementById('loteObsSubstitui').checked;
+    if (!Object.keys(base).length) {
+      alert('Escolha ao menos um campo para aplicar.');
+      return;
+    }
+    if (!confirm('Aplicar aos ' + alvos.length + ' lançamentos selecionados?')) return;
+
+    btnSalvar.disabled = true;
+    saida.hidden = false;
+    const falhas = [];
+    let aplicados = 0;
+    for (let i = 0; i < alvos.length; i++) {
+      const tr = alvos[i].closest('tr');
+      const id = tr.dataset.id;
+      saida.textContent = 'Aplicando ' + (i + 1) + ' de ' + alvos.length + '...';
+      const payload = Object.assign({}, base);
+      if ('_observacao' in payload) {
+        delete payload._observacao;
+        const campo = tr.querySelector('.obs-input');
+        const vazia = !campo || !campo.value.trim();
+        if (substituiObs || vazia) payload.observacao = base._observacao;
+      }
+      if (!Object.keys(payload).length) continue;
+      try {
+        const r = await fetch('/api/transacao/' + encodeURIComponent(id), {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (!d.ok) { falhas.push(descricaoCurta(tr) + ': ' + (d.erro || 'falha')); continue; }
+        aplicarNaLinha(tr, payload, d);
+        if (d.bloqueada) {
+          falhas.push(descricaoCurta(tr) + ': OK recusado — ' +
+            (d.rateio_invalido ? 'rateio incompleto'
+             : d.pendente_banco ? 'ainda pendente no banco'
+             : d.sem_pdf_conciliado ? 'sem vínculo com a fatura em PDF'
+             : 'faltam campos obrigatórios'));
+        }
+        aplicados++;
+      } catch (e) {
+        falhas.push(descricaoCurta(tr) + ': erro de rede');
+      }
+    }
+    btnSalvar.disabled = false;
+    let texto = aplicados + ' de ' + alvos.length + ' atualizados.';
+    if (falhas.length) texto += ' Não foi possível em ' + falhas.length + ': ' + falhas.join(' · ');
+    saida.textContent = texto;
+    saida.className = 'barra-lote-resultado' + (falhas.length ? ' com-falha' : '');
+  });
+
+  function descricaoCurta(tr) {
+    const td = tr.querySelector('.cel-desc');
+    return (td ? td.textContent : '').trim().slice(0, 40) || tr.dataset.id;
+  }
+
+  // Reflete na tela o estado REAL devolvido pelo servidor, igual ao salvamento
+  // de uma linha - a tela nunca infere o OK por conta propria.
+  function aplicarNaLinha(tr, payload, d) {
+    if ('categoria' in payload) {
+      const sel = tr.querySelector('.cat-select');
+      if (sel) {
+        sel.innerHTML = '<option value="' + payload.categoria + '" selected></option>';
+        sel.options[0].textContent = textoDaOpcao('categoria', payload.categoria);
+        sel.classList.remove('classificacao-faltando');
+        if (window.pdmCombobox) window.pdmCombobox.sincronizar(sel);
+      }
+    }
+    Object.keys(payload.dimensoes || {}).forEach(function (dimId) {
+      const sel = tr.querySelector('.dim-select[data-dim="' + dimId + '"]');
+      if (!sel) return;
+      const valor = payload.dimensoes[dimId];
+      sel.innerHTML = '<option value="' + valor + '" selected></option>';
+      sel.options[0].textContent = textoDaOpcao('dimensao', valor, dimId);
+      sel.classList.remove('classificacao-faltando');
+      if (window.pdmCombobox) window.pdmCombobox.sincronizar(sel);
+    });
+    if ('observacao' in payload) {
+      const campo = tr.querySelector('.obs-input');
+      if (campo) campo.value = payload.observacao || '';
+      if (window.detalhes[tr.dataset.id]) {
+        window.detalhes[tr.dataset.id].observacao = payload.observacao || '-';
+      }
+    }
+    if ('conferida' in d) {
+      const conf = tr.querySelector('.conf-check');
+      if (conf) conf.checked = !!d.conferida;
+      tr.classList.toggle('conferida', !!d.conferida);
+      if (window.detalhes[tr.dataset.id]) window.detalhes[tr.dataset.id]._conferida = !!d.conferida;
+    }
+  }
+
+  // Rotulo legivel a partir da MESMA fonte que alimenta os comboboxes da tabela.
+  function textoDaOpcao(tipo, valor, dimId) {
+    const cfg = window.configLancamentos || {};
+    const fonte = tipo === 'categoria'
+      ? (cfg.categorias || []).map(c => ({valor: String(c.chave), rotulo: String(c.nome)}))
+      : ((cfg.dimensoes || {})[dimId] || []).map(v => ({valor: String(v.id), rotulo: String(v.rotulo)}));
+    const achado = fonte.find(o => o.valor === String(valor));
+    return achado ? achado.rotulo : valor;
+  }
+
+  // Os selects da barra ficam FORA da tabela, entao a hidratacao sob demanda
+  // dali nao os alcanca - e eles precisam da lista inteira desde o inicio.
+  // A primeira opcao e "(nao alterar)", que e o que mantem o campo intocado.
+  function hidratarBarra() {
+    const cfg = window.configLancamentos || {};
+    const cat = document.getElementById('loteCategoria');
+    if (cat && cat.dataset.hidratado !== '1') {
+      preencher(cat, (cfg.categorias || []).map(c => ({valor: String(c.chave), rotulo: String(c.nome)})));
+    }
+    document.querySelectorAll('#barraLote .lote-dim').forEach(function (sel) {
+      if (sel.dataset.hidratado === '1') return;
+      preencher(sel, ((cfg.dimensoes || {})[sel.dataset.dim] || [])
+        .map(v => ({valor: String(v.id), rotulo: String(v.rotulo)})));
+    });
+  }
+  function preencher(sel, opcoes) {
+    const fragmento = document.createDocumentFragment();
+    [{valor: '', rotulo: '(não alterar)'}].concat(opcoes).forEach(function (item) {
+      const opcao = document.createElement('option');
+      opcao.value = item.valor;
+      opcao.textContent = item.rotulo;
+      fragmento.appendChild(opcao);
+    });
+    sel.replaceChildren(fragmento);
+    sel.value = '';
+    sel.dataset.hidratado = '1';
+    if (window.pdmCombobox) window.pdmCombobox.sincronizar(sel);
+  }
+
+  // Mesma regra da linha (secao 7.2): escolher Projeto traz o Portfolio padrao
+  // dele, e so quando o usuario ainda nao decidiu o Portfolio na barra.
+  barra.addEventListener('change', function (e) {
+    if (!e.target.matches('.lote-dim')) return;
+    const cfg = window.configLancamentos || {};
+    const dimPortfolio = cfg.dim_id_portfolio;
+    if (!dimPortfolio || e.target.dataset.dim === String(dimPortfolio)) return;
+    const portfolioId = portfolioDoProjeto(e.target.value);
+    if (!portfolioId) return;
+    const sel = barra.querySelector('.lote-dim[data-dim="' + dimPortfolio + '"]');
+    if (sel && !sel.value) {
+      sel.value = portfolioId;
+      if (window.pdmCombobox) window.pdmCombobox.sincronizar(sel);
+    }
+  });
+
+  hidratarBarra();
+  atualizarBarra();
+  // A pesquisa local esconde linhas; a contagem tem que acompanhar.
+  document.addEventListener('input', function (e) {
+    if (e.target.matches('.filtro-tabela')) setTimeout(atualizarBarra, 0);
+  });
+})();

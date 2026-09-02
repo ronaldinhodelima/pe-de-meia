@@ -111,14 +111,52 @@
   <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
 </details>
 
+{% if pode_editar %}
+<div id="barraLote" class="barra-lote" hidden aria-live="polite">
+  <div class="barra-lote-topo">
+    <strong id="loteContagem">0 selecionados</strong>
+    <span class="barra-lote-ajuda">Campo deixado em <em>(não alterar)</em> não é tocado.</span>
+    <button type="button" class="ver-btn" id="loteLimpar">Limpar seleção</button>
+  </div>
+  <div class="barra-lote-campos">
+    <label>Categoria
+      <select data-pdm-combobox data-lazy-options="categoria" id="loteCategoria" data-vazio="(não alterar)">
+        <option value="" selected>(não alterar)</option>
+      </select>
+    </label>
+    {% for d in dimensoes %}
+    <label>{{ d.nome }}
+      <select data-pdm-combobox data-lazy-options="dimensao" data-dim="{{ d.id }}" class="lote-dim" data-vazio="(não alterar)">
+        <option value="" selected>(não alterar)</option>
+      </select>
+    </label>
+    {% endfor %}
+    <label class="barra-lote-obs">Observação
+      <input type="text" id="loteObservacao" maxlength="500" placeholder="(não alterar)">
+    </label>
+    <label class="barra-lote-inline" data-tip="Só preenche quem está sem observação. A observação é pessoal e não pode ser sobrescrita sem intenção.">
+      <input type="checkbox" id="loteObsSubstitui"> substituir observação existente
+    </label>
+    {% if pode_conferir %}
+    <label class="barra-lote-inline" data-tip="Marca o OK dos selecionados. Cada um passa pelas mesmas validações da linha; quem não puder é listado no fim.">
+      <input type="checkbox" id="loteOk"> marcar OK
+    </label>
+    {% endif %}
+    <button type="button" class="ver-btn primario" id="loteSalvar">Salvar nos selecionados</button>
+  </div>
+  <div id="loteResultado" class="barra-lote-resultado" hidden></div>
+</div>
+{% endif %}
+
 <table class="compacta ajustavel" id="tabela-lancamentos" data-tabela="lancamentos">
   <thead><tr>
-    <th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra">Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
+    {% if pode_editar %}<th class="cel-sel" data-col="sel" data-sem-arrastar><input type="checkbox" id="loteTodos" aria-label="Selecionar todos os lançamentos visíveis" data-tip="Seleciona todas as linhas visíveis no filtro atual"></th>{% endif %}<th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra">Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
   </tr></thead>
   <tbody>
     {% for r in linhas %}
       <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
+        {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
         <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
           {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
@@ -153,6 +191,7 @@
       </tr>
       {% for parte in r.rateios %}
       <tr class="rateio-row{{ '' if r.rateio_valido else ' rateio-invalido' }}" data-rateio-parent="{{ r.id }}" data-rateio-id="{{ parte.id }}" hidden>
+        {% if pode_editar %}<td class="cel-sel" data-col="sel"></td>{% endif %}
         <td class="cel-data" data-col="data"></td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }} — Parte {{ loop.index }}"><span class="rateio-seta">↳</span> {{ r.descricao }} — Parte {{ loop.index }}</td>
         <td class="cel-origem" data-col="origem">Rateio interno</td>
@@ -167,6 +206,7 @@
       {% endfor %}
       {% for tecnico in r.registros_tecnicos %}
       <tr class="tecnico-row" data-tecnico-parent="{{ r.id }}" data-id="{{ tecnico.id }}" hidden>
+        {% if pode_editar %}<td class="cel-sel" data-col="sel"></td>{% endif %}
         <td class="cel-data" data-col="data" data-tip="{{ tecnico.data_full }}" data-sort="{{ tecnico.data_sort }}">{{ tecnico.data_dia }}<br>{{ tecnico.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ tecnico.descricao }}"><span class="rateio-seta">↳</span> {{ tecnico.descricao }} <span class="selo-fora" title="{{ tecnico.fora_do_resultado }}">registro técnico</span></td>
         <td class="cel-origem" data-col="origem" data-tip="{{ tecnico.origem_completa }}">{{ tecnico.origem_selo|safe }}<span>{{ tecnico.origem_texto }}</span></td>
@@ -180,7 +220,7 @@
       </tr>
       {% endfor %}
     {% else %}
-      <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
+      <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) + (1 if pode_editar else 0) }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -258,5 +298,5 @@
 {# lancamentos.js le estes dois blocos em vez de receber o dado interpolado #}
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
-<script src="/static/lancamentos.js?v=20260830-2"></script>
+<script src="/static/lancamentos.js?v=20260901-lote"></script>
 {% endblock %}
