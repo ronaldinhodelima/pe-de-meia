@@ -14,11 +14,11 @@
   <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input type="hidden" name="acao" value="criar">
     <input name="novo_usuario" placeholder="Login (ex: joao)" required
-           style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:170px">
+           style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:170px">
     <input name="novo_nome" placeholder="Nome"
-           style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:180px">
+           style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:180px">
     <input name="nova_senha" type="password" placeholder="Senha (mín. 6)" minlength="6" required
-           style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:170px">
+           style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:170px">
     {{ sel_perfil("operador") }}
     <button type="submit">Criar usuário</button>
   </form>
@@ -44,7 +44,7 @@
         <input type="hidden" name="usuario" value="{{ c.usuario }}">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
           <input name="nome" value="{{ c.nome or '' }}" placeholder="Nome"
-                 style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:190px">
+                 style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:190px">
           <span style="font-size:12px;color:var(--ink-faint)">Perfil</span>
           <select name="perfil" onchange="aplicarPerfil(this)" data-usuario="{{ c.usuario }}"
                   style="padding:7px 9px">
@@ -72,7 +72,7 @@
           <input type="hidden" name="acao" value="senha">
           <input type="hidden" name="usuario" value="{{ c.usuario }}">
           <input name="senha" type="password" placeholder="Nova senha" minlength="6"
-                 style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:170px">
+                 style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:170px">
           <button type="submit" class="ver-btn">Trocar senha</button>
         </form>
         <form method="post" style="display:flex;align-items:center">
@@ -97,7 +97,7 @@
 {% endfor %}
 
 <details class="cat-breakdown" style="padding:0">
-  <summary style="cursor:pointer;padding:14px 18px;font-weight:600;font-size:13px;color:var(--ink-soft)">
+  <summary style="cursor:pointer;padding:14px 18px;font-weight:var(--peso-forte);font-size:13px;color:var(--ink-soft)">
     O que cada permissão libera
   </summary>
   <div style="padding:0 18px 16px 18px">

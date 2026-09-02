@@ -2,7 +2,7 @@
 
 {# select de categoria, reaproveitado pelo form de criar e pelo de editar #}
 {% macro sel_categoria(selecionado=None) %}
-  <select name="categoria" data-pdm-combobox aria-label="Categoria" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+  <select name="categoria" data-pdm-combobox aria-label="Categoria" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
     {% for c in categorias %}
       <option value="{{ c.chave }}" {{ 'selected' if c.chave == selecionado }}>{{ c.nome }}</option>
     {% endfor %}
@@ -14,7 +14,7 @@
   {% for d in dimensoes %}
     <div>
       <label style="font-size:12px;color:var(--ink-faint);display:block">{{ d.nome }}</label>
-      <select name="dim_{{ d.id }}" data-pdm-combobox aria-label="{{ d.nome }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+      <select name="dim_{{ d.id }}" data-pdm-combobox aria-label="{{ d.nome }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
         <option value="">(nao definir)</option>
         {% for v in valores_por_dim.get(d.id, []) %}
           <option value="{{ v.id }}" {{ 'selected' if selecionados.get(d.id) == v.id }}>{{ v.nome }}</option>
@@ -28,7 +28,7 @@
   <div>
     <label style="font-size:12px;color:var(--ink-faint);display:block">Condição do valor (opcional)</label>
     <div style="display:flex;gap:5px">
-      <select name="valor_operador" class="regra-preview-campo" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px">
+      <select name="valor_operador" class="regra-preview-campo" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
         <option value="">Qualquer valor</option>
         {% for chave, dados in (operadores_valor|default({})).items() %}
           <option value="{{ chave }}" {{ 'selected' if chave == operador }}>{{ dados[0] }}</option>
@@ -36,7 +36,7 @@
       </select>
       <input name="valor_limite" class="regra-preview-campo" type="number" min="0" step="0.01"
              value="{{ limite if limite is not none }}" placeholder="R$ 0,00"
-             style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:110px">
+             style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:110px">
     </div>
   </div>
 {% endmacro %}
@@ -56,7 +56,7 @@
     <input type="hidden" name="acao" value="criar_regra">
     <div>
       <label style="font-size:12px;color:var(--ink-faint);display:block">Texto na descricao</label>
-      <input name="padrao" class="regra-preview-campo" value="{{ novo.padrao }}" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
+      <input name="padrao" class="regra-preview-campo" value="{{ novo.padrao }}" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
     </div>
     {{ filtro_valor(novo.valor_operador, novo.valor_limite) }}
     <div>
@@ -67,7 +67,7 @@
     <button type="submit" class="btn-primario">Criar regra</button>
   </form>
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
-  <div id="regraPreview" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--raise)"></div>
+  <div id="regraPreview" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--raise)"></div>
 </div>
 
 <table>
@@ -81,7 +81,7 @@
             <input type="hidden" name="regra_id" value="{{ r.id }}">
             <div>
               <label style="font-size:12px;color:var(--ink-faint);display:block">Texto na descricao</label>
-              <input name="padrao" value="{{ r.padrao }}" style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
+              <input name="padrao" value="{{ r.padrao }}" style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
             </div>
             {{ filtro_valor(r.valor_operador|default(''), r.valor_limite|default('')) }}
             <div>

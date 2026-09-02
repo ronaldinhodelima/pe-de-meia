@@ -21,7 +21,7 @@
   <input type="hidden" name="final4" value="{{ final4 }}">
   <span style="font-size:12px;color:var(--ink-faint);min-width:78px">final {{ final4 }}</span>
   <input name="prefixo" value="{{ nome or '' }}" placeholder="ex: Ronaldo - físico"
-         style="padding:6px 9px;border:1px solid #ccc;border-radius:6px;width:230px;font-size:12.5px">
+         style="padding:6px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:230px;font-size:12.5px">
   <button type="submit" class="ver-btn">Salvar</button>
 </form>
 {% endmacro %}
@@ -32,7 +32,7 @@
     <div style="display:flex;align-items:center;gap:9px">
       {{ info.selo|safe }}{# selo do banco: HTML fixo gerado no Python, sem entrada de usuario #}
       <div>
-        <div style="font-weight:600;font-size:14px">{{ info.banco }}</div>
+        <div style="font-weight:var(--peso-forte);font-size:14px">{{ info.banco }}</div>
         <div style="font-size:12px;color:var(--ink-faint)">{{ info.contas_txt }}</div>
       </div>
     </div>
@@ -41,7 +41,7 @@
       <input type="hidden" name="item_id" value="{{ item_id }}">
       <input name="titular" list="sugestoes-titular" value="{{ info.titular or '' }}"
              placeholder="De quem é essa conta?"
-             style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:220px">
+             style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
       <button type="submit" class="ver-btn">Salvar</button>
     </form>
   </div>
@@ -97,12 +97,12 @@
     <div>
       <label style="font-size:12px;color:var(--ink-faint);display:block">Últimos 4 dígitos</label>
       <input name="final4" maxlength="4" placeholder="Ex: 9938"
-             style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:110px">
+             style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:110px">
     </div>
     <div>
       <label style="font-size:12px;color:var(--ink-faint);display:block">Nome do cartão</label>
       <input name="prefixo" placeholder="Ex: Andrea - digital"
-             style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:230px">
+             style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:230px">
     </div>
     <button type="submit" class="ver-btn">Adicionar</button>
   </form>

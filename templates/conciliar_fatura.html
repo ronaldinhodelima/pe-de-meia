@@ -15,7 +15,7 @@
   <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
       <label style="font-size:12px;color:var(--ink-faint);display:block">Cartão (origem)</label>
-      <select name="account_id" required style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;min-width:260px">
+      <select name="account_id" required style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);min-width:260px">
         <option value="">selecione…</option>
         {% for aid, curto, completo, _, _ in contas_credito %}
           <option value="{{ aid }}" {{ 'selected' if aid == account_id }}>{{ completo }}</option>
@@ -83,7 +83,7 @@
       <span class="ver-btn" style="opacity:.35;cursor:default">‹</span>
     {% endif %}
     <div>
-      <div style="font-size:20px;font-weight:600;line-height:1.2">
+      <div style="font-size:20px;font-weight:var(--peso-forte);line-height:1.2">
         Fatura {{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}
         {%- if resultado.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}
       </div>
@@ -129,7 +129,7 @@
       {{ resultado.orfas|length }} lançamento(s) do Pluggy sem vínculo
     </div>
     <div style="margin-top:10px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      <a href="/lancamentos/fatura?fatura_id={{ f.id }}" style="font-size:12px;font-weight:600">
+      <a href="/lancamentos/fatura?fatura_id={{ f.id }}" style="font-size:12px;font-weight:var(--peso-forte)">
         Revisar classificação, DRE e OK desta fatura →
       </a>
       <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
@@ -206,7 +206,7 @@
   {% if resultado.sem_vinculo %}
     <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
       <h3>Linhas da fatura sem vínculo
-        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.sem_vinculo|length }})</span>
+        <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ resultado.sem_vinculo|length }})</span>
       </h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
         A operadora cobrou e ainda não há lançamento do Pluggy associado. Vincule a um dos lançamentos
@@ -254,7 +254,7 @@
   {% if resultado.orfas %}
     <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
       <h3>Lançamentos do Pluggy sem vínculo
-        <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.orfas|length }})</span>
+        <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ resultado.orfas|length }})</span>
       </h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
         Estão na conta, dentro do ciclo desta fatura, e não têm vínculo com nenhuma linha de nenhuma fatura.

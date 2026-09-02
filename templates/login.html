@@ -15,10 +15,10 @@
 
   .entrada-marca{position:relative;display:flex;align-items:center;gap:11px}
   .entrada-marca img{width:32px;height:auto;display:block}
-  .entrada-marca span{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .entrada-marca span{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-size:18px;font-weight:var(--peso-forte);letter-spacing:-.01em}
 
   .entrada-tese{position:relative;max-width:30ch;margin-top:auto}
-  .entrada-tese h1{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:600;font-size:clamp(24px,3.4vw,32px);line-height:1.18;letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance}
+  .entrada-tese h1{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:var(--peso-forte);font-size:clamp(24px,3.4vw,32px);line-height:1.18;letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance}
   .entrada-tese p{margin:0;color:var(--ink-faint);font-size:13.5px;line-height:1.6;max-width:34ch}
 
   .entrada-rodape{position:relative;display:flex;gap:20px;font-size:11.5px;color:var(--ink-faint);margin-top:34px}
@@ -26,22 +26,22 @@
   .entrada-ponto{width:5px;height:5px;border-radius:50%;background:var(--good);display:inline-block}
 
   .entrada-conteudo{display:flex;align-items:center;justify-content:center;padding:28px;background:var(--bg)}
-  .entrada-cartao{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:34px 30px 28px;box-shadow:var(--shadow-1)}
-  .entrada-cartao h2{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:600;font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
+  .entrada-cartao{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:34px 30px 28px;box-shadow:var(--shadow-1)}
+  .entrada-cartao h2{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:var(--peso-forte);font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
   .entrada-sub{color:var(--ink-soft);font-size:13px;margin:0 0 24px}
 
   .entrada-cartao form{display:flex;flex-direction:column;gap:13px}
-  .entrada-campo label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:600;display:block;margin-bottom:5px}
-  .entrada-campo input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s,background-color .15s}
+  .entrada-campo label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:var(--peso-forte);display:block;margin-bottom:5px}
+  .entrada-campo input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s,background-color .15s}
   .entrada-campo input:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft)}
 
   .entrada-senha{position:relative}
   .entrada-senha input{padding-right:38px}
-  .entrada-olho{position:absolute;right:5px;top:26px;width:27px;height:27px;border:none;background:none;cursor:pointer;color:var(--ink-faint);display:flex;align-items:center;justify-content:center;border-radius:6px;transition:background-color .12s,color .12s}
+  .entrada-olho{position:absolute;right:5px;top:26px;width:27px;height:27px;border:none;background:none;cursor:pointer;color:var(--ink-faint);display:flex;align-items:center;justify-content:center;border-radius:var(--radius-xs);transition:background-color .12s,color .12s}
   .entrada-olho:hover{color:var(--ink-soft);background:var(--accent-soft)}
   .entrada-olho svg{width:16px;height:16px}
 
-  .entrada-cartao button[type=submit]{margin-top:6px;padding:11px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:filter .15s,transform .08s}
+  .entrada-cartao button[type=submit]{margin-top:6px;padding:11px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:14px;font-weight:var(--peso-forte);font-family:inherit;cursor:pointer;transition:filter .15s,transform .08s}
   .entrada-cartao button[type=submit]:hover{filter:brightness(1.07)}
   .entrada-cartao button[type=submit]:active{transform:translateY(1px)}
 

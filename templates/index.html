@@ -60,13 +60,13 @@
 <div id="formManual" class="cat-breakdown" style="display:none" {{ 'hidden' if not pode_manual }}>
   <h3>Novo lançamento manual (dinheiro)</h3>
   <form onsubmit="return salvarManual(event)" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <input type="date" id="manualData" required value="{{ hoje_iso }}" style="padding:7px 9px;border:1px solid var(--line);border-radius:6px">
-    <input type="text" id="manualDescricao" placeholder="Descrição" required style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;flex:1;min-width:160px">
+    <input type="date" id="manualData" required value="{{ hoje_iso }}" style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs)">
+    <input type="text" id="manualDescricao" placeholder="Descrição" required style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);flex:1;min-width:160px">
     <select id="manualDirecao" style="padding:7px 9px">
       <option value="saida">Saída</option>
       <option value="entrada">Entrada</option>
     </select>
-    <input type="number" id="manualValor" step="0.01" min="0.01" placeholder="Valor (R$)" required style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:130px">
+    <input type="number" id="manualValor" step="0.01" min="0.01" placeholder="Valor (R$)" required style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:130px">
     <select id="manualCategoria" data-pdm-combobox aria-label="Categoria" style="padding:7px 9px">
       {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
     </select>

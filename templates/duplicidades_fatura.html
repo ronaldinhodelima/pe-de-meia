@@ -46,7 +46,7 @@
 {% if repetidas %}
   <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
     <h3>Parcela cobrada de novo
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ repetidas|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ repetidas|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       A compra inteira já está lançada (e fora do resultado) e a fatura já cobre as parcelas.
@@ -68,7 +68,7 @@
 {% if ecos %}
   <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
     <h3>Mesma compra gravada duas vezes pelo Pluggy (pending → posted)
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ ecos|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ ecos|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       Estes caem a poucos dias do lançamento da compra inteira: o Pluggy registra na autorização
@@ -102,7 +102,7 @@
 {% if revisar %}
   <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
     <h3>Precisa da sua revisão
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ revisar|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ revisar|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       Sem vínculo com nenhuma linha de fatura e sem padrão que permita concluir sozinho. Pode ser
@@ -121,7 +121,7 @@
 {% if estornadas %}
   <div class="cat-breakdown">
     <h3>Cobrança estornada pela operadora
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ estornadas|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ estornadas|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       Existe um estorno de mesmo valor no mesmo dia. A cobrança e o estorno são os dois
@@ -135,7 +135,7 @@
 {% if aguardando %}
   <div class="cat-breakdown">
     <h3>Aguardando a próxima fatura
-      <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ aguardando|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ aguardando|length }})</span>
     </h3>
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
       Compras feitas perto do fechamento do último mês importado. A operadora lança na fatura

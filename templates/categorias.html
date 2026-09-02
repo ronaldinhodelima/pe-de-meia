@@ -6,7 +6,7 @@
   <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input type="hidden" name="acao" value="criar">
     <input name="nome" placeholder="Nome da categoria"
-           style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;width:240px">
+           style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:240px">
     <button type="submit" class="btn-primario">
       Criar categoria
     </button>
@@ -14,7 +14,7 @@
 </div>
 
 <details class="cat-breakdown">
-  <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-soft)">O que é cada natureza?</summary>
+  <summary style="cursor:pointer;font-weight:var(--peso-forte);font-size:13px;color:var(--ink-soft)">O que é cada natureza?</summary>
   <div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:10px">
     O DRE mede o <strong>resultado</strong> do período: Receitas − Despesas. Nem todo dinheiro que sai é despesa.
     <ul style="margin:8px 0 0 0;padding-left:18px">
@@ -76,7 +76,7 @@
             <input type="hidden" name="acao" value="renomear">
             <input type="hidden" name="categoria" value="{{ c.chave }}">
             <input name="novo_nome" value="{{ c.nome }}"
-                   style="padding:6px 8px;border:1px solid #ccc;border-radius:6px;width:220px">
+                   style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
             <button type="submit" class="ver-btn">Salvar</button>
           </form>
           <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">{{ c.chave }}</div>
@@ -101,7 +101,7 @@
           <form method="post" style="display:flex;gap:6px;align-items:center">
             <input type="hidden" name="acao" value="mover">
             <input type="hidden" name="origem" value="{{ c.chave }}">
-            <select name="destino" style="padding:6px 8px;border:1px solid #ccc;border-radius:6px;max-width:180px">
+            <select name="destino" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);max-width:180px">
               <option value="">mover lançamentos para…</option>
               {% for d in categorias if d.chave != c.chave %}
               <option value="{{ d.chave }}">{{ d.nome }}</option>

@@ -14,12 +14,12 @@
 </div>
 
 <div class="rel-filtros">
-  <select name="visao" id="selVisao" class="chip-btn" style="border-radius:20px" onchange="aplicarFiltros()">
+  <select name="visao" id="selVisao" class="chip-btn" style="border-radius:var(--radius-lg)" onchange="aplicarFiltros()">
     {% for val, rotulo in visao_opcoes %}
       <option value="{{ val }}" {{ 'selected' if val == visao }}>{{ rotulo }}</option>
     {% endfor %}
   </select>
-  <select name="agrupar" id="selAgrupar" class="chip-btn" style="border-radius:20px" onchange="aplicarFiltros()">
+  <select name="agrupar" id="selAgrupar" class="chip-btn" style="border-radius:var(--radius-lg)" onchange="aplicarFiltros()">
     {% for val, rotulo in agrupar_opcoes %}
       <option value="{{ val }}" {{ 'selected' if val == agrupar }}>{{ rotulo }}</option>
     {% endfor %}
@@ -48,7 +48,7 @@
 </div>
 
 <div class="cat-breakdown">
-  <h3>Totais agrupados <span style="font-weight:400;font-size:12px;color:var(--ink-faint)">(clique em um grupo para ver os lançamentos)</span></h3>
+  <h3>Totais agrupados <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">(clique em um grupo para ver os lançamentos)</span></h3>
   <div id="gruposCont"><div style="color:var(--ink-faint);padding:10px 0">Carregando...</div></div>
 </div>
 {% endblock %}

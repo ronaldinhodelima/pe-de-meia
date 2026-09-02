@@ -43,7 +43,7 @@
               <td class="valor">{{ a.bruto|moeda }}</td>
               <td class="valor" style="color:var(--good)">{{ a.rend|moeda }}<div style="font-size:11px">{{ "%.1f"|format(a.pct) }}%</div></td>
               <td class="valor" style="color:var(--ink-faint)">{{ a.impostos|moeda }}</td>
-              <td class="valor" style="font-weight:600">{{ a.saldo|moeda }}</td>
+              <td class="valor" style="font-weight:var(--peso-forte)">{{ a.saldo|moeda }}</td>
               <td style="font-size:11.5px;color:var(--ink-soft)">{{ a.vencimento }}</td>
             </tr>
           {% else %}
