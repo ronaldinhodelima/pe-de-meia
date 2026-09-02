@@ -287,7 +287,7 @@
   table.ajustavel th[data-col] .col-resize-handle:hover::after { background: var(--accent); }
   table.ajustavel th[data-col].sort-asc::after { content: " ▲"; font-size: 9px; color: var(--accent); }
   table.ajustavel th[data-col].sort-desc::after { content: " ▼"; font-size: 9px; color: var(--accent); }
-  table.compacta input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); }
+  table.compacta input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); }
 
   /* ---------- chips dos filtros selecionados ---------- */
   .chips-sel { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -550,14 +550,13 @@ td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
 .sel-check, .sel-fatura, #loteTodos, .conf-check, .ok-lancamento,
 .barra-lote-inline input[type=checkbox] {
   appearance: none; -webkit-appearance: none;
-  width: 16px; height: 16px; margin: 0; padding: 0;
+  width: 15px; height: 15px; margin: 0; padding: 0;
   border: none; border-radius: 5px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(16, 32, 58, .07);
   cursor: pointer; position: relative; flex: none;
   transition: box-shadow .13s ease, background-color .13s ease, transform .13s ease;
 }
-.ok-lancamento { width: 17px; height: 17px; }
 .sel-check:hover, .sel-fatura:hover, #loteTodos:hover, .conf-check:hover,
 .ok-lancamento:hover, .barra-lote-inline input[type=checkbox]:hover {
   box-shadow: inset 0 0 0 1px var(--accent), 0 2px 6px var(--accent-soft);
@@ -577,7 +576,7 @@ td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
 .sel-check:checked::after, .sel-fatura:checked::after, #loteTodos:checked::after,
 .conf-check:checked::after, .ok-lancamento:checked::after,
 .barra-lote-inline input[type=checkbox]:checked::after {
-  content: ''; position: absolute; left: 5px; top: 1.5px;
+  content: ''; position: absolute; left: 4.5px; top: 1px;
   width: 4px; height: 8px; border: solid #fff;
   border-width: 0 2px 2px 0; transform: rotate(43deg);
 }
