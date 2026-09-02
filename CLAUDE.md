@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 02/09/2026 · **Schema:** migração 51 · **Testes:** 289 aprovados, 6 ignorados
+**Última revisão:** 02/09/2026 · **Schema:** migração 52 · **Testes:** 292 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -938,8 +938,32 @@ decisão do usuário, que vale inclusive contra a maioria dos OK já gravados** 
 | APPLE.COM/BILL | Serviços Digitais | — | — | |
 | TOTAL SPORTES | Vestuário | — | — | |
 
-**GuilhermeDaSilva:** abaixo de R$ 120,00 é **Água**, acima é **Gás**; sempre Família / Casa /
-Vida Familiar. **R$ 120,00 exatos seguem sem decisão** e não são tocados.
+Decisões de 02/09/2026, depois da auditoria dos 1.012 OK de 2026 (migração 52). Como na 46, valem
+contra a maioria dos OK já gravados, e por isso a migração corrigiu lançamento conferido — sem
+encostar no OK:
+
+| Lojista | Decisão | Regra p/ novos |
+|---|---|---|
+| NETFLIX (as duas grafias) | Família / Compras Pessoais / Vida Familiar | sim |
+| AQUAMATER | Projeto **Saúde** | sim |
+| EVENTIM | Projeto **Iron Maiden 2026** | **não** — evento datado (§8.2) |
+| AZULEQVY2E | categoria **Airport and airlines** | já existia |
+| JIM.COM REGINALDO | categoria **Beleza** | sim |
+| COSTAO DO SÁ | categoria **Viagem** | sim |
+| ORTOCLINICA | categoria **Hospital clinics and labs** | sim |
+| DELTA VIDEIRA | **manter como está** — há formas diferentes de trabalho | — |
+| UNICRED TAG | **manter como está** | — |
+
+**GuilhermeDaSilva:** abaixo de R$ 100,00 é **Água**, acima é **Gás**; sempre Família / Casa /
+Vida Familiar. O corte era R$ 120,00 e **encostou no gás**: os valores reais são água de R$ 17,00 a
+R$ 66,00 e gás de R$ 114,99 a R$ 185,00, então o vão está entre 66 e 115. Mudar para R$ 100,00 não
+moveu nenhum lançamento existente — mudou o critério dos próximos. R$ 100,00 exatos seguem sem
+decisão.
+
+**"VISA NACIONAL" não é lojista e não pode virar regra.** As linhas são `ESTORNO - Visa Nacional`,
+cada uma herdando a classificação da compra que estornou (§8.3) — mercado, reforma, serviço
+digital. As categorias diferentes são o comportamento **certo**: forçar uma só faria o crédito
+deixar de anular a despesa correta no DRE. A migração 52 recusou aplicar isso de propósito.
 
 Decisões anteriores que continuam valendo: farmácia cotidiana é Saúde (projetos explícitos de
 viagem ou cirurgia são preservados); anuidades e bonificações Unicred são Tarifas do Cartão /
@@ -1252,3 +1276,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 49 | segunda passada do consenso; `classificacao_backup_v49` |
 | 50 | desfaz vínculos entre estabelecimentos diferentes; `vinculo_backup_v50` + `agregado_backup_v50` |
 | 51 | eco de 3h: mesma cobrança contando duas vezes no DRE (§6.7); `eco_backup_v51` |
+| 52 | decisões do usuário sobre lojistas divergentes de 2026 (§8.4); `classificacao_backup_v52` |
