@@ -19,6 +19,7 @@ from core import (
     FINANCEIRO_TABELA,
     JOIN_NATUREZA,
     MESES_ABREV,
+    NATUREZA_PADRAO,
     NATUREZA_SQL,
     VAL_DESPESA,
     _montar_filtro_relatorio,
@@ -2972,4 +2973,204 @@ def api_eco_horario():
         "detalhe": sorted(
             casos, key=lambda c: -c["excedente_no_dre"]
         )[:300],
+    })
+
+
+@bp.route("/api/diagnostico/classificacao-ok")
+@requer("cadastros")
+def api_classificacao_ok():
+    """Audita a QUALIDADE dos lancamentos que ja tem OK, sem gravar nada.
+
+    O consenso da secao 8.2 aprende com o OK e so preenche campo vazio - ele
+    nunca questiona o que ja foi assinado. Esta rota faz o contrario: assume que
+    o OK e a assinatura humana (secao 1.2) e procura onde essa base se contradiz.
+
+    Cinco eixos, todos sobre o mesmo recorte (ano + conta + conferida):
+
+    1. `ok_incompleto`  - OK com campo obrigatorio faltando. Deveria ser zero: a
+       trava da secao 7.2 exige os quatro campos para liberar o OK. Qualquer
+       ocorrencia e anomalia - tipicamente `valor_id` NULL da secao 3, onde o
+       valor de dimensao foi apagado depois e a linha ficou para tras.
+    2. `categoria_divergente` - mesmo lojista com categorias diferentes entre os
+       OK. Separa o par compra+IOF, que e falso positivo conhecido (secao 8.3):
+       o IOF chega com a MESMA descricao do lojista, entao NOVOTEL aparece como
+       Accomodation e Tax on financial operations, e os dois estao certos.
+    3. `dimensao_destoante` - lojista com categoria unanime mas UM lancamento
+       com Responsavel/Projeto/Portfolio diferente do resto. O "1 em 15" e o
+       formato classico de erro de digitacao.
+    4. `categoria_sem_natureza` - categoria que o DRE assume como despesa por
+       falta de cadastro (secao 4.1). Com OK assinado em cima, infla o resultado
+       sem ninguem ver.
+    5. `padroes` - lojista cujos OK concordam nos QUATRO campos, com no minimo
+       tres evidencias. E a base para regra automatica e para o proximo mes.
+
+    Somente leitura: nao abre transacao de escrita e nao toca em `conferida`.
+    """
+    conta = request.args.get("account_id") or CONTA_UNICRED
+    anos = [int(a) for a in (request.args.get("anos") or "2026").split(",") if a.strip()]
+    minimo_padrao = max(2, int(request.args.get("minimo_padrao") or 3))
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id,nome FROM cartao.dimensao WHERE lower(nome) IN "
+        "('responsável','responsavel','projeto','portfólio','portfolio');"
+    )
+    dims_alvo = {i: n for i, n in cur.fetchall()}
+    cur.execute("SELECT id,nome,obrigatoria FROM cartao.dimensao;")
+    obrigatorias = {i: n for i, n, obr in cur.fetchall() if obr}
+    cur.execute("SELECT id,nome FROM cartao.dimensao_valor;")
+    nomes_valor = dict(cur.fetchall())
+    cur.execute("SELECT categoria,natureza FROM cartao.categoria_natureza;")
+    naturezas = dict(cur.fetchall())
+
+    # Registro tecnico nao e lancamento a classificar (secao 10.4 n.5): esta
+    # fora do resultado por construcao e nunca teria classificacao completa.
+    cur.execute(
+        "SELECT t.transacao_id::text, t.descricao, t.categoria, "
+        f"to_char({DATA_LOCAL_SQL},'YYYY-MM') AS mes, "
+        "COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+        " FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+        " '{}'::jsonb) "
+        "FROM cartao.transacao t WHERE t.account_id=%s "
+        "AND t.conferida = true "
+        "AND COALESCE(t.duplicada,false)=false "
+        "AND COALESCE(t.somente_conciliacao,false)=false "
+        "AND t.substituido_por IS NULL "
+        f"AND EXTRACT(YEAR FROM {DATA_LOCAL_SQL}) = ANY(%s);",
+        (conta, anos),
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    registros = []
+    for tid, descricao, categoria, mes, valor, dims in linhas:
+        # `valor_id` NULL conta como VAZIO, nao como preenchido (secao 3):
+        # apagar um valor de dimensao deixa a linha para tras com valor nulo, e
+        # a tela mostra "(nao definido)" enquanto a chave existe.
+        preenchidas = {
+            int(d): v for d, v in (dims or {}).items() if v is not None
+        }
+        registros.append({
+            "tid": tid, "loja": _loja_v45(descricao), "descricao": descricao,
+            "categoria": categoria, "mes": mes,
+            "valor": float(abs(Decimal(str(valor or 0)))),
+            "dims": preenchidas,
+        })
+
+    natureza_de = lambda c: naturezas.get(c or "", NATUREZA_PADRAO)
+
+    # 1. OK com campo obrigatorio faltando
+    ok_incompleto = []
+    for r in registros:
+        if not exige_dimensoes(natureza_de(r["categoria"])):
+            continue
+        faltam = []
+        if not r["categoria"]:
+            faltam.append("categoria")
+        faltam.extend(
+            nome for did, nome in obrigatorias.items() if did not in r["dims"]
+        )
+        if faltam:
+            ok_incompleto.append({
+                "transacao_id": r["tid"], "descricao": r["descricao"],
+                "mes": r["mes"], "valor": r["valor"], "faltam": faltam,
+            })
+
+    # 2. Categoria divergente entre OK do mesmo lojista
+    votos_cat = {}
+    for r in registros:
+        if not r["categoria"]:
+            continue
+        votos_cat.setdefault(r["loja"], {})
+        votos_cat[r["loja"]][r["categoria"]] = \
+            votos_cat[r["loja"]].get(r["categoria"], 0) + 1
+    divergentes, so_iof = {}, {}
+    for loja, cats in sorted(votos_cat.items()):
+        if len(cats) < 2:
+            continue
+        ordenado = dict(sorted(cats.items(), key=lambda x: -x[1]))
+        sem_iof = {c: n for c, n in ordenado.items()
+                   if "tax on financial" not in (c or "").lower()}
+        # compra + IOF na mesma descricao: os dois estao certos (secao 8.3)
+        if len(sem_iof) < 2:
+            so_iof[loja] = ordenado
+        else:
+            divergentes[loja] = ordenado
+
+    # 3. Dimensao destoante dentro de lojista com categoria unanime
+    destoantes = []
+    for loja, cats in sorted(votos_cat.items()):
+        if len(cats) > 1:
+            continue
+        do_loja = [r for r in registros if r["loja"] == loja]
+        if len(do_loja) < minimo_padrao:
+            continue
+        for did, nome_dim in sorted(dims_alvo.items()):
+            contagem = {}
+            for r in do_loja:
+                contagem.setdefault(r["dims"].get(did), []).append(r)
+            if len(contagem) != 2:
+                continue
+            ordem = sorted(contagem.items(), key=lambda x: -len(x[1]))
+            (maioria, muitos), (minoria, poucos) = ordem
+            # so aponta quando e' mesmo um fora da curva, nao um empate
+            if len(poucos) != 1 or len(muitos) < minimo_padrao or minoria is None:
+                continue
+            fora = poucos[0]
+            destoantes.append({
+                "lojista": loja, "campo": nome_dim,
+                "maioria": nomes_valor.get(maioria, "(não definido)"),
+                "quantos_na_maioria": len(muitos),
+                "valor_destoante": nomes_valor.get(minoria, "(não definido)"),
+                "transacao_id": fora["tid"], "descricao": fora["descricao"],
+                "mes": fora["mes"], "valor": fora["valor"],
+            })
+
+    # 4. Categoria sem natureza cadastrada
+    sem_natureza = {}
+    for r in registros:
+        if r["categoria"] and r["categoria"] not in naturezas:
+            sem_natureza.setdefault(r["categoria"], {"lancamentos": 0, "valor": 0.0})
+            sem_natureza[r["categoria"]]["lancamentos"] += 1
+            sem_natureza[r["categoria"]]["valor"] = round(
+                sem_natureza[r["categoria"]]["valor"] + r["valor"], 2)
+
+    # 5. Padroes fechados, prontos para virar regra
+    padroes = {}
+    for loja, cats in sorted(votos_cat.items()):
+        if len(cats) > 1:
+            continue
+        do_loja = [r for r in registros if r["loja"] == loja]
+        if len(do_loja) < minimo_padrao:
+            continue
+        combinado = {"categoria": next(iter(cats))}
+        completo = True
+        for did, nome_dim in sorted(dims_alvo.items()):
+            valores = {r["dims"].get(did) for r in do_loja}
+            if len(valores) != 1 or None in valores:
+                completo = False
+                break
+            combinado[nome_dim] = nomes_valor.get(valores.pop())
+        if completo:
+            combinado["evidencias"] = len(do_loja)
+            padroes[loja] = combinado
+
+    return jsonify({
+        "conta": conta, "anos": anos,
+        "lancamentos_com_ok": len(registros),
+        "ok_incompleto": {
+            "quantos": len(ok_incompleto),
+            "detalhe": sorted(ok_incompleto, key=lambda x: -x["valor"])[:100],
+        },
+        "categoria_divergente": divergentes,
+        "divergencia_so_por_iof": so_iof,
+        "dimensao_destoante": {
+            "quantos": len(destoantes),
+            "detalhe": sorted(destoantes, key=lambda x: -x["quantos_na_maioria"])[:100],
+        },
+        "categoria_sem_natureza": sem_natureza,
+        "padroes": {"quantos": len(padroes), "detalhe": padroes},
     })
