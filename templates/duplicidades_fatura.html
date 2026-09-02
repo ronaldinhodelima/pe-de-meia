@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block conteudo %}
 
-<div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
+<div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
   A fatura em PDF é a autoridade. Toda linha dela já tem a cobrança contabilizada — por um
   lançamento casado com ela, ou pela parcela gerada a partir da própria fatura. Logo, o que o
   Pluggy trouxe e ficou <strong>sem vínculo com nenhuma linha de nenhuma fatura</strong> ou é
@@ -30,7 +30,7 @@
           <td style="white-space:nowrap">{{ i.data.strftime('%d/%m/%Y') }}</td>
           <td>{{ i.descricao }}</td>
           <td class="valor">{{ i.valor|moeda }}</td>
-          <td style="font-size:11.5px;color:var(--ink-soft)">{{ i.motivo }}</td>
+          <td style="font-size:var(--fonte-xs);color:var(--ink-soft)">{{ i.motivo }}</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -46,9 +46,9 @@
 {% if repetidas %}
   <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
     <h3>Parcela cobrada de novo
-      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ repetidas|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:var(--fonte-sm);color:var(--ink-faint)">({{ repetidas|length }})</span>
     </h3>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       A compra inteira já está lançada (e fora do resultado) e a fatura já cobre as parcelas.
       Estas chegaram meses depois, por cima — o dinheiro está sendo contado duas vezes.
     </div>
@@ -59,7 +59,7 @@
       <button type="button" class="ver-btn" onclick="marcarTodasRepetidas(this)">
         Vincular todas as {{ repetidas|length }}
       </button>
-      <span id="dup-status" style="font-size:12px;color:var(--ink-faint)"></span>
+      <span id="dup-status" style="font-size:var(--fonte-sm);color:var(--ink-faint)"></span>
     </div>
     {% endif %}
   </div>
@@ -68,9 +68,9 @@
 {% if ecos %}
   <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
     <h3>Mesma compra gravada duas vezes pelo Pluggy (pending → posted)
-      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ ecos|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:var(--fonte-sm);color:var(--ink-faint)">({{ ecos|length }})</span>
     </h3>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Estes caem a poucos dias do lançamento da compra inteira: o Pluggy registra na autorização
       e registra de novo ao consolidar como parcelamento, sem remover o primeiro. Os pares com
       1 centavo de diferença são a assinatura disso.
@@ -84,7 +84,7 @@
       <button type="button" class="ver-btn" onclick="marcarTodosEcos(this)">
         Vincular todos os {{ ecos|length }}
       </button>
-      <span id="eco-status" style="font-size:12px;color:var(--ink-faint)"></span>
+      <span id="eco-status" style="font-size:var(--fonte-sm);color:var(--ink-faint)"></span>
     </div>
     {% endif %}
   </div>
@@ -93,7 +93,7 @@
 {% if not repetidas and not ecos %}
   <div class="cat-breakdown" style="border-left:3px solid var(--good)">
     <h3>✓ Nenhuma cobrança em dobro pendente</h3>
-    <div style="font-size:12px;color:var(--ink-soft)">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft)">
       Nenhum lançamento sem vínculo repete parcela de parcelamento já coberto pela fatura.
     </div>
   </div>
@@ -102,9 +102,9 @@
 {% if revisar %}
   <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
     <h3>Precisa da sua revisão
-      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ revisar|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:var(--fonte-sm);color:var(--ink-faint)">({{ revisar|length }})</span>
     </h3>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Sem vínculo com nenhuma linha de fatura e sem padrão que permita concluir sozinho. Pode ser
       cobrança que a fatura daquele mês realmente não trouxe, parcelamento que o Pluggy
       representou de outro jeito, ou duplicidade da operadora. Confira contra o PDF antes de marcar.
@@ -121,9 +121,9 @@
 {% if estornadas %}
   <div class="cat-breakdown">
     <h3>Cobrança estornada pela operadora
-      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ estornadas|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:var(--fonte-sm);color:var(--ink-faint)">({{ estornadas|length }})</span>
     </h3>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Existe um estorno de mesmo valor no mesmo dia. A cobrança e o estorno são os dois
       lançamentos legítimos e <strong>se anulam sozinhos</strong> no resultado — marcar um deles
       deixaria o estorno negativo solto. Sem ação.
@@ -135,9 +135,9 @@
 {% if aguardando %}
   <div class="cat-breakdown">
     <h3>Aguardando a próxima fatura
-      <span style="font-weight:var(--peso-normal);font-size:12px;color:var(--ink-faint)">({{ aguardando|length }})</span>
+      <span style="font-weight:var(--peso-normal);font-size:var(--fonte-sm);color:var(--ink-faint)">({{ aguardando|length }})</span>
     </h3>
-    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Compras feitas perto do fechamento do último mês importado. A operadora lança na fatura
       seguinte — devem sumir daqui sozinhas quando você importar o próximo PDF.
       <strong>Não são duplicidade</strong>, por isso não têm ação.

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block conteudo %}
 
-<div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">
+<div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px">
   Dimensões são classificações independentes do Centro de Custo, aplicadas a cada lançamento
   (ex: <strong>Responsável</strong> — quem gastou, <strong>Projeto/Evento</strong> — a qual viagem
   ou evento pertence). Dimensões marcadas como obrigatórias impedem confirmar (marcar como
@@ -17,7 +17,7 @@
     <input type="hidden" name="acao" value="criar_dimensao">
     <input name="nome" placeholder="Ex: Cliente, Método de pagamento..."
            style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:260px">
-    <label style="font-size:13px;color:var(--ink-soft)">
+    <label style="font-size:var(--fonte-md);color:var(--ink-soft)">
       <input type="checkbox" name="obrigatoria" checked> obrigatório para confirmar
     </label>
     <button type="submit" class="btn-primario">
@@ -29,12 +29,12 @@
 
 {% for d in dimensoes %}
 <details class="cat-breakdown" open style="padding:0">
-  <summary style="cursor:pointer;padding:14px 18px;font-weight:var(--peso-forte);font-size:14px">
+  <summary style="cursor:pointer;padding:14px 18px;font-weight:var(--peso-forte);font-size:var(--fonte-lg)">
     {{ d.nome }}
     {% if d.obrigatoria %}
-      <span style="color:var(--bad);font-size:12px">(obrigatório)</span>
+      <span style="color:var(--bad);font-size:var(--fonte-sm)">(obrigatório)</span>
     {% else %}
-      <span style="color:var(--ink-faint);font-size:12px">(opcional)</span>
+      <span style="color:var(--ink-faint);font-size:var(--fonte-sm)">(opcional)</span>
     {% endif %}
   </summary>
   <div style="padding:0 18px 18px 18px">
@@ -42,7 +42,7 @@
       <input type="hidden" name="acao" value="editar_dimensao">
       <input type="hidden" name="dimensao_id" value="{{ d.id }}">
       <input name="nome" value="{{ d.nome }}" style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
-      <label style="font-size:13px;color:var(--ink-soft)">
+      <label style="font-size:var(--fonte-md);color:var(--ink-soft)">
         <input type="checkbox" name="obrigatoria" {% if d.obrigatoria %}checked{% endif %}> obrigatório para confirmar
       </label>
       <button type="submit" class="ver-btn">Salvar</button>
@@ -50,7 +50,7 @@
     {% if usados_dimensao.get(d.id) %}
       <button type="button" data-dimensao="{{ d.id }}" onclick="verLancamentosDimensao(this)"
               data-tip="Existem lançamentos vinculados a valores desta dimensão. Clique para ver quais são."
-              style="font-size:11px;color:var(--ink-faint);background:none;border:none;padding:0;
+              style="font-size:var(--fonte-xs);color:var(--ink-faint);background:none;border:none;padding:0;
                      text-decoration:underline;cursor:pointer">
         {{ usados_dimensao[d.id] }} lanç. — dimensão protegida
       </button>
@@ -74,14 +74,14 @@
                    title="Ícone opcional (emoji) para reconhecer este valor de relance"
                    style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:52px;text-align:center">
             <input name="nome" value="{{ v.nome }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:200px">
-            <span style="font-size:12px;color:var(--ink-faint)">teto mensal</span>
+            <span style="font-size:var(--fonte-sm);color:var(--ink-faint)">teto mensal</span>
             <input name="teto_mensal" value="{{ v.teto_mensal|num }}" placeholder="opcional"
                    style="width:100px;padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
-            <span style="font-size:12px;color:var(--ink-faint)">teto anual</span>
+            <span style="font-size:var(--fonte-sm);color:var(--ink-faint)">teto anual</span>
             <input name="teto_anual" value="{{ v.teto_anual|num }}" placeholder="opcional"
                    style="width:100px;padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
             {% if d.nome == 'Projeto' %}
-              <span style="font-size:12px;color:var(--ink-faint)" title="Ao escolher este Projeto num lançamento, o Portfólio é preenchido sozinho com este valor (dá pra trocar depois)">portfólio padrão</span>
+              <span style="font-size:var(--fonte-sm);color:var(--ink-faint)" title="Ao escolher este Projeto num lançamento, o Portfólio é preenchido sozinho com este valor (dá pra trocar depois)">portfólio padrão</span>
               <select name="portfolio_valor_id"
                       style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
                 <option value="">nenhum</option>
@@ -94,15 +94,15 @@
           </form>
           {% set g = gastos.get(v.id, {}) %}
           {% if v.teto_mensal %}
-            <div style="font-size:11.5px;color:var(--ink-faint)">
+            <div style="font-size:var(--fonte-xs);color:var(--ink-faint)">
               {{ g.mes|moeda }} este mês de {{ v.teto_mensal|moeda }}
             </div>
             {{ barra(g.mes, v.teto_mensal)|safe }}
           {% elif g.mes %}
-            <div style="font-size:11.5px;color:var(--ink-faint)">{{ g.mes|moeda }} este mês</div>
+            <div style="font-size:var(--fonte-xs);color:var(--ink-faint)">{{ g.mes|moeda }} este mês</div>
           {% endif %}
           {% if v.teto_anual %}
-            <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px">
+            <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:4px">
               {{ g.ano|moeda }} este ano de {{ v.teto_anual|moeda }}
             </div>
             {{ barra(g.ano, v.teto_anual)|safe }}
@@ -112,7 +112,7 @@
           {% if usados_valor.get(v.id) %}
             <button type="button" data-valor="{{ v.id }}" onclick="verLancamentosValor(this)"
                     data-tip="Existem lançamentos com este valor. Clique para ver quais são."
-                    style="font-size:11px;color:var(--ink-faint);background:none;border:none;padding:0;
+                    style="font-size:var(--fonte-xs);color:var(--ink-faint);background:none;border:none;padding:0;
                            text-decoration:underline;cursor:pointer">{{ usados_valor[v.id] }} lanç. — protegido</button>
           {% else %}
             <form method="post" onsubmit="return confirm('Excluir este valor?')">
@@ -124,7 +124,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="2" style="padding-left:24px;color:var(--ink-faint);font-size:13px">Nenhum valor cadastrado ainda.</td></tr>
+      <tr><td colspan="2" style="padding-left:24px;color:var(--ink-faint);font-size:var(--fonte-md)">Nenhum valor cadastrado ainda.</td></tr>
       {% endfor %}
     </tbody></table>
 

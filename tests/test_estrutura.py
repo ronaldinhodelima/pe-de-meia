@@ -1120,7 +1120,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 310
+    TETO = 55
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],
@@ -1131,7 +1131,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
         f"{total} valores visuais fora do sistema de tokens (teto {TETO}). "
         "Use as variaveis do :root em vez de cor/tamanho/raio escritos na mao."
     )
-    assert total >= TETO - 40, (
+    assert total >= TETO - 25, (
         f"o teto ficou folgado demais ({total} de {TETO}): abaixe TETO para {total} "
         "para que a proxima regressao seja pega."
     )

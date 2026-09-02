@@ -4693,7 +4693,7 @@ def _barra_html(realizado, teto):
     return (
         f'<div style="background:var(--raise);border-radius:var(--radius-xxs);height:8px;margin-top:4px;overflow:hidden">'
         f'<div style="background:{cor};width:{largura:.0f}%;height:100%"></div></div>'
-        f'<div style="font-size:11px;color:{cor};margin-top:2px">{pct:.0f}% do teto</div>'
+        f'<div style="font-size:var(--fonte-xs);color:{cor};margin-top:2px">{pct:.0f}% do teto</div>'
     )
 
 
@@ -4924,7 +4924,7 @@ def aviso_pendencias_html(pend):
         partes.append(f'<strong>{n}</strong> categoria{"s" if n > 1 else ""} de despesa sem centro de custo')
     return (
         '<div style="background:var(--bad-soft);border:1px solid var(--bad);border-radius:var(--radius-sm);'
-        'padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+        'padding:10px 14px;margin-bottom:14px;font-size:var(--fonte-md);display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
         '<span>⚠</span><span>' + " · ".join(partes) + '</span>'
         '<a href="/pendencias" style="margin-left:auto;color:var(--bad);font-weight:var(--peso-forte)">Revisar agora →</a>'
         '</div>'

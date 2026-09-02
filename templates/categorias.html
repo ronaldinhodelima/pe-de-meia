@@ -14,8 +14,8 @@
 </div>
 
 <details class="cat-breakdown">
-  <summary style="cursor:pointer;font-weight:var(--peso-forte);font-size:13px;color:var(--ink-soft)">O que é cada natureza?</summary>
-  <div style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin-top:10px">
+  <summary style="cursor:pointer;font-weight:var(--peso-forte);font-size:var(--fonte-md);color:var(--ink-soft)">O que é cada natureza?</summary>
+  <div style="font-size:var(--fonte-md);color:var(--ink-soft);line-height:1.7;margin-top:10px">
     O DRE mede o <strong>resultado</strong> do período: Receitas − Despesas. Nem todo dinheiro que sai é despesa.
     <ul style="margin:8px 0 0 0;padding-left:18px">
       <li><strong>Receita</strong> — entra e aumenta seu patrimônio (salário, PIX recebido, depósitos).</li>
@@ -32,7 +32,7 @@
 {% if duplicadas %}
 <div class="cat-breakdown" style="border-left:3px solid var(--bad)">
   <h3>Nomes repetidos em categorias diferentes</h3>
-  <div style="font-size:12.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:10px">
+  <div style="font-size:var(--fonte-sm);color:var(--ink-soft);line-height:1.6;margin-bottom:10px">
     Renomear troca só o apelido — a categoria original do banco continua sendo outra. Com o
     mesmo nome em duas delas, o <strong>relatório mostra linhas repetidas</strong> com o total
     dividido, e cada uma tem seu próprio vínculo de centro de custo e sua própria natureza.
@@ -43,10 +43,10 @@
     <div class="cat-row" style="align-items:flex-start">
       <span><strong>{{ d.nome }}</strong>
         {% if d.naturezas_divergem %}
-          <span style="color:var(--bad);font-size:11.5px">— naturezas diferentes entre elas</span>
+          <span style="color:var(--bad);font-size:var(--fonte-xs)">— naturezas diferentes entre elas</span>
         {% endif %}
       </span>
-      <span style="font-size:12px;color:var(--ink-soft);text-align:right">
+      <span style="font-size:var(--fonte-sm);color:var(--ink-soft);text-align:right">
         {% for i in d.itens %}
           {{ i.chave }} · {{ i.qtd }} lanç. · {{ naturezas.get(i.natureza, i.natureza) }}{% if not loop.last %}<br>{% endif %}
         {% endfor %}
@@ -57,7 +57,7 @@
 {% endif %}
 
 <div class="cat-breakdown">
-  <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px">
+  <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
     Renomeie, defina a natureza contábil, mova lançamentos entre categorias ou remova categorias
     vazias. Uma categoria só pode ser removida quando não tiver nenhum lançamento — mova os
     lançamentos para outra categoria primeiro, usando a coluna "Mover".
@@ -79,7 +79,7 @@
                    style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
             <button type="submit" class="ver-btn">Salvar</button>
           </form>
-          <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">{{ c.chave }}</div>
+          <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:2px">{{ c.chave }}</div>
         </td>
         <td class="valor">{{ c.qtd or "-" }}</td>
         <td class="valor">{% if c.qtd %}{{ c.total|moeda }}{% else %}-{% endif %}</td>
@@ -87,13 +87,13 @@
           <form method="post" style="display:flex;gap:6px;align-items:center">
             <input type="hidden" name="acao" value="natureza">
             <input type="hidden" name="categoria" value="{{ c.chave }}">
-            <select name="natureza" onchange="this.form.submit()" style="padding:5px 7px;font-size:12px">
+            <select name="natureza" onchange="this.form.submit()" style="padding:5px 7px;font-size:var(--fonte-sm)">
               {% for chave, rotulo in naturezas.items() %}
               <option value="{{ chave }}" {% if chave == c.natureza %}selected{% endif %}>{{ rotulo }}</option>
               {% endfor %}
             </select>
             {% if c.natureza in naturezas_neutras %}
-            <span style="color:var(--ink-faint);font-size:11px"> fora do resultado</span>
+            <span style="color:var(--ink-faint);font-size:var(--fonte-xs)"> fora do resultado</span>
             {% endif %}
           </form>
         </td>
@@ -114,7 +114,7 @@
           {% if c.qtd %}
             <button type="button" data-categoria="{{ c.chave }}" onclick="verLancamentosCategoria(this)"
                     data-tip="Existem lançamentos nessa categoria. Clique para ver quais são."
-                    style="font-size:11px;color:var(--ink-faint);background:none;border:none;padding:0;
+                    style="font-size:var(--fonte-xs);color:var(--ink-faint);background:none;border:none;padding:0;
                            text-decoration:underline;cursor:pointer">{{ c.qtd }} lanç. — protegida</button>
           {% else %}
             <form method="post" onsubmit="return confirm('Remover a categoria {{ c.nome }}?')">
@@ -136,7 +136,7 @@
     <span class="close" onclick="fecharModalLanc()">&times;</span>
     <h3 id="modalLancTitulo">Lançamentos</h3>
     <div id="modalLancBody" style="max-height:60vh;overflow-y:auto"></div>
-    <div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px">
+    <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:10px">
       Clique em um lançamento para ver os detalhes.
     </div>
   </div>
@@ -156,7 +156,7 @@
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
       </select></span>
     </div>
-    <div id="modalTxStatus" style="font-size:12px;margin-top:8px"></div>
+    <div id="modalTxStatus" style="font-size:var(--fonte-sm);margin-top:8px"></div>
   </div>
 </div>
 {% endblock %}

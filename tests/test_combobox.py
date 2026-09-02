@@ -34,7 +34,8 @@ def test_layout_sombra_flutuante_e_compacto():
     assert "content:'Enter ↵'" not in css
     assert "--field-soft: var(--bg)" in css
     assert "background:transparent!important" in css
-    assert "font-size:12.5px" in css
+    # o combobox segue a escala de texto, nao um tamanho proprio
+    assert "font-size:var(--fonte-sm)" in css
     assert "height:26px" in css
     assert "border-radius:5px!important" in css
     assert "padding:1px 18px 1px 3px!important" in css
@@ -44,7 +45,7 @@ def test_layout_sombra_flutuante_e_compacto():
     assert "background:var(--raise)!important" in css
     assert "border-color:rgba(92,95,102,.24)!important" in css
     assert "transform:scale(1.012)" in css
-    assert "table.compacta .pdm-combobox-input { font-size: 11.5px; }" in css
+    assert "table.compacta .pdm-combobox-input { font-size: var(--fonte-xs); }" in css
 
 
 def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():

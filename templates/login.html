@@ -19,20 +19,20 @@
 
   .entrada-tese{position:relative;max-width:30ch;margin-top:auto}
   .entrada-tese h1{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:var(--peso-forte);font-size:clamp(24px,3.4vw,32px);line-height:1.18;letter-spacing:-.01em;margin:0 0 14px;text-wrap:balance}
-  .entrada-tese p{margin:0;color:var(--ink-faint);font-size:13.5px;line-height:1.6;max-width:34ch}
+  .entrada-tese p{margin:0;color:var(--ink-faint);font-size:var(--fonte-md);line-height:1.6;max-width:34ch}
 
-  .entrada-rodape{position:relative;display:flex;gap:20px;font-size:11.5px;color:var(--ink-faint);margin-top:34px}
+  .entrada-rodape{position:relative;display:flex;gap:20px;font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:34px}
   .entrada-rodape span{display:flex;align-items:center;gap:6px}
   .entrada-ponto{width:5px;height:5px;border-radius:50%;background:var(--good);display:inline-block}
 
   .entrada-conteudo{display:flex;align-items:center;justify-content:center;padding:28px;background:var(--bg)}
   .entrada-cartao{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:34px 30px 28px;box-shadow:var(--shadow-1)}
   .entrada-cartao h2{font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;font-weight:var(--peso-forte);font-size:21px;margin:0 0 4px;letter-spacing:-.01em}
-  .entrada-sub{color:var(--ink-soft);font-size:13px;margin:0 0 24px}
+  .entrada-sub{color:var(--ink-soft);font-size:var(--fonte-md);margin:0 0 24px}
 
   .entrada-cartao form{display:flex;flex-direction:column;gap:13px}
-  .entrada-campo label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:var(--peso-forte);display:block;margin-bottom:5px}
-  .entrada-campo input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s,background-color .15s}
+  .entrada-campo label{font-size:var(--fonte-xs);text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:var(--peso-forte);display:block;margin-bottom:5px}
+  .entrada-campo input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--bg);color:var(--ink);font-size:var(--fonte-lg);font-family:inherit;transition:border-color .15s,box-shadow .15s,background-color .15s}
   .entrada-campo input:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft)}
 
   .entrada-senha{position:relative}
@@ -41,11 +41,11 @@
   .entrada-olho:hover{color:var(--ink-soft);background:var(--accent-soft)}
   .entrada-olho svg{width:16px;height:16px}
 
-  .entrada-cartao button[type=submit]{margin-top:6px;padding:11px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:14px;font-weight:var(--peso-forte);font-family:inherit;cursor:pointer;transition:filter .15s,transform .08s}
+  .entrada-cartao button[type=submit]{margin-top:6px;padding:11px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:var(--fonte-lg);font-weight:var(--peso-forte);font-family:inherit;cursor:pointer;transition:filter .15s,transform .08s}
   .entrada-cartao button[type=submit]:hover{filter:brightness(1.07)}
   .entrada-cartao button[type=submit]:active{transform:translateY(1px)}
 
-  .entrada-rodape-cartao{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-faint);text-align:center}
+  .entrada-rodape-cartao{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);font-size:var(--fonte-xs);color:var(--ink-faint);text-align:center}
 </style>
 {% endblock %}
 

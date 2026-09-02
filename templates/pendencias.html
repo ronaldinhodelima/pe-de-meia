@@ -2,11 +2,11 @@
 {% block conteudo %}
 
 {% if not pend.total %}
-  <div style="font-size:13px;color:var(--good);margin-bottom:16px">
+  <div style="font-size:var(--fonte-md);color:var(--good);margin-bottom:16px">
     ✓ Nenhuma pendência de classificação. Os números do DRE estão consistentes.
   </div>
 {% else %}
-  <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
+  <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
     Esta tela existe para garantir a <strong>regra de ouro</strong>: os números precisam ser
     reais, sem despesa inflada por classificação errada. Resolva o que estiver aqui e o DRE
     fica confiável.
@@ -15,7 +15,7 @@
 
 <div class="cat-breakdown">
   <h3>Completar pela conferência já feita</h3>
-  <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
+  <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
     Aprende <strong>só com lançamento que tem OK</strong>, exige unanimidade, e preenche
     <strong>apenas campo vazio</strong> — nunca sobrescreve o que já está classificado e
     <strong>nunca marca o OK</strong>. Cada OK novo que você assina aumenta o alcance, por isso
@@ -24,14 +24,14 @@
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button type="button" class="ver-btn" id="consensoPrevia">Ver o que seria preenchido</button>
     <button type="button" class="ver-btn" id="consensoAplicar" disabled>Aplicar</button>
-    <span id="consensoResultado" style="font-size:12.5px;color:var(--ink-soft)"></span>
+    <span id="consensoResultado" style="font-size:var(--fonte-sm);color:var(--ink-soft)"></span>
   </div>
 </div>
 
 <div class="cat-breakdown">
   <h3>Lançamentos sem categoria{% if pend.sem_categoria %} ({{ pend.sem_categoria }}){% endif %}</h3>
   {% if pend.sem_categoria %}
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
       Estes lançamentos entram no resultado, mas não aparecem em uma categoria ou centro de custo.
       Em créditos e estornos, escolha a categoria da compra original para que o valor reduza a
       despesa correta. Definir a categoria <strong>não marca o OK</strong>.
@@ -49,7 +49,7 @@
               <form method="post" style="display:flex;gap:6px;align-items:center">
                 <input type="hidden" name="acao" value="definir_categoria_lancamento">
                 <input type="hidden" name="transacao_id" value="{{ m.id }}">
-                <select name="categoria" data-pdm-combobox aria-label="Categoria" required style="padding:5px 7px;font-size:12px;min-width:190px">
+                <select name="categoria" data-pdm-combobox aria-label="Categoria" required style="padding:5px 7px;font-size:var(--fonte-sm);min-width:190px">
                   <option value="">escolha…</option>
                   {% for c in categorias_pendencia %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
                 </select>
@@ -62,14 +62,14 @@
       </table>
     </div>
   {% else %}
-    <div style="font-size:13px;color:var(--good)">✓ Todos os lançamentos têm categoria.</div>
+    <div style="font-size:var(--fonte-md);color:var(--good)">✓ Todos os lançamentos têm categoria.</div>
   {% endif %}
 </div>
 
 <div class="cat-breakdown">
   <h3>Categorias sem natureza definida{% if pend.sem_natureza %} ({{ pend.sem_natureza|length }}){% endif %}</h3>
   {% if pend.sem_natureza %}
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
       Estas categorias chegaram pela sincronização e <strong>ninguém decidiu o que elas são</strong>.
       O app assume <strong>despesa</strong> por padrão — se alguma for investimento, compra de bem
       ou transferência, ela está inflando a despesa e distorcendo o resultado do período.
@@ -83,9 +83,9 @@
       <input type="hidden" name="acao" value="definir_natureza_lote">
       <button type="button" class="ver-btn" onclick="marcarTodasPendencias(true)">Marcar todas</button>
       <button type="button" class="ver-btn" onclick="marcarTodasPendencias(false)">Limpar</button>
-      <span id="contaLote" style="font-size:12px;color:var(--ink-soft)">nenhuma marcada</span>
+      <span id="contaLote" style="font-size:var(--fonte-sm);color:var(--ink-soft)">nenhuma marcada</span>
       <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
-        <select name="natureza" style="padding:6px 8px;font-size:13px">
+        <select name="natureza" style="padding:6px 8px;font-size:var(--fonte-md)">
           {% for chave, rotulo in naturezas.items() %}
           <option value="{{ chave }}" {% if chave == natureza_padrao %}selected{% endif %}>{{ rotulo }}</option>
           {% endfor %}
@@ -105,13 +105,13 @@
           </td>
           <td>
             {{ nome_categoria(c) }}
-            <div style="font-size:11px;color:var(--ink-faint)">{{ c }}</div>
+            <div style="font-size:var(--fonte-xs);color:var(--ink-faint)">{{ c }}</div>
           </td>
           <td>
             <form method="post" style="display:flex;gap:6px;align-items:center">
               <input type="hidden" name="acao" value="definir_natureza">
               <input type="hidden" name="categoria" value="{{ c }}">
-              <select name="natureza" style="padding:5px 7px;font-size:12px">
+              <select name="natureza" style="padding:5px 7px;font-size:var(--fonte-sm)">
                 {% for chave, rotulo in naturezas.items() %}
                 <option value="{{ chave }}" {% if chave == natureza_padrao %}selected{% endif %}>{{ rotulo }}</option>
                 {% endfor %}
@@ -131,14 +131,14 @@
       </tbody>
     </table>
   {% else %}
-    <div style="font-size:13px;color:var(--good)">✓ Todas as categorias em uso têm natureza definida.</div>
+    <div style="font-size:var(--fonte-md);color:var(--good)">✓ Todas as categorias em uso têm natureza definida.</div>
   {% endif %}
 </div>
 
 <div class="cat-breakdown">
   <h3>Despesas fora do centro de custo{% if pend.despesa_sem_centro %} ({{ pend.despesa_sem_centro|length }}){% endif %}</h3>
   {% if pend.despesa_sem_centro %}
-    <div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px;line-height:1.6">
       Estas categorias <strong>são despesa</strong> e entram no resultado normalmente, mas não
       estão em nenhum centro de custo — então somem dos totais por grupo do DRE. Só aparecem
       aqui as de despesa: vincular receita ou transferência a centro de custo não faria sentido,
@@ -151,13 +151,13 @@
         <tr>
           <td>
             {{ nome_categoria(c) }}
-            <div style="font-size:11px;color:var(--ink-faint)">{{ c }}</div>
+            <div style="font-size:var(--fonte-xs);color:var(--ink-faint)">{{ c }}</div>
           </td>
           <td>
             <form method="post" style="display:flex;gap:6px;align-items:center">
               <input type="hidden" name="acao" value="vincular_centro">
               <input type="hidden" name="categoria" value="{{ c }}">
-              <select name="subgrupo_id" data-pdm-combobox aria-label="Subgrupo" style="padding:5px 7px;font-size:12px">
+              <select name="subgrupo_id" data-pdm-combobox aria-label="Subgrupo" style="padding:5px 7px;font-size:var(--fonte-sm)">
                 <option value="">escolha o subgrupo…</option>
                 {% for g in grupos %}
                   {% if subgrupos_por_grupo.get(g.id) %}
@@ -177,14 +177,14 @@
       </tbody>
     </table>
   {% else %}
-    <div style="font-size:13px;color:var(--good)">✓ Toda categoria de despesa está em um centro de custo.</div>
+    <div style="font-size:var(--fonte-md);color:var(--good)">✓ Toda categoria de despesa está em um centro de custo.</div>
   {% endif %}
 </div>
 
 {% if pend.natureza_manual %}
 <div class="cat-breakdown">
   <h3>Lançamentos com natureza manual ({{ pend.natureza_manual }})</h3>
-  <div style="font-size:12.5px;color:var(--ink-soft);line-height:1.6">
+  <div style="font-size:var(--fonte-sm);color:var(--ink-soft);line-height:1.6">
     Estes lançamentos têm uma natureza marcada no próprio lançamento, que ignora a natureza da
     categoria. Funciona, mas fica escondido: quem olhar a categoria depois não entende por que o
     número não bate. <strong>O caminho mais limpo é mover o lançamento para uma categoria que já

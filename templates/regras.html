@@ -13,7 +13,7 @@
 {% macro sel_dimensoes(selecionados={}) %}
   {% for d in dimensoes %}
     <div>
-      <label style="font-size:12px;color:var(--ink-faint);display:block">{{ d.nome }}</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">{{ d.nome }}</label>
       <select name="dim_{{ d.id }}" data-pdm-combobox aria-label="{{ d.nome }}" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
         <option value="">(nao definir)</option>
         {% for v in valores_por_dim.get(d.id, []) %}
@@ -26,7 +26,7 @@
 
 {% macro filtro_valor(operador='', limite='') %}
   <div>
-    <label style="font-size:12px;color:var(--ink-faint);display:block">Condição do valor (opcional)</label>
+    <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Condição do valor (opcional)</label>
     <div style="display:flex;gap:5px">
       <select name="valor_operador" class="regra-preview-campo" style="padding:6px 8px;border:1px solid #ccc;border-radius:var(--radius-xs)">
         <option value="">Qualquer valor</option>
@@ -43,7 +43,7 @@
 
 {% block conteudo %}
 {% set novo = prefill|default({'padrao':'','valor_operador':'','valor_limite':'','categoria':'','dimensoes':{}}, true) %}
-<div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">
+<div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px">
   Quando a descrição de um lançamento <strong>pendente</strong> (não conferido) contiver o texto cadastrado aqui,
   o app preenche sozinho a categoria e as dimensoes escolhidas, na proxima vez que voce abrir a tela principal.
   Nunca mexe em lancamentos que voce ja marcou como conferidos.
@@ -55,12 +55,12 @@
   <form method="post" id="novaRegraForm" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <input type="hidden" name="acao" value="criar_regra">
     <div>
-      <label style="font-size:12px;color:var(--ink-faint);display:block">Texto na descricao</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Texto na descricao</label>
       <input name="padrao" class="regra-preview-campo" value="{{ novo.padrao }}" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
     </div>
     {{ filtro_valor(novo.valor_operador, novo.valor_limite) }}
     <div>
-      <label style="font-size:12px;color:var(--ink-faint);display:block">Categoria</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Categoria</label>
       {{ sel_categoria(novo.categoria) }}
     </div>
     {{ sel_dimensoes(novo.dimensoes) }}
@@ -80,12 +80,12 @@
             <input type="hidden" name="acao" value="editar_regra">
             <input type="hidden" name="regra_id" value="{{ r.id }}">
             <div>
-              <label style="font-size:12px;color:var(--ink-faint);display:block">Texto na descricao</label>
+              <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Texto na descricao</label>
               <input name="padrao" value="{{ r.padrao }}" style="padding:7px 9px;border:1px solid #ccc;border-radius:var(--radius-xs);width:220px">
             </div>
             {{ filtro_valor(r.valor_operador|default(''), r.valor_limite|default('')) }}
             <div>
-              <label style="font-size:12px;color:var(--ink-faint);display:block">Categoria</label>
+              <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Categoria</label>
               {{ sel_categoria(r.categoria) }}
             </div>
             {{ sel_dimensoes(r.dims_selecionadas) }}
