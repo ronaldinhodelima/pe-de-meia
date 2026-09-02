@@ -1354,22 +1354,71 @@ def lancamento_manual():
         tipo = "CREDIT" if direcao == "entrada" else "DEBIT"
         data_transacao = f"{data_str} 12:00:00-03:00"
 
+        # O OK e assinatura humana: so vai marcado quando QUEM ESTA CRIANDO
+        # marcou a caixa, e ainda assim passa pela mesma trava da tela - sem
+        # classificacao completa, nao ha OK (secoes 1.2 e 7.2). O lancamento e
+        # criado do mesmo jeito; so a assinatura fica de fora, e a resposta diz
+        # o que faltou para a tela apontar o campo.
         conn = get_conn()
         cur = conn.cursor()
+
+        dimensoes = data.get("dimensoes") or {}
+        observacao = (data.get("observacao") or "").strip() or None
+        quer_conferir = bool(data.get("conferida")) and pode("lancamentos_conferir")
+
+        cur.execute("SELECT id FROM cartao.dimensao WHERE obrigatoria = true;")
+        obrigatorias = [str(r[0]) for r in cur.fetchall()]
+        faltando_ids = [d for d in obrigatorias if not str(dimensoes.get(d) or "").strip()]
+        falta_categoria = not categoria
+        if quer_conferir and (faltando_ids or falta_categoria):
+            # Recusar e melhor que criar e descartar o OK em silencio: a pessoa
+            # marcou a caixa porque quer assinar. Ela completa os campos, ou
+            # desmarca e salva sem assinatura - as duas saidas sao explicitas.
+            cur.close()
+            conn.close()
+            conn = cur = None
+            return jsonify({
+                "ok": False,
+                "erro": "Para marcar como conferido, preencha Categoria e as dimensões obrigatórias.",
+                "faltando_ids": faltando_ids, "falta_categoria": falta_categoria,
+            }), 400
+        conferida = quer_conferir
+
+        transacao_id = str(uuid.uuid4())
         cur.execute(
             "INSERT INTO cartao.transacao ("
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
-            "valor_brl, data_transacao, categoria, categoria_manual, status, tipo, "
+            "valor_brl, data_transacao, categoria, categoria_manual, observacao, "
+            "conferida, conferida_por, conferida_em, status, tipo, "
             "criado_em, atualizado_em, sincronizado_em"
-            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s, now(), now(), now());",
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,%s,%s,%s,%s,'POSTED',%s, now(), now(), now());",
             (
-                str(uuid.uuid4()), CONTA_MANUAL_ID, descricao, descricao,
-                valor, valor, data_transacao, categoria, bool(categoria), tipo,
+                transacao_id, CONTA_MANUAL_ID, descricao, descricao,
+                valor, valor, data_transacao, categoria, bool(categoria), observacao,
+                conferida, session.get("usuario") if conferida else None,
+                datetime.now() if conferida else None, tipo,
             ),
         )
+        for dim_id, valor_id in dimensoes.items():
+            if not str(valor_id or "").strip():
+                continue
+            cur.execute(
+                "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
+                "VALUES (%s,%s,%s) ON CONFLICT (transacao_id, dimensao_id) "
+                "DO UPDATE SET valor_id = EXCLUDED.valor_id;",
+                (transacao_id, int(dim_id), int(valor_id)),
+            )
         conn.commit()
         transacao_encerrada = True
-        return jsonify({"ok": True})
+        registrar_auditoria(
+            "alteracao", "Lançamento manual criado",
+            detalhes={"transacao_id": transacao_id, "descricao": descricao,
+                      "valor": float(valor), "conferida": conferida},
+        )
+        return jsonify({
+            "ok": True, "transacao_id": transacao_id, "conferida": conferida,
+            "faltando_ids": faltando_ids, "falta_categoria": falta_categoria,
+        })
     except Exception as e:
         print("Aviso: falha ao criar lançamento manual:", e)
         return jsonify({"ok": False, "erro": "Não foi possível salvar o lançamento."}), 400
@@ -1834,6 +1883,15 @@ def update_transacao(transacao_id):
     if "observacao" in data:
         sets.append("observacao = %s")
         valores.append(data.get("observacao"))
+    if "descricao" in data:
+        # SO em lancamento manual. A descricao de lancamento do Pluggy pertence
+        # ao banco (secao 4.6): editar ali falsificaria o registro bancario e
+        # ainda seria desfeito na proxima sincronizacao. O filtro vai no proprio
+        # UPDATE para que nem uma chamada direta a API alcance outra origem.
+        nova_descricao = (data.get("descricao") or "").strip()
+        if nova_descricao:
+            sets.append("descricao = %s")
+            valores.append(nova_descricao)
     if "categoria" in data:
         # Uma escolha humana, mesmo antes de marcar OK, não pode ser desfeita
         # por uma regra automática criada posteriormente.
@@ -1844,10 +1902,15 @@ def update_transacao(transacao_id):
         valores.append(natureza)
 
     if sets:
-        # os trechos do SET sao literais fixos daqui; so os valores vao por parametro
+        # os trechos do SET sao literais fixos daqui; so os valores vao por parametro.
+        # A trava da descricao vai no WHERE, e nao so na tela: assim uma chamada
+        # direta a API tambem nao consegue reescrever a descricao de um
+        # lancamento do Pluggy.
+        escopo = " AND account_id = %s" if "descricao" in data else ""
+        extra = [CONTA_MANUAL_ID] if "descricao" in data else []
         cur.execute(
-            f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s;",
-            valores + [transacao_id],
+            f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s{escopo};",
+            valores + [transacao_id] + extra,
         )
     classificacoes_compartilhadas = {
         "membros": 0, "categorias": 0, "dimensoes": 0, "observacoes": 0,

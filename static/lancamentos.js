@@ -375,6 +375,11 @@ function verDetalhes(id) {
     '</div>';
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
+  const campoDesc = document.getElementById('modalDescricao');
+  if (campoDesc) {
+    campoDesc.value = d.descricao || '';
+    document.getElementById('modalDescricaoStatus').textContent = '';
+  }
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');
   // espelha a categoria da linha; mudar aqui muda la e salva
   const selCat = document.getElementById('modalCategoria');
@@ -668,6 +673,35 @@ function fecharModal() {
 // o ESC e tratado no tabelas.js, que so tira a classe .show - aqui a tela limpa
 // o proprio estado
 window.aoFecharModal = function () { idAtualModal = null; acaoConfirmacaoModal = null; };
+// A descricao so e editavel em lancamento manual - o botao vive dentro de
+// #modalAcoes, que so aparece nesse caso. O servidor repete a trava no WHERE.
+document.addEventListener('click', function (e) {
+  if (e.target.id !== 'modalSalvarDescricao') return;
+  const campo = document.getElementById('modalDescricao');
+  const status = document.getElementById('modalDescricaoStatus');
+  const nova = campo.value.trim();
+  if (!nova) { status.textContent = 'Informe uma descrição.'; return; }
+  status.textContent = 'Salvando...';
+  fetch('/api/transacao/' + encodeURIComponent(idAtualModal), {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({descricao: nova})
+  }).then(r => r.json()).then(d => {
+    if (!d.ok) { status.textContent = d.erro || 'Falha ao salvar'; return; }
+    status.textContent = 'Salvo';
+    const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
+    if (tr) {
+      const cel = tr.querySelector('.cel-desc');
+      // a celula tem botoes (+ de rateio/tecnico) e selos: troca so o texto
+      if (cel) {
+        [...cel.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
+        cel.insertBefore(document.createTextNode(' ' + nova + ' '), cel.querySelector('.selo-fora'));
+        cel.dataset.tip = nova;
+      }
+    }
+    if (window.detalhes[idAtualModal]) window.detalhes[idAtualModal].descricao = nova;
+  }).catch(() => { status.textContent = 'Falha ao salvar'; });
+});
+
 function excluirManual() {
   if (!idAtualModal) return;
   const d = window.detalhes[idAtualModal] || {};
@@ -993,22 +1027,50 @@ function toggleFormManual() {
 function salvarManual(e) {
   e.preventDefault();
   const statusEl = document.getElementById('manualStatus');
+  statusEl.className = '';
   statusEl.textContent = 'Salvando...';
+  const dimensoes = {};
+  document.querySelectorAll('#formManual .manual-dim').forEach(function (sel) {
+    if (sel.value) dimensoes[sel.dataset.dim] = sel.value;
+  });
+  const conferida = document.getElementById('manualConferida');
   const payload = {
     data: document.getElementById('manualData').value,
     descricao: document.getElementById('manualDescricao').value,
     direcao: document.getElementById('manualDirecao').value,
     valor: document.getElementById('manualValor').value,
-    categoria: document.getElementById('manualCategoria').value
+    categoria: document.getElementById('manualCategoria').value,
+    observacao: document.getElementById('manualObservacao').value,
+    dimensoes: dimensoes,
+    // O OK aqui e a assinatura de quem esta criando o lancamento - por isso
+    // parte SEMPRE de false e so vai marcado quando a pessoa marca a caixa.
+    conferida: !!(conferida && conferida.checked)
   };
   fetch('/api/lancamento-manual', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   }).then(r => r.json()).then(d => {
-    if (d.ok) { guardarPosicaoAtual(); window.location.reload(); }
-    else { statusEl.textContent = d.erro || 'Falha ao salvar'; }
-  }).catch(() => { statusEl.textContent = 'Falha ao salvar'; });
+    if (d.ok) { guardarPosicaoAtual(); window.location.reload(); return; }
+    statusEl.className = 'erro';
+    statusEl.textContent = d.erro || 'Falha ao salvar';
+    // o servidor diz o que falta; a tela marca os campos em vez de so avisar
+    document.querySelectorAll('#formManual .classificacao-faltando')
+      .forEach(el => el.classList.remove('classificacao-faltando'));
+    (d.faltando_ids || []).forEach(function (dimId) {
+      const sel = document.querySelector('#formManual .manual-dim[data-dim="' + dimId + '"]');
+      if (sel) sel.classList.add('classificacao-faltando');
+      if (window.pdmCombobox && sel) window.pdmCombobox.sincronizar(sel);
+    });
+    if (d.falta_categoria) {
+      const cat = document.getElementById('manualCategoria');
+      cat.classList.add('classificacao-faltando');
+      if (window.pdmCombobox) window.pdmCombobox.sincronizar(cat);
+    }
+  }).catch(() => {
+    statusEl.className = 'erro';
+    statusEl.textContent = 'Falha ao salvar';
+  });
   return false;
 }
 atualizarChipLabels();

@@ -676,3 +676,45 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 .barra-lote-resultado.com-falha { color: var(--warn); background: var(--warn-soft); }
 .cel-sel-fatura { white-space: nowrap; }
 .cel-sel-fatura .sel-fatura { margin-right: 5px; vertical-align: middle; }
+
+/* ---- lancamento manual: mesmo desenho do editor da Detalhada ---- */
+.ajuda-manual { font-size: var(--fonte-xs); color: var(--ink-faint); line-height: 1.5; margin: 0 0 12px; }
+.editor-manual {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;
+}
+.editor-manual .campo-largo { grid-column: span 2; }
+.editor-manual label {
+  font-size: var(--fonte-xs); color: var(--ink-faint); display: block; margin-bottom: 4px;
+}
+.editor-manual label.obrigatorio::after { content: ' *'; }
+.editor-manual input, .editor-manual select { width: 100%; box-sizing: border-box; }
+.editor-manual input[type=text], .editor-manual input[type=date], .editor-manual input[type=number] {
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font-size: var(--fonte-md); background: var(--surface); color: var(--ink); font-family: inherit;
+  transition: border-color .12s, box-shadow .12s;
+}
+.editor-manual input:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.editor-manual .classificacao-faltando { border-color: var(--bad) !important; background: var(--bad-soft) !important; }
+.rodape-manual {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px;
+}
+.manual-ok {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fonte-sm); color: var(--ink-soft); cursor: pointer;
+}
+#manualStatus { font-size: var(--fonte-sm); color: var(--ink-faint); }
+#manualStatus.erro { color: var(--bad); }
+@media (max-width: 700px) { .editor-manual .campo-largo { grid-column: auto; } }
+
+.editar-manual { margin-bottom: 12px; }
+.editar-manual > label { display: block; font-size: var(--fonte-xs); color: var(--ink-faint); margin-bottom: 4px; }
+.editar-manual-linha { display: flex; gap: 8px; align-items: center; }
+.editar-manual-linha input {
+  flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font-size: var(--fonte-md); background: var(--surface); color: var(--ink); font-family: inherit;
+}
+.editar-manual-linha input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.editar-manual small { display: block; margin-top: 5px; font-size: var(--fonte-xxs); color: var(--ink-faint); line-height: 1.45; }
+#modalDescricaoStatus { font-size: var(--fonte-sm); color: var(--ink-faint); white-space: nowrap; }

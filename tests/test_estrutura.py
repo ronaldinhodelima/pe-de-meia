@@ -1063,6 +1063,30 @@ def test_migracao_51_nao_encosta_no_ok_e_so_marca_o_par_que_ainda_bate():
     assert "a.account_id=b.account_id" in bloco
 
 
+def test_migracao_52_respeita_o_ok_a_origem_e_o_que_o_usuario_nao_decidiu():
+    """Secao 1.2, 1.4, 8.1 e 11.4 aplicadas as decisoes de 02/09/2026."""
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = core.split("if versao_atual < 52:", 1)[1].split("cur.close()", 1)[0]
+
+    assert "classificacao_backup_v52" in bloco, "alteracao em lote sem reversao"
+    assert "SET conferida" not in bloco and "conferida=" not in bloco
+    # observacao e' do usuario (secao 7.3): esta migracao nao escreve nela
+    assert "SET observacao" not in bloco
+
+    # VISA NACIONAL sao estornos e NAO pode estar entre os alvos
+    decisoes = bloco.split("decisoes_v52 = (", 1)[1].split("\n            )", 1)[0]
+    assert "VISA NACIONAL" not in decisoes.upper()
+
+    # regra nova sempre presa a origem (secao 8.1 / 11.4)
+    regras = bloco.split("novas_regras_v52 = (", 1)[1].split("\n            )", 1)[0]
+    assert "EVENTIM" not in regras, "projeto datado nao vira regra (secao 8.2)"
+    assert "account_id" in bloco.split("INSERT INTO cartao.regra_classificacao", 1)[1][:400]
+
+    # o corte do GuilhermeDaSilva passou a ser 100
+    assert "valor_limite=100" in bloco
+    assert "120" in bloco, "a migracao precisa achar as regras antigas de 120"
+
+
 def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():
     """Secao 4.1: centro de custo so faz sentido em lancamento do resultado.
 
@@ -1170,3 +1194,31 @@ def test_cabecalho_de_tabela_tem_um_peso_so():
     ajustavel = css.split("table.ajustavel th[data-col] {", 1)[1].split("}", 1)[0]
     assert "font-weight: var(--peso-medio)" in geral
     assert "var(--peso-forte)" not in ajustavel, "cabecalho de tabela nao volta a negrito"
+
+
+def test_lancamento_manual_aceita_a_classificacao_inteira_e_trava_o_ok():
+    """O manual passa pelas mesmas regras da tela, nao por um caminho paralelo."""
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    bloco = view.split("def lancamento_manual", 1)[1].split("@bp.route", 1)[0]
+    assert "transacao_dimensao" in bloco, "grava as dimensoes"
+    assert "observacao" in bloco
+    # o OK exige permissao E classificacao completa, como em qualquer lancamento
+    assert 'pode("lancamentos_conferir")' in bloco
+    assert "obrigatoria = true" in bloco
+    assert "falta_categoria" in bloco
+    # recusa explicita: nunca cria descartando o OK em silencio
+    assert '"ok": False' in bloco and "Para marcar como conferido" in bloco
+    assert "registrar_auditoria" in bloco
+
+
+def test_descricao_so_muda_em_lancamento_manual():
+    """A descricao de lancamento do Pluggy pertence ao banco (secao 4.6).
+
+    A trava mora no WHERE, e nao so na tela: chamada direta a API tambem nao
+    pode reescrever a descricao de um lancamento sincronizado.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    bloco = view.split("def update_transacao", 1)[1]
+    assert 'escopo = " AND account_id = %s" if "descricao" in data else ""' in bloco
+    assert "extra = [CONTA_MANUAL_ID]" in bloco
+    assert "{escopo}" in bloco

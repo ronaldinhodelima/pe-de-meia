@@ -4414,6 +4414,174 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (51);")
             conn.commit()
 
+        if versao_atual < 52:
+            # Decisoes do usuario em 02/09/2026, depois da auditoria dos 1.012
+            # lancamentos de 2026 que ja tinham OK. Como na migracao 46, a fonte
+            # e a decisao dele - vale contra a maioria dos OK ja gravados - e por
+            # isso corrige tambem lancamento CONFERIDO, sem nunca marcar,
+            # desmarcar ou encostar em quem assinou.
+            #
+            # Escopo: cartao Unicred. O pedido comecou com "com base na origem
+            # cartao unicred", e a secao 11.4 proibe transportar regra entre
+            # origens. AQUAMATER existe TAMBEM no Nubank, com outro significado
+            # (categoria "School", sem nenhuma dimensao) - essas 11 ficam de
+            # fora e foram reportadas separadamente.
+            #
+            # "VISA NACIONAL e Digital" NAO entra aqui. As 4 linhas nao sao de um
+            # lojista: sao "ESTORNO - Visa Nacional", cada uma herdando a
+            # classificacao da compra que estornou (secao 8.3). Forcar Digital
+            # transformaria o estorno de R$ 257,00 de mercado e o de R$ 26,33 de
+            # reforma em servico digital, e o credito deixaria de anular a
+            # despesa certa no DRE. Fica pendente de nova decisao.
+            cur.execute(
+                "SELECT id,nome FROM cartao.dimensao WHERE "
+                "lower(nome) IN ('responsável','responsavel','projeto','portfólio','portfolio');"
+            )
+            dims_v52 = {chave_alfa(n): i for i, n in cur.fetchall()}
+            cur.execute("SELECT id,dimensao_id,nome FROM cartao.dimensao_valor;")
+            valores_v52 = {(d, chave_alfa(n)): i for i, d, n in cur.fetchall()}
+
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v52 AS "
+                "SELECT t.transacao_id,t.account_id,t.categoria,t.categoria_manual,"
+                "t.observacao,t.conferida,t.atualizado_em,now() AS backup_em,"
+                "COALESCE((SELECT jsonb_object_agg(td.dimensao_id,td.valor_id) "
+                "FROM cartao.transacao_dimensao td WHERE td.transacao_id=t.transacao_id::text),"
+                "'{}'::jsonb) AS dimensoes "
+                "FROM cartao.transacao t WHERE t.account_id=%s;",
+                (CONTA_UNICRED,),
+            )
+
+            # (padrao, categoria, responsavel, projeto, portfolio)
+            # None = o usuario nao decidiu esse campo; nao inventar (secao 1.4).
+            # AZULEQVY2E, COSTAO, ORTOCLINICA e REGINALDO tiveram so a categoria
+            # decidida, entao as dimensoes deles ficam como estao.
+            decisoes_v52 = (
+                ("NETFLIX", None, "Família", "Compras Pessoais", "Vida Familiar"),
+                ("AQUAMAT", None, None, "Saúde", None),
+                ("EVENTIM", None, None, "Iron Maiden 2026", None),
+                ("AZULEQVY2E", "Airport and airlines", None, None, None),
+                ("REGINALDO WILLIA", "Beleza", None, None, None),
+                ("COSTAO DO SA", "Viagem", None, None, None),
+                ("ORTOCLINICA", "Hospital clinics and labs", None, None, None),
+            )
+
+            cats_v52 = dims_gravadas_v52 = 0
+            for padrao, categoria, responsavel, projeto, portfolio in decisoes_v52:
+                alvo_v52 = (
+                    " FROM cartao.transacao t WHERE t.account_id=%s "
+                    " AND t.descricao ILIKE '%%' || %s || '%%' "
+                    " AND COALESCE(t.duplicada,false)=false "
+                    " AND COALESCE(t.somente_conciliacao,false)=false "
+                    " AND t.substituido_por IS NULL "
+                )
+                if categoria:
+                    cur.execute(
+                        "UPDATE cartao.transacao SET categoria=%s, categoria_manual=true, "
+                        "atualizado_em=now() WHERE transacao_id IN "
+                        "(SELECT t.transacao_id" + alvo_v52 + ") AND categoria IS DISTINCT FROM %s;",
+                        (categoria, CONTA_UNICRED, padrao, categoria),
+                    )
+                    cats_v52 += max(cur.rowcount, 0)
+                for dim_chave, valor_nome in (
+                    ("responsavel", responsavel), ("projeto", projeto),
+                    ("portfolio", portfolio),
+                ):
+                    if not valor_nome:
+                        continue
+                    dim_id = dims_v52.get(dim_chave)
+                    valor_id = valores_v52.get((dim_id, chave_alfa(valor_nome)))
+                    if not dim_id or not valor_id:
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.transacao_dimensao "
+                        "(transacao_id,dimensao_id,valor_id) "
+                        "SELECT t.transacao_id::text,%s,%s" + alvo_v52 +
+                        " ON CONFLICT (transacao_id,dimensao_id) "
+                        " DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                        (dim_id, valor_id, CONTA_UNICRED, padrao),
+                    )
+                    dims_gravadas_v52 += max(cur.rowcount, 0)
+
+            # GuilhermeDaSilva: o corte de R$ 120 encostou no gas. Os valores
+            # reais de 2026 sao agua de R$ 17,00 a R$ 66,00 e gas de R$ 114,99 a
+            # R$ 185,00 - o vao esta entre 66 e 115. O usuario decidiu R$ 100,00.
+            # Nenhum lancamento existente muda de categoria com esse corte; o
+            # que muda e o criterio dos proximos.
+            cur.execute(
+                "UPDATE cartao.regra_classificacao SET valor_limite=100 "
+                "WHERE lower(padrao)=lower('GuilhermeDaSilva') AND valor_limite=120;"
+            )
+            regras_v52 = max(cur.rowcount, 0)
+            for chave_cat, comparador in (("Agua", "<"), ("Agua / Gas", ">")):
+                cur.execute(
+                    "UPDATE cartao.transacao SET categoria=%s, categoria_manual=true, "
+                    "atualizado_em=now() WHERE account_id=%s "
+                    "AND descricao ILIKE '%%GuilhermeDaSilva%%' "
+                    "AND COALESCE(duplicada,false)=false "
+                    "AND COALESCE(somente_conciliacao,false)=false "
+                    "AND substituido_por IS NULL "
+                    "AND ABS(COALESCE(valor_brl,valor_original)) " + comparador + " 100 "
+                    "AND categoria IS DISTINCT FROM %s;",
+                    (chave_cat, CONTA_UNICRED, chave_cat),
+                )
+                cats_v52 += max(cur.rowcount, 0)
+
+            # Regras para os PROXIMOS lancamentos, presas a origem Unicred: a
+            # secao 8.1 exige origem vinculada quando a regra poderia alcancar
+            # outra conta - e AQUAMATER e' exatamente esse caso.
+            # EVENTIM fica de FORA de proposito: "Iron Maiden 2026" e evento
+            # datado, e a secao 8.2 nao propaga projeto datado para o futuro.
+            novas_regras_v52 = (
+                ("NETFLIX", "Digital services",
+                 (("responsavel", "Família"), ("projeto", "Compras Pessoais"),
+                  ("portfolio", "Vida Familiar"))),
+                ("AQUAMAT", "Academia", (("projeto", "Saúde"),)),
+                ("AZULEQVY2E", "Airport and airlines", ()),
+                ("REGINALDO WILLIA", "Beleza", ()),
+                ("COSTAO DO SA", "Viagem", ()),
+                ("ORTOCLINICA", "Hospital clinics and labs", ()),
+            )
+            criadas_v52 = 0
+            for padrao, categoria, pares in novas_regras_v52:
+                cur.execute(
+                    "INSERT INTO cartao.regra_classificacao "
+                    "(padrao, categoria, account_id, ordem) "
+                    "SELECT %s, %s, %s, 100 WHERE NOT EXISTS ("
+                    " SELECT 1 FROM cartao.regra_classificacao "
+                    " WHERE lower(padrao)=lower(%s) AND account_id=%s) RETURNING id;",
+                    (padrao, categoria, CONTA_UNICRED, padrao, CONTA_UNICRED),
+                )
+                nova = cur.fetchone()
+                if not nova:
+                    continue
+                criadas_v52 += 1
+                for dim_chave, valor_nome in pares:
+                    dim_id = dims_v52.get(dim_chave)
+                    valor_id = valores_v52.get((dim_id, chave_alfa(valor_nome)))
+                    if not dim_id or not valor_id:
+                        continue
+                    cur.execute(
+                        "INSERT INTO cartao.regra_dimensao_valor "
+                        "(regra_id,dimensao_id,valor_id) VALUES (%s,%s,%s) "
+                        "ON CONFLICT (regra_id,dimensao_id) "
+                        "DO UPDATE SET valor_id=EXCLUDED.valor_id;",
+                        (nova[0], dim_id, valor_id),
+                    )
+
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Decisoes do usuario sobre lojistas divergentes',"
+                "jsonb_build_object('versao',52,'categorias_corrigidas',%s,"
+                "'dimensoes_gravadas',%s,'regras_criadas',%s,"
+                "'regras_guilherme_ajustadas',%s,'corte_guilherme',100,"
+                "'visa_nacional_recusada','sao estornos, herdam a compra original',"
+                "'backup','cartao.classificacao_backup_v52'));",
+                (cats_v52, dims_gravadas_v52, criadas_v52, regras_v52),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (52);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
