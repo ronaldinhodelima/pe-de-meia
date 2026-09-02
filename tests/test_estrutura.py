@@ -136,6 +136,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/classificacao/consenso-preview",
         "/api/classificacao/reaplicar-consenso",
         "/api/fatura/vinculos-suspeitos",
+        "/api/diagnostico/eco-3h",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/lancamentos/fatura",

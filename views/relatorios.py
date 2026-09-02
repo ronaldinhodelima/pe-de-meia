@@ -2863,3 +2863,108 @@ def api_vinculos_suspeitos():
         "com_agregado_fora_do_dre": sum(1 for s in suspeitos if s["agregado_fora_do_dre"]),
         "detalhe": suspeitos[:200],
     })
+
+
+@bp.route("/api/diagnostico/eco-3h")
+@requer("cadastros")
+def api_eco_horario():
+    """Linhas de fatura com DOIS OU MAIS lancamentos contando no DRE ao mesmo tempo.
+
+    Somente leitura. Nao marca duplicidade nem substituicao (secao 1.3) e nao
+    encosta no OK (secao 1.2).
+
+    O caso que motivou: MP*REGIBARBERSHOP R$ 70,00, uma unica cobranca no PDF,
+    com dois registros do Pluggy - um as 14:00 e outro as 17:00. Sao o MESMO
+    evento gravado duas vezes com descricoes diferentes (secao 6.5 no 7), e os
+    dois estavam elegiveis, entao a despesa entrou dobrada no resultado.
+
+    As 3 horas exatas sao a assinatura da normalizacao Unicred (migracao 43):
+    um dos registros recebeu o -3h e o outro nao. Por isso a resposta separa os
+    pares por diferenca de tempo - "3h exatas" aponta para a normalizacao
+    incompleta, qualquer outra diferenca e um fenomeno diferente e nao deve ser
+    tratada pelo mesmo caminho.
+
+    `elegivel` aqui e o mesmo criterio da tela detalhada: nao duplicada, sem
+    `substituido_por` e sem `somente_conciliacao` - ou seja, exatamente "conta
+    no DRE".
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT fl.id AS linha_id, fi.mes_referencia, fi.ano_referencia, "
+        "fl.descricao AS linha_descricao, fl.valor AS linha_valor, "
+        "t.transacao_id::text AS transacao_id, t.descricao, t.data_transacao, "
+        "COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        "t.numero_cartao_final, t.conferida, "
+        "COALESCE(t.importado,false) AS importado, "
+        "fl.transacao_id_criado::text AS criado "
+        "FROM cartao.fatura_vinculo fv "
+        "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+        "JOIN cartao.fatura_importada fi ON fi.id=fl.fatura_id "
+        "JOIN cartao.transacao t ON t.transacao_id=fv.transacao_id "
+        "WHERE COALESCE(t.duplicada,false)=false "
+        "AND t.substituido_por IS NULL "
+        "AND COALESCE(t.somente_conciliacao,false)=false "
+        "ORDER BY fi.ano_referencia, fi.mes_referencia, fl.id;"
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    por_linha = {}
+    for r in linhas:
+        por_linha.setdefault(r["linha_id"], []).append(r)
+
+    casos = []
+    for linha_id, registros in por_linha.items():
+        if len(registros) < 2:
+            continue
+        r0 = registros[0]
+        # Mesmo valor absoluto e mesmo cartao: e' a mesma cobranca representada
+        # mais de uma vez. Valores diferentes na mesma linha sao parcelamento ou
+        # vinculo errado - outro problema, outro caminho.
+        valores = {abs(Decimal(str(r["valor"] or 0))) for r in registros}
+        cartoes = {r["numero_cartao_final"] for r in registros}
+        if len(valores) > 1 or len(cartoes) > 1:
+            continue
+        instantes = sorted(r["data_transacao"] for r in registros)
+        delta = instantes[-1] - instantes[0]
+        segundos = int(delta.total_seconds())
+        valor = valores.pop()
+        casos.append({
+            "linha_id": linha_id,
+            "fatura": "%02d/%s" % (r0["mes_referencia"], r0["ano_referencia"]),
+            "linha": r0["linha_descricao"],
+            "linha_valor": float(r0["linha_valor"] or 0),
+            "registros": len(registros),
+            "valor_unitario": float(valor),
+            "excedente_no_dre": float(valor * (len(registros) - 1)),
+            "diferenca_segundos": segundos,
+            "tres_horas_exatas": segundos == 3 * 3600,
+            "algum_conferido": any(r["conferida"] for r in registros),
+            "algum_criado_pela_fatura": any(
+                r["criado"] and r["transacao_id"] == r["criado"] for r in registros
+            ),
+            "detalhe": [
+                {
+                    "transacao_id": r["transacao_id"],
+                    "descricao": r["descricao"],
+                    "instante": data_hora_local(r["data_transacao"]),
+                    "fonte": "F" if (r["criado"] and r["transacao_id"] == r["criado"]) else "P",
+                }
+                for r in sorted(registros, key=lambda x: x["data_transacao"])
+            ],
+        })
+
+    tres_horas = [c for c in casos if c["tres_horas_exatas"]]
+    return jsonify({
+        "vinculos_elegiveis_avaliados": len(linhas),
+        "linhas_com_mais_de_um_no_dre": len(casos),
+        "excedente_total_no_dre": round(sum(c["excedente_no_dre"] for c in casos), 2),
+        "pares_com_3h_exatas": len(tres_horas),
+        "excedente_dos_3h": round(sum(c["excedente_no_dre"] for c in tres_horas), 2),
+        "conferidos_entre_eles": sum(1 for c in casos if c["algum_conferido"]),
+        "detalhe": sorted(
+            casos, key=lambda c: -c["excedente_no_dre"]
+        )[:300],
+    })
