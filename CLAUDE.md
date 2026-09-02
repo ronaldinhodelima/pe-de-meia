@@ -763,6 +763,47 @@ planilha**: a vizinha compensa, a soma nunca muda e a tabela não estoura a tela
   grid e a coluna seguinte desenhava por cima. Por isso a regra é `td.cel-origem`, com
   `display:table-cell !important` defensivo nos `th[data-col]`.
 
+## 7.8-A Sistema de design — norma
+
+**Todo valor visual vem de token.** Cor, tamanho de fonte, raio, peso e sombra saem das variáveis
+do `:root` em `static/app.css`. Valor escrito na mão não conhece o modo escuro — foi assim que os
+números do DRE ficaram com o verde e o vermelho antigos depois do redesenho, e assim que a
+`.login-box` teria pintado texto branco sobre fundo claro.
+
+| Papel | Tokens |
+|---|---|
+| Marca (botão primário, foco, link) | `--accent`, `--accent-strong`, `--accent-soft` |
+| Seleção e hover | `--selecao`, `--selecao-forte`, `--selecao-suave`, `--selecao-simbolo` |
+| Semântica | `--good`, `--bad`, `--warn`, `--neutro` (+ `-soft`) |
+| Superfície | `--bg`, `--surface`, `--raise`, `--line` |
+| Texto | `--ink`, `--ink-soft`, `--ink-faint` |
+| Escala de texto | `--fonte-xxs` a `--fonte-lg` (10 a 14px) |
+| Raio | `--radius-xxs` a `--radius-lg`, `--radius-pill` |
+| Peso | `--peso-normal`, `--peso-medio`, `--peso-forte`, `--peso-destaque` |
+
+**Marca e seleção são papéis diferentes.** O acento aparece pouco e pode ser forte; a seleção
+aparece dezenas de vezes por tela e precisa ser leve. Reusar `--accent` na seleção foi o que
+deixou a tela pesada, com caixas em azul-petróleo.
+
+**Componente repetido vira classe, não estilo inline.** O mesmo botão escuro estava copiado em 6
+telas por `style=`; virou `.btn-primario`. Estilo inline fica fora do sistema e some das buscas.
+
+**Especificidade é o inimigo silencioso.** Três vezes nesta sessão uma regra mais específica
+desfez uma decisão geral sem nenhum erro aparente: `table.compacta input[type=checkbox]` (caixa
+14px dentro da tabela, 16px fora), `table.ajustavel th[data-col]` (cabeçalho de volta ao negrito)
+e `.perm-item input`/`label.chip-opt input` (checkbox redesenhado). **Sempre medir o valor
+computado no navegador** — nenhum dos três aparecia lendo o código.
+
+**Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
+fora do sistema. Eram 522 em 01/09/2026; hoje são 53, e o que restou é intenção (círculos `50%`,
+fio de cabelo `1px`, títulos grandes, branco sobre botão colorido, o painel navy do login).
+`test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
+folgado**, pedindo para abaixá-lo — o número só pode cair.
+
+**Padronizar não é redesenhar.** Ao agrupar valores, só junte o que estiver a no máximo 1px de
+distância. Foi por isso que 12px, 16px e 18px de raio ficaram fora da escala: agrupá-los mudaria o
+desenho, e isso é decisão do usuário, não faxina.
+
 ## 7.9 Identidade visual
 
 Nome **Pé de Meia**; logo oficial (meia de tricô com dinheiro) em fundo claro sólido no topbar e no
