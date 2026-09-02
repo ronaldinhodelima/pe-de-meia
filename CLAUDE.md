@@ -625,6 +625,31 @@ Nunca inferir família por descrição, data ou valor semelhante. Só preencher 
 houver um único valor não vazio e inequívoco; em conflito, deixar vazio para revisão humana. Nunca
 sobrescrever campo já preenchido.
 
+## 7.2-A Edição em lote
+
+Coluna de seleção por linha nas duas visualizações; com um ou mais selecionados aparece uma barra
+que aplica **Categoria, Responsável, Projeto, Portfólio, Observação e o OK** de uma vez.
+"Selecionar tudo do filtro" alcança só o que a pesquisa e os filtros atuais estão mostrando —
+combinado com `ANO INTEIRO`, resolve "todos os UNICRED TAG do ano" num clique.
+
+**Não existe endpoint de lote, e isso é deliberado.** Cada selecionado passa pelo mesmo
+`POST /api/transacao/<id>` de uma edição normal, com as mesmas validações, a mesma auditoria e a
+mesma propagação para família de parcelas. Um segundo caminho de gravação começaria igual e
+divergiria na primeira regra nova — é literalmente como nasceram os 57 falsos pendentes da §6.5
+nº 10. O núcleo mora em `static/lote.js` e é **compartilhado pelas duas telas** pelo mesmo motivo;
+`tests/test_templates.py` exige que só exista **um** ponto de gravação em todo o código do lote.
+
+Travas: campo em `(não alterar)` não é tocado; observação só sobrescreve com opção explícita
+(§7.3); o lote **marca** o OK mas **nunca desmarca**, porque retirar assinatura exige confirmação
+um a um (§1.2); rateado fica fora (o pai não pode ser editado sem quebrar as partes); quem o
+servidor recusar é listado com o motivo. Na fatura em andamento o "marcar OK" nem aparece (§7.5).
+
+O núcleo aplica **4 em paralelo** — uma de cada vez fica lento com o ano inteiro selecionado, e
+muitas de uma vez só enfileiram no processo único do Gunicorn (§2.2). Na Detalhada, depois de
+aplicar a tela **recarrega o estado real do servidor** em vez de inferir: é o servidor que decide
+"Faltam:", natureza e OK. O checkbox mora na primeira célula, junto do `+`, porque aquela tabela
+não é `ajustavel` e o JS ordena por índice de célula — coluna nova deslocaria tudo em silêncio.
+
 ## 7.3 Observação pessoal × informação interna
 
 `transacao.observacao` **pertence exclusivamente ao usuário**. Nenhuma rotina de importação,
