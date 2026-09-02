@@ -1091,12 +1091,46 @@ def test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema():
     propriedades = r"(appearance|width|height|border|accent-color|background)\s*:"
     culpados = []
     for nome, texto in fontes.items():
-        for regra in re.findall(r"[^{}]*checkbox[^{}]*\{[^}]*\}", texto):
+        for regra in re.findall(r"[^{}]*\{[^}]*\}", texto):
             seletor, corpo = regra.split("{", 1)
-            if "checkbox" not in seletor:
-                continue  # a palavra estava no corpo/valor, nao no seletor
-            if re.search(propriedades, corpo):
+            # `accent-color` so existe para checkbox e radio: onde ele aparece,
+            # alguem esta desenhando a caixa. E o sinal confiavel, e pega o
+            # seletor que nao diz "checkbox" - foi assim que passaram
+            # `.perm-item input` e `label.chip-opt input`.
+            desenha = "accent-color" in corpo
+            if "checkbox" in seletor and re.search(propriedades, corpo):
+                desenha = True
+            if desenha:
                 culpados.append(nome + ": " + " ".join(regra.split())[:90])
     assert not culpados, (
         "checkbox so pode ser desenhado no bloco unico do app.css: " + str(culpados)
+    )
+
+
+def test_valores_visuais_fora_do_sistema_nao_aumentam():
+    """Catraca do sistema de design: o numero so pode cair.
+
+    Nao trava tudo de uma vez - sao centenas de valores escritos na mao ao longo
+    do projeto, e converter todos num golpe so mudaria pixel em toda tela sem
+    ninguem conferir. Trava o crescimento: tela nova nasce usando token, e cada
+    limpeza abaixa o teto. Para ver o que falta:
+        python3 ferramentas/inventario_estilo.py --lista
+    """
+    import subprocess
+    import sys
+
+    TETO = 450
+
+    saida = subprocess.run(
+        [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    total = int(saida.split("tokens:", 1)[1].split()[0])
+    assert total <= TETO, (
+        f"{total} valores visuais fora do sistema de tokens (teto {TETO}). "
+        "Use as variaveis do :root em vez de cor/tamanho/raio escritos na mao."
+    )
+    assert total >= TETO - 40, (
+        f"o teto ficou folgado demais ({total} de {TETO}): abaixe TETO para {total} "
+        "para que a proxima regressao seja pega."
     )

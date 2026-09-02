@@ -153,7 +153,7 @@
       <input type="checkbox" id="loteOk"> marcar OK
     </label>
     {% endif %}
-    <button type="button" class="ver-btn primario" id="loteSalvar">Salvar nos selecionados</button>
+    <button type="button" class="btn-primario" id="loteSalvar">Salvar nos selecionados</button>
   </div>
   <div id="loteResultado" class="barra-lote-resultado" hidden></div>
 </div>
@@ -169,7 +169,7 @@
     <td>{% if linha.titular %}<div class="quem"><span class="avatar-titular">{{ linha.titular[:2]|upper }}</span><div>{{ linha.titular }}{{ cartao_info|safe }}</div></div>{% else %}-{{ cartao_info|safe }}{% endif %}</td>
     <td>{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</td>
     <td class="valor">{{ linha.valor|moeda }}</td>
-    <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:#9a6a12">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
+    <td data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:var(--warn)">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</td>
     <td style="text-align:center">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir or fatura.em_andamento }} title="{{ 'OK liberado somente após o PDF ser conciliado' if fatura.em_andamento else 'OK do lançamento' }}{% if not fatura.em_andamento and linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}">{% endif %}</td>
   </tr>
   {% if linha.vinculos %}<tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="8">

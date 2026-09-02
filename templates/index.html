@@ -13,20 +13,20 @@
     </div>
   </div>
   <div>
-    <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;white-space:nowrap">
+    <label style="font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;white-space:nowrap">
       <input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()">
       Ano inteiro
     </label>
   </div>
   <div>
-    <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;white-space:nowrap">
+    <label style="font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;white-space:nowrap">
       <input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()">
       Período customizado
     </label>
   </div>
   <div id="intervaloWrap" style="display:{{ 'flex' if periodo == 'intervalo' else 'none' }};align-items:center;gap:6px">
     <input type="date" id="dataInicioInput" value="{{ data_inicio }}" onchange="aplicarFiltros(true)">
-    <span style="font-size:12px;color:#888">até</span>
+    <span style="font-size:12px;color:var(--ink-faint)">até</span>
     <input type="date" id="dataFimInput" value="{{ data_fim }}" onchange="aplicarFiltros(true)">
   </div>
   <div>
@@ -71,7 +71,7 @@
       {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
     </select>
     <button type="submit">Adicionar</button>
-    <span id="manualStatus" style="font-size:12px;color:#888"></span>
+    <span id="manualStatus" style="font-size:12px;color:var(--ink-faint)"></span>
   </form>
 </div>
 
@@ -143,7 +143,7 @@
       <input type="checkbox" id="loteOk"> marcar OK
     </label>
     {% endif %}
-    <button type="button" class="ver-btn primario" id="loteSalvar">Salvar nos selecionados</button>
+    <button type="button" class="btn-primario" id="loteSalvar">Salvar nos selecionados</button>
   </div>
   <div id="loteResultado" class="barra-lote-resultado" hidden></div>
 </div>
@@ -221,7 +221,7 @@
       </tr>
       {% endfor %}
     {% else %}
-      <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) + (1 if pode_editar else 0) }}" style="padding:20px;text-align:center;color:#888">Nenhum lançamento neste filtro.</td></tr>
+      <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) + (1 if pode_editar else 0) }}" style="padding:20px;text-align:center;color:var(--ink-faint)">Nenhum lançamento neste filtro.</td></tr>
     {% endfor %}
   </tbody>
 </table>

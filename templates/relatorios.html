@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block conteudo %}
-<div style="font-size:12px;color:#888;margin-bottom:10px">
+<div style="font-size:12px;color:var(--ink-faint);margin-bottom:10px">
   Pagamento de fatura, transferência entre contas próprias, aplicações e compra de bens
   <strong>não são despesa</strong> — só trocam a forma do dinheiro. Por isso ficam fora da visão de Despesas
   (veja a <a href="/categorias">classificação de naturezas</a>).
@@ -28,7 +28,7 @@
   {% for html in filtros_chip %}{{ html|safe }}{% endfor %}
   <div class="rel-datewrap">
     <input type="date" name="data_ini" id="inputDataIni" value="{{ data_ini }}" onchange="aplicarFiltros()">
-    <span style="color:#bbb">–</span>
+    <span style="color:var(--ink-faint)">–</span>
     <input type="date" name="data_fim" id="inputDataFim" value="{{ data_fim }}" onchange="aplicarFiltros()">
   </div>
   <div class="rel-actions">
@@ -48,8 +48,8 @@
 </div>
 
 <div class="cat-breakdown">
-  <h3>Totais agrupados <span style="font-weight:400;font-size:12px;color:#999">(clique em um grupo para ver os lançamentos)</span></h3>
-  <div id="gruposCont"><div style="color:#888;padding:10px 0">Carregando...</div></div>
+  <h3>Totais agrupados <span style="font-weight:400;font-size:12px;color:var(--ink-faint)">(clique em um grupo para ver os lançamentos)</span></h3>
+  <div id="gruposCont"><div style="color:var(--ink-faint);padding:10px 0">Carregando...</div></div>
 </div>
 {% endblock %}
 

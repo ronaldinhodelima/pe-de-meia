@@ -14,7 +14,7 @@
   {% if pode_editar_conciliacao %}
   <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
-      <label style="font-size:12px;color:#888;display:block">Cartão (origem)</label>
+      <label style="font-size:12px;color:var(--ink-faint);display:block">Cartão (origem)</label>
       <select name="account_id" required style="padding:7px 9px;border:1px solid #ccc;border-radius:6px;min-width:260px">
         <option value="">selecione…</option>
         {% for aid, curto, completo, _, _ in contas_credito %}
@@ -23,11 +23,11 @@
       </select>
     </div>
     <div>
-      <label style="font-size:12px;color:#888;display:block">PDF da fatura</label>
+      <label style="font-size:12px;color:var(--ink-faint);display:block">PDF da fatura</label>
       <input type="file" name="fatura" accept="application/pdf" required
              style="padding:6px 0;font-size:13px">
     </div>
-    <button type="submit" style="background:#1d2b3a;color:#fff;border:none;padding:9px 16px;border-radius:6px;cursor:pointer">
+    <button type="submit" class="btn-primario">
       Conciliar
     </button>
   </form>
@@ -152,7 +152,7 @@
   </div>
 
   {% if resultado.repetidas_na_fatura %}
-    <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+    <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
       <h3>Cobranças repetidas na própria fatura — revisar</h3>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
         A operadora lançou a mesma descrição, mesmo valor e mesmo dia mais de uma vez. Nem toda
@@ -252,7 +252,7 @@
   {% endif %}
 
   {% if resultado.orfas %}
-    <div class="cat-breakdown" style="border-left:3px solid #d9a441">
+    <div class="cat-breakdown" style="border-left:3px solid var(--warn)">
       <h3>Lançamentos do Pluggy sem vínculo
         <span style="font-weight:normal;font-size:12px;color:var(--ink-faint)">({{ resultado.orfas|length }})</span>
       </h3>

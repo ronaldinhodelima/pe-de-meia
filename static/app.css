@@ -17,6 +17,8 @@
     --selecao-forte: #3f93a6;
     --selecao-suave: rgba(82, 167, 186, .18);
     --selecao-simbolo: #fff;
+    --tooltip-fundo: #1f2126;
+    --tooltip-texto: #fff;
     --field-soft: var(--bg);
     --good: #059669;
     --good-soft: #e4f5ee;
@@ -50,6 +52,8 @@
       --selecao-forte: #6fd0de;
       --selecao-suave: rgba(75, 188, 205, .20);
       --selecao-simbolo: #08121f;
+    --tooltip-fundo: #e7ebf6;
+    --tooltip-texto: #0a0f1e;
       --field-soft: var(--bg);
       --good: #34d399;
       --good-soft: rgba(52,211,153,.14);
@@ -82,6 +86,8 @@
     --selecao-forte: #6fd0de;
     --selecao-suave: rgba(75, 188, 205, .20);
     --selecao-simbolo: #08121f;
+    --tooltip-fundo: #e7ebf6;
+    --tooltip-texto: #0a0f1e;
     --field-soft: var(--bg);
     --good: #34d399;
     --good-soft: rgba(52,211,153,.14);
@@ -200,12 +206,12 @@
   table.compacta .cel-data { width: 78px; color: var(--ink-soft); font-size: 11.5px; line-height: 1.25; }
   table.compacta .cel-data { position:relative;padding-left:14px; }
   .linha-indicadores { position:absolute;left:3px;top:5px;bottom:5px;width:7px;display:flex;flex-direction:column;justify-content:center;gap:2px; }
-  .linha-ponto { display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 7px;background:#9ca3ad; }
-  .linha-ponto.conferida { background:#8b929a; }
-  .linha-ponto.pendente-banco { background:#d9a441; }
+  .linha-ponto { display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 7px;background:var(--ink-faint); }
+  .linha-ponto.conferida { background:var(--ink-faint); }
+  .linha-ponto.pendente-banco { background:var(--warn); }
   .linha-ponto.suspeita,.linha-ponto.rateio { background:var(--bad); }
-  .linha-ponto.duplicada { background:#b58a43; }
-  .linha-ponto.fora { background:#7c7696; }
+  .linha-ponto.duplicada { background:var(--warn); }
+  .linha-ponto.fora { background:var(--neutro); }
   .legenda-lancamentos { background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;margin:0 0 10px; }
   .legenda-lancamentos summary { cursor:pointer;color:var(--ink-soft);font-size:12px;font-weight:500; }
   .legenda-itens { display:flex;gap:7px;flex-wrap:wrap;margin-top:9px; }
@@ -235,7 +241,7 @@
   .rateio-row .rateio-valor-inline.invalido { border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:600; }
   .rateio-resumo { display:block;margin-top:2px;font-size:9.5px;color:var(--ink-faint);white-space:normal; }
   .rateio-resumo:empty { display:none; }
-  .rateio-resumo.invalido { color:#c23c34;font-weight:600; }
+  .rateio-resumo.invalido { color:var(--bad);font-weight:600; }
   .rateio-seta { color:var(--accent);font-weight:700;margin-right:5px; }
   .tecnico-row,.tecnico-row:hover { background:var(--raise); }
   .tecnico-row td { color:var(--ink-soft);border-top-style:dashed; }
@@ -251,7 +257,7 @@
   .modal-rateio .rateio-valor.invalido { border-color:var(--bad);color:var(--bad);font-weight:600; }
   .modal-rateio-acoes { display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px; }
   .rateio-fechamento { font-size:12px;color:var(--ink-soft); }
-  .rateio-fechamento.invalido { color:#c23c34;font-weight:600; }
+  .rateio-fechamento.invalido { color:var(--bad);font-weight:600; }
 
   /* ---------- colunas ajustaveis: redimensionar, reordenar, ordenar ---------- */
   /* sem rolagem: a tabela ocupa 100% e redimensionar uma coluna tira/da espaco
@@ -325,7 +331,6 @@
     border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface);
   }
   .perm-item:hover { border-color: var(--ink-faint); }
-  .perm-item input { accent-color: var(--accent); width: 15px; height: 15px; }
   .perm-item:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
   .tag-ativo, .tag-inativo {
     font-size: 10.5px; font-weight: 500; padding: 2px 7px; border-radius: 20px; text-transform: uppercase; letter-spacing: .03em;
@@ -340,7 +345,7 @@
   /* ---------- tooltip proprio (o nativo do navegador demora ~1s) ---------- */
   #tooltip {
     position: fixed; z-index: 9999; pointer-events: none;
-    background: #1f2126; color: #fff; padding: 6px 9px; border-radius: 6px;
+    background: var(--tooltip-fundo); color: var(--tooltip-texto); padding: 6px 9px; border-radius: var(--radius-sm);
     font-size: 12px; line-height: 1.4; max-width: 360px;
     box-shadow: 0 4px 14px rgba(0,0,0,.18);
     opacity: 0; transition: opacity .1s; white-space: normal;
@@ -348,15 +353,6 @@
   #tooltip.show { opacity: 1; }
 
   /* ---------- login ---------- */
-  .login-box { max-width: 340px; margin: 100px auto; background: var(--surface); padding: 32px; border-radius: 14px; border: 1px solid var(--line); box-shadow: var(--shadow-2); }
-  .login-box h2 { font-size: 19px; letter-spacing: -0.01em; margin: 0 0 18px 0; }
-  .login-box input { width: 100%; padding: 10px 12px; margin: 6px 0; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 14px; }
-  .login-box input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .login-box button {
-    background: var(--ink); color: #fff; border: none; padding: 9px 18px; border-radius: var(--radius-sm);
-    cursor: pointer; font-size: 14px; font-weight: 500; transition: opacity .15s;
-  }
-  .login-box button:hover { opacity: .85; }
   /* botoes da barra de filtros seguem o padrao claro dos cards/chips - antes essa
      regra era escura e, por ter mais especificidade que .ver-btn/.chip-btn, pintava
      de escuro ate os botoes que ja pediam o estilo claro (setas de mes, + Origem) */
@@ -493,7 +489,6 @@
      esta regra. Sem isso o nome da conta sai em CAIXA ALTA na lista. */
   label.chip-opt { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; color: var(--ink); text-transform: none; letter-spacing: normal; }
   label.chip-opt:hover, label.chip-opt.chip-hover { background: var(--bg); }
-  label.chip-opt input { accent-color: var(--accent); width: 15px; height: 15px; }
   /* quantos lancamentos a origem tem no mes aberto - discreto, so para comparar */
   /* O texto do item vive num span proprio: dentro dele o fluxo e inline, entao o
      numero segue a ultima palavra em vez de ser empurrado para a borda direita
@@ -503,7 +498,7 @@
      7px e ~36% menor que os 11px anteriores - parei aqui porque abaixo disso o
      algarismo deixa de ser legivel na maioria das telas. O negrito compensa o
      tamanho e a cor clara. */
-  .chip-qtd { margin-left: 5px; font-size: 8.4px; font-weight: 700; color: #b9bec7; font-variant-numeric: tabular-nums; }
+  .chip-qtd { margin-left: 5px; font-size: 8.4px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
   .rel-grupo-detalhe { background: var(--bg); border-radius: var(--radius-sm); margin: 4px 0 10px 0; overflow: hidden; }
   .rel-mini-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -538,7 +533,7 @@
    (somente_conciliacao). Sem essa marca, dois lancamentos de mesmo valor
    aparecem lado a lado sem pista de que so um conta. */
 tr.fora-resultado { opacity: .62; }
-tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-color: #bbb; }
+tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-color: var(--ink-faint); }
 .selo-fora {
   font-size: 10px; text-transform: uppercase; letter-spacing: .3px;
   background: var(--raise); color: var(--ink-faint); border: 1px solid var(--line);
@@ -549,6 +544,22 @@ tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-col
 /* ---- edicao em lote na tela de Lancamentos ---- */
 .cel-sel { width: 28px; text-align: center; }
 td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
+
+/* Botao primario: uma definicao para todas as telas. Antes cada formulario
+   repetia o mesmo `style="background:#1d2b3a;color:#fff;..."` inline, fora do
+   sistema de tokens - e por isso invisivel ao modo escuro. */
+.btn-primario {
+  background: var(--accent); color: #fff;
+  border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  padding: 9px 16px; font-size: 13px; font-family: inherit; font-weight: 500;
+  cursor: pointer;
+  transition: background-color .13s ease, box-shadow .13s ease, transform .13s ease;
+}
+.btn-primario:hover:not(:disabled) {
+  background: var(--accent-strong); border-color: var(--accent-strong);
+  box-shadow: 0 2px 8px var(--selecao-suave); transform: translateY(-1px);
+}
+.btn-primario:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ===========================================================================
    CAIXAS DE MARCACAO - REGRA UNICA E OBRIGATORIA
@@ -639,11 +650,7 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
   font-size: 12px !important; color: var(--ink-soft) !important;
   padding-bottom: 6px; cursor: pointer;
 }
-.barra-lote .ver-btn.primario {
-  background: var(--accent); color: #fff; border-color: var(--accent);
-}
-.barra-lote .ver-btn.primario:hover { background: var(--accent-strong); }
-.barra-lote .ver-btn.primario:disabled { opacity: .5; cursor: progress; }
+.barra-lote .btn-primario:disabled { opacity: .5; cursor: progress; }
 .barra-lote-resultado {
   margin-top: 8px; font-size: 12.5px; color: var(--ink-soft);
   background: var(--raise); border-radius: var(--radius-sm); padding: 7px 9px;
