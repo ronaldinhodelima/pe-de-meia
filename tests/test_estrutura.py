@@ -1134,3 +1134,14 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
         f"o teto ficou folgado demais ({total} de {TETO}): abaixe TETO para {total} "
         "para que a proxima regressao seja pega."
     )
+
+
+def test_cabecalho_de_tabela_tem_um_peso_so():
+    """`table.ajustavel th[data-col]` e mais especifico que `th` e desfazia, em
+    silencio, a decisao de tirar o negrito dos cabecalhos - a mesma classe de
+    erro do checkbox 14px vs 16px."""
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    geral = css.split("\n  th {", 1)[1].split("}", 1)[0]
+    ajustavel = css.split("table.ajustavel th[data-col] {", 1)[1].split("}", 1)[0]
+    assert "font-weight: var(--peso-medio)" in geral
+    assert "var(--peso-forte)" not in ajustavel, "cabecalho de tabela nao volta a negrito"
