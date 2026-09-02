@@ -4333,6 +4333,87 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (50);")
             conn.commit()
 
+        if versao_atual < 51:
+            # Duas cobrancas contavam DUAS VEZES no resultado. Cada linha do PDF
+            # tem uma cobranca so, e o Pluggy gravou dois lancamentos para ela,
+            # com descricoes diferentes do mesmo evento (secao 6.5 n.7):
+            #   GUILHERMEDASILVA   R$ 185,00  fatura 08/2026
+            #   MP*REGIBARBERSHOP  R$  70,00  fatura 08/2026
+            # Total inflado no DRE: R$ 255,00.
+            #
+            # Os dois registros de cada par estavam elegiveis - nao duplicada,
+            # sem substituido_por e sem somente_conciliacao -, que e exatamente
+            # o criterio de "conta no DRE". A tela avisava so "mais de um
+            # lancamento possivel", sem dizer que ambos somavam.
+            #
+            # As 3 HORAS EXATAS entre eles sao a assinatura da normalizacao de
+            # horario da Unicred (migracao 43), que alcancou um registro e nao o
+            # outro. A causa disso continua desconhecida: os quatro tem
+            # `importado=false`, entao nenhum escapou por ter vindo da fatura, e
+            # o nome da conexao ("Unicred") mantem a condicao do worker valida.
+            # Esta migracao corrige o DADO, nao a causa.
+            #
+            # `substituido_por` e o estado certo, nao `duplicada`: e o mesmo
+            # evento real gravado duas vezes, e nao duas cobrancas (secao 4.3).
+            # Fica o registro de horario JA normalizado - e o principal da tela,
+            # carrega a classificacao do usuario e traz cidade/pais (secao 5).
+            #
+            # Nao encosta em `conferida` (secao 1.2): os dois pares estao com OK
+            # assinado, e o OK permanece onde esta.
+            pares_v51 = (
+                # (fica, sai)
+                ("e7d62baf-2ae9-4a35-8801-67dc130217e0",
+                 "944b1db3-31fe-483c-a6c4-b131631173ae"),
+                ("8c52b3d6-fe83-4d9c-a705-ada8d3e171b0",
+                 "95ca3ad5-d89e-438f-b59f-190a4796cbe3"),
+            )
+            saem_v51 = [sai for _fica, sai in pares_v51]
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.eco_backup_v51 AS "
+                "SELECT transacao_id, substituido_por, duplicada, conferida, "
+                "data_transacao, now() AS backup_em FROM cartao.transacao "
+                "WHERE transacao_id::text = ANY(%s);",
+                (saem_v51,),
+            )
+            marcados_v51 = 0
+            for fica, sai in pares_v51:
+                # So marca se o par ainda for o que a varredura mediu: mesma
+                # conta, mesmo valor absoluto e 3h exatas de distancia. Se o
+                # usuario ja tiver resolvido na tela, ou se o dado mudou, a
+                # migracao nao faz nada - em vez de gravar sobre outra coisa.
+                cur.execute(
+                    "SELECT COUNT(*) FROM cartao.transacao a "
+                    "JOIN cartao.transacao b ON b.transacao_id::text=%s "
+                    "WHERE a.transacao_id::text=%s "
+                    "AND a.account_id=b.account_id "
+                    "AND ABS(COALESCE(a.valor_brl,a.valor_original)) "
+                    "  = ABS(COALESCE(b.valor_brl,b.valor_original)) "
+                    "AND a.data_transacao - b.data_transacao = interval '3 hours';",
+                    (fica, sai),
+                )
+                if not cur.fetchone()[0]:
+                    continue
+                cur.execute(
+                    "UPDATE cartao.transacao SET substituido_por=%s, "
+                    "atualizado_em=now() WHERE transacao_id::text=%s "
+                    "AND substituido_por IS NULL "
+                    "AND COALESCE(duplicada,false)=false "
+                    "AND COALESCE(somente_conciliacao,false)=false;",
+                    (fica, sai),
+                )
+                marcados_v51 += cur.rowcount
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Eco de 3h: mesma cobranca contando duas vezes',"
+                "jsonb_build_object('versao',51,'marcados',%s,"
+                "'excedente_removido_do_dre',255.00,"
+                "'aprovado_pelo_usuario',true,"
+                "'backup','cartao.eco_backup_v51'));",
+                (marcados_v51,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (51);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

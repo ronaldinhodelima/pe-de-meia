@@ -1039,6 +1039,29 @@ def test_migracao_50_desfaz_so_a_lista_explicita_e_respeita_a_trava_da_6_6():
     assert "if vinculos >= 2 or com_parcela:" in bloco
 
 
+def test_migracao_51_nao_encosta_no_ok_e_so_marca_o_par_que_ainda_bate():
+    """Secao 4.3: `substituido_por` e' o estado do MESMO evento, nao `duplicada`.
+
+    E secao 1.2: os dois pares estao com OK assinado, e a migracao nao pode
+    mexer nele - so tirar do resultado o registro repetido.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = core.split("if versao_atual < 51:", 1)[1].split("cur.close()", 1)[0]
+
+    assert "eco_backup_v51" in bloco, "alteracao de dado sem ponto de reversao"
+    assert "SET conferida" not in bloco and "conferida=" not in bloco
+    # e' o mesmo evento, nao cobranca em dobro: `duplicada` seria o estado errado
+    assert "SET substituido_por" in bloco
+    assert "SET duplicada" not in bloco
+    # so grava sobre quem ainda esta contando no resultado
+    assert "substituido_por IS NULL" in bloco
+    assert "COALESCE(duplicada,false)=false" in bloco
+    assert "COALESCE(somente_conciliacao,false)=false" in bloco
+    # e so se o par ainda for o que a varredura mediu
+    assert "interval '3 hours'" in bloco
+    assert "a.account_id=b.account_id" in bloco
+
+
 def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():
     """Secao 4.1: centro de custo so faz sentido em lancamento do resultado.
 
