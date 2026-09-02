@@ -375,10 +375,19 @@ function verDetalhes(id) {
       '<span class="modal-campo"><small>Tipo</small><strong>' + escHtml(d.tipo) + '</strong></span>' +
     '</div>' +
     '<div class="row"><span>Origem</span><span>' + escHtml(d.origem) + '</span></div>' +
-    '<div class="row row-pareada">' +
-      '<span class="modal-campo"><small>Visto 1ª vez em</small><strong>' + escHtml(d.primeiro_sincronizado_em) + '</strong></span>' +
-      '<span class="modal-campo"><small>Última sincronização</small><strong>' + escHtml(d.sincronizado_em) + '</strong></span>' +
-    '</div>';
+    // Lancamento manual nunca sincroniza: "visto 1a vez" e "ultima
+    // sincronizacao" seriam rotulos sem sentido, e um deles ficava fixo na data
+    // da criacao mesmo depois de editar. Ali o que responde "minha alteracao
+    // entrou?" e o atualizado_em.
+    (d._manual
+      ? '<div class="row row-pareada">' +
+          '<span class="modal-campo"><small>Criado em</small><strong>' + escHtml(d.primeiro_sincronizado_em !== '-' ? d.primeiro_sincronizado_em : d.sincronizado_em) + '</strong></span>' +
+          '<span class="modal-campo"><small>Última alteração</small><strong>' + escHtml(d.atualizado_em) + '</strong></span>' +
+        '</div>'
+      : '<div class="row row-pareada">' +
+          '<span class="modal-campo"><small>Visto 1ª vez em</small><strong>' + escHtml(d.primeiro_sincronizado_em) + '</strong></span>' +
+          '<span class="modal-campo"><small>Última sincronização</small><strong>' + escHtml(d.sincronizado_em) + '</strong></span>' +
+        '</div>');
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
   // O texto entra por .value: em innerHTML ele viraria atributo e precisaria de
@@ -393,7 +402,14 @@ function verDetalhes(id) {
   // espelha a categoria da linha; mudar aqui muda la e salva
   const selCat = document.getElementById('modalCategoria');
   const catLinha = trAtual ? trAtual.querySelector('.cat-select') : null;
-  if (selCat && catLinha) selCat.value = catLinha.value;
+  if (selCat && catLinha) {
+    selCat.value = catLinha.value;
+    // O combobox so se redesenha em mudanca de filho ou evento `change`; atribuir
+    // .value nao dispara nenhum dos dois, entao o texto visivel continuava no
+    // valor anterior enquanto o select real ja estava certo. As dimensoes nao
+    // sofrem disso porque usam replaceChildren, que o MutationObserver enxerga.
+    if (window.pdmCombobox) window.pdmCombobox.sincronizar(selCat);
+  }
   const emRateio = !!(d._rateios && d._rateios.length);
   if (selCat) selCat.disabled = !window.configLancamentos.pode_editar || emRateio;
   const selConferida = document.getElementById('modalConferida');
@@ -702,7 +718,17 @@ function salvarDescricaoModal(campo) {
       cel.insertBefore(document.createTextNode(' ' + nova + ' '), cel.querySelector('.selo-fora'));
       cel.dataset.tip = nova;
     }
-    if (window.detalhes[id]) window.detalhes[id].descricao = nova;
+    if (window.detalhes[id]) {
+      window.detalhes[id].descricao = nova;
+      if (d.atualizado_em) window.detalhes[id].atualizado_em = d.atualizado_em;
+    }
+    // "Ultima alteracao" tem que refletir esta edicao na hora, senao a tela
+    // continua afirmando um horario que ja nao e o do dado.
+    const campoAtualizado = [...document.querySelectorAll('#modalBody .modal-campo')]
+      .find(el => el.querySelector('small') && el.querySelector('small').textContent === 'Última alteração');
+    if (campoAtualizado && d.atualizado_em) {
+      campoAtualizado.querySelector('strong').textContent = d.atualizado_em;
+    }
   }).catch(() => alert('Falha ao salvar a descrição.'));
 }
 document.addEventListener('input', function (e) {

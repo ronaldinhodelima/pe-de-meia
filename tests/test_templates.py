@@ -308,7 +308,10 @@ class TestIndex:
         assert 'onchange="salvarDimensaoModal(this)"' in html
         assert 'onchange="salvarObservacaoModal()"' in html
         assert 'id="modalConferidaPor" hidden' in html
-        assert js.count('class="row row-pareada"') == 4
+        # 5 e nao 4: a ultima linha tem duas versoes, porque lancamento manual
+        # nunca sincroniza e mostra "Criado em / Ultima alteracao" no lugar
+        assert js.count('class="row row-pareada"') == 5
+        assert "<small>Última alteração</small>" in js
         assert js.index('<small>Data</small>') < js.index('<small>Valor (R$)</small>')
         assert js.index('<small>Valor original</small>') < js.index('<small>Parcela</small>')
         assert js.index('<small>Visto 1ª vez em</small>') < js.index('<small>Última sincronização</small>')
@@ -456,3 +459,18 @@ def test_descricao_manual_salva_sozinha_e_so_no_modal_do_manual():
     assert "focusout" in js.split("salvarDescricaoModal", 1)[1]
     # o texto nunca vai por atributo dentro de innerHTML
     assert "campoDesc.value = d.descricao" in js
+
+
+def test_modal_sincroniza_o_combobox_ao_espelhar_a_categoria():
+    """Atribuir .value nao redesenha o combobox.
+
+    O widget so se atualiza em mudanca de filho (MutationObserver) ou evento
+    `change`; `selCat.value = ...` nao dispara nenhum dos dois, entao o texto
+    visivel ficava em "(sem categoria)" com o select real ja correto. As
+    dimensoes escapavam por usarem replaceChildren.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    trecho = js.split("espelha a categoria da linha", 1)[1].split("const emRateio", 1)[0]
+    assert "pdmCombobox.sincronizar(selCat)" in trecho

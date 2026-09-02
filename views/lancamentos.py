@@ -277,7 +277,8 @@ def index():
         "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
         "t.conferida, t.observacao, t.observacao_sistema, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
         "t.substituido_por, COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
-        "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, t.primeiro_sincronizado_em, "
+        "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, "
+        "t.primeiro_sincronizado_em, t.atualizado_em, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) + " ORDER BY t.data_transacao DESC;",
         params,
@@ -602,6 +603,10 @@ def index():
             "observacao": r["observacao"] or "-",
             "observacao_sistema": r["observacao_sistema"] or "",
             "sincronizado_em": data_hora_local(r["sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["sincronizado_em"] else "-",
+            # Em lancamento manual "ultima sincronizacao" nao quer dizer nada -
+            # ele nunca sincroniza. O que responde "minha edicao entrou?" e o
+            # atualizado_em, e e ele que a tela mostra nesse caso.
+            "atualizado_em": data_hora_local(r["atualizado_em"]).strftime("%d/%m/%Y %H:%M") if r["atualizado_em"] else "-",
             "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
             "_conferida": bool(r["conferida"]),
             "_pendente_banco": pendente_banco,
@@ -1985,10 +1990,23 @@ def update_transacao(transacao_id):
             None,
             classificacoes_compartilhadas,
         )
+    # Depois do UPDATE, senao devolveria a hora anterior a esta edicao.
+    cur.execute(
+        "SELECT atualizado_em FROM cartao.transacao WHERE transacao_id=%s;", (transacao_id,)
+    )
+    _atualizado = cur.fetchone()
+    atualizado_em_fmt = (
+        data_hora_local(_atualizado[0]).strftime("%d/%m/%Y %H:%M")
+        if _atualizado and _atualizado[0] else "-"
+    )
+
     return jsonify({
         "ok": True,
         "bloqueada": bloqueada,
         "faltando": faltando,
+        # A hora vem do servidor, nunca do relogio do navegador: o modal mostra
+        # "Ultima alteracao" e um relogio adiantado ali seria uma mentira sutil.
+        "atualizado_em": atualizado_em_fmt,
         "rateio_invalido": rateio_invalido,
         "pendente_banco": pendente_banco,
         "sem_pdf_conciliado": sem_pdf_conciliado,
