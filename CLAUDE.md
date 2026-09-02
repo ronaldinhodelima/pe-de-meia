@@ -65,7 +65,8 @@ levantamento** — conferir contra um caso conhecido antes de confiar.
 ## 1.6 Regra permanente de publicação
 
 Todo deploy atualiza este arquivo com decisões, comportamento entregue, migrações, validações e
-pendências. Antes de publicar: suíte pytest completa, `py_compile`, `git diff --check`. Depois do
+pendências. Antes de publicar: suíte pytest completa, `py_compile`, `git diff --check` e
+`git add` com a **lista explícita de arquivos** — nunca `git add -A` (§10.2 nº 3). Depois do
 deploy: conferir os logs, abrir a tela afetada em produção e comparar os números anotados antes.
 **Não marcar/desmarcar OK real apenas para testar.**
 
@@ -1050,12 +1051,19 @@ Coolify e comportamento do Pluggy são diferentes.
 
 1. **Ler o código antes de mudar** — várias vezes a causa raiz era diferente da aparente.
 2. `python3 -m py_compile` + `pytest tests/ -q` antes de commitar.
-3. Commit + push, **e então validar em produção**: status no Coolify, `/health`, logs (procurar
+3. **`git add` com a lista de arquivos, nunca `git add -A`.** O `-A` varre o que estiver na
+   árvore, inclusive trabalho de outro assunto ainda em andamento. Aconteceu em 02/09/2026: o
+   commit `31a9935` diz "Migração 52" e carrega junto o formulário de lançamento manual inteiro —
+   4 dos 7 arquivos não têm relação com a mensagem. Depois de publicado não se reescreve (é dele
+   que o Coolify faz deploy), então fica um commit que mente sobre o próprio conteúdo. É a mesma
+   auditoria que permitiu reverter as 22 datas corrompidas da §6.4: enfraquecê-la custa caro.
+   Antes de commitar, `git status --short` e conferir que só está indo o assunto daquele commit.
+4. Commit + push, **e então validar em produção**: status no Coolify, `/health`, logs (procurar
    traceback e `Aviso: falha ao rodar migracao`) e a tela real pelo navegador.
-4. **Testar de verdade, não só ler o código.** O teste com payload real de XSS encontrou 3 pontos
+5. **Testar de verdade, não só ler o código.** O teste com payload real de XSS encontrou 3 pontos
    que o grep não pegou. Limpar o `localStorage` **antes** de recarregar, senão o estado antigo em
    memória falseia o resultado.
-5. Limpar dados de teste depois.
+6. Limpar dados de teste depois.
 
 ## 10.3 Como cortar código sem quebrar nada
 
