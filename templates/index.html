@@ -316,15 +316,6 @@
       </div>
     </div>
     <div id="modalAcoes" style="margin-top:14px;display:none">
-      <div class="editar-manual">
-        <label for="modalDescricao">Descrição do lançamento manual</label>
-        <div class="editar-manual-linha">
-          <input type="text" id="modalDescricao" maxlength="300" {{ 'disabled' if not pode_editar }}>
-          <button type="button" class="ver-btn" id="modalSalvarDescricao" {{ 'disabled' if not pode_editar }}>Salvar</button>
-          <span id="modalDescricaoStatus"></span>
-        </div>
-        <small>Só lançamento manual pode ter a descrição alterada: a de um lançamento do banco pertence ao Pluggy e voltaria na próxima sincronização.</small>
-      </div>
       <button type="button" class="btn-perigo" onclick="excluirManual()" {{ 'disabled' if not pode_manual }}>Excluir lançamento</button>
       <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:7px">Só lançamentos manuais ou importados de arquivo podem ser excluídos.</div>
     </div>
@@ -337,5 +328,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260901-1"></script>
-<script src="/static/lancamentos.js?v=20260902-1"></script>
+<script src="/static/lancamentos.js?v=20260902-2"></script>
 {% endblock %}

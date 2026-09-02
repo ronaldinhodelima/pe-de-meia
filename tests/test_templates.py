@@ -437,3 +437,22 @@ class TestEdicaoEmLote:
         raiz = pathlib.Path(__file__).resolve().parent.parent
         html = (raiz / "templates" / "index.html").read_text(encoding="utf-8")
         assert html.count('data-col="sel"') == 4, "cabecalho, linha, rateio e tecnica"
+
+
+def test_descricao_manual_salva_sozinha_e_so_no_modal_do_manual():
+    """Sem botao Salvar: espera curta e ao sair do campo, como a observacao."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    html = (raiz / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert "modalSalvarDescricao" not in js and "modalSalvarDescricao" not in html
+    assert "d._manual" in js.split("Descrição", 1)[0][-400:] or "d._manual\n" in js
+    # o campo so e montado para lancamento manual
+    trecho = js.split("'<div class=\"row\"><span>Descrição</span>", 1)[0][-300:]
+    assert "d._manual" in trecho
+    # salvamento automatico nos dois gatilhos
+    assert "setTimeout(() => salvarDescricaoModal(campo), 700)" in js
+    assert "focusout" in js.split("salvarDescricaoModal", 1)[1]
+    # o texto nunca vai por atributo dentro de innerHTML
+    assert "campoDesc.value = d.descricao" in js

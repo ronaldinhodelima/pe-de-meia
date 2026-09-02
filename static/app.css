@@ -708,13 +708,15 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 #manualStatus.erro { color: var(--bad); }
 @media (max-width: 700px) { .editor-manual .campo-largo { grid-column: auto; } }
 
-.editar-manual { margin-bottom: 12px; }
-.editar-manual > label { display: block; font-size: var(--fonte-xs); color: var(--ink-faint); margin-bottom: 4px; }
-.editar-manual-linha { display: flex; gap: 8px; align-items: center; }
-.editar-manual-linha input {
-  flex: 1; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  font-size: var(--fonte-md); background: var(--surface); color: var(--ink); font-family: inherit;
+/* Descricao do lancamento manual, editavel na propria linha do modal. */
+.modal-desc-input {
+  width: 100%; box-sizing: border-box; text-align: right;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius-xs);
+  font-size: var(--fonte-md); background: var(--surface); color: var(--ink);
+  font-family: inherit; transition: border-color .12s, box-shadow .12s;
 }
-.editar-manual-linha input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.editar-manual small { display: block; margin-top: 5px; font-size: var(--fonte-xxs); color: var(--ink-faint); line-height: 1.45; }
-#modalDescricaoStatus { font-size: var(--fonte-sm); color: var(--ink-faint); white-space: nowrap; }
+.modal-desc-input:hover:not(:disabled) { border-color: var(--selecao); }
+.modal-desc-input:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  text-align: left;
+}

@@ -359,7 +359,13 @@ function verDetalhes(id) {
       '<span class="modal-campo"><small>Data</small><strong>' + escHtml(d.data) + '</strong></span>' +
       '<span class="modal-campo"><small>Valor (R$)</small><strong>' + escHtml(d.valor) + '</strong></span>' +
     '</div>' +
-    '<div class="row"><span>Descrição</span><span>' + escHtml(d.descricao) + '</span></div>' +
+    (d._manual
+      // So lancamento manual: a descricao de lancamento do Pluggy pertence ao
+      // banco e voltaria na proxima sincronizacao (secao 4.6). O servidor
+      // repete a trava no WHERE do UPDATE.
+      ? '<div class="row"><span>Descrição</span>' +
+        '<span><input class="modal-desc-input" type="text" maxlength="300" aria-label="Descrição"></span></div>'
+      : '<div class="row"><span>Descrição</span><span>' + escHtml(d.descricao) + '</span></div>') +
     '<div class="row row-pareada">' +
       '<span class="modal-campo"><small>Valor original</small><strong>' + escHtml(d.valor_original) + '</strong></span>' +
       '<span class="modal-campo"><small>Parcela</small><strong>' + escHtml(d.parcela) + '</strong></span>' +
@@ -375,10 +381,13 @@ function verDetalhes(id) {
     '</div>';
   document.getElementById('modalBody').innerHTML = html;
   document.getElementById('modalAcoes').style.display = d._manual ? 'block' : 'none';
-  const campoDesc = document.getElementById('modalDescricao');
+  // O texto entra por .value: em innerHTML ele viraria atributo e precisaria de
+  // escape proprio - aqui nao ha como esquecer.
+  const campoDesc = document.querySelector('#modalBody .modal-desc-input');
   if (campoDesc) {
     campoDesc.value = d.descricao || '';
-    document.getElementById('modalDescricaoStatus').textContent = '';
+    const obs = document.getElementById('modalObservacao');
+    campoDesc.disabled = !!(obs && obs.disabled);
   }
   const trAtual = document.querySelector('tr[data-id="' + id + '"]');
   // espelha a categoria da linha; mudar aqui muda la e salva
@@ -673,33 +682,39 @@ function fecharModal() {
 // o ESC e tratado no tabelas.js, que so tira a classe .show - aqui a tela limpa
 // o proprio estado
 window.aoFecharModal = function () { idAtualModal = null; acaoConfirmacaoModal = null; };
-// A descricao so e editavel em lancamento manual - o botao vive dentro de
-// #modalAcoes, que so aparece nesse caso. O servidor repete a trava no WHERE.
-document.addEventListener('click', function (e) {
-  if (e.target.id !== 'modalSalvarDescricao') return;
-  const campo = document.getElementById('modalDescricao');
-  const status = document.getElementById('modalDescricaoStatus');
+// Descricao do lancamento manual: salva sozinha, com espera curta e ao sair do
+// campo - o mesmo comportamento da observacao (secao 7.2). Sem botao Salvar.
+let temporizadorDescricao = null;
+function salvarDescricaoModal(campo) {
   const nova = campo.value.trim();
-  if (!nova) { status.textContent = 'Informe uma descrição.'; return; }
-  status.textContent = 'Salvando...';
-  fetch('/api/transacao/' + encodeURIComponent(idAtualModal), {
+  if (!nova || !idAtualModal) return;
+  const id = idAtualModal;
+  fetch('/api/transacao/' + encodeURIComponent(id), {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({descricao: nova})
   }).then(r => r.json()).then(d => {
-    if (!d.ok) { status.textContent = d.erro || 'Falha ao salvar'; return; }
-    status.textContent = 'Salvo';
-    const tr = document.querySelector('tr[data-id="' + idAtualModal + '"]');
-    if (tr) {
-      const cel = tr.querySelector('.cel-desc');
+    if (!d.ok) { alert(d.erro || 'Falha ao salvar a descrição.'); return; }
+    const tr = document.querySelector('tr[data-id="' + id + '"]');
+    const cel = tr && tr.querySelector('.cel-desc');
+    if (cel) {
       // a celula tem botoes (+ de rateio/tecnico) e selos: troca so o texto
-      if (cel) {
-        [...cel.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
-        cel.insertBefore(document.createTextNode(' ' + nova + ' '), cel.querySelector('.selo-fora'));
-        cel.dataset.tip = nova;
-      }
+      [...cel.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); });
+      cel.insertBefore(document.createTextNode(' ' + nova + ' '), cel.querySelector('.selo-fora'));
+      cel.dataset.tip = nova;
     }
-    if (window.detalhes[idAtualModal]) window.detalhes[idAtualModal].descricao = nova;
-  }).catch(() => { status.textContent = 'Falha ao salvar'; });
+    if (window.detalhes[id]) window.detalhes[id].descricao = nova;
+  }).catch(() => alert('Falha ao salvar a descrição.'));
+}
+document.addEventListener('input', function (e) {
+  if (!e.target.matches('#modalBody .modal-desc-input')) return;
+  clearTimeout(temporizadorDescricao);
+  const campo = e.target;
+  temporizadorDescricao = setTimeout(() => salvarDescricaoModal(campo), 700);
+});
+document.addEventListener('focusout', function (e) {
+  if (!e.target.matches('#modalBody .modal-desc-input')) return;
+  clearTimeout(temporizadorDescricao);
+  salvarDescricaoModal(e.target);
 });
 
 function excluirManual() {
