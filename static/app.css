@@ -156,11 +156,6 @@
   }
   select:focus, input:not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:26px;box-sizing:border-box;border:1px solid transparent!important;border-radius:5px!important;padding:1px 18px 1px 3px!important;background:transparent!important;box-shadow:0 1px 3px rgba(20,20,20,.08)!important;color:var(--ink);font-size:12.5px;cursor:text;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}.pdm-combobox-input:hover,.pdm-combobox-input:focus{background:var(--raise)!important;border-color:rgba(92,95,102,.24)!important;box-shadow:0 3px 10px rgba(20,20,20,.11)!important;transform:scale(1.012)}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:11px;pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--ink-soft)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px rgba(27,31,36,.13);padding:2px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:7px 4px;border-radius:6px;font-size:12.5px;line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-color:rgba(194,60,52,.45)!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:hover,.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-color:rgba(194,60,52,.75)!important;background:var(--bad-soft)!important;box-shadow:0 3px 10px rgba(194,60,52,.12)!important}
-  /* checkbox usa outline em vez de box-shadow: dentro de celula de tabela com
-     overflow:hidden (ver td[data-col] mais abaixo), o box-shadow fica cortado
-     e o foco por Tab passa a ser invisivel - so aparecia em navegadores que
-     nao respeitam esse recorte. Outline nao e afetado do mesmo jeito. */
-  input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
   /* ---------- table ---------- */
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
@@ -287,7 +282,6 @@
   table.ajustavel th[data-col] .col-resize-handle:hover::after { background: var(--accent); }
   table.ajustavel th[data-col].sort-asc::after { content: " ▲"; font-size: 9px; color: var(--accent); }
   table.ajustavel th[data-col].sort-desc::after { content: " ▼"; font-size: 9px; color: var(--accent); }
-  table.compacta input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); }
 
   /* ---------- chips dos filtros selecionados ---------- */
   .chips-sel { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -544,55 +538,65 @@ tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-col
 .cel-sel { width: 28px; text-align: center; }
 td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
 
-/* Caixas de marcacao (selecao a esquerda e OK a direita) com o mesmo desenho:
-   sem contorno duro - o limite e uma sombra interna, que some no hover em favor
-   do acento. A marca e desenhada em CSS, sem imagem nem data: URI. */
-.sel-check, .sel-fatura, #loteTodos, .conf-check, .ok-lancamento,
-.barra-lote-inline input[type=checkbox] {
+/* ===========================================================================
+   CAIXAS DE MARCACAO - REGRA UNICA E OBRIGATORIA
+   ===========================================================================
+   TODO input[type=checkbox] do sistema e desenhado aqui, e SO aqui. Nenhuma
+   tela pode redefinir aparencia, tamanho, borda, cor ou accent-color de
+   checkbox: quem fizer isso cria uma segunda verdade que vence ou perde por
+   especificidade dependendo da tela, em silencio. Foi exatamente o que houve
+   com `table.compacta input[type=checkbox]`, mais especifico que a classe, que
+   deixava a caixa 14px dentro da tabela e 16px fora sem nenhum erro aparente.
+   `tests/test_estrutura.py` trava essa regra.
+
+   Desenho: sem contorno duro - o limite e uma sombra interna, que cede lugar ao
+   acento no hover. A marca e desenhada em CSS, sem imagem e sem data: URI,
+   entao nao depende do CSP.
+   Precisa de outra caixa em algum lugar? Mude aqui, para todas. */
+input[type=checkbox] {
   appearance: none; -webkit-appearance: none;
   width: 15px; height: 15px; margin: 0; padding: 0;
   border: none; border-radius: 5px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(16, 32, 58, .07);
-  cursor: pointer; position: relative; flex: none;
+  cursor: pointer; position: relative; flex: none; vertical-align: middle;
   transition: box-shadow .13s ease, background-color .13s ease, transform .13s ease;
 }
-.sel-check:hover, .sel-fatura:hover, #loteTodos:hover, .conf-check:hover,
-.ok-lancamento:hover, .barra-lote-inline input[type=checkbox]:hover {
+input[type=checkbox]:hover:not(:disabled) {
   box-shadow: inset 0 0 0 1px var(--accent), 0 2px 6px var(--accent-soft);
   transform: scale(1.08);
 }
-.sel-check:focus-visible, .sel-fatura:focus-visible, #loteTodos:focus-visible,
-.conf-check:focus-visible, .ok-lancamento:focus-visible,
-.barra-lote-inline input[type=checkbox]:focus-visible {
+/* Sem outline: o anel e box-shadow externo. Dentro de celula com
+   overflow:hidden o box-shadow ficava cortado - por isso `td.cel-check` e
+   `td[data-col="sel"]` liberam overflow logo abaixo. */
+input[type=checkbox]:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft);
 }
-.sel-check:checked, .sel-fatura:checked, #loteTodos:checked, .conf-check:checked,
-.ok-lancamento:checked, .barra-lote-inline input[type=checkbox]:checked {
+input[type=checkbox]:checked {
   background: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent), 0 1px 3px var(--accent-soft);
 }
-.sel-check:checked::after, .sel-fatura:checked::after, #loteTodos:checked::after,
-.conf-check:checked::after, .ok-lancamento:checked::after,
-.barra-lote-inline input[type=checkbox]:checked::after {
+input[type=checkbox]:checked::after {
   content: ''; position: absolute; left: 4.5px; top: 1px;
   width: 4px; height: 8px; border: solid #fff;
   border-width: 0 2px 2px 0; transform: rotate(43deg);
 }
-#loteTodos:indeterminate {
+input[type=checkbox]:indeterminate {
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
-#loteTodos:indeterminate::after {
+input[type=checkbox]:indeterminate::after {
   content: ''; position: absolute; left: 3.5px; top: 7px;
   width: 9px; height: 2px; border-radius: 1px; background: var(--accent-strong);
 }
-.sel-check:disabled, .sel-fatura:disabled, .conf-check:disabled, .ok-lancamento:disabled {
+input[type=checkbox]:disabled {
   cursor: not-allowed; opacity: .4;
   box-shadow: inset 0 0 0 1px var(--line);
   transform: none;
 }
+/* O anel de foco e sombra: celula com overflow:hidden o cortaria. */
+td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !important; }
 
 .barra-lote {
   position: sticky; top: 0; z-index: 5;

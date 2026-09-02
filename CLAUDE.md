@@ -129,6 +129,17 @@ versão do boot, sem erro nenhum. `tests/test_core_estado.py` trava isso checand
 `if versao_atual < N`. Num banco já migrado aquele bloco não roda e a migração seguinte quebra com
 `NameError` — erro que não aparece em banco novo, que é onde os testes olham.
 
+**Caixa de marcação tem uma única definição visual, e isso é obrigatório.** Todo
+`input[type=checkbox]` do sistema é desenhado no bloco único do `app.css` — sem contorno duro, o
+limite é sombra interna, o check é desenhado em CSS (sem imagem nem `data:` URI, então não depende
+do CSP). **Nenhuma tela pode redefinir aparência, tamanho, borda, cor ou `accent-color` de
+checkbox.** Uma segunda definição vence ou perde por especificidade dependendo da tela, em
+silêncio: `table.compacta input[type=checkbox]` é mais específico que uma classe e deixava a caixa
+14px dentro da tabela e 16px fora, com o CSS parecendo certo nas duas leituras. Precisa de outra
+caixa em algum lugar? Mude no bloco único, para todas.
+`tests/test_estrutura.py::test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema` varre
+templates, CSS e `core.py` e falha se aparecer uma segunda regra.
+
 **O JS da visão detalhada usa parâmetro de versão no `src`.** Sempre renovar quando o
 comportamento mudar, evitando HTML novo com script antigo no cache.
 

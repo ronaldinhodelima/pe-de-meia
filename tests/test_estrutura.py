@@ -1057,3 +1057,46 @@ def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():
     # a mesma condicao nas tres telas e na trava do servidor (secao 6.5 n.10)
     assert view.count("exige_dimensoes(") >= 2, "detalhada e fatura em andamento"
     assert "EXIGE_DIMENSOES_SQL" in view, "e a trava do servidor, em SQL"
+
+
+def test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema():
+    """Regra obrigatoria: o desenho da caixa de marcacao mora so no app.css.
+
+    Uma segunda definicao vence ou perde por especificidade dependendo da tela,
+    sem erro nenhum: `table.compacta input[type=checkbox]` deixava a caixa 14px
+    dentro da tabela e 16px fora, e o CSS "parecia certo" nas duas leituras.
+    """
+    import re
+
+    def sem_comentarios(texto):
+        return re.sub(r"/\*.*?\*/", " ", texto, flags=re.S)
+
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    partes = css.split("CAIXAS DE MARCACAO - REGRA UNICA E OBRIGATORIA", 1)
+    assert len(partes) == 2, "o bloco unico sumiu do app.css"
+    unico, resto = partes[1].split("input[type=checkbox]:disabled", 1)
+    for propriedade in ("appearance", "width", "height", "border-radius", "box-shadow"):
+        assert propriedade in unico, propriedade
+
+    # todo lugar que poderia desenhar um checkbox, menos o proprio bloco unico
+    fontes = {"static/app.css": sem_comentarios(partes[0] + resto)}
+    for pasta, padrao in (("templates", "*.html"), ("static", "*.css")):
+        for caminho in sorted((RAIZ / pasta).glob(padrao)):
+            chave = f"{pasta}/{caminho.name}"
+            if chave in fontes:
+                continue  # o app.css ja entrou acima, sem o bloco unico
+            fontes[chave] = sem_comentarios(caminho.read_text(encoding="utf-8"))
+    fontes["core.py"] = sem_comentarios((RAIZ / "core.py").read_text(encoding="utf-8"))
+
+    propriedades = r"(appearance|width|height|border|accent-color|background)\s*:"
+    culpados = []
+    for nome, texto in fontes.items():
+        for regra in re.findall(r"[^{}]*checkbox[^{}]*\{[^}]*\}", texto):
+            seletor, corpo = regra.split("{", 1)
+            if "checkbox" not in seletor:
+                continue  # a palavra estava no corpo/valor, nao no seletor
+            if re.search(propriedades, corpo):
+                culpados.append(nome + ": " + " ".join(regra.split())[:90])
+    assert not culpados, (
+        "checkbox so pode ser desenhado no bloco unico do app.css: " + str(culpados)
+    )
