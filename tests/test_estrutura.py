@@ -1257,3 +1257,36 @@ def test_valor_e_impresso_no_formato_brasileiro():
     for caminho in sorted((RAIZ / "views").glob("*.py")):
         texto = caminho.read_text(encoding="utf-8")
         assert ",.2f" not in texto, f"{caminho.name} formata valor na mao"
+
+
+def test_modal_tem_uma_tipografia_de_rotulo_e_um_desenho_de_campo():
+    """O modal de detalhes tinha dois tamanhos de rotulo e quatro campos.
+
+    O rotulo da linha pareada usava `<small>`, que encolhe para 0,8em = 10,4px,
+    enquanto o da linha simples ficava em 13px - mesmo papel, mesma coluna, dois
+    tamanhos, e um deles fora da escala. Os campos somavam tres raios (5, 6 e
+    9px), duas alturas e duas bordas. Nada disso aparece lendo o CSS: cada regra
+    parecia certa sozinha.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+
+    # o <small> do rotulo nao pode voltar a decidir o tamanho sozinho
+    assert ".modal .modal-campo small," in css
+    assert ".modal-conferencia small { font-size: var(--fonte-sm)" in css
+
+    # um so bloco desenha campo dentro do modal, e ele nao repete raio na mao
+    bloco = css.split('.modal select, .modal input[type="text"]', 1)
+    assert len(bloco) == 2, "o bloco unico de campo do modal sumiu"
+    corpo = bloco[1].split("}", 1)[0]
+    for esperado in ("height: 26px", "var(--radius-xs)", "var(--campo-sombra)", "var(--fonte-sm)"):
+        assert esperado in corpo, esperado
+
+    # o combobox le os mesmos tokens: e ele o padrao que os campos seguem
+    assert "border-radius:var(--radius-xs)!important" in css
+    assert "box-shadow:var(--campo-sombra)!important" in css
+
+    # a descricao nao pode voltar a ter desenho proprio: por ser mais
+    # especifica, ela venceria o bloco unico sem nenhum erro aparente
+    proprio = css.split("\n.modal-desc-input {", 1)[1].split("}", 1)[0]
+    for herdado in ("border", "padding", "font-size", "background", "border-radius"):
+        assert herdado not in proprio, f".modal-desc-input redefine {herdado}"

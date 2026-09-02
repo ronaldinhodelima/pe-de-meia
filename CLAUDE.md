@@ -829,6 +829,16 @@ desfez uma decisão geral sem nenhum erro aparente: `table.compacta input[type=c
 e `.perm-item input`/`label.chip-opt input` (checkbox redesenhado). **Sempre medir o valor
 computado no navegador** — nenhum dos três aparecia lendo o código.
 
+**Um papel, uma tipografia; um campo, um desenho.** O modal de detalhes tinha dois tamanhos de
+rótulo na mesma coluna — a linha simples em 13px e a pareada com `<small>`, que encolhe para
+0,8em = **10,4px**, fora da escala — e quatro desenhos de campo (combobox, descrição, observação e
+o `select` nativo de Conferida) somando três raios (5, 6 e 9px), duas alturas e duas bordas. Nada
+disso aparece lendo o CSS: cada regra parecia certa sozinha. **`<small>`, `<strong>` e afins são
+semântica, não tamanho** — quem decide o tamanho é o token. O padrão de campo é o do combobox
+(§7.7), porque ele já é a maioria; `--campo-sombra` e `--campo-sombra-forte` existem para que os
+dois leiam o mesmo valor em vez de copiá-lo.
+`tests/test_estrutura.py::test_modal_tem_uma_tipografia_de_rotulo_e_um_desenho_de_campo` trava isso.
+
 **Contorno semântico também é token.** `--accent-line`, `--good-line` e `--bad-line` existem
 porque três bordas estavam em cor fixa (`#b9dfe4`, `#cfe9d9`, `#efb3ae`) sobre fundo que já era
 token — no escuro o fundo mudava e o contorno não. Junto com elas foram 28 campos de cadastro com

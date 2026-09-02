@@ -37,10 +37,13 @@ def test_layout_sombra_flutuante_e_compacto():
     # o combobox segue a escala de texto, nao um tamanho proprio
     assert "font-size:var(--fonte-sm)" in css
     assert "height:26px" in css
-    assert "border-radius:5px!important" in css
+    # combobox e campo do modal compartilham o raio: eram 5px e 6px lado a lado
+    assert "border-radius:var(--radius-xs)!important" in css
     assert "padding:1px 18px 1px 3px!important" in css
     assert "padding:7px 4px" in css
-    assert "box-shadow:0 1px 3px rgba(20,20,20,.08)!important" in css
+    # a sombra do campo virou token: sem isso os campos do modal nao tinham
+    # como igualar o combobox sem copiar o numero na mao
+    assert "box-shadow:var(--campo-sombra)!important" in css
     assert ".pdm-combobox-input:hover,.pdm-combobox-input:focus" in css
     assert "background:var(--raise)!important" in css
     assert "border-color:rgba(92,95,102,.24)!important" in css

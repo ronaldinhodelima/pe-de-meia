@@ -266,7 +266,7 @@
     <div class="row">
       <span>Categoria</span>
       <span><select id="modalCategoria" data-pdm-combobox aria-label="Categoria" onchange="salvarCategoriaModal()"
-                    {{ 'disabled' if not pode_editar }} style="padding:5px 7px;max-width:230px">
+                    {{ 'disabled' if not pode_editar }}>
         <option value="">(sem categoria)</option>
         {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
       </select></span>
@@ -294,11 +294,11 @@
     </details>
     <div class="row">
       <span>Conferida</span>
-      <span class="modal-conferencia"><small id="modalConferidaPor" hidden></small><select id="modalConferida" onchange="alterarConferidaModal()"
+      <span class="modal-conferencia"><small id="modalConferidaPor" hidden></small><span class="modal-select-nativo"><select id="modalConferida" onchange="alterarConferidaModal()"
                     {{ 'disabled' if not pode_conferir }}>
           <option value="sim">Sim</option>
           <option value="nao">Não</option>
-        </select></span>
+        </select></span></span>
     </div>
     <div class="row">
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--ink)">
