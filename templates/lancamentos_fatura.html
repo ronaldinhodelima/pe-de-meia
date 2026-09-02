@@ -56,7 +56,7 @@
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:17px;line-height:1;cursor:pointer;border-radius:5px;transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:var(--raise);color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:12px}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:10px;text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:6px;padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--ink-faint);font-weight:400}
-  .ok-lancamento{width:19px;height:19px;cursor:pointer}.ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0}
+  .ajuda-fatura{font-size:11.5px;color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:var(--surface);color:var(--ink);font-family:inherit;transition:border-color .12s,box-shadow .12s}.busca-fatura input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.busca-fatura span{font-size:12px;color:var(--ink-faint)}
   .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:10px}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
@@ -229,4 +229,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260901-1"></script><script src="/static/lancamentos_fatura.js?v=20260901-lote"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260901-1"></script><script src="/static/lancamentos_fatura.js?v=20260901-lote2"></script>{% endblock %}

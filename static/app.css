@@ -543,9 +543,57 @@ tr.fora-resultado .cel-desc { text-decoration: line-through; text-decoration-col
 /* ---- edicao em lote na tela de Lancamentos ---- */
 .cel-sel { width: 28px; text-align: center; }
 td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
-.sel-check, #loteTodos { cursor: pointer; accent-color: var(--accent); }
-.sel-check:disabled { cursor: not-allowed; opacity: .35; }
-tr:hover .sel-check { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+
+/* Caixas de marcacao (selecao a esquerda e OK a direita) com o mesmo desenho:
+   sem contorno duro - o limite e uma sombra interna, que some no hover em favor
+   do acento. A marca e desenhada em CSS, sem imagem nem data: URI. */
+.sel-check, .sel-fatura, #loteTodos, .conf-check, .ok-lancamento,
+.barra-lote-inline input[type=checkbox] {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px; margin: 0; padding: 0;
+  border: none; border-radius: 5px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(16, 32, 58, .07);
+  cursor: pointer; position: relative; flex: none;
+  transition: box-shadow .13s ease, background-color .13s ease, transform .13s ease;
+}
+.ok-lancamento { width: 17px; height: 17px; }
+.sel-check:hover, .sel-fatura:hover, #loteTodos:hover, .conf-check:hover,
+.ok-lancamento:hover, .barra-lote-inline input[type=checkbox]:hover {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 2px 6px var(--accent-soft);
+  transform: scale(1.08);
+}
+.sel-check:focus-visible, .sel-fatura:focus-visible, #loteTodos:focus-visible,
+.conf-check:focus-visible, .ok-lancamento:focus-visible,
+.barra-lote-inline input[type=checkbox]:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft);
+}
+.sel-check:checked, .sel-fatura:checked, #loteTodos:checked, .conf-check:checked,
+.ok-lancamento:checked, .barra-lote-inline input[type=checkbox]:checked {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 1px 3px var(--accent-soft);
+}
+.sel-check:checked::after, .sel-fatura:checked::after, #loteTodos:checked::after,
+.conf-check:checked::after, .ok-lancamento:checked::after,
+.barra-lote-inline input[type=checkbox]:checked::after {
+  content: ''; position: absolute; left: 5px; top: 1.5px;
+  width: 4px; height: 8px; border: solid #fff;
+  border-width: 0 2px 2px 0; transform: rotate(43deg);
+}
+#loteTodos:indeterminate {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+#loteTodos:indeterminate::after {
+  content: ''; position: absolute; left: 3.5px; top: 7px;
+  width: 9px; height: 2px; border-radius: 1px; background: var(--accent-strong);
+}
+.sel-check:disabled, .sel-fatura:disabled, .conf-check:disabled, .ok-lancamento:disabled {
+  cursor: not-allowed; opacity: .4;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transform: none;
+}
 
 .barra-lote {
   position: sticky; top: 0; z-index: 5;
@@ -562,9 +610,8 @@ tr:hover .sel-check { outline: 2px solid var(--accent-soft); outline-offset: 1px
 .barra-lote-topo .ver-btn { margin-left: auto; }
 .barra-lote-campos { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .barra-lote-campos > label {
-  display: flex; flex-direction: column; gap: 3px;
-  font-size: 11.5px; color: var(--ink-faint);
-  text-transform: uppercase; letter-spacing: .03em;
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--ink-faint);
 }
 .barra-lote-campos select, .barra-lote-campos input[type=text] {
   min-width: 150px; padding: 6px 8px; font-size: 13px;
@@ -573,9 +620,8 @@ tr:hover .sel-check { outline: 2px solid var(--accent-soft); outline-offset: 1px
 }
 .barra-lote-obs input { min-width: 200px; }
 .barra-lote-inline {
-  flex-direction: row !important; align-items: center; gap: 5px;
-  text-transform: none !important; letter-spacing: 0 !important;
-  font-size: 12.5px !important; color: var(--ink-soft) !important;
+  flex-direction: row !important; align-items: center; gap: 6px;
+  font-size: 12px !important; color: var(--ink-soft) !important;
   padding-bottom: 6px; cursor: pointer;
 }
 .barra-lote .ver-btn.primario {
@@ -590,4 +636,4 @@ tr:hover .sel-check { outline: 2px solid var(--accent-soft); outline-offset: 1px
 }
 .barra-lote-resultado.com-falha { color: var(--warn); background: var(--warn-soft); }
 .cel-sel-fatura { white-space: nowrap; }
-.cel-sel-fatura .sel-fatura { margin-right: 4px; accent-color: var(--accent); cursor: pointer; }
+.cel-sel-fatura .sel-fatura { margin-right: 5px; vertical-align: middle; }
