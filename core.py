@@ -4582,6 +4582,66 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (52);")
             conn.commit()
 
+        if versao_atual < 53:
+            # O unico lancamento marcado como `duplicada` em todo o sistema.
+            # Condominio Sta Lucia, 21/11/2025, R$ 2.359,61, conta corrente
+            # Unicred: o Pluggy mandou o mesmo debito duas vezes, com o nome
+            # grafado diferente ("Condominio" e "Condiminio"), e a cobranca
+            # ocorreu uma vez so.
+            #
+            # `duplicada` era o estado errado. Pela secao 4.3, `duplicada` e o
+            # que sobra - mesma cobranca duas vezes, sem estorno e sem par
+            # identificavel. Aqui o par existe e e' o MESMO evento real, entao
+            # o estado certo e' `substituido_por`, que diz qual registro conta
+            # e mantem o caminho de volta.
+            #
+            # Fica o registro que NAO estava marcado: ele ja e' o que entra no
+            # resultado hoje, entao a troca de estado nao move o DRE em um
+            # centavo. Nao encosta em `conferida` (secao 1.2).
+            fica_v53 = "7a71066e-5628-40ce-a159-00f160f8f277"
+            sai_v53 = "faf0bcb0-79ea-4010-afd6-2479188f1627"
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.duplicada_backup_v53 AS "
+                "SELECT transacao_id, duplicada, substituido_por, conferida, "
+                "now() AS backup_em FROM cartao.transacao "
+                "WHERE transacao_id::text = ANY(%s);",
+                ([fica_v53, sai_v53],),
+            )
+            # Valida o par antes de gravar (secao 4.3): mesma conta, mesmo dia e
+            # mesmo valor. Negativo nao casa por descricao - as duas gravacoes
+            # do Pluggy usam grafias diferentes (secao 6.5 n.12).
+            cur.execute(
+                "SELECT COUNT(*) FROM cartao.transacao a "
+                "JOIN cartao.transacao b ON b.transacao_id::text=%s "
+                "WHERE a.transacao_id::text=%s "
+                "AND a.account_id=b.account_id "
+                "AND COALESCE(a.valor_brl,a.valor_original) "
+                "  = COALESCE(b.valor_brl,b.valor_original) "
+                f"AND ({DATA_LOCAL_SQL.replace('t.', 'a.')})::date "
+                f"  = ({DATA_LOCAL_SQL.replace('t.', 'b.')})::date;",
+                (sai_v53, fica_v53),
+            )
+            trocados_v53 = 0
+            if cur.fetchone()[0]:
+                cur.execute(
+                    "UPDATE cartao.transacao SET duplicada=false, substituido_por=%s, "
+                    "atualizado_em=now() WHERE transacao_id::text=%s "
+                    "AND COALESCE(duplicada,false)=true AND substituido_por IS NULL;",
+                    (fica_v53, sai_v53),
+                )
+                trocados_v53 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Duplicada vira mesmo evento (substituido_por)',"
+                "jsonb_build_object('versao',53,'trocados',%s,"
+                "'motivo','o par existe: e o mesmo evento real, nao cobranca em dobro',"
+                "'impacto_no_dre','nenhum - o registro que conta continua o mesmo',"
+                "'backup','cartao.duplicada_backup_v53'));",
+                (trocados_v53,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (53);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

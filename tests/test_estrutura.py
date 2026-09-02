@@ -9,6 +9,7 @@ achando que estava sem uso).
 import ast
 import builtins
 import pathlib
+import re
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 MODULOS = [RAIZ / "app.py", RAIZ / "core.py", *sorted((RAIZ / "views").glob("*.py"))]
@@ -992,6 +993,19 @@ def test_cartao_pendente_explica_por_que_falta_o_titular_na_fatura_em_andamento(
     assert "cartão pendente" in template
 
 
+def _bloco_migracao(core, versao):
+    """Texto de UMA migracao.
+
+    Delimitar por "cur.close()" so funcionava enquanto a migracao fosse a
+    ultima do arquivo: assim que outra era acrescentada abaixo, o bloco passava
+    a engolir as seguintes e as asercoes viravam ruido. O fim certo e o inicio
+    da proxima migracao.
+    """
+    corpo = core.split("if versao_atual < %d:" % versao, 1)[1]
+    seguinte = re.search(r"\n\s*if versao_atual < \d+:", corpo)
+    return corpo[:seguinte.start()] if seguinte else corpo.split("cur.close()", 1)[0]
+
+
 def test_migracao_48_nao_encosta_no_ok_e_tem_ponto_de_reversao():
     """O OK e assinatura humana (secao 1.2) e alteracao em lote precisa de backup."""
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
@@ -1028,7 +1042,7 @@ def test_reaplicar_consenso_e_repetivel_com_previa_e_sem_tocar_no_ok():
 
 def test_migracao_50_desfaz_so_a_lista_explicita_e_respeita_a_trava_da_6_6():
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
-    bloco = core.split("if versao_atual < 50:", 1)[1].split("cur.close()", 1)[0]
+    bloco = _bloco_migracao(core, 50)
     assert "vinculo_backup_v50" in bloco and "agregado_backup_v50" in bloco
     assert "SET conferida" not in bloco and "conferida=" not in bloco
     # os falsos positivos legitimos nao podem estar na lista de alvos
@@ -1047,7 +1061,7 @@ def test_migracao_51_nao_encosta_no_ok_e_so_marca_o_par_que_ainda_bate():
     mexer nele - so tirar do resultado o registro repetido.
     """
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
-    bloco = core.split("if versao_atual < 51:", 1)[1].split("cur.close()", 1)[0]
+    bloco = _bloco_migracao(core, 51)
 
     assert "eco_backup_v51" in bloco, "alteracao de dado sem ponto de reversao"
     assert "SET conferida" not in bloco and "conferida=" not in bloco
@@ -1066,7 +1080,7 @@ def test_migracao_51_nao_encosta_no_ok_e_so_marca_o_par_que_ainda_bate():
 def test_migracao_52_respeita_o_ok_a_origem_e_o_que_o_usuario_nao_decidiu():
     """Secao 1.2, 1.4, 8.1 e 11.4 aplicadas as decisoes de 02/09/2026."""
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
-    bloco = core.split("if versao_atual < 52:", 1)[1].split("cur.close()", 1)[0]
+    bloco = _bloco_migracao(core, 52)
 
     assert "classificacao_backup_v52" in bloco, "alteracao em lote sem reversao"
     assert "SET conferida" not in bloco and "conferida=" not in bloco
@@ -1085,6 +1099,22 @@ def test_migracao_52_respeita_o_ok_a_origem_e_o_que_o_usuario_nao_decidiu():
     # o corte do GuilhermeDaSilva passou a ser 100
     assert "valor_limite=100" in bloco
     assert "120" in bloco, "a migracao precisa achar as regras antigas de 120"
+
+
+def test_migracao_53_troca_duplicada_por_mesmo_evento_sem_mover_o_dre():
+    """Secao 4.3: `duplicada` e' o que SOBRA. Havendo par identificavel, o
+    estado certo e' `substituido_por` - e ele tem caminho de volta."""
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = _bloco_migracao(core, 53)
+
+    assert "duplicada_backup_v53" in bloco, "troca de estado sem reversao"
+    assert "SET conferida" not in bloco and "conferida=" not in bloco
+    assert "SET duplicada=false, substituido_por=" in bloco
+    # so age sobre quem ainda esta marcado, e nunca por cima de uma substituicao
+    assert "COALESCE(duplicada,false)=true" in bloco
+    assert "substituido_por IS NULL" in bloco
+    # valida o par antes de gravar (secao 4.3)
+    assert "a.account_id=b.account_id" in bloco
 
 
 def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():
