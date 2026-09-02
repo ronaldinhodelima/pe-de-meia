@@ -2951,6 +2951,11 @@ def api_eco_horario():
                     "descricao": r["descricao"],
                     "instante": data_hora_local(r["data_transacao"]),
                     "fonte": "F" if (r["criado"] and r["transacao_id"] == r["criado"]) else "P",
+                    # `fonte` acima e' posicao na tela (e' a linha que a fatura
+                    # criou?). `importado` e' o campo real, e e' ele que decide:
+                    # a migracao 43 pulou `importado=true`, entao um registro
+                    # assim explica ter escapado do -3h.
+                    "importado": bool(r["importado"]),
                 }
                 for r in sorted(registros, key=lambda x: x["data_transacao"])
             ],
