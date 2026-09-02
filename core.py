@@ -351,6 +351,27 @@ NATUREZA_SQL = (
 )
 
 
+# Dimensao obrigatoria so faz sentido em lancamento que participa do resultado.
+# Pagamento de fatura, transferencia entre contas proprias, compra de bem e
+# investimento sao natureza NEUTRA (secao 4.1): nao sao gasto nem receita, e
+# cobrar Responsavel/Projeto/Portfolio deles so infla a lista de pendencia com
+# linha que nunca vai ser classificada. A categoria continua obrigatoria - ela
+# e o que diz que o lancamento e neutro.
+#
+# Ponto unico de verdade: toda tela que lista pendencia de classificacao usa
+# esta condicao. Espalhar a regra foi o que gerou os 57 falsos pendentes da
+# secao 6.5 n.10, com uma tela dizendo "nada pendente" e a outra discordando.
+EXIGE_DIMENSOES_SQL = (
+    "(COALESCE(t.natureza, n.natureza, '" + NATUREZA_PADRAO + "') NOT IN ("
+    + ", ".join("'" + x + "'" for x in NATUREZAS_NEUTRAS) + "))"
+)
+
+
+def exige_dimensoes(natureza):
+    """Versao Python da EXIGE_DIMENSOES_SQL, para quem ja tem a natureza."""
+    return (natureza or NATUREZA_PADRAO) not in NATUREZAS_NEUTRAS
+
+
 # O banco e o container trabalham em UTC, mas a competencia financeira e a
 # data civil de Sao Paulo. Sem esta conversao, uma compra perto da meia-noite
 # pode cair no dia/mes seguinte no DRE.

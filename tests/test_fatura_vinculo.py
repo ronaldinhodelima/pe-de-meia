@@ -14,6 +14,7 @@ O cursor e' dublado porque _conciliar_linhas faz uma unica consulta; assim
 o teste roda sem PostgreSQL.
 """
 from datetime import date
+import pathlib
 
 from decimal import Decimal
 
@@ -413,3 +414,38 @@ def test_mesmo_evento_com_ate_cinco_dias_de_diferenca():
 
     c = _tokens_significativos("Parcelado Lojista - Visa - LISCIA           VIDEIRA      BR")
     assert len(c & _tokens_significativos("Parcelado Lojista - Visa - LISCIA VIDEIRA BR")) >= 2
+
+
+def test_mesmo_valor_no_ciclo_desempata_pelo_estabelecimento():
+    """XIMANGO e ALLPARK, ambas R$ 25,00 na mesma fatura, trocaram de dono.
+
+    A escolha era "o mais recente, sem motivo melhor pra escolher". Agora o
+    estabelecimento desempata primeiro; a data so decide entre iguais.
+    """
+    from views.relatorios import _tokens_significativos
+
+    linha = _tokens_significativos("XIMANGO SERRA GAUCHA")
+    certo = _tokens_significativos("A vista sem juros - Visa - XIMANGO SERRA GAUCHA CANELA BR")
+    errado = _tokens_significativos("A vista sem juros - Visa - ALLPARK EMPREENDIMENTOS, Canela BR")
+    assert linha & certo
+    assert not (linha & errado)
+
+    # o desempate e (casa_lojista, data): o certo vence mesmo sendo mais antigo
+    import datetime
+    chave_certo = (True, datetime.date(2025, 9, 1))
+    chave_errado = (False, datetime.date(2025, 9, 20))
+    assert chave_certo > chave_errado
+
+
+def test_par_legitimo_sem_palavra_em_comum_continua_casando():
+    """A preferencia nao pode virar exigencia: secao 6.5 n.12."""
+    from views.relatorios import _tokens_significativos
+
+    a = _tokens_significativos("Pagamento Recebido")
+    b = _tokens_significativos("Pag de Fatura Via Deb Aut - ")
+    assert not (a & b), "sao o mesmo evento sem nenhuma palavra em comum"
+    # com candidato unico, melhor_chave comeca None e (False, data) e aceito -
+    # a comparacao so acontece entre chaves, nunca contra None
+    view = (pathlib.Path(__file__).resolve().parent.parent / "views" / "relatorios.py").read_text(
+        encoding="utf-8")
+    assert "if melhor_chave is None or chave > melhor_chave:" in view

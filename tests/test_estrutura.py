@@ -1036,3 +1036,24 @@ def test_migracao_50_desfaz_so_a_lista_explicita_e_respeita_a_trava_da_6_6():
     # trava da 6.6: nunca desmarcar quem ja gerou parcela
     assert "transacao_id_criado" in bloco
     assert "if vinculos >= 2 or com_parcela:" in bloco
+
+
+def test_natureza_neutra_nao_exige_dimensao_em_nenhuma_tela():
+    """Secao 4.1: centro de custo so faz sentido em lancamento do resultado.
+
+    Pagamento de fatura e transferencia entre contas proprias nunca teriam essas
+    dimensoes, entao cobrar delas so inflava a lista de pendencia - e a trava do
+    servidor impedia o OK para sempre.
+    """
+    import core
+
+    assert core.exige_dimensoes("despesa") is True
+    assert core.exige_dimensoes("receita") is True
+    assert core.exige_dimensoes(None) is True, "sem natureza o padrao e despesa"
+    for neutra in core.NATUREZAS_NEUTRAS:
+        assert core.exige_dimensoes(neutra) is False, neutra
+
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    # a mesma condicao nas tres telas e na trava do servidor (secao 6.5 n.10)
+    assert view.count("exige_dimensoes(") >= 2, "detalhada e fatura em andamento"
+    assert "EXIGE_DIMENSOES_SQL" in view, "e a trava do servidor, em SQL"

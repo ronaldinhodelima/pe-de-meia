@@ -695,17 +695,26 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         pendentes = []
         for l in linhas_grupo:
             melhor_linha = None
+            melhor_chave = None
+            tokens_l = _tokens_significativos(l.get("descricao_base") or l["descricao"])
             for c in candidatos:
                 if (c["_usado"] or c["_bloqueado"]
                         or c["_valor_centavos"] != l["_valor_centavos"]):
                     continue
                 if not (ciclo_inicio <= c["_data_local"] <= ciclo_fim):
                     continue
-                # varios candidatos com o mesmo valor dentro do ciclo (ex: duas
-                # parcelas iguais de compras diferentes) - fica com o mais
-                # recente, sem motivo melhor pra escolher
-                if melhor_linha is None or c["_data_local"] > melhor_linha["_data_local"]:
-                    melhor_linha = c
+                # Havendo varios candidatos de MESMO valor no ciclo, o
+                # estabelecimento desempata primeiro. Sem isso a escolha era "o
+                # mais recente, sem motivo melhor" e duas compras de mesmo valor
+                # trocavam de dono: XIMANGO ficou com a transacao da ALLPARK e
+                # vice-versa, ambas R$ 25,00. Nao e' exigencia, e preferencia -
+                # par legitimo sem palavra em comum existe ("Pagamento Recebido"
+                # x "Pag de Fatura Via Deb Aut", secao 6.5 n.12) e continua
+                # casando quando nao ha candidato melhor.
+                casa_lojista = bool(tokens_l and (tokens_l & _tokens_significativos(c["descricao"])))
+                chave = (casa_lojista, c["_data_local"])
+                if melhor_chave is None or chave > melhor_chave:
+                    melhor_linha, melhor_chave = c, chave
             if melhor_linha:
                 melhor_linha["_usado"] = True
                 batidos.append({**l, "transacao_id": str(melhor_linha["transacao_id"]),

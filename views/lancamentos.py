@@ -8,6 +8,8 @@ import psycopg2.extras
 from flask import Blueprint, request, session, jsonify, render_template
 
 from core import (
+    EXIGE_DIMENSOES_SQL,
+    exige_dimensoes,
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT,
@@ -832,7 +834,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
         tx["dims"] = dims_por_tx.get(tid, {})
         tx["rateado"] = False
         faltando = ([] if tx["categoria"] else ["Categoria"]) + [
-            nomes_dimensoes[d] for d in obrigatorias if not tx["dims"].get(d)
+            nomes_dimensoes[d] for d in obrigatorias
+            if exige_dimensoes(tx["natureza_efetiva"]) and not tx["dims"].get(d)
         ]
         completo = not faltando
         classificadas += int(completo)
@@ -1200,9 +1203,14 @@ def lancamentos_por_fatura():
             tid = principal["transacao_id"]
             principal["dims"] = dims_por_tx.get(tid, {})
             principal["rateado"] = tid in rateados
+            # Natureza neutra (pagamento de fatura, transferencia, bem,
+            # investimento) nao participa do resultado: cobrar dimensao dela so
+            # cria pendencia que nunca sera resolvida (secao 4.1).
+            exige = exige_dimensoes(principal["natureza_efetiva"])
+            obrig_linha = obrigatorias if exige else set()
             completa = (
                 rateio_valido.get(tid, False) if principal["rateado"] else
-                bool(principal["categoria"]) and obrigatorias.issubset({k for k, v in principal["dims"].items() if v})
+                bool(principal["categoria"]) and obrig_linha.issubset({k for k, v in principal["dims"].items() if v})
             )
             linha["classificada"] = completa
             linha["conferida"] = bool(principal["conferida"])
@@ -1214,7 +1222,7 @@ def lancamentos_por_fatura():
                 if not principal["categoria"]:
                     faltando.append("Categoria")
                 faltando.extend(
-                    nomes_dimensoes[dim_id] for dim_id in obrigatorias
+                    nomes_dimensoes[dim_id] for dim_id in obrig_linha
                     if not principal["dims"].get(dim_id)
                 )
             linha["faltando"] = faltando
@@ -1750,11 +1758,17 @@ def update_transacao(transacao_id):
         soma_rateios = Decimal(str(soma_rateios or 0)).quantize(Decimal("0.01"))
         rateio_invalido = qtd_rateios < 2 or soma_rateios != esperado or bool(rateios_sem_categoria)
     else:
+        # A trava so cobra dimensao de lancamento que participa do resultado.
+        # Sem isto, um pagamento de fatura (natureza neutra) nunca poderia
+        # receber OK: as dimensoes dele nao existem e nao fazem sentido (4.1).
         cur.execute(
             "SELECT d.nome FROM cartao.dimensao d "
             "LEFT JOIN cartao.transacao_dimensao td ON td.dimensao_id = d.id AND td.transacao_id = %s "
-            "WHERE d.obrigatoria = true AND (td.valor_id IS NULL);",
-            (transacao_id,),
+            "WHERE d.obrigatoria = true AND (td.valor_id IS NULL) AND EXISTS ("
+            "  SELECT 1 FROM cartao.transacao t "
+            "  LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
+            f"  WHERE t.transacao_id = %s AND {EXIGE_DIMENSOES_SQL});",
+            (transacao_id, transacao_id),
         )
         faltando = [r[0] for r in cur.fetchall()]
         categoria_final = (

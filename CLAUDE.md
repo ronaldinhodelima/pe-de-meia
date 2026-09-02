@@ -221,6 +221,14 @@ então categoria nova inventada pelo Pluggy entra como despesa *silenciosamente*
 impedir o Pluggy de criar categorias — a solução é alertar (`/pendencias` + faixa no DRE) para o
 usuário decidir: definir natureza, renomear ou ocultar.
 
+**Dimensão obrigatória não se aplica a natureza neutra.** Pagamento de fatura, transferência
+entre contas próprias, bem e investimento não participam do resultado: cobrar Responsável/Projeto/
+Portfólio deles só criava pendência que nunca seria resolvida, e a trava do servidor **impedia o
+OK para sempre**. A condição tem ponto único de verdade — `EXIGE_DIMENSOES_SQL` e
+`exige_dimensoes()` no `core` — usado pela detalhada, pela fatura em andamento e pela trava do
+servidor. Espalhar a regra foi o que gerou os 57 falsos pendentes da §6.5 nº 10. A **categoria**
+continua obrigatória: é ela que diz que o lançamento é neutro.
+
 **Centro de custo só se aplica a categorias de despesa.** Vincular receita ou transferência a
 centro de custo não faz sentido contábil — por isso `/pendencias` só cobra vínculo das categorias
 com natureza `despesa`.
@@ -1026,6 +1034,12 @@ XIMANGO ↔ ALLPARK (R$ 25,00), SMARTYZRBSB ↔ PANIFICADORA (R$ 40,00).
 Deb Aut` (§6.5 nº 12), `Anuidade - bonificação` ↔ `Est.Tarifa manutencao de conta` (§8.3), e
 grafias coladas que o tokenizador não casa (`PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE QUINTAL`,
 `CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA`).
+
+**Os três pares trocados voltaram a trocar quando o vínculo automático rodou de novo** — a regra
+do token protegia o agregado e a substituição, **não** o casamento 1:1, que escolhia "o mais
+recente, sem motivo melhor pra escolher". Agora, entre candidatos de mesmo valor no ciclo, **o
+estabelecimento desempata primeiro** e a data só decide entre iguais. É preferência, não
+exigência: par legítimo sem palavra em comum existe (§6.5 nº 12) e continua casando.
 
 **Corrigido pela migração 50** (aprovada pelo usuário em 01/09/2026), sobre uma **lista explícita**
 de estabelecimentos — a varredura tem falsos positivos legítimos que não podem ser desfeitos. Ela
