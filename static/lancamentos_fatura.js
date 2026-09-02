@@ -473,6 +473,7 @@
     }
     function marcados() { return selecionaveis().filter(cb => cb.checked); }
     function atualizar() {
+      atualizarBotaoSelecao();
       const n = marcados().length;
       barra.hidden = n === 0;
       contagem.textContent = n === 1 ? '1 lançamento selecionado'
@@ -482,15 +483,26 @@
     document.addEventListener('change', evento => {
       if (evento.target.classList && evento.target.classList.contains('sel-fatura')) atualizar();
     });
-    const btnTudo = document.getElementById('loteTodosFiltro');
-    if (btnTudo) btnTudo.addEventListener('click', () => {
-      selecionaveis().forEach(cb => { cb.checked = true; });
+    // Um botao so, como na Resumida: seleciona tudo do filtro e, com tudo
+    // marcado, vira "Limpar selecao".
+    const btnSelecao = document.getElementById('loteSelecao');
+    function tudoMarcado() {
+      const total = selecionaveis().length;
+      return total > 0 && marcados().length === total;
+    }
+    function atualizarBotaoSelecao() {
+      if (!btnSelecao) return;
+      const limpar = tudoMarcado();
+      btnSelecao.textContent = limpar ? 'Limpar seleção' : 'Selecionar tudo do filtro';
+      btnSelecao.dataset.tip = limpar
+        ? 'Desmarca todas as linhas selecionadas'
+        : 'Marca todas as linhas que a pesquisa atual está mostrando';
+    }
+    if (btnSelecao) btnSelecao.addEventListener('click', () => {
+      const marcar = !tudoMarcado();
+      selecionaveis().forEach(cb => { cb.checked = marcar; });
+      if (!marcar) saida.hidden = true;
       atualizar();
-    });
-    document.getElementById('loteLimpar').addEventListener('click', () => {
-      selecionaveis().forEach(cb => { cb.checked = false; });
-      atualizar();
-      saida.hidden = true;
     });
 
     function montarPayload() {

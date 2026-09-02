@@ -1030,7 +1030,6 @@ atualizarBotaoDetalhado();
   const contagem = document.getElementById('loteContagem');
   const saida = document.getElementById('loteResultado');
   const btnSalvar = document.getElementById('loteSalvar');
-  const btnLimpar = document.getElementById('loteLimpar');
   const todos = document.getElementById('loteTodos');
 
   function linhasSelecionaveis() {
@@ -1044,6 +1043,7 @@ atualizarBotaoDetalhado();
     return linhasSelecionaveis().filter(cb => cb.checked);
   }
   function atualizarBarra() {
+    atualizarBotaoSelecao();
     const n = selecionados().length;
     barra.hidden = n === 0;
     contagem.textContent = n === 1 ? '1 lançamento selecionado' : n + ' lançamentos selecionados';
@@ -1063,18 +1063,30 @@ atualizarBotaoDetalhado();
       atualizarBarra();
     });
   }
-  const btnTudo = document.getElementById('loteTodosFiltro');
-  if (btnTudo) {
-    btnTudo.addEventListener('click', function () {
-      linhasSelecionaveis().forEach(cb => { cb.checked = true; });
+  // Um botao so: enquanto sobra linha por marcar ele seleciona tudo do filtro;
+  // com tudo marcado, ele vira "Limpar selecao". Dois botoes para estados que
+  // nunca sao uteis ao mesmo tempo so ocupavam espaco.
+  const btnSelecao = document.getElementById('loteSelecao');
+  function tudoMarcado() {
+    const total = linhasSelecionaveis().length;
+    return total > 0 && selecionados().length === total;
+  }
+  function atualizarBotaoSelecao() {
+    if (!btnSelecao) return;
+    const limpar = tudoMarcado();
+    btnSelecao.textContent = limpar ? 'Limpar seleção' : 'Selecionar tudo do filtro';
+    btnSelecao.dataset.tip = limpar
+      ? 'Desmarca todas as linhas selecionadas'
+      : 'Marca todas as linhas que o filtro e a pesquisa atuais estão mostrando';
+  }
+  if (btnSelecao) {
+    btnSelecao.addEventListener('click', function () {
+      const marcar = !tudoMarcado();
+      linhasSelecionaveis().forEach(cb => { cb.checked = marcar; });
+      if (!marcar) saida.hidden = true;
       atualizarBarra();
     });
   }
-  btnLimpar.addEventListener('click', function () {
-    linhasSelecionaveis().forEach(cb => { cb.checked = false; });
-    atualizarBarra();
-    saida.hidden = true;
-  });
 
   function montarPayload() {
     const payload = {};
