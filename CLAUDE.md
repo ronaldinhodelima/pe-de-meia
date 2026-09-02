@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 02/09/2026 · **Schema:** migração 52 · **Testes:** 292 aprovados, 6 ignorados
+**Última revisão:** 02/09/2026 · **Schema:** migração 53 · **Testes:** 296 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -48,6 +48,11 @@ confirmação explícita na tela.
 O Claude levanta, evidencia e explica; não marca. Vale inclusive quando a evidência parece
 inequívoca. IDs distintos recebidos da operadora são sempre importados — podem representar
 cobrança realmente duplicada.
+
+**Não existe mais "marcar como duplicada" na interface** (decisão de 02/09/2026). Dizer que um
+lançamento é o mesmo evento que outro se faz por `substituido_por`, que aponta **qual** registro
+conta e tem caminho de volta. Não reintroduzir a caixa: um estado que esconde o lançamento sem
+dizer por quem é exatamente o defeito que a §4.3 e a §6.6 já cobraram caro.
 
 ## 1.4 Nunca inventar número ou informação
 
@@ -273,8 +278,13 @@ Cada um significa exatamente uma coisa. Não confundir:
   parcelada agregada. Visível, vinculável, fora do resultado.
 - **`substituido_por`** (uuid → outra transação) — este lançamento é o **mesmo evento real** que
   outro; só o outro conta. Cobre o *pending → posted* e a *parcela mensal repetida*.
-- **`duplicada`** — só o que sobrar: mesma cobrança duas vezes, sem estorno e sem par
-  identificável.
+- **`duplicada`** — **estado legado, não marcável desde 02/09/2026.** Era "o que sobrar": mesma
+  cobrança duas vezes, sem estorno e sem par identificável. Na prática todo caso real tinha par e
+  era `substituido_por`; `duplicada` só escondia o lançamento sem dizer por quem. O único registro
+  marcado em toda a base (Condomínio Sta Lúcia, 21/11/2025, R$ 2.359,61) virou `substituido_por`
+  na migração 53, sem mover o DRE. **A coluna continua existindo e continua excluindo do
+  resultado** — ela faz parte de `elegivel`, e tirá-la de lá faria consultas que hoje excluem
+  duplicados passarem a incluí-los em silêncio.
 
 **Cobrança dupla REAL da operadora não usa nenhum dos três.** Ela vem como cobrança + estorno,
 ambos legítimos, que se anulam sozinhos no resultado — marcar qualquer um quebraria a conta
@@ -1309,3 +1319,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 50 | desfaz vínculos entre estabelecimentos diferentes; `vinculo_backup_v50` + `agregado_backup_v50` |
 | 51 | eco de 3h: mesma cobrança contando duas vezes no DRE (§6.7); `eco_backup_v51` |
 | 52 | decisões do usuário sobre lojistas divergentes de 2026 (§8.4); `classificacao_backup_v52` |
+| 53 | o único `duplicada` vira `substituido_por` (§4.3); `duplicada_backup_v53` |
