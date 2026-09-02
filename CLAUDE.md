@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 01/09/2026 · **Schema:** migração 47 · **Testes:** 270 aprovados, 6 ignorados
+**Última revisão:** 02/09/2026 · **Schema:** migração 51 · **Testes:** 289 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -581,6 +581,37 @@ de 2026 caiu de R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 nã
 **Eco técnico não é divergência:** dois registros Pluggy com o mesmo instante, cartão e valor,
 para uma única cobrança oficial no PDF — um contabilizado, o outro preservado para auditoria. A
 equivalência só elimina o alerta quando data/hora, valor e final do cartão coincidem.
+
+### O eco separado por 3 horas (migração 51)
+
+**Quando a hora não bate, os dois registros contam.** `_candidatos_fatura_equivalentes` compara
+data/hora, valor e cartão; 3 horas de diferença quebram a assinatura, a linha vira "ambígua" e a
+tela escreve apenas **"Validar: mais de um lançamento possível"** — sem dizer que os dois estão
+somando. E estão: `elegivel` é `not (duplicada or substituido_por or somente_conciliacao)`, que é
+exatamente "conta no DRE", e a ambiguidade só dispara com **dois elegíveis**. Todo alerta desse
+tipo é despesa dobrada, não uma escolha estética.
+
+**Cuidado com o rótulo da tela:** `registro técnico · somente leitura` é `tecnico = not principal`
+— posição na tela, não estado contábil. Ele não tira nada do resultado.
+
+`GET /api/diagnostico/eco-3h` varre isso, somente leitura: linhas de fatura com dois ou mais
+lançamentos elegíveis, mesmo valor e mesmo cartão, separando os pares de **3h exatas** — que são a
+assinatura da normalização de horário da §4.6 alcançando um registro e não o outro. Ela **só
+enxerga fatura com PDF**: o ciclo em andamento fica fora do alcance.
+
+Resultado de 02/09/2026: 2.681 vínculos avaliados, **2 casos**, R$ 255,00 inflados —
+GUILHERMEDASILVA R$ 185,00 e MP*REGIBARBERSHOP R$ 70,00, ambos na fatura 08/2026, ambos já com OK
+assinado. Corrigidos pela migração 51 com `substituido_por` (mesmo evento, não cobrança em dobro),
+mantendo o registro de horário já normalizado — que é o principal da tela e carrega a
+classificação. Backup em `cartao.eco_backup_v51`. Depois: DRE da fatura = R$ 18.821,76 = total do
+PDF, centavo a centavo.
+
+**A causa continua desconhecida, e por isso pode voltar.** Duas hipóteses foram descartadas com
+dado: os quatro registros têm `importado=false` (nenhum escapou por ter vindo da fatura, que é o
+que a migração 43 excluiu) e a conexão se chama "Unicred", então a condição do worker
+(`"unicred" in nome_conexao.lower()`) está válida. **Reabrir a varredura quando a fatura de
+setembro/2026 for importada** — os dois casos estavam na fatura mais recente que existia, então
+pode ser a borda de um fenômeno contínuo, não o fim dele.
 
 
 ---
@@ -1211,3 +1242,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 48 | segundo eixo de consenso, por categoria; `classificacao_backup_v48` |
 | 49 | segunda passada do consenso; `classificacao_backup_v49` |
 | 50 | desfaz vínculos entre estabelecimentos diferentes; `vinculo_backup_v50` + `agregado_backup_v50` |
+| 51 | eco de 3h: mesma cobrança contando duas vezes no DRE (§6.7); `eco_backup_v51` |
