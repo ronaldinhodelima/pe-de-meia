@@ -1187,9 +1187,18 @@ operadora.
 do lojista, então `NOVOTEL` = Accomodation + `Tax on financial operations` são a compra e o IOF
 dela, ambos certos (§8.3). Divergências reais a decidir: AQUAMATER (Academia 14 × Shopping 1),
 AZULEQVY2E e LATAM AIR (Airport and airlines × Viagem), ORTOCLINICA (Healthcare × Hospital clinics
-and labs), GUILHERMEDASILVA (Agua 15 × Agua / Gas 8 — a categoria "Agua / Gas" parece resíduo de
-antes da regra por valor da §8.4). MERCADO*MERCADOLIVRE (Houseware 13 × Vehicle maintenance 6) é
-divergência **legítima**: marketplace, e a §8.4 manda não automatizar.
+and labs). MERCADO*MERCADOLIVRE (Houseware 13 × Vehicle maintenance 6) é divergência **legítima**:
+marketplace, e a §8.4 manda não automatizar.
+
+**GUILHERMEDASILVA não é divergência** — corrigido em 02/09/2026, contra os 24 lançamentos de 2026.
+`Agua / Gas` é o nome interno da categoria que a tela mostra como **Gás**; a regra por valor da §8.4
+está aplicada e funcionando, e "Agua × Agua / Gas" é só Água × Gás. **Não tratar como resíduo.**
+
+**Mas o corte de R$ 120,00 encostou no gás.** Os valores reais de 2026 são Água de R$ 17,00 a
+R$ 66,00 e Gás de R$ 114,99 a R$ 185,00 — o vão está entre 66 e 115, não em 120. O único lançamento
+que a regra classificaria errado é o de **R$ 114,99 (12/03/2026)**, hoje em Gás, que pela letra da
+regra deveria ser Água. Mover o corte para **R$ 90,00** acerta esse e não move nenhum dos outros 23.
+Pendente de decisão do usuário.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
