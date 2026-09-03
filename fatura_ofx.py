@@ -147,11 +147,17 @@ def extrair_fatura(arquivo):
         # fatura do app usa o contrario - compra positiva, credito negativo,
         # como o PDF da Unicred - e todas as somas e comparacoes ja dependem
         # disso. A inversao mora aqui, num lugar so.
-        descricao, parcela_atual, parcela_total = _partir_parcela(_tag(trecho, "MEMO"))
+        memo = " ".join((_tag(trecho, "MEMO") or "").split())
+        base, parcela_atual, parcela_total = _partir_parcela(memo)
+        # Mesma convencao do extrator da Unicred: `descricao` guarda o texto
+        # INTEIRO como a operadora imprimiu, e `descricao_base` e a versao sem a
+        # parcela. Sao usadas para coisas diferentes - a base e quem o casamento
+        # automatico compara (secao 6.5 n.11), e jogar o resto fora perderia o
+        # que a fatura de fato disse.
         linhas.append({
             "data": data_linha,
-            "descricao": descricao or "(sem descrição)",
-            "descricao_base": descricao or "(sem descrição)",
+            "descricao": memo or "(sem descrição)",
+            "descricao_base": base or memo or "(sem descrição)",
             "parcela_atual": parcela_atual,
             "parcela_total": parcela_total,
             "valor": -valor,

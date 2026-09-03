@@ -37,7 +37,7 @@ CHARSET:1252
 <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20250922000000[-3:BRT]</DTPOSTED>
 <TRNAMT>-10.00</TRNAMT><FITID>aaa-1</FITID><MEMO>Jetshr</MEMO></STMTTRN>
 <STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20250922000000[-3:BRT]</DTPOSTED>
-<TRNAMT>-8.41</TRNAMT><FITID>aaa-2</FITID><MEMO>Jetshr</MEMO></STMTTRN>
+<TRNAMT>-8.41</TRNAMT><FITID>aaa-2</FITID><MEMO>Santtaluz - Parcela 3/6</MEMO></STMTTRN>
 <STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20250916000000[-3:BRT]</DTPOSTED>
 <TRNAMT>1.00</TRNAMT><FITID>aaa-3</FITID><MEMO>Pagamento recebido</MEMO></STMTTRN>
 </BANKTRANLIST>
@@ -79,10 +79,22 @@ def test_ciclo_vem_do_arquivo_e_nao_de_heuristica():
     assert (f["mes_referencia"], f["ano_referencia"]) == (10, 2025)
 
 
+def test_parcela_do_formato_real_do_nubank():
+    """Formato confirmado na fatura 09/2026: "LOJA - Parcela N/M". A descricao
+    guarda o texto inteiro, como a operadora imprimiu; `descricao_base` e quem
+    o casamento automatico compara (secao 6.5 n.11)."""
+    parcelada = [l for l in _fatura()["linhas"] if l["parcela_total"]]
+    assert len(parcelada) == 1
+    linha = parcelada[0]
+    assert linha["descricao"] == "Santtaluz - Parcela 3/6"
+    assert linha["descricao_base"] == "Santtaluz"
+    assert (linha["parcela_atual"], linha["parcela_total"]) == (3, 6)
+
+
 def test_compra_fica_positiva_e_credito_negativo():
     """O OFX traz a compra NEGATIVA; a fatura do app usa o contrario, como o PDF
     da Unicred, e todas as somas dependem disso."""
-    linhas = {l["descricao"]: l for l in _fatura()["linhas"]}
+    linhas = {l["descricao_base"]: l for l in _fatura()["linhas"]}
     assert linhas["Jetshr"]["valor"] > 0
     assert linhas["Pagamento recebido"]["valor"] < 0
 
