@@ -3300,16 +3300,21 @@ def api_suspeitas_duplicidade():
         # transferencia - aparecia como R$ 1.948,10 de despesa dobrada, e nao
         # move o DRE em nada. O registro repetido continua existindo; o que muda
         # e' que ele nao e' um problema de resultado.
-        linhas_pdf = set()
-        sem_vinculo = 0
-        for m in elegiveis:
-            ligadas = linha_por_transacao.get(m["transacao_id"])
-            if ligadas:
-                linhas_pdf |= ligadas
-            else:
-                sem_vinculo += 1
-        caso["linhas_de_fatura_distintas"] = len(linhas_pdf)
-        caso["elegiveis_sem_vinculo"] = sem_vinculo
+        # `fatura_vinculo` e N:N (secao 6.1): a UNIAO das linhas nao prova que
+        # cada registro tem a sua. Dois lancamentos ligados as MESMAS duas
+        # linhas dariam uniao 2 e passariam como "duas cobrancas reais". Por
+        # isso a exigencia e mais dura: cada elegivel com exatamente UMA linha,
+        # e todas diferentes entre si.
+        ligacoes = [
+            linha_por_transacao.get(m["transacao_id"]) or set() for m in elegiveis
+        ]
+        uma_linha_cada = all(len(l) == 1 for l in ligacoes)
+        distintas = {next(iter(l)) for l in ligacoes if len(l) == 1}
+        caso["linhas_de_fatura_distintas"] = len(distintas)
+        caso["elegiveis_sem_vinculo"] = sum(1 for l in ligacoes if not l)
+        caso["cada_um_na_sua_linha"] = bool(
+            uma_linha_cada and len(distintas) == len(elegiveis)
+        )
         caso["natureza"] = membros[0]["natureza_efetiva"]
         caso["entra_no_dre"] = exige_dimensoes(caso["natureza"])
         caso["excedente_no_dre"] = (
@@ -3318,10 +3323,7 @@ def api_suspeitas_duplicidade():
         instantes = sorted(m["data_transacao"] for m in elegiveis)
         delta = int((instantes[-1] - instantes[0]).total_seconds())
         caso["diferenca_segundos"] = delta
-        if (
-            caso["linhas_de_fatura_distintas"] >= len(elegiveis)
-            and not caso["elegiveis_sem_vinculo"]
-        ):
+        if caso["cada_um_na_sua_linha"]:
             # cada elegivel esta numa linha PROPRIA do PDF: a operadora cobrou
             # esse numero de vezes, entao nao ha duplicidade.
             baldes["cobrancas_reais_da_fatura"].append(caso)
