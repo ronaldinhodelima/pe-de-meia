@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 02/09/2026 · **Schema:** migração 53 · **Testes:** 296 aprovados, 6 ignorados
+**Última revisão:** 03/09/2026 · **Schema:** migração 53 · **Testes:** 298 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
