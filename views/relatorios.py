@@ -3226,6 +3226,16 @@ def api_suspeitas_duplicidade():
         (anos,),
     )
     linhas = cur.fetchall()
+    # Quem NASCEU de uma linha do PDF. E' a evidencia que decide o balde do eco
+    # instantaneo: a fatura so imprime o DIA, entao o lancamento criado por ela
+    # recebe um horario padrao. Varios registros no mesmo instante ali nao sao
+    # copias - sao cobrancas distintas que a operadora imprimiu em linhas
+    # distintas, e a fatura e a autoridade sobre o que foi cobrado (secao 5).
+    cur.execute(
+        "SELECT transacao_id_criado::text FROM cartao.fatura_linha "
+        "WHERE transacao_id_criado IS NOT NULL;"
+    )
+    nascidos_da_fatura = {r["transacao_id_criado"] for r in cur.fetchall()}
     cur.close()
     conn.close()
 
@@ -3234,7 +3244,10 @@ def api_suspeitas_duplicidade():
         chave = (r["account_id"], r["dia"], str(r["valor"]), r["descricao"])
         grupos.setdefault(chave, []).append(r)
 
-    baldes = {"ja_resolvido": [], "eco_instantaneo": [], "eco_3h": [], "revisar": []}
+    baldes = {
+        "ja_resolvido": [], "cobrancas_reais_da_fatura": [],
+        "eco_instantaneo": [], "eco_3h": [], "revisar": [],
+    }
     excedente = 0.0
     for chave, membros in grupos.items():
         if len(membros) < 2:
@@ -3253,6 +3266,10 @@ def api_suspeitas_duplicidade():
             "valor": float(valor), "registros": len(membros),
             "elegiveis": len(elegiveis),
             "algum_conferido": any(m["conferida"] for m in membros),
+            "importados": sum(1 for m in membros if m["importado"]),
+            "linhas_do_pdf": sum(
+                1 for m in membros if m["transacao_id"] in nascidos_da_fatura
+            ),
             "horas": sorted({m["hora"] for m in membros}),
             "estados": [
                 ("substituido" if m["substituido_por"] else
@@ -3265,10 +3282,16 @@ def api_suspeitas_duplicidade():
             baldes["ja_resolvido"].append(caso)
             continue
         caso["excedente_no_dre"] = float(valor * (len(elegiveis) - 1))
-        excedente += caso["excedente_no_dre"]
         instantes = sorted(m["data_transacao"] for m in elegiveis)
         delta = int((instantes[-1] - instantes[0]).total_seconds())
         caso["diferenca_segundos"] = delta
+        if caso["linhas_do_pdf"] >= len(elegiveis):
+            # cada elegivel nasceu de uma linha PROPRIA da fatura: a operadora
+            # cobrou aquele numero de vezes. Nao ha o que resolver - e por isso
+            # este valor NAO entra no total de despesa possivelmente dobrada.
+            baldes["cobrancas_reais_da_fatura"].append(caso)
+            continue
+        excedente += caso["excedente_no_dre"]
         if delta == 0:
             baldes["eco_instantaneo"].append(caso)
         elif delta == 3 * 3600:
@@ -3293,6 +3316,7 @@ def api_suspeitas_duplicidade():
                 c["conta"] for v in baldes.values() for c in v if c["conta"]
             })
         },
+        "cobrancas_reais_da_fatura": por_valor(baldes["cobrancas_reais_da_fatura"])[:100],
         "eco_instantaneo": por_valor(baldes["eco_instantaneo"])[:100],
         "eco_3h": por_valor(baldes["eco_3h"])[:100],
         "revisar": por_valor(baldes["revisar"])[:150],
