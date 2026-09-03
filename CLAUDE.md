@@ -131,6 +131,18 @@ Como os blueprints fazem `from core import ...`, `recarregar_categorias_db()` **
 dicionários no lugar** (`clear()` + `update()`). Trocar por reatribuição congelaria os nomes na
 versão do boot, sem erro nenhum. `tests/test_core_estado.py` trava isso checando a identidade.
 
+**Nenhuma consulta depois de `cur.close()`/`conn.close()`.** Em 02/09/2026 a leitura de
+`atualizado_em`, para o campo "Última alteração" do modal, ficou depois do fechamento em
+`update_transacao`. Não quebrou só o campo novo: derrubou **toda edição de lançamento** — OK,
+categoria, dimensão, observação, descrição — com 500, e a tela mostrava apenas
+`Falha ao salvar a descrição`, sem mensagem do servidor, porque a resposta nem era JSON. Passou por
+`py_compile` e pela suíte inteira; só aparece editando de verdade (§10.3 nº 3). Se precisar voltar
+ao banco depois de fechar, abra outra conexão com `get_conn()`.
+`tests/test_estrutura.py::test_nenhuma_rota_usa_cursor_depois_de_fechar_a_conexao` varre isso por
+AST, olhando **só o corpo direto** de cada função — `close` dentro de um `if` que retorna é saída
+antecipada legítima, e a primeira versão do teste, baseada em número de linha, deu 20 falsos
+positivos.
+
 **Helper usado por mais de uma migração mora no módulo**, nunca dentro do bloco
 `if versao_atual < N`. Num banco já migrado aquele bloco não roda e a migração seguinte quebra com
 `NameError` — erro que não aparece em banco novo, que é onde os testes olham.
