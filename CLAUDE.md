@@ -1248,9 +1248,33 @@ de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07)
 `fluxo`, então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não
 for caso a caso, podem estar inflando a receita.
 
-**Duplicidades antigas em conta corrente.** O Pluggy já mandou o mesmo débito duas vezes (Cond Sta
-Lúcia, 21/11/2025 — ocorreu uma vez só). A tela avisa sobre o mês aberto, mas **os meses anteriores
-nunca foram varridos**.
+**Duplicidades: varridas em 03/09/2026** — `GET /api/diagnostico/suspeitas-duplicidade`, somente
+leitura. As 144 linhas que a tela lista em 2025+2026 são **58 grupos**, e a maioria não é
+duplicidade:
+
+| Balde | Grupos | O que é |
+|---|---|---|
+| Cobrança real da fatura | 26 | cada registro tem **linha própria no PDF** |
+| Já resolvido | 12 | sobrou um elegível só; excedente já fora do DRE |
+| Revisar | 17 | horários reais distintos — provavelmente compras separadas |
+| Eco instantâneo | 2 | Unicred TAG, mesmo instante, sem linha de PDF |
+| Eco de 3h | 1 | AÇOUGUE CARNE FRESCA 08/08/2026, R$ 257,00 |
+
+**A tela de Lançamentos superestima.** O filtro "Possíveis duplicidades" agrupa por conta + dia +
+valor + descrição e só exclui `duplicada` — **não exclui `substituido_por` nem
+`somente_conciliacao`**. É a §6.5 nº 10 do outro lado: par já resolvido continua listado como
+pendência.
+
+**Horário uniforme não é eco.** Os 26 legítimos apareciam todos às **09:00** porque a fatura só
+imprime o DIA, e o lançamento nascido dela recebe hora padrão. Três pedágios de R$ 8,40 num dia são
+uma viagem, não uma cópia — e a fatura é a autoridade sobre o que foi cobrado (§5). A evidência que
+decide é `fatura_linha.transacao_id_criado`, **não** `transacao.importado`, que é outra coisa e vale
+`false` nesses registros.
+
+Pendente de decisão do usuário (a marcação é dele, §1.3): os 17 de "revisar", com destaque para
+**`Pagamento recebido` R$ 1.948,10 em 05/08/2026 na conta platinum**, com dois registros contando —
+de longe o maior item. E o eco de 3h do açougue, que a varredura da §6.7 não pegou porque **ela só
+enxerga par ligado à mesma linha de fatura**.
 
 **Horários 00:00 e diferença de três horas em conta corrente.** Não usar horário isoladamente para
 apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
