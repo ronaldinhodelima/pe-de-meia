@@ -3215,15 +3215,17 @@ def api_suspeitas_duplicidade():
         "t.data_transacao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
         "COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
         "COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
-        "t.conferida, COALESCE(t.importado,false) AS importado, "
+        "t.conferida, COALESCE(t.importado,false) AS importado"
+        "COALESCE(t.natureza, n.natureza, %s) AS natureza_efetiva, "
         "c.nome AS conta_nome, c.tipo AS conta_tipo, "
         f"to_char({DATA_LOCAL_SQL},'YYYY-MM-DD') AS dia, "
         f"to_char({DATA_LOCAL_SQL},'HH24:MI') AS hora "
         "FROM cartao.transacao t "
         "LEFT JOIN cartao.conta c ON c.account_id = t.account_id "
+        "LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
         f"WHERE EXTRACT(YEAR FROM {DATA_LOCAL_SQL}) = ANY(%s) "
         "ORDER BY t.data_transacao;",
-        (anos,),
+        (NATUREZA_PADRAO, anos),
     )
     linhas = cur.fetchall()
     # Quem NASCEU de uma linha do PDF. E' a evidencia que decide o balde do eco
@@ -3281,7 +3283,16 @@ def api_suspeitas_duplicidade():
         if len(elegiveis) < 2:
             baldes["ja_resolvido"].append(caso)
             continue
-        caso["excedente_no_dre"] = float(valor * (len(elegiveis) - 1))
+        # `elegivel` nao basta: natureza NEUTRA tambem fica fora do resultado
+        # (secao 4.2). Sem isto, um par de "Pagamento de Fatura" - que e
+        # transferencia - aparecia como R$ 1.948,10 de despesa dobrada, e nao
+        # move o DRE em nada. O registro repetido continua existindo; o que muda
+        # e' que ele nao e' um problema de resultado.
+        caso["natureza"] = membros[0]["natureza_efetiva"]
+        caso["entra_no_dre"] = exige_dimensoes(caso["natureza"])
+        caso["excedente_no_dre"] = (
+            float(valor * (len(elegiveis) - 1)) if caso["entra_no_dre"] else 0.0
+        )
         instantes = sorted(m["data_transacao"] for m in elegiveis)
         delta = int((instantes[-1] - instantes[0]).total_seconds())
         caso["diferenca_segundos"] = delta
