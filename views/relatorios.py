@@ -3215,7 +3215,7 @@ def api_suspeitas_duplicidade():
         "t.data_transacao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
         "COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
         "COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
-        "t.conferida, COALESCE(t.importado,false) AS importado"
+        "t.conferida, COALESCE(t.importado,false) AS importado, "
         "COALESCE(t.natureza, n.natureza, %s) AS natureza_efetiva, "
         "c.nome AS conta_nome, c.tipo AS conta_tipo, "
         f"to_char({DATA_LOCAL_SQL},'YYYY-MM-DD') AS dia, "

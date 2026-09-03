@@ -1429,3 +1429,40 @@ def test_editar_lancamento_grava_a_hora_da_alteracao():
     assert trecho.index("UPDATE cartao.transacao SET") < trecho.index(
         "SELECT atualizado_em FROM cartao.transacao"
     )
+
+
+def test_fragmentos_de_sql_nao_se_colam_sem_separador():
+    """SQL montado por concatenacao implicita nao pode grudar dois tokens.
+
+    Em 03/09/2026 uma edicao encostou `AS importado"` em `"COALESCE(...)` e o
+    SQL virou `AS importadoCOALESCE(...)`. `py_compile` passa, a suite inteira
+    passa - Python junta os literais adjacentes ANTES do AST, entao nao ha como
+    ver a emenda na arvore - e a rota so quebra com 500 ao ser chamada. Por isso
+    esta checagem le o texto do arquivo, e nao o AST.
+
+    Vale so para fragmento que parece SQL: texto e URL sao colados de proposito
+    em outros lugares.
+    """
+    import re
+
+    sql = re.compile(
+        r"\b(SELECT|FROM|WHERE|JOIN|COALESCE|UPDATE|INSERT|VALUES|GROUP BY"
+        r"|ORDER BY|SET |AND |OR |ON |AS )",
+        re.I,
+    )
+    problemas = []
+    for arquivo in sorted((RAIZ / "views").glob("*.py")) + [RAIZ / "core.py"]:
+        linhas = arquivo.read_text(encoding="utf-8").splitlines()
+        for i in range(len(linhas) - 1):
+            atual, seguinte = linhas[i].rstrip(), linhas[i + 1].strip()
+            fim = re.search(r'"([^"]*)"\s*$', atual)
+            ini = re.match(r'f?"([^"]*)"', seguinte)
+            if not fim or not ini or not fim.group(1) or not ini.group(1):
+                continue
+            a, b = fim.group(1), ini.group(1)
+            if a.endswith((" ", "(", ",")) or b.startswith((" ", ")", ",", ";")):
+                continue
+            if not (sql.search(a) or sql.search(b)):
+                continue
+            problemas.append(f"{arquivo.name}:{i + 1}  ...{a[-30:]!r} colado a {b[:30]!r}")
+    assert not problemas, "\n".join(problemas)
