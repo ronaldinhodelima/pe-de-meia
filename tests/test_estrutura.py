@@ -139,6 +139,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/fatura/vinculos-suspeitos",
         "/api/diagnostico/eco-3h",
         "/api/diagnostico/classificacao-ok",
+        "/api/diagnostico/suspeitas-duplicidade",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
         "/relatorios", "/relatorios/dados", "/relatorios/lancamentos",
         "/relatorios/conciliar-fatura", "/lancamentos/fatura",

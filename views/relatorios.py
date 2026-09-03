@@ -3175,3 +3175,126 @@ def api_classificacao_ok():
         "categoria_sem_natureza": sem_natureza,
         "padroes": {"quantos": len(padroes), "detalhe": padroes},
     })
+
+
+@bp.route("/api/diagnostico/suspeitas-duplicidade")
+@requer("cadastros")
+def api_suspeitas_duplicidade():
+    """Classifica as "possiveis duplicidades" da tela de Lancamentos.
+
+    Somente leitura: nao marca nada (secao 1.3) e nao toca em `conferida`.
+
+    O criterio da suspeita e o mesmo da tela: mesma conta, mesmo dia, mesmo
+    valor e MESMA descricao, com mais de um registro. Mas a tela nao aplica os
+    filtros de "ja resolvido" - ela so exclui `duplicada`. Entao um par que ja
+    foi resolvido por `substituido_por` ou que virou registro tecnico
+    (`somente_conciliacao`) continua aparecendo la como pendencia. E exatamente
+    a armadilha da secao 6.5 n.10, agora do outro lado: cada tela precisa
+    aplicar os MESMOS filtros de ja resolvido.
+
+    O que importa financeiramente nao e quantos grupos existem, e quantos ainda
+    tem DOIS OU MAIS elegiveis - porque `elegivel` e' exatamente "conta no DRE".
+    So esses estao dobrando despesa.
+
+    Baldes:
+      `ja_resolvido`  - sobrou um elegivel so; o excedente ja esta fora do
+                        resultado. Nenhuma acao.
+      `eco_instantaneo` - dois elegiveis com o MESMO instante: o Pluggy gravou a
+                        mesma cobranca duas vezes (secao 6.7).
+      `eco_3h`        - separados por 3h exatas, a assinatura da normalizacao de
+                        horario da secao 4.6 alcancando um registro e nao o outro.
+      `revisar`       - dois ou mais elegiveis sem assinatura reconhecivel. Pode
+                        ser cobranca real repetida (duas compras iguais no mesmo
+                        dia acontecem) ou duplicidade de verdade: decisao humana.
+    """
+    anos = [int(a) for a in (request.args.get("anos") or "2025,2026").split(",") if a.strip()]
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT t.transacao_id::text, t.account_id::text, t.descricao, "
+        "t.data_transacao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        "COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
+        "COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
+        "t.conferida, COALESCE(t.importado,false) AS importado, "
+        "c.nome AS conta_nome, c.tipo AS conta_tipo, "
+        f"to_char({DATA_LOCAL_SQL},'YYYY-MM-DD') AS dia, "
+        f"to_char({DATA_LOCAL_SQL},'HH24:MI') AS hora "
+        "FROM cartao.transacao t "
+        "LEFT JOIN cartao.conta c ON c.account_id = t.account_id "
+        f"WHERE EXTRACT(YEAR FROM {DATA_LOCAL_SQL}) = ANY(%s) "
+        "ORDER BY t.data_transacao;",
+        (anos,),
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    grupos = {}
+    for r in linhas:
+        chave = (r["account_id"], r["dia"], str(r["valor"]), r["descricao"])
+        grupos.setdefault(chave, []).append(r)
+
+    baldes = {"ja_resolvido": [], "eco_instantaneo": [], "eco_3h": [], "revisar": []}
+    excedente = 0.0
+    for chave, membros in grupos.items():
+        if len(membros) < 2:
+            continue
+        # a tela nao lista quem ja foi marcado como duplicada
+        if all(m["duplicada"] for m in membros):
+            continue
+        elegiveis = [
+            m for m in membros
+            if not (m["duplicada"] or m["substituido_por"] or m["somente_conciliacao"])
+        ]
+        valor = abs(Decimal(str(membros[0]["valor"] or 0)))
+        caso = {
+            "conta": membros[0]["conta_nome"], "tipo": membros[0]["conta_tipo"],
+            "data": membros[0]["dia"], "descricao": membros[0]["descricao"],
+            "valor": float(valor), "registros": len(membros),
+            "elegiveis": len(elegiveis),
+            "algum_conferido": any(m["conferida"] for m in membros),
+            "horas": sorted({m["hora"] for m in membros}),
+            "estados": [
+                ("substituido" if m["substituido_por"] else
+                 "tecnico" if m["somente_conciliacao"] else
+                 "duplicada" if m["duplicada"] else "no DRE")
+                for m in membros
+            ],
+        }
+        if len(elegiveis) < 2:
+            baldes["ja_resolvido"].append(caso)
+            continue
+        caso["excedente_no_dre"] = float(valor * (len(elegiveis) - 1))
+        excedente += caso["excedente_no_dre"]
+        instantes = sorted(m["data_transacao"] for m in elegiveis)
+        delta = int((instantes[-1] - instantes[0]).total_seconds())
+        caso["diferenca_segundos"] = delta
+        if delta == 0:
+            baldes["eco_instantaneo"].append(caso)
+        elif delta == 3 * 3600:
+            baldes["eco_3h"].append(caso)
+        else:
+            baldes["revisar"].append(caso)
+
+    def por_valor(lista):
+        return sorted(lista, key=lambda c: -c.get("excedente_no_dre", c["valor"]))
+
+    return jsonify({
+        "anos": anos,
+        "grupos_suspeitos": sum(len(v) for v in baldes.values()),
+        "excedente_no_dre": round(excedente, 2),
+        "resumo": {k: len(v) for k, v in baldes.items()},
+        "por_conta": {
+            nome: sum(
+                1 for k in ("eco_instantaneo", "eco_3h", "revisar")
+                for c in baldes[k] if c["conta"] == nome
+            )
+            for nome in sorted({
+                c["conta"] for v in baldes.values() for c in v if c["conta"]
+            })
+        },
+        "eco_instantaneo": por_valor(baldes["eco_instantaneo"])[:100],
+        "eco_3h": por_valor(baldes["eco_3h"])[:100],
+        "revisar": por_valor(baldes["revisar"])[:150],
+        "ja_resolvido_amostra": por_valor(baldes["ja_resolvido"])[:20],
+    })
