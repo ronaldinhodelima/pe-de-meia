@@ -10,6 +10,11 @@ import psycopg2.extras
 from flask import Blueprint, Response, request, jsonify, render_template, session, redirect
 
 from fatura_unicred import extrair_fatura, FaturaInvalida
+from fatura_ofx import (
+    extrair_fatura as extrair_fatura_ofx,
+    eh_ofx,
+    identificar_origem,
+)
 from core import (
     valor_pt,
     CATEGORIAS_EXTRA,
@@ -1118,18 +1123,56 @@ def conciliar_fatura():
 
     if request.method == "POST":
         arquivo = request.files.get("fatura")
+        pdf_bytes = arquivo.read() if arquivo and arquivo.filename else b""
+        # O formato vem do CONTEUDO, nunca da extensao: `accept` no navegador e
+        # so uma dica e o nome do arquivo o usuario renomeia.
+        formato_ofx = bool(pdf_bytes) and eh_ofx(pdf_bytes)
+        origem_arquivo = identificar_origem(pdf_bytes) if formato_ofx else {}
+
+        if formato_ofx and origem_arquivo.get("conta_externa"):
+            # Origem aprendida: o OFX diz de qual conta DO BANCO ele veio, e o
+            # app ja sabe a qual cartao daqui isso corresponde. Na primeira vez
+            # o usuario escolhe; da segunda em diante e automatico.
+            cur.execute(
+                "SELECT account_id::text FROM cartao.fatura_origem_externa "
+                "WHERE banco=%s AND conta_externa=%s;",
+                (origem_arquivo.get("banco") or "", origem_arquivo["conta_externa"]),
+            )
+            conhecida = cur.fetchone()
+            if conhecida and conhecida["account_id"] in contas_by_id:
+                account_id = conhecida["account_id"]
+
         if not arquivo or not arquivo.filename:
-            erro = "Selecione o PDF da fatura."
+            erro = "Selecione o arquivo da fatura (PDF ou OFX)."
         elif not account_id or account_id not in contas_by_id:
-            erro = "Selecione a qual cartão essa fatura pertence."
+            erro = (
+                "Reconheci o arquivo como " + (origem_arquivo.get("banco") or "OFX")
+                + ", mas ainda não sei a qual cartão daqui ele pertence. "
+                "Escolha uma vez — nas próximas importações desse cartão eu já sei."
+            ) if formato_ofx else "Selecione a qual cartão essa fatura pertence."
         else:
-            pdf_bytes = arquivo.read()
             try:
-                fatura = extrair_fatura(io.BytesIO(pdf_bytes))
+                if formato_ofx:
+                    fatura = extrair_fatura_ofx(io.BytesIO(pdf_bytes))
+                else:
+                    fatura = extrair_fatura(io.BytesIO(pdf_bytes))
             except FaturaInvalida as exc:
                 erro = str(exc)
             except Exception as exc:
-                erro = f"Não consegui ler esse PDF: {exc}"
+                erro = f"Não consegui ler esse arquivo: {exc}"
+
+            if not erro and formato_ofx and origem_arquivo.get("conta_externa"):
+                # Aprende a ligacao depois de o arquivo ter sido lido de fato -
+                # nao vale gravar mapeamento a partir de arquivo que nem abriu.
+                cur.execute(
+                    "INSERT INTO cartao.fatura_origem_externa "
+                    "(banco, conta_externa, account_id, criado_por) "
+                    "VALUES (%s,%s,%s,%s) "
+                    "ON CONFLICT (banco, conta_externa) "
+                    "DO UPDATE SET account_id=EXCLUDED.account_id;",
+                    (origem_arquivo.get("banco") or "", origem_arquivo["conta_externa"],
+                     account_id, session.get("user")),
+                )
 
             if not erro:
                 # As datas do ciclo vem inteiramente das proprias faturas

@@ -4642,6 +4642,30 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (53);")
             conn.commit()
 
+        if versao_atual < 54:
+            # De qual conta do app e o arquivo que o usuario acabou de enviar.
+            #
+            # O OFX identifica o banco (ORG/FID) e a conta NO BANCO (ACCTID),
+            # mas o ACCTID do Nubank NAO e o account_id do Pluggy - conferido
+            # contra as 7 contas cadastradas, nenhuma bate. Entao a ligacao nao
+            # pode ser deduzida: ela e' APRENDIDA na primeira importacao, em que
+            # o usuario diz a qual cartao o arquivo pertence, e reusada em todas
+            # as seguintes.
+            #
+            # Sem isto, ou o usuario escolhe a origem toda vez, ou o app adivinha
+            # por nome de banco - e ha DUAS contas Nubank (Ronaldo e Andrea),
+            # entao adivinhar por banco mandaria a fatura de um para o outro.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.fatura_origem_externa ("
+                "banco text NOT NULL, conta_externa text NOT NULL, "
+                "account_id uuid NOT NULL, "
+                "criado_em timestamptz NOT NULL DEFAULT now(), "
+                "criado_por text, "
+                "PRIMARY KEY (banco, conta_externa));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (54);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

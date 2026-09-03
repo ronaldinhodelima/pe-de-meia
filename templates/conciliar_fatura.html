@@ -2,11 +2,13 @@
 {% block conteudo %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
-  Envie o PDF da fatura do cartão de crédito (hoje só o formato da Unicred é reconhecido) e o
-  sistema confere, lançamento a lançamento, se o que a operadora cobrou bate com o que o Pluggy
-  sincronizou nessa conta. Por mais correto que o Pluggy costume ser, quem manda é a fatura —
-  o valor pago precisa fechar 100%. Os lançamentos extraídos e o PDF original ficam salvos, para
-  consultar ou reprocessar depois sem reenviar o arquivo.
+  Envie a fatura do cartão de crédito — <strong>PDF da Unicred</strong> ou <strong>OFX</strong>
+  (Nubank e outros bancos) — e o sistema confere, lançamento a lançamento, se o que a operadora
+  cobrou bate com o que o Pluggy sincronizou nessa conta. Por mais correto que o Pluggy costume
+  ser, quem manda é a fatura — o valor pago precisa fechar 100%. Os lançamentos extraídos e o
+  arquivo original ficam salvos, para consultar ou reprocessar depois sem reenviar.
+  <br>No OFX o cartão é reconhecido sozinho: você escolhe a origem só na primeira importação
+  de cada cartão.
 </div>
 
 <div class="cat-breakdown">
@@ -23,8 +25,8 @@
       </select>
     </div>
     <div>
-      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">PDF da fatura</label>
-      <input type="file" name="fatura" accept="application/pdf" required
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura (PDF ou OFX)</label>
+      <input type="file" name="fatura" accept=".pdf,.ofx,application/pdf,application/x-ofx" required
              style="padding:6px 0;font-size:var(--fonte-md)">
     </div>
     <button type="submit" class="btn-primario">

@@ -1466,3 +1466,38 @@ def test_fragmentos_de_sql_nao_se_colam_sem_separador():
                 continue
             problemas.append(f"{arquivo.name}:{i + 1}  ...{a[-30:]!r} colado a {b[:30]!r}")
     assert not problemas, "\n".join(problemas)
+
+
+def test_dockerfile_copia_todo_modulo_da_raiz():
+    """Modulo novo na raiz sem COPY: o container sobe sem o arquivo e a
+    aplicacao INTEIRA cai, porque `views/relatorios.py` importa no topo. A
+    secao 2.3 registra isso para pasta nova; vale igual para arquivo solto.
+    """
+    docker = (RAIZ / "Dockerfile").read_text(encoding="utf-8")
+    modulos = {
+        f.name for f in RAIZ.glob("*.py")
+        if not f.name.startswith("test_") and f.name != "setup.py"
+    }
+    faltando = sorted(m for m in modulos if m not in docker)
+    assert not faltando, f"sem COPY no Dockerfile: {faltando}"
+
+
+def test_import_de_fatura_escolhe_o_extrator_pelo_CONTEUDO():
+    """`accept` no navegador e so uma dica e a extensao o usuario renomeia."""
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    trecho = codigo.split("def conciliar_fatura", 1)[1][:6000]
+    assert "eh_ofx(pdf_bytes)" in trecho
+    assert "extrair_fatura_ofx" in trecho
+    # a origem aprendida so e gravada depois de o arquivo ter sido lido
+    assert trecho.index("extrair_fatura_ofx") < trecho.index(
+        "INSERT INTO cartao.fatura_origem_externa"
+    )
+
+
+def test_migracao_54_cria_a_origem_aprendida_por_conta_do_banco():
+    """Ha DUAS contas Nubank: adivinhar a origem pelo nome do banco mandaria a
+    fatura de um titular para o outro. A chave e a conta NO BANCO."""
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = _bloco_migracao(core, 54)
+    assert "fatura_origem_externa" in bloco
+    assert "PRIMARY KEY (banco, conta_externa)" in bloco

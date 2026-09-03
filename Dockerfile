@@ -13,6 +13,7 @@ COPY app.py /app/app.py
 # Sem estas duas linhas o container nem sobe (ImportError logo no boot).
 COPY core.py /app/core.py
 COPY fatura_unicred.py /app/fatura_unicred.py
+COPY fatura_ofx.py /app/fatura_ofx.py
 COPY views/ /app/views/
 # static/ tem os logos, o favicon, o CSS e os JS. Sem esta linha o app sobe, mas
 # todas as telas ficam sem imagem e SEM ESTILO (404 em /static/*).
