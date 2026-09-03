@@ -1944,6 +1944,17 @@ def update_transacao(transacao_id):
             observacao=observacao_familia,
         )
     conn.commit()
+    # Depois do commit e ANTES de fechar. Esta consulta rodava com o cursor e a
+    # conexao ja fechados e derrubava a rota inteira com 500 - qualquer edicao,
+    # nao so a descricao. Ler aqui devolve a hora DESTA edicao, nao a anterior.
+    cur.execute(
+        "SELECT atualizado_em FROM cartao.transacao WHERE transacao_id=%s;", (transacao_id,)
+    )
+    _atualizado = cur.fetchone()
+    atualizado_em_fmt = (
+        data_hora_local(_atualizado[0]).strftime("%d/%m/%Y %H:%M")
+        if _atualizado and _atualizado[0] else "-"
+    )
     cur.close()
     conn.close()
     conferida_por = (
@@ -1982,16 +1993,6 @@ def update_transacao(transacao_id):
             None,
             classificacoes_compartilhadas,
         )
-    # Depois do UPDATE, senao devolveria a hora anterior a esta edicao.
-    cur.execute(
-        "SELECT atualizado_em FROM cartao.transacao WHERE transacao_id=%s;", (transacao_id,)
-    )
-    _atualizado = cur.fetchone()
-    atualizado_em_fmt = (
-        data_hora_local(_atualizado[0]).strftime("%d/%m/%Y %H:%M")
-        if _atualizado and _atualizado[0] else "-"
-    )
-
     return jsonify({
         "ok": True,
         "bloqueada": bloqueada,

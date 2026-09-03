@@ -1347,3 +1347,65 @@ def test_modal_tem_uma_tipografia_de_rotulo_e_um_desenho_de_campo():
     proprio = css.split("\n.modal-desc-input {", 1)[1].split("}", 1)[0]
     for herdado in ("border", "padding", "font-size", "background", "border-radius"):
         assert herdado not in proprio, f".modal-desc-input redefine {herdado}"
+
+
+def test_nenhuma_rota_usa_cursor_depois_de_fechar_a_conexao():
+    """Consulta depois de `cur.close()` derruba a rota inteira com 500.
+
+    Aconteceu em 02/09/2026: a leitura de `atualizado_em` para o campo "Última
+    alteração" do modal ficou DEPOIS de `cur.close()`/`conn.close()` e passou a
+    quebrar TODA edicao de lancamento - descricao, OK, categoria, dimensao.
+    `py_compile` passa, a suite passa, e o erro so aparece quando alguem edita
+    de verdade (secao 10.3 n.3).
+
+    A varredura olha so o CORPO DIRETO da funcao. Um `close` dentro de um `if`
+    que retorna e' saida antecipada legitima - foi o que gerou 20 falsos
+    positivos na primeira versao deste teste, e por isso a checagem por numero
+    de linha nao serve.
+    """
+    import ast
+
+    def usa_cursor(no):
+        for filho in ast.walk(no):
+            if (
+                isinstance(filho, ast.Call)
+                and isinstance(filho.func, ast.Attribute)
+                and getattr(filho.func.value, "id", "") == "cur"
+                and (filho.func.attr == "execute" or filho.func.attr.startswith("fetch"))
+            ):
+                return filho
+        return None
+
+    def reabre(no):
+        return any(
+            isinstance(f, ast.Call) and isinstance(f.func, ast.Name)
+            and f.func.id == "get_conn"
+            for f in ast.walk(no)
+        )
+
+    problemas = []
+    for arquivo in sorted((RAIZ / "views").glob("*.py")) + [RAIZ / "core.py"]:
+        arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
+        for no in ast.walk(arvore):
+            if not isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            fechou = False
+            for stmt in no.body:
+                if fechou and reabre(stmt):
+                    fechou = False
+                if fechou:
+                    uso = usa_cursor(stmt)
+                    if uso is not None:
+                        problemas.append(
+                            f"{arquivo.name}:{uso.lineno} usa cur.{uso.func.attr} "
+                            f"depois de fechar a conexao (em {no.name})"
+                        )
+                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                    alvo = stmt.value.func
+                    if (
+                        isinstance(alvo, ast.Attribute)
+                        and alvo.attr == "close"
+                        and getattr(alvo.value, "id", "") in ("cur", "conn")
+                    ):
+                        fechou = True
+    assert not problemas, "\n".join(problemas)
