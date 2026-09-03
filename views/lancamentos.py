@@ -1905,8 +1905,14 @@ def update_transacao(transacao_id):
         # lancamento do Pluggy.
         escopo = " AND account_id = %s" if "descricao" in data else ""
         extra = [CONTA_MANUAL_ID] if "descricao" in data else []
+        # Sem isto, "Ultima alteracao" no modal mostrava a hora de CRIACAO para
+        # sempre: migracoes e rotinas em lote gravam `atualizado_em`, mas a rota
+        # que o usuario usa para editar nunca gravava. O campo dizia a verdade
+        # sobre a coluna e mentia sobre o dado.
         cur.execute(
-            f"UPDATE cartao.transacao SET {', '.join(sets)} WHERE transacao_id = %s{escopo};",
+            "UPDATE cartao.transacao SET "
+            + ", ".join(sets + ["atualizado_em = now()"])
+            + f" WHERE transacao_id = %s{escopo};",
             valores + [transacao_id] + extra,
         )
     classificacoes_compartilhadas = {

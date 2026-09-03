@@ -1409,3 +1409,22 @@ def test_nenhuma_rota_usa_cursor_depois_de_fechar_a_conexao():
                     ):
                         fechou = True
     assert not problemas, "\n".join(problemas)
+
+
+def test_editar_lancamento_grava_a_hora_da_alteracao():
+    """"Ultima alteracao" no modal precisa refletir a edicao que acabou de ocorrer.
+
+    Migracoes e rotinas em lote sempre gravaram `atualizado_em`, mas a rota que
+    o usuario de fato usa para editar nao gravava: o campo mostrava a hora de
+    CRIACAO para sempre. Ele dizia a verdade sobre a coluna e mentia sobre o
+    dado - pior que nao existir, porque parecia conferido.
+    """
+    codigo = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = codigo.split("def update_transacao", 1)[1].split("\ndef ", 1)[0]
+    assert 'sets + ["atualizado_em = now()"]' in trecho, (
+        "o UPDATE da edicao precisa carimbar atualizado_em"
+    )
+    # e a resposta le a hora DEPOIS do UPDATE, senao devolveria a anterior
+    assert trecho.index("UPDATE cartao.transacao SET") < trecho.index(
+        "SELECT atualizado_em FROM cartao.transacao"
+    )
