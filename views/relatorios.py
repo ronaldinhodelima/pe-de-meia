@@ -3488,3 +3488,74 @@ def api_suspeitas_duplicidade():
         "revisar": por_valor(baldes["revisar"])[:150],
         "ja_resolvido_amostra": por_valor(baldes["ja_resolvido"])[:20],
     })
+
+
+@bp.route("/api/faturas/recalcular-ciclo-do-arquivo", methods=["POST"])
+@requer("cadastros")
+def recalcular_ciclo_do_arquivo():
+    """Rele o DTSTART do arquivo guardado e conserta o `periodo_inicio`.
+
+    As faturas em OFX importadas ANTES da correcao tiveram o inicio do ciclo
+    sobrescrito pela deducao "fim da anterior + 1 dia", que existe para o PDF da
+    Unicred. A marca `ciclo_do_arquivo` manda confiar no valor gravado - mas o
+    valor gravado e o deduzido, entao a marca sozinha nao resolve.
+
+    Aqui o inicio volta a sair do PROPRIO arquivo, que fica salvo em
+    `pdf_arquivo`. Nao deduz nada: se o arquivo nao disser, a fatura fica como
+    esta. `preview: true` levanta sem gravar.
+    """
+    from fatura_ofx import extrair_fatura as _ofx, eh_ofx as _eh_ofx
+
+    data = request.get_json(silent=True) or {}
+    preview = bool(data.get("preview"))
+    conta_alvo = (data.get("account_id") or "").strip() or None
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT id, mes_referencia, ano_referencia, periodo_inicio, pdf_arquivo "
+            "FROM cartao.fatura_importada "
+            "WHERE COALESCE(ciclo_do_arquivo,false) = true AND pdf_arquivo IS NOT NULL "
+            + ("AND account_id = %s " if conta_alvo else "")
+            + "ORDER BY ano_referencia, mes_referencia;",
+            ((conta_alvo,) if conta_alvo else ()),
+        )
+        mudancas, corrigidas = [], 0
+        for f in cur.fetchall():
+            bruto = bytes(f["pdf_arquivo"])
+            if not _eh_ofx(bruto):
+                continue
+            try:
+                lido = _ofx(io.BytesIO(bruto))
+            except Exception:
+                continue
+            novo = lido.get("periodo_inicio")
+            if not novo or novo == f["periodo_inicio"]:
+                continue
+            mudancas.append({
+                "fatura": f"{f['mes_referencia']:02d}/{f['ano_referencia']}",
+                "de": f["periodo_inicio"].isoformat() if f["periodo_inicio"] else None,
+                "para": novo.isoformat(),
+            })
+            if not preview:
+                cur.execute(
+                    "UPDATE cartao.fatura_importada SET periodo_inicio = %s WHERE id = %s;",
+                    (novo, f["id"]),
+                )
+                corrigidas += 1
+        if not preview and corrigidas:
+            conn.commit()
+            registrar_auditoria(
+                "alteracao", "relatorios.recalcular_ciclo_do_arquivo", sucesso=True,
+                detalhes={"corrigidas": corrigidas, "mudancas": mudancas},
+            )
+        else:
+            conn.rollback()
+        return jsonify({"ok": True, "preview": preview,
+                        "corrigidas": corrigidas, "mudancas": mudancas})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui recalcular: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
