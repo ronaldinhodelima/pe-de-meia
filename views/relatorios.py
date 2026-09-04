@@ -2458,7 +2458,8 @@ def vincular_automatico_fatura(fatura_id):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT id, account_id, ano_referencia, mes_referencia, periodo_inicio, periodo_fim "
+            "SELECT id, account_id, ano_referencia, mes_referencia, "
+            "periodo_inicio, periodo_fim, ciclo_do_arquivo "
             "FROM cartao.fatura_importada WHERE id = %s;",
             (fatura_id,),
         )

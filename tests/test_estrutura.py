@@ -1578,3 +1578,22 @@ def test_fim_do_ciclo_e_exclusivo_quando_o_arquivo_informa():
     assert 'periodo_fim = fatura_row["periodo_fim"] or' not in codigo
     # e a contagem de orfaos em SQL segue a mesma regra
     assert "THEN f.periodo_fim - 1 ELSE f.periodo_fim END" in codigo
+
+
+def test_quem_calcula_ciclo_carrega_a_coluna_que_decide():
+    """`_ciclo_inicio` e `_ciclo_fim` leem `ciclo_do_arquivo` do fatura_row.
+
+    Uma consulta que nao traz essa coluna faz `.get()` devolver None e o ciclo
+    volta silenciosamente para a DEDUCAO - sem erro nenhum. Foi isso que manteve
+    o vinculo automatico usando a janela errada mesmo depois da correcao: a rota
+    carregava a fatura por lista de colunas e a coluna nova nao entrou nela.
+    """
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    for trecho in codigo.split("FROM cartao.fatura_importada WHERE id = %s")[:-1]:
+        select = trecho[trecho.rfind("SELECT"):]
+        if "periodo_inicio" not in select:
+            continue  # consulta que nao alimenta calculo de ciclo
+        assert "ciclo_do_arquivo" in select, (
+            "consulta que carrega periodo_inicio precisa trazer ciclo_do_arquivo:\n"
+            + select[:200]
+        )
