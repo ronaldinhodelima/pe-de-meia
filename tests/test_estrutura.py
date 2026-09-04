@@ -1520,3 +1520,7 @@ def test_orfao_carrega_a_conta_e_a_trava_dos_409_filtra_por_ela():
     # o recorte tem que chegar tambem na consulta que escolhe as linhas
     assert "AND fi.account_id = %s " in rota
     assert "AND fi.mes_referencia <= %s " in rota
+    # e a trava olha a janela de datas do recorte, nao a conta inteira
+    assert "ini_janela <= quando <= fim_janela" in rota
+    # na duvida, bloqueia: sem data dos dois lados o orfao conta como ameaca
+    assert rota.index("ini_janela <= quando <= fim_janela") < rota.index("return True")

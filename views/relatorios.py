@@ -2196,18 +2196,40 @@ def criar_cobrancas_sem_pluggy():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         if not preview:
+            # Janela de datas coberta pelas faturas que serao usadas. A trava
+            # vale para o ESCOPO pedido: um orfao de outra conta, ou de um ciclo
+            # fora do recorte, nao tem como ser a contraparte de uma linha que
+            # sera criada aqui. Bloquear por causa dele impediria para sempre de
+            # fechar a metade que ja esta limpa.
+            cur.execute(
+                "SELECT MIN(periodo_inicio) AS ini, MAX(periodo_fim) AS fim "
+                "FROM cartao.fatura_importada WHERE 1=1 "
+                + ("AND ano_referencia = %s " if ano else "")
+                + ("AND account_id = %s " if conta_alvo else "")
+                + ("AND mes_referencia <= %s " if ate_mes else ""),
+                ((int(ano),) if ano else ())
+                + ((conta_alvo,) if conta_alvo else ())
+                + ((ate_mes,) if ate_mes else ()),
+            )
+            janela = cur.fetchone() or {}
+            ini_janela, fim_janela = janela.get("ini"), janela.get("fim")
+
             orfaos = _classificar_orfaos(cur)
             pendentes_todos = (
                 orfaos["repetidas"] + orfaos["ecos"] + orfaos["revisar"]
             )
-            # A trava vale para o ESCOPO pedido. Um orfao de outra conta, ou de
-            # um mes fora do recorte, nao pode duplicar o que sera criado aqui -
-            # e bloquear por causa dele impediria para sempre de fechar a parte
-            # que ja esta limpa.
-            pendentes = sum(
-                1 for o in pendentes_todos
-                if (not conta_alvo or str(o.get("account_id") or "") == conta_alvo)
-            )
+
+            def ameaca(o):
+                if conta_alvo and str(o.get("account_id") or "") != conta_alvo:
+                    return False
+                quando = o.get("data")
+                if quando and ini_janela and fim_janela:
+                    return ini_janela <= quando <= fim_janela
+                # sem data confiavel dos dois lados, conta como ameaca: a duvida
+                # tem que bloquear, nunca liberar
+                return True
+
+            pendentes = sum(1 for o in pendentes_todos if ameaca(o))
             if pendentes:
                 return jsonify({
                     "ok": False,
