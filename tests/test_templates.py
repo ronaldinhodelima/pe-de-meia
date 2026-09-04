@@ -499,3 +499,19 @@ def test_modal_sincroniza_o_combobox_ao_espelhar_a_categoria():
     js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
     trecho = js.split("espelha a categoria da linha", 1)[1].split("const emRateio", 1)[0]
     assert "pdmCombobox.sincronizar(selCat)" in trecho
+
+
+def test_bloqueio_de_ok_por_falta_de_pdf_tem_mensagem_propria():
+    """Secao 7.5: OK de cartao de credito exige vinculo com uma linha do PDF.
+
+    Sem tratar `sem_pdf_conciliado`, as duas telas caiam no texto generico e
+    mandavam "preencha os campos obrigatorios" mesmo com `faltando` VAZIO - o
+    usuario procurava um campo que nao existia enquanto o motivo era outro.
+    """
+    for arquivo in ("lancamentos.js", "lancamentos_fatura.js"):
+        caminho = Path(__file__).resolve().parents[1] / "static" / arquivo
+        js = caminho.read_text(encoding="utf-8")
+        assert "sem_pdf_conciliado" in js, f"{arquivo} ignora a trava do PDF"
+        assert "Conciliar fatura" in js, (
+            f"{arquivo} precisa dizer ONDE resolver, nao so que esta bloqueado"
+        )

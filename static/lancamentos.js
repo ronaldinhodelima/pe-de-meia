@@ -992,10 +992,16 @@ function salvar(id, el, opcoes) {
           const sel = tr.querySelector('.dim-select[data-dim="' + dimId + '"]');
           if (sel) sel.classList.add('classificacao-faltando');
         });
+        // `sem_pdf_conciliado` precisa de mensagem PROPRIA. Sem ela a tela caia
+        // no texto generico e mandava preencher campo obrigatorio mesmo com
+        // `faltando` vazio - o usuario procurava um campo que nao existia,
+        // enquanto o motivo real era a trava da secao 7.5.
         alert(d.rateio_invalido
           ? 'Não foi possível confirmar: revise o rateio e faça as partes fecharem exatamente com o valor do lançamento.'
           : d.pendente_banco
           ? 'Não foi possível confirmar: esse lançamento ainda está pendente no banco (pode mudar até a fatura fechar). Aguarde virar "Concluída" para marcar OK.'
+          : d.sem_pdf_conciliado
+          ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura em PDF. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
       const s = document.getElementById('status-' + id);

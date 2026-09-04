@@ -256,6 +256,9 @@
         let motivo = 'O OK só é liberado quando a classificação estiver completa' + (nomes ? ': ' + nomes + '.' : '.');
         if (json.rateio_invalido) motivo = 'O OK só é liberado quando o rateio estiver completo e fechar exatamente com o lançamento.';
         if (json.pendente_banco) motivo = 'O banco ainda informa que este lançamento está pendente. Aguarde a confirmação bancária para marcar OK.';
+        // sem esta linha a tela mandava completar a classificacao mesmo com
+        // `faltando` vazio, e o motivo real era a trava da secao 7.5
+        if (json.sem_pdf_conciliado) motivo = 'Este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura em PDF. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.';
         alert(motivo);
       }
       await atualizarResumoPagina(novo && status && status.value === 'pendente_ok');
