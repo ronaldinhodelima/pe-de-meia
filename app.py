@@ -17,7 +17,7 @@ from core import (
     rotulo_valor_dimensao,
     sanitizar_dados_auditoria,
 )
-from views import auth, sistema, lancamentos, relatorios, cadastros, usuarios, logs
+from views import auth, sistema, lancamentos, relatorios, cadastros, compras, usuarios, logs
 
 app = Flask(__name__)
 
@@ -201,7 +201,7 @@ def _globais_template():
 
 
 # a ordem nao importa: nenhum blueprint disputa o mesmo caminho
-for modulo in (auth, sistema, lancamentos, relatorios, cadastros, usuarios, logs):
+for modulo in (auth, sistema, lancamentos, relatorios, cadastros, compras, usuarios, logs):
     app.register_blueprint(modulo.bp)
 
 

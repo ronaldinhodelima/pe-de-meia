@@ -137,6 +137,8 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/classificacao/consenso-preview",
         "/api/classificacao/reaplicar-consenso",
         "/api/fatura/vinculos-suspeitos",
+        "/compras-futuras", "/api/compra-futura",
+        "/api/compra-futura/<int:compra_id>",
         "/api/diagnostico/eco-3h",
         "/api/diagnostico/classificacao-ok",
         "/api/diagnostico/suspeitas-duplicidade",
@@ -1244,7 +1246,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 55
+    TETO = 53
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],
@@ -1631,3 +1633,31 @@ def test_migracao_56_move_so_o_pagamento_de_fatura_e_nao_toca_no_ok():
     assert "descricao ILIKE" in update, "sem filtro de descricao varreria Transfers inteiro"
     # e vai para a categoria de natureza transferencia
     assert "categoria='Credit card payment'" in update
+
+
+def test_compra_futura_nunca_entra_no_resultado():
+    """Plano nao e fato (secao 1.1).
+
+    Se um item da lista de compras virasse lancamento, ele apareceria no DRE,
+    nos relatorios e nos cards como dinheiro que saiu - inflando o resultado com
+    uma intencao. A separacao e estrutural: tabela propria, e nenhuma consulta
+    financeira a conhece.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "compras.py").read_text(encoding="utf-8")
+
+    # a tabela existe e e separada de transacao
+    assert "CREATE TABLE IF NOT EXISTS cartao.compra_futura (" in core
+    assert "compra_futura_dimensao" in core
+
+    # a tela de compras NUNCA escreve em transacao nem cria lancamento
+    assert "INSERT INTO cartao.transacao" not in view
+    assert "UPDATE cartao.transacao" not in view
+
+    # e nenhuma consulta financeira conhece a tabela
+    for nome in ("relatorios.py", "lancamentos.py"):
+        texto = (RAIZ / "views" / nome).read_text(encoding="utf-8")
+        assert "compra_futura" not in texto, nome
+    financeiro = core.split("CREATE OR REPLACE VIEW cartao.lancamento_financeiro", 1)
+    if len(financeiro) == 2:
+        assert "compra_futura" not in financeiro[1][:4000]

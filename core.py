@@ -4760,6 +4760,58 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (56);")
             conn.commit()
 
+        if versao_atual < 57:
+            # Compras futuras / sonhos: o que a familia PRETENDE comprar.
+            #
+            # Tabela propria, e NAO um lancamento. Plano nao e fato: se entrasse
+            # em cartao.transacao apareceria no DRE, nos relatorios e nos cards
+            # como dinheiro que saiu - exatamente o "dado mascarado que infla o
+            # lancamento" que a regra de ouro proibe (secao 1.1). Fica fora da
+            # view cartao.lancamento_financeiro por construcao: nada aqui e
+            # somado ao resultado de nenhum periodo.
+            #
+            # O vinculo com a compra realizada (transacao_id) da o par
+            # previsto x realizado e o caminho de volta - mesmo padrao explicito
+            # de substituido_por e fatura_vinculo (secao 4.3).
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.compra_futura ("
+                "id serial PRIMARY KEY, "
+                "descricao text NOT NULL, "
+                "valor_previsto numeric(14,2), "
+                "mes_alvo date, "
+                "prioridade text NOT NULL DEFAULT 'media', "
+                "observacao text, "
+                "situacao text NOT NULL DEFAULT 'aberta', "
+                "transacao_id text, "
+                "comprada_em timestamptz, "
+                "criado_por text, "
+                "criado_em timestamptz DEFAULT now(), "
+                "atualizado_em timestamptz DEFAULT now());"
+            )
+            # Espelha transacao_dimensao: as mesmas dimensoes dos lancamentos,
+            # para que o total previsto por Projeto/Portfolio converse com o
+            # realizado sem tradutor no meio.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.compra_futura_dimensao ("
+                "compra_id integer NOT NULL REFERENCES cartao.compra_futura(id) ON DELETE CASCADE, "
+                "dimensao_id integer NOT NULL REFERENCES cartao.dimensao(id) ON DELETE CASCADE, "
+                "valor_id integer REFERENCES cartao.dimensao_valor(id) ON DELETE SET NULL, "
+                "PRIMARY KEY (compra_id, dimensao_id));"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS compra_futura_situacao_idx "
+                "ON cartao.compra_futura (situacao, mes_alvo);"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Compras futuras (previsao, fora do resultado)',"
+                "jsonb_build_object('versao',57,'tabelas',"
+                "'cartao.compra_futura, cartao.compra_futura_dimensao',"
+                "'fora_do_dre',true));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (57);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -5064,6 +5116,7 @@ def topbar_html(titulo, ativo=None):
         </a>
         <div class="nav-menu">
           {f'<a href="/" class="{cls("inicio")}">Lançamentos</a>' if pode("lancamentos_ver") else ""}
+          {f'<a href="/compras-futuras" class="{cls("compras-futuras")}">Compras futuras</a>' if pode("lancamentos_ver") else ""}
           {f'''<div class="dropdown">
             <button type="button" class="dropbtn" onclick="menuToggle(event, this)">Relatórios ▾</button>
             <div class="dropdown-content">

@@ -788,3 +788,28 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 /* Desenho: ver o bloco unico de campo do modal, mais acima. Aqui fica so o
    que e proprio da descricao. */
 .modal-desc-input { width: 100%; }
+
+/* ---- compras futuras (previsao, nunca lancamento) ---- */
+.aviso-previsao {
+  background: var(--neutro-soft); border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 14px;
+  font-size: var(--fonte-sm); color: var(--ink-soft); line-height: 1.55;
+}
+.aviso-previsao strong { color: var(--neutro); font-weight: var(--peso-medio); }
+.filtros-compras { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.filtros-compras .chip-btn { text-decoration: none; }
+.vazio-compras { font-size: var(--fonte-sm); color: var(--ink-faint); padding: 14px 0; }
+.compra-obs, .compra-realizada {
+  display: block; font-size: var(--fonte-xxs); color: var(--ink-faint); line-height: 1.4;
+}
+.compra-realizada { color: var(--good); }
+tr.compra-feita { opacity: .6; }
+.prio {
+  display: inline-block; padding: 1px 7px; border-radius: var(--radius-pill);
+  font-size: var(--fonte-xxs); font-weight: var(--peso-medio);
+}
+.prio-alta { background: var(--bad-soft); color: var(--bad); }
+.prio-media { background: var(--raise); color: var(--ink-soft); }
+.prio-baixa { background: var(--line-soft); color: var(--ink-faint); }
+#compraStatus { font-size: var(--fonte-sm); color: var(--ink-faint); }
+#compraStatus.erro { color: var(--bad); }

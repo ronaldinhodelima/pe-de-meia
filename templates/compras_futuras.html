@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block conteudo %}
+
+<div class="aviso-previsao">
+  <strong>Isto é previsão, não lançamento.</strong> Nada desta lista entra no DRE, nos relatórios
+  ou em qualquer total de período — plano não é dinheiro que saiu. Quando a compra acontecer,
+  marque o item como comprada e aponte o lançamento real: só ele conta.
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="label">Total em aberto</div>
+    <div class="val">{{ total_aberto|moeda }}</div>
+    <div class="sub">{{ quantidade_aberta }} item(ns) a comprar</div>
+  </div>
+  {% for mes, valor in por_mes[:3] %}
+  <div class="card">
+    <div class="label">Previsto para {{ mes }}</div>
+    <div class="val">{{ valor|moeda }}</div>
+    <div class="sub">provisionamento do mês</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if pode_editar %}
+<div class="cat-breakdown">
+  <h3>Novo item</h3>
+  <form onsubmit="return criarCompra(event)">
+    <div class="editor-manual">
+      <div class="campo-largo"><label for="compraDescricao">O que precisa comprar</label>
+        <input type="text" id="compraDescricao" required placeholder="ex.: móvel para a pia do banheiro"></div>
+      <div><label for="compraValor">Valor previsto (R$)</label>
+        <input type="number" id="compraValor" step="0.01" min="0" placeholder="0,00"></div>
+      <div><label for="compraMes">Mês-alvo</label>
+        <input type="month" id="compraMes" value="{{ mes_atual }}"></div>
+      <div><label for="compraPrioridade">Prioridade</label>
+        <select id="compraPrioridade" data-pdm-native>
+          {% for chave, rotulo in prioridades.items() %}
+          <option value="{{ chave }}" {{ 'selected' if chave == 'media' }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select></div>
+      {% for d in dimensoes %}
+      <div><label>{{ d.nome }}</label>
+        <select data-pdm-combobox class="compra-dim" data-dim="{{ d.id }}" aria-label="{{ d.nome }}">
+          <option value="">(não definido)</option>
+          {% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}">{{ rotulo_dim(val) }}</option>{% endfor %}
+        </select></div>
+      {% endfor %}
+      <div class="campo-largo"><label for="compraObservacao">Observação</label>
+        <input type="text" id="compraObservacao" maxlength="500" placeholder="opcional"></div>
+    </div>
+    <div class="rodape-manual">
+      <button type="submit" class="btn-primario">Adicionar à lista</button>
+      <span id="compraStatus"></span>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="cat-breakdown">
+  <h3>Lista de compras</h3>
+  <div class="filtros-compras">
+    {% for chave, rotulo in situacoes.items() %}
+    <a href="?situacao={{ chave }}" class="chip-btn {{ 'ativo' if situacao == chave }}">{{ rotulo }}</a>
+    {% endfor %}
+    <a href="?situacao=todas" class="chip-btn {{ 'ativo' if situacao == 'todas' }}">Todas</a>
+  </div>
+
+  {% if not linhas %}
+    <div class="vazio-compras">Nenhum item nesta situação.</div>
+  {% else %}
+  <table class="compacta ajustavel" data-tabela="compras-futuras">
+    <thead><tr>
+      <th data-col="desc">Item</th>
+      <th data-col="mes">Mês-alvo</th>
+      <th data-col="prio">Prioridade</th>
+      {% for d in dimensoes %}<th data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}
+      <th data-col="valor" style="text-align:right">Previsto</th>
+      <th data-col="situacao">Situação</th>
+      <th data-col="acoes"></th>
+    </tr></thead>
+    <tbody>
+      {% for l in linhas %}
+      <tr data-compra="{{ l.id }}" class="{{ 'compra-feita' if l.situacao != 'aberta' }}">
+        <td data-col="desc">
+          {{ l.descricao }}
+          {% if l.observacao %}<small class="compra-obs">{{ l.observacao }}</small>{% endif %}
+          {% if l.transacao_descricao %}
+            <small class="compra-realizada">realizada por: {{ l.transacao_descricao }} · {{ l.transacao_valor|moeda }}</small>
+          {% endif %}
+        </td>
+        <td data-col="mes">{{ l.mes_alvo_rotulo }}</td>
+        <td data-col="prio"><span class="prio prio-{{ l.prioridade }}">{{ l.prioridade_rotulo }}</span></td>
+        {% for d in dimensoes %}<td data-col="dim_{{ d.id }}">{{ l.dims_rotulos.get(d.id) or '—' }}</td>{% endfor %}
+        <td data-col="valor" class="valor">{{ l.valor_previsto|moeda if l.valor_previsto is not none else '—' }}</td>
+        <td data-col="situacao">{{ l.situacao_rotulo }}</td>
+        <td data-col="acoes" style="white-space:nowrap">
+          {% if pode_editar %}
+            {% if l.situacao == 'aberta' %}
+              <button type="button" class="ver-btn" data-comprar="{{ l.id }}">Comprei</button>
+            {% else %}
+              <button type="button" class="ver-btn" data-reabrir="{{ l.id }}">Reabrir</button>
+            {% endif %}
+            <button type="button" class="btn-perigo" data-excluir="{{ l.id }}">Excluir</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}<script src="/static/compras.js?v=20260902-1"></script>{% endblock %}
