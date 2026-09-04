@@ -1605,3 +1605,29 @@ def test_quem_calcula_ciclo_carrega_a_coluna_que_decide():
             "consulta que carrega periodo_inicio precisa trazer ciclo_do_arquivo:\n"
             + select[:220]
         )
+
+
+def test_migracao_56_move_so_o_pagamento_de_fatura_e_nao_toca_no_ok():
+    """Secao 1.1: pagamento de fatura nao e despesa, so troca a forma do
+    patrimonio. O lado da conta corrente estava em "Transfers" (natureza
+    `fluxo`), onde a direcao decide - e saida vira despesa. Com as compras do
+    cartao ja contadas, o pagamento entrava de novo.
+
+    O recorte tem que continuar estreito: "Transfers" tem centenas de
+    lancamentos e ali ha transferencia entre contas proprias misturada com
+    movimento que e receita ou despesa de verdade.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = _bloco_migracao(core, 56)
+
+    assert "classificacao_backup_v56" in bloco, "alteracao em lote sem reversao"
+    assert "SET conferida" not in bloco and "conferida=" not in bloco
+    assert "SET observacao" not in bloco
+    # o recorte tem que estar no PROPRIO UPDATE, nao so na consulta de backup:
+    # sem as duas condicoes juntas ele varreria "Transfers" inteiro
+    # ate o fim da instrucao SQL - `split(")")` cortaria dentro de `now()`
+    update = bloco.split("UPDATE cartao.transacao SET", 1)[1].split(';"', 1)[0]
+    assert "categoria='Transfers'" in update
+    assert "descricao ILIKE" in update, "sem filtro de descricao varreria Transfers inteiro"
+    # e vai para a categoria de natureza transferencia
+    assert "categoria='Credit card payment'" in update

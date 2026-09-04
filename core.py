@@ -4703,6 +4703,63 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (55);")
             conn.commit()
 
+        if versao_atual < 56:
+            # Pagamento de fatura estava contando DUAS vezes.
+            #
+            # O movimento tem dois lados: no cartao chega como "Pagamento
+            # recebido" (categoria "Credit card payment", natureza
+            # `transferencia`, corretamente fora do resultado) e na conta
+            # corrente sai como "Pagamento de fatura" - mas esse lado estava em
+            # "Transfers", cuja natureza e `fluxo`. Em `fluxo` a DIRECAO decide,
+            # e saida de conta corrente vira DESPESA (secao 4.1).
+            #
+            # Resultado: as compras do cartao ja entram como despesa e o
+            # pagamento da fatura entrava de novo - exatamente o que a regra de
+            # ouro proibe ("pagamento de fatura de cartao nao e despesa, so
+            # troca a forma do patrimonio", secao 1.1).
+            #
+            # O recorte e estreito de proposito: SO quem esta em "Transfers" com
+            # descricao de pagamento de fatura. "Transfers" tem centenas de
+            # lancamentos e ali ha transferencia entre contas proprias misturada
+            # com movimento que e receita ou despesa de verdade - mexer no resto
+            # exige analise propria (secao 11.3).
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.classificacao_backup_v56 AS "
+                "SELECT transacao_id, account_id, categoria, categoria_manual, "
+                "conferida, now() AS backup_em FROM cartao.transacao "
+                "WHERE categoria = 'Transfers' AND descricao ILIKE %s;",
+                ("%pagamento de fatura%",),
+            )
+            cur.execute(
+                "UPDATE cartao.transacao SET categoria='Credit card payment', "
+                "categoria_manual=true, regra_aplicada_id=NULL, atualizado_em=now() "
+                "WHERE categoria='Transfers' AND descricao ILIKE %s;",
+                ("%pagamento de fatura%",),
+            )
+            movidos_v56 = max(cur.rowcount, 0)
+
+            # Regra para os proximos. Sem origem vinculada de proposito: o lado
+            # do CARTAO chega como "Pagamento recebido", entao este padrao so
+            # alcanca o lado da conta corrente, em qualquer banco.
+            cur.execute(
+                "INSERT INTO cartao.regra_classificacao (padrao, categoria, ordem) "
+                "SELECT 'Pagamento de fatura', 'Credit card payment', 100 "
+                "WHERE NOT EXISTS (SELECT 1 FROM cartao.regra_classificacao "
+                "WHERE lower(padrao)=lower('Pagamento de fatura'));"
+            )
+            regra_v56 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Pagamento de fatura deixa de contar duas vezes',"
+                "jsonb_build_object('versao',56,'lancamentos_movidos',%s,'regra_criada',%s,"
+                "'de','Transfers (fluxo, entrava como despesa)',"
+                "'para','Credit card payment (transferencia, fora do resultado)',"
+                "'backup','cartao.classificacao_backup_v56'));",
+                (movidos_v56, regra_v56),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (56);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
