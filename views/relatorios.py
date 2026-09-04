@@ -9,6 +9,7 @@ import psycopg2
 import psycopg2.extras
 from flask import Blueprint, Response, request, jsonify, render_template, session, redirect
 
+from extrato_unicred import eh_extrato, extrair_extrato
 from fatura_unicred import extrair_fatura, FaturaInvalida
 from fatura_ofx import (
     extrair_fatura as extrair_fatura_ofx,
@@ -1151,6 +1152,9 @@ def conciliar_fatura():
         # O formato vem do CONTEUDO, nunca da extensao: `accept` no navegador e
         # so uma dica e o nome do arquivo o usuario renomeia.
         formato_ofx = bool(pdf_bytes) and eh_ofx(pdf_bytes)
+        # Extrato de conta corrente e fatura de cartao sao os dois PDF da mesma
+        # cooperativa: so o conteudo distingue.
+        formato_extrato = bool(pdf_bytes) and not formato_ofx and eh_extrato(pdf_bytes)
         origem_arquivo = identificar_origem(pdf_bytes) if formato_ofx else {}
 
         if formato_ofx and origem_arquivo.get("conta_externa"):
@@ -1178,6 +1182,8 @@ def conciliar_fatura():
             try:
                 if formato_ofx:
                     fatura = extrair_fatura_ofx(io.BytesIO(pdf_bytes))
+                elif formato_extrato:
+                    fatura = extrair_extrato(io.BytesIO(pdf_bytes))
                 else:
                     fatura = extrair_fatura(io.BytesIO(pdf_bytes))
             except FaturaInvalida as exc:
@@ -1243,19 +1249,22 @@ def conciliar_fatura():
                 cur.execute(
                     "INSERT INTO cartao.fatura_importada "
                     "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por, "
-                    "periodo_inicio, periodo_fim, vencimento, pdf_arquivo, ciclo_do_arquivo) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "periodo_inicio, periodo_fim, vencimento, pdf_arquivo, ciclo_do_arquivo, "
+                    "tipo_documento) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (account_id, mes_referencia, ano_referencia) DO UPDATE SET "
                     "total=EXCLUDED.total, cartao_final4=EXCLUDED.cartao_final4, "
                     "arquivo_nome=EXCLUDED.arquivo_nome, importado_por=EXCLUDED.importado_por, importado_em=now(), "
                     "periodo_inicio=EXCLUDED.periodo_inicio, periodo_fim=EXCLUDED.periodo_fim, "
                     "vencimento=EXCLUDED.vencimento, pdf_arquivo=EXCLUDED.pdf_arquivo, "
-                    "ciclo_do_arquivo=EXCLUDED.ciclo_do_arquivo "
+                    "ciclo_do_arquivo=EXCLUDED.ciclo_do_arquivo, "
+                    "tipo_documento=EXCLUDED.tipo_documento "
                     "RETURNING id;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
                      fatura["cartao_final4"], arquivo.filename, session.get("user"),
                      periodo_inicio, periodo_fim, fatura["vencimento"],
-                     psycopg2.Binary(pdf_bytes), ciclo_do_arquivo),
+                     psycopg2.Binary(pdf_bytes), ciclo_do_arquivo,
+                     "extrato" if fatura.get("extrato") else "fatura"),
                 )
                 fatura_id = cur.fetchone()["id"]
                 # Reenviar o mesmo PDF (ex: corrigir algo, ou so pra recalcular
@@ -1298,6 +1307,20 @@ def conciliar_fatura():
                          anterior["conferida_fatura_por"] if anterior else None,
                          anterior["conferida_fatura_em"] if anterior else None),
                     )
+                # Compromissos: debitos JA AGENDADOS que o extrato lista a
+                # parte. Recriados a cada importacao, junto com as linhas.
+                cur.execute(
+                    "DELETE FROM cartao.extrato_compromisso WHERE fatura_id=%s;",
+                    (fatura_id,),
+                )
+                for compromisso in fatura.get("compromissos") or []:
+                    cur.execute(
+                        "INSERT INTO cartao.extrato_compromisso "
+                        "(fatura_id, data, descricao, valor) VALUES (%s,%s,%s,%s);",
+                        (fatura_id, compromisso["data"], compromisso["descricao"],
+                         compromisso["valor"]),
+                    )
+
                 # Casamento automatico roda aqui (POST), nao na abertura da
                 # tela: GET nao pode gravar - e assim o resultado para de mudar
                 # sozinho entre uma visita e outra.
@@ -1315,9 +1338,15 @@ def conciliar_fatura():
                 # A propria importacao conclui o regime de caixa. Assim uma
                 # compra total do Pluggy nunca espera outra acao manual para
                 # virar parcelas mensais oficiais.
-                resumo_parcelas = _sincronizar_parcelas_de_agregado(
-                    cur, session.get("user"), account_id=account_id
-                )
+                # Conta corrente nao tem parcelamento: o regime de caixa da
+                # secao 4.5 e uma regra de CARTAO, e roda-la sobre extrato
+                # marcaria lancamento como agregado sem nenhuma parcela para
+                # ocupar o lugar dele - o defeito da secao 6.6.
+                resumo_parcelas = {"agregados": 0, "parcelas": 0}
+                if not fatura.get("extrato"):
+                    resumo_parcelas = _sincronizar_parcelas_de_agregado(
+                        cur, session.get("user"), account_id=account_id
+                    )
                 # O OK da fatura vem DEPOIS das parcelas: e a sincronizacao que
                 # define quem e agregado (fora do resultado) e quem e a parcela
                 # que conta. Assinar antes marcaria o registro errado.
@@ -1418,10 +1447,31 @@ def conciliar_fatura():
             fatura_mais_nova = historico[pos - 1] if pos > 0 else None
             fatura_mais_antiga = historico[pos + 1] if pos + 1 < len(historico) else None
 
+    # Compromissos do extrato: debitos ja agendados pelo banco. Nao sao
+    # movimento do periodo e nao entram em nenhum total - a tela mostra a parte,
+    # para o dinheiro que ainda nao saiu nunca virar resultado (secao 1.1).
+    compromissos, tipo_documento = [], "fatura"
+    if fatura_id:
+        cur.execute(
+            "SELECT tipo_documento FROM cartao.fatura_importada WHERE id=%s;", (fatura_id,)
+        )
+        linha_tipo = cur.fetchone()
+        tipo_documento = (linha_tipo or {}).get("tipo_documento") or "fatura"
+        if tipo_documento == "extrato":
+            cur.execute(
+                "SELECT data, descricao, valor FROM cartao.extrato_compromisso "
+                "WHERE fatura_id=%s ORDER BY data, id;",
+                (fatura_id,),
+            )
+            compromissos = [dict(r) for r in cur.fetchall()]
+
     cur.close()
     conn.close()
     return render_template(
         "conciliar_fatura.html",
+        compromissos=compromissos,
+        total_compromissos=sum((c["valor"] for c in compromissos), Decimal("0")),
+        tipo_documento=tipo_documento,
         fatura_mais_nova=fatura_mais_nova,
         fatura_mais_antiga=fatura_mais_antiga,
         titulo="Conciliar fatura",

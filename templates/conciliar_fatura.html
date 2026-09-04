@@ -2,7 +2,7 @@
 {% block conteudo %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
-  Envie a fatura do cartão de crédito — o arquivo que o banco fornece, em <strong>PDF</strong> ou <strong>OFX</strong>
+  Envie a fatura do cartão de crédito ou o extrato da conta corrente — o arquivo que o banco fornece, em <strong>PDF</strong> ou <strong>OFX</strong>
   (Nubank e outros bancos) — e o sistema confere, lançamento a lançamento, se o que a operadora
   cobrou bate com o que o Pluggy sincronizou nessa conta. Por mais correto que o Pluggy costume
   ser, quem manda é a fatura — o valor pago precisa fechar 100%. Os lançamentos extraídos e o
@@ -152,6 +152,27 @@
       Pluggy gravou de uma vez só).
     </div>
   </div>
+
+  {% if compromissos %}
+    <div class="cat-breakdown" style="border-left:3px solid var(--neutro)">
+      <h3>Compromissos já agendados — {{ total_compromissos|abs|moeda }}</h3>
+      <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px;line-height:1.55">
+        Débitos que o banco já agendou e que <strong>ainda não aconteceram</strong>. Não entram em
+        nenhum total desta tela, nem no DRE, nem em relatório: são compromisso, não gasto.
+        Servem para você saber o que está por vir nesta conta.
+      </div>
+      <table class="compacta">
+        <thead><tr><th style="width:100px">Data</th><th>Descrição</th><th style="text-align:right;width:120px">Valor</th></tr></thead>
+        <tbody>
+          {% for c in compromissos %}
+          <tr><td style="white-space:nowrap">{{ c.data.strftime('%d/%m/%Y') }}</td>
+              <td>{{ c.descricao }}</td>
+              <td class="valor">{{ c.valor|moeda }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
 
   {% if resultado.repetidas_na_fatura %}
     <div class="cat-breakdown" style="border-left:3px solid var(--warn)">

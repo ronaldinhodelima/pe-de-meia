@@ -1714,3 +1714,31 @@ def test_ok_da_fatura_exige_as_tres_condicoes_e_nunca_desmarca():
     view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     for trecho in view.split("marcar_ok_automatico_da_fatura(cur")[1:]:
         assert "GET" not in trecho[:200]
+
+
+def test_extrato_entra_na_maquina_da_fatura_mas_marcado_como_extrato():
+    """Extrato NAO e fatura: nao tem vencimento, ciclo de cartao nem parcela.
+
+    Ele reusa a maquina de conciliacao porque ela sempre foi agnostica de
+    formato, mas `tipo_documento` diz o que o registro e - sem essa marca, uma
+    regra de cartao alcancaria o extrato em silencio.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+
+    assert "tipo_documento text NOT NULL DEFAULT 'fatura'" in core
+    assert "CREATE TABLE IF NOT EXISTS cartao.extrato_compromisso" in core
+
+    # o formato vem do CONTEUDO, nunca da extensao
+    assert "eh_extrato(pdf_bytes)" in view
+    assert "extrair_extrato(io.BytesIO(pdf_bytes))" in view
+
+    # regime de caixa e regra de CARTAO: sobre extrato marcaria agregado sem
+    # nenhuma parcela para ocupar o lugar (o defeito da secao 6.6)
+    trecho = view.split("_sincronizar_parcelas_de_agregado(", 1)[0][-500:]
+    assert 'if not fatura.get("extrato")' in trecho
+
+    # compromissos ficam FORA de fatura_linha: nao sao cobranca a conciliar
+    assert "INSERT INTO cartao.extrato_compromisso" in view
+    compromissos = view.split("Compromissos: debitos JA AGENDADOS", 1)[1][:600]
+    assert "fatura_linha" not in compromissos

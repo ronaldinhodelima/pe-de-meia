@@ -4964,6 +4964,46 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (58);")
             conn.commit()
 
+        if versao_atual < 59:
+            # O extrato de conta corrente entra na MESMA maquina de conciliacao
+            # da fatura (vinculo N:N, orfaos, "fecha 100%", OK automatico) - ela
+            # sempre foi agnostica de formato, so o extrator conhece o layout.
+            #
+            # Mas extrato NAO e fatura: nao tem vencimento, nao tem ciclo de
+            # cartao e nao tem parcelamento. `tipo_documento` diz o que o
+            # registro e, para que toda rotina especifica de cartao possa
+            # perguntar antes de rodar. Sem essa marca, uma regra futura de
+            # fatura alcancaria o extrato em silencio.
+            cur.execute(
+                "ALTER TABLE cartao.fatura_importada ADD COLUMN IF NOT EXISTS "
+                "tipo_documento text NOT NULL DEFAULT 'fatura';"
+            )
+            # Lancamentos futuros do extrato: debitos JA AGENDADOS pelo banco.
+            # Tabela propria porque nao sao movimento do periodo - contar
+            # dinheiro que ainda nao saiu inflaria o resultado (secao 1.1), e
+            # guarda-los em fatura_linha os faria virar cobranca a conciliar.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.extrato_compromisso ("
+                "id serial PRIMARY KEY, "
+                "fatura_id integer NOT NULL REFERENCES cartao.fatura_importada(id) "
+                "  ON DELETE CASCADE, "
+                "data date NOT NULL, "
+                "descricao text NOT NULL, "
+                "valor numeric(14,2) NOT NULL);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS extrato_compromisso_fatura_idx "
+                "ON cartao.extrato_compromisso (fatura_id, data);"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Extrato de conta corrente na conciliacao',"
+                "jsonb_build_object('versao',59,'coluna','fatura_importada.tipo_documento',"
+                "'tabela','cartao.extrato_compromisso'));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (59);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
