@@ -5275,7 +5275,7 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/relatorios" class="{cls("relatorios")}">Relatórios</a>' if pode("relatorios") else ""}
               {f'<a href="/dre" class="{cls("dre")}">DRE / Centro de Custos</a>' if pode("relatorios") else ""}
               {f'<a href="/investimentos" class="{cls("investimentos")}">Investimentos</a>' if pode("relatorios") else ""}
-              {f'<a href="/relatorios/conciliar-fatura" class="{cls("conciliar-fatura")}">Conciliar fatura (PDF)</a>' if pode("relatorios") else ""}
+              {f'<a href="/relatorios/conciliar-fatura" class="{cls("conciliar-fatura")}">Conciliar fatura</a>' if pode("relatorios") else ""}
               {f'<a href="/relatorios/duplicidades-fatura" class="{cls("duplicidades-fatura")}">Duplicidades da fatura</a>' if pode("relatorios") else ""}
               {f'<a href="/logs" class="{cls("logs")}">Logs</a>' if pode("usuarios") else ""}
             </div>
@@ -5289,7 +5289,7 @@ def topbar_html(titulo, ativo=None):
               {f'<a href="/dimensoes" class="{cls("dimensoes")}">Gerenciar dimensões</a>' if pode("cadastros") else ""}
               {f'<a href="/regras" class="{cls("regras")}">Regras automáticas</a>' if pode("cadastros") else ""}
               {f'<a href="/contas" class="{cls("contas")}">Configurações de Contas / Cartão</a>' if pode("cadastros") else ""}
-              {f'<a href="/configuracoes/faturas-pdf" class="{cls("faturas-pdf")}">Faturas em PDF</a>' if pode("cadastros") else ""}
+              {f'<a href="/configuracoes/faturas-pdf" class="{cls("faturas-pdf")}">Arquivos de fatura</a>' if pode("cadastros") else ""}
               {f'<a href="/usuarios" class="{cls("usuarios")}">Usuários e permissões</a>' if pode("usuarios") else ""}
             </div>
           </div>''' if (pode("cadastros") or pode("usuarios")) else ""}

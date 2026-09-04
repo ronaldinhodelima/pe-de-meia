@@ -1302,7 +1302,7 @@ def lancamentos_por_fatura():
             v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
             v["tecnico"] = not v["principal"]
             v["fonte"] = "F" if v["transacao_id"] == criado else "P"
-            v["fonte_nome"] = "Fatura em PDF" if v["fonte"] == "F" else "Pluggy"
+            v["fonte_nome"] = "Fatura importada" if v["fonte"] == "F" else "Pluggy"
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1

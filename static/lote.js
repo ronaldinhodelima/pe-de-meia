@@ -13,7 +13,7 @@
   function motivoRecusa(d) {
     if (d.rateio_invalido) return 'rateio incompleto';
     if (d.pendente_banco) return 'ainda pendente no banco';
-    if (d.sem_pdf_conciliado) return 'sem vínculo com a fatura em PDF';
+    if (d.sem_pdf_conciliado) return 'sem vínculo com a fatura importada';
     return 'faltam campos obrigatórios';
   }
 

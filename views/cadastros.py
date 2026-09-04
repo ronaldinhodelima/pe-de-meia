@@ -1343,8 +1343,8 @@ def faturas_pdf_view():
         )
         conn.commit()
         if anterior and cur.rowcount:
-            registrar_mudanca_auditoria("PDF da fatura", anterior["arquivo_nome"], None)
-            aviso = f'PDF "{anterior["arquivo_nome"]}" apagado. O histórico de conciliação continua disponível.'
+            registrar_mudanca_auditoria("Arquivo da fatura", anterior["arquivo_nome"], None)
+            aviso = f'Arquivo "{anterior["arquivo_nome"]}" apagado. O histórico de conciliação continua disponível.'
 
     contas_by_id, _ = carregar_origens(cur)
     cur.execute(
@@ -1364,8 +1364,8 @@ def faturas_pdf_view():
 
     return render_template(
         "faturas_pdf.html",
-        titulo="Faturas em PDF",
-        topbar=topbar_html("Faturas em PDF", "faturas-pdf"),
+        titulo="Arquivos de fatura",
+        topbar=topbar_html("Arquivos de fatura", "faturas-pdf"),
         aviso=aviso,
         faturas=faturas,
     )

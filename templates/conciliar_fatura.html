@@ -2,7 +2,7 @@
 {% block conteudo %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
-  Envie a fatura do cartão de crédito — <strong>PDF da Unicred</strong> ou <strong>OFX</strong>
+  Envie a fatura do cartão de crédito — o arquivo que o banco fornece, em <strong>PDF</strong> ou <strong>OFX</strong>
   (Nubank e outros bancos) — e o sistema confere, lançamento a lançamento, se o que a operadora
   cobrou bate com o que o Pluggy sincronizou nessa conta. Por mais correto que o Pluggy costume
   ser, quem manda é a fatura — o valor pago precisa fechar 100%. Os lançamentos extraídos e o
@@ -25,7 +25,7 @@
       </select>
     </div>
     <div>
-      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura (PDF ou OFX)</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura</label>
       <input type="file" name="fatura" accept=".pdf,.ofx,application/pdf,application/x-ofx" required
              style="padding:6px 0;font-size:var(--fonte-md)">
     </div>
@@ -45,7 +45,7 @@
   <div class="cat-breakdown">
     <h3>Faturas já importadas</h3>
     <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
-      Clique para reabrir a conciliação com o estado atual do sistema, sem reenviar o PDF.
+      Clique para reabrir a conciliação com o estado atual do sistema, sem reenviar o arquivo.
     </div>
     <table class="compacta"><thead><tr><th>Referência</th><th>Cartão</th><th style="text-align:right">Total</th><th>Importada em</th>
       <th>Início</th><th>Fim</th><th>Vencimento</th></tr></thead>
@@ -67,8 +67,8 @@
     <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:8px">
       Linha em verde com ✓ = a fatura fecha 100%: toda linha dela tem vínculo e nenhum lançamento
       do Pluggy sobrou no ciclo.
-      Essas datas vêm direto do PDF, não são editáveis aqui. O PDF original de cada fatura fica salvo e pode ser
-      baixado ou apagado em <a href="/configuracoes/faturas-pdf">Configurações → Faturas em PDF</a>.
+      Essas datas vêm direto da fatura, não são editáveis aqui. O arquivo original de cada fatura fica salvo e pode ser
+      baixado ou apagado em <a href="/configuracoes/faturas-pdf">Configurações → Arquivos de fatura</a>.
     </div>
   </div>
 {% endif %}
@@ -112,9 +112,9 @@
     <div class="cards" style="margin-top:12px">
       <div class="card"><div class="label" title="Referência da fatura">Referência</div>
         <div class="val">{{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}</div></div>
-      <div class="card"><div class="label" title="SALDO TOTAL impresso no PDF da fatura">Total impresso no PDF</div>
+      <div class="card"><div class="label" title="SALDO TOTAL impresso na fatura">Total impresso na fatura</div>
         <div class="val">{{ f.total|moeda }}</div></div>
-      <div class="card"><div class="label" title="Soma das linhas que o sistema leu do PDF (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura do PDF está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
+      <div class="card"><div class="label" title="Soma das linhas que o sistema leu da fatura (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura da fatura está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
         <div class="val" style="color:{{ 'var(--good)' if (resultado.soma_fatura - f.total)|abs < 0.01 else 'var(--bad)' }}">{{ resultado.soma_fatura|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas da fatura que já têm vínculo com um lançamento do Pluggy">Já vinculado ao Pluggy</div>
         <div class="val">{{ resultado.soma_vinculada|moeda }}</div></div>
@@ -122,7 +122,7 @@
         <div class="val" style="color:{{ 'var(--good)' if resultado.diferenca == 0 else 'var(--bad)' }}">{{ resultado.diferenca|moeda }}</div></div>
       <div class="card"><div class="label" title="Somente lançamentos deste ciclo classificados com natureza de despesa e contabilizados no DRE">Despesas no DRE</div>
         <div class="val">{{ resultado.despesas_dre|moeda }}</div></div>
-      <div class="card"><div class="label" title="Diferença explicável entre o PDF e o DRE: investimentos e outras naturezas que continuam conciliadas, mas não são despesas">Fora do DRE</div>
+      <div class="card"><div class="label" title="Diferença explicável entre a fatura e o DRE: investimentos e outras naturezas que continuam conciliadas, mas não são despesas">Fora do DRE</div>
         <div class="val">{{ resultado.fora_dre|moeda }}</div></div>
     </div>
     <div style="font-size:var(--fonte-sm);color:var(--ink-faint);margin-top:10px">
@@ -146,7 +146,7 @@
       {% endif %}
     </div>
     <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:6px">
-      A fatura em PDF é a autoridade. Cada linha dela guarda o vínculo com o lançamento que o Pluggy trouxe —
+      A fatura é a autoridade. Cada linha dela guarda o vínculo com o lançamento que o Pluggy trouxe —
       o vínculo fica salvo, então o resultado não muda sozinho de uma visita para outra. Vínculo feito por você
       nunca é desfeito pelo automático. Uma mesma transação pode atender várias linhas (parcelamento que o
       Pluggy gravou de uma vez só).

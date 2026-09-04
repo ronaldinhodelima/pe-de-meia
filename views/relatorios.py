@@ -1167,7 +1167,7 @@ def conciliar_fatura():
                 account_id = conhecida["account_id"]
 
         if not arquivo or not arquivo.filename:
-            erro = "Selecione o arquivo da fatura (PDF ou OFX)."
+            erro = "Selecione o arquivo da fatura."
         elif not account_id or account_id not in contas_by_id:
             erro = (
                 "Reconheci o arquivo como " + (origem_arquivo.get("banco") or "OFX")
@@ -1832,7 +1832,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
             item["motivo"] = (
                 f"Está no ciclo da fatura mais recente ({ultima['mes_referencia']:02d}/"
                 f"{ultima['ano_referencia']}). Compra perto do fechamento entra na fatura "
-                f"seguinte — deve se resolver quando o próximo PDF for importado."
+                f"seguinte — deve se resolver quando a próxima fatura for importada."
             )
             aguardando.append(item)
         else:
@@ -2612,7 +2612,7 @@ def baixar_fatura_pdf(fatura_id):
     cur.close()
     conn.close()
     if not row or not row["pdf_arquivo"]:
-        return "PDF não encontrado (pode ter sido apagado).", 404
+        return "Arquivo não encontrado (pode ter sido apagado).", 404
     # nome vem do arquivo enviado pelo usuario - tira aspas/controle antes de
     # colocar no header, pra nao dar pra escapar do filename="..."
     nome = re.sub(r'[\r\n"]', "", row["arquivo_nome"] or "") or f"fatura-{fatura_id}.pdf"

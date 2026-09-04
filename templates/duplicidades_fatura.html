@@ -2,7 +2,7 @@
 {% block conteudo %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
-  A fatura em PDF é a autoridade. Toda linha dela já tem a cobrança contabilizada — por um
+  A fatura é a autoridade. Toda linha dela já tem a cobrança contabilizada — por um
   lançamento casado com ela, ou pela parcela gerada a partir da própria fatura. Logo, o que o
   Pluggy trouxe e ficou <strong>sem vínculo com nenhuma linha de nenhuma fatura</strong> ou é
   cobrança repetida, ou é compra que ainda vai aparecer na fatura seguinte.
@@ -107,7 +107,7 @@
     <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Sem vínculo com nenhuma linha de fatura e sem padrão que permita concluir sozinho. Pode ser
       cobrança que a fatura daquele mês realmente não trouxe, parcelamento que o Pluggy
-      representou de outro jeito, ou duplicidade da operadora. Confira contra o PDF antes de marcar.
+      representou de outro jeito, ou duplicidade da operadora. Confira contra a fatura antes de marcar.
     </div>
     {{ tabela(revisar, pode_editar_duplicidades) }}
     {% if pode_editar_duplicidades %}
@@ -139,7 +139,7 @@
     </h3>
     <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Compras feitas perto do fechamento do último mês importado. A operadora lança na fatura
-      seguinte — devem sumir daqui sozinhas quando você importar o próximo PDF.
+      seguinte — devem sumir daqui sozinhas quando você importar a próxima fatura.
       <strong>Não são duplicidade</strong>, por isso não têm ação.
     </div>
     {{ tabela(aguardando, false) }}

@@ -1045,7 +1045,7 @@ function salvar(id, el, opcoes) {
           : d.pendente_banco
           ? 'Não foi possível confirmar: esse lançamento ainda está pendente no banco (pode mudar até a fatura fechar). Aguarde virar "Concluída" para marcar OK.'
           : d.sem_pdf_conciliado
-          ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura em PDF. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
+          ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura importada. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
       const s = document.getElementById('status-' + id);

@@ -93,7 +93,7 @@ def test_fatura_em_andamento_bloqueia_ok_e_preserva_edicao():
     assert "def _render_fatura_em_andamento" in view
     assert 'sem_pdf_conciliado = not bool(cur.fetchone()[0])' in view
     assert "faltando or rateio_invalido or pendente_banco or sem_pdf_conciliado" in view
-    assert "OK será liberado somente depois da importação e conciliação do PDF" in tela
+    assert "OK será liberado somente depois da importação e conciliação da fatura" in tela
     assert "not pode_conferir or fatura.em_andamento" in tela
     assert "fatura.value === 'andamento'" in js
     assert "andamento=1&amp;account_id={{ account_id }}" in tela

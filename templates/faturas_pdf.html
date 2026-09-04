@@ -2,15 +2,15 @@
 {% block conteudo %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px">
-  PDFs originais das faturas já conciliadas em <a href="/relatorios/conciliar-fatura">Conciliar fatura</a>.
+  arquivos originais das faturas já conciliadas em <a href="/relatorios/conciliar-fatura">Conciliar fatura</a>.
   Ficam salvos no próprio banco (não em disco, porque o app roda em container e pode ser
   reiniciado a qualquer deploy) — dá pra baixar de novo se precisar reprocessar, sem pedir o
-  arquivo outra vez. Apagar o PDF aqui não mexe no histórico de conciliação, só libera o espaço
+  arquivo outra vez. Apagar o arquivo aqui não mexe no histórico de conciliação, só libera o espaço
   do arquivo em si.
 </div>
 
 <div class="cat-breakdown">
-  <h3>Faturas com PDF salvo</h3>
+  <h3>Faturas com arquivo salvo</h3>
   <table class="compacta">
     <thead><tr>
       <th>Referência</th><th>Cartão</th><th>Arquivo</th><th>Tamanho</th><th>Importada em</th><th></th>
@@ -32,7 +32,7 @@
           <td style="white-space:nowrap">
             {% if f.pdf_tamanho %}
               <a class="ver-btn" href="/relatorios/fatura/{{ f.id }}/pdf" target="_blank">Baixar</a>
-              <form method="post" style="display:inline" onsubmit="return confirm('Apagar o PDF desta fatura? O histórico de conciliação continua disponível, só o arquivo some.')">
+              <form method="post" style="display:inline" onsubmit="return confirm('Apagar o arquivo desta fatura? O histórico de conciliação continua disponível, só o arquivo some.')">
                 <input type="hidden" name="acao" value="apagar_pdf">
                 <input type="hidden" name="fatura_id" value="{{ f.id }}">
                 <button type="submit" class="ver-btn">Apagar</button>
