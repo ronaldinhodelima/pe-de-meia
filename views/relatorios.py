@@ -3619,3 +3619,112 @@ def recalcular_ciclo_do_arquivo():
     finally:
         cur.close()
         conn.close()
+
+
+@bp.route("/api/diagnostico/casamento/<int:fatura_id>")
+@requer("cadastros")
+def api_diagnostico_casamento(fatura_id):
+    """Por que uma linha da fatura nao casou. Somente leitura.
+
+    Reproduz o MESMO recorte do casamento - a consulta de candidatos, a janela
+    do ciclo e a lista de transacoes bloqueadas - e devolve, para cada linha sem
+    vinculo, todos os candidatos com o veredito de cada filtro. Serve para parar
+    de adivinhar: sem isso a investigacao vira tentativa e erro em cima de dado
+    real, que foi o que aconteceu com a janela de datas.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("SELECT * FROM cartao.fatura_importada WHERE id = %s;", (fatura_id,))
+        fatura = cur.fetchone()
+        if not fatura:
+            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+
+        cur.execute(
+            "SELECT fl.id, fl.data, fl.descricao, fl.descricao_base, fl.parcela_atual, "
+            "fl.parcela_total, fl.valor, fl.titular FROM cartao.fatura_linha fl "
+            "WHERE fl.fatura_id = %s "
+            "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id) "
+            "ORDER BY fl.data;",
+            (fatura_id,),
+        )
+        pendentes = [dict(r) for r in cur.fetchall()]
+
+        ciclo_inicio = _ciclo_inicio(cur, fatura)
+        ciclo_fim_real = _ciclo_fim(fatura)
+        cur.execute(
+            "SELECT fl.data FROM cartao.fatura_linha fl WHERE fl.fatura_id = %s;",
+            (fatura_id,),
+        )
+        datas = [r["data"] for r in cur.fetchall()]
+        fim_busca = ciclo_fim_real or (max(datas) if datas else None)
+        if datas and fim_busca and fim_busca < max(datas):
+            fim_busca = max(datas)
+        if not datas or not fim_busca:
+            return jsonify({"ok": False, "erro": "Fatura sem linhas."}), 400
+        if ciclo_inicio is None or ciclo_inicio < fim_busca - timedelta(days=35):
+            ciclo_inicio = fim_busca - timedelta(days=35)
+
+        bloqueadas = _transacoes_vinculadas(cur, ignorar_fatura_id=fatura_id)
+        cur.execute(
+            f"SELECT t.transacao_id, t.descricao, "
+            f"COALESCE(t.valor_brl, t.valor_original) AS valor, "
+            f"({DATA_LOCAL_SQL})::date AS data_local "
+            f"FROM cartao.transacao t WHERE t.account_id = %s "
+            f"AND COALESCE(t.duplicada, false) = false "
+            f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
+            f"WHERE fl.transacao_id_criado = t.transacao_id) "
+            f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
+            (str(fatura["account_id"]), min(datas), fim_busca + timedelta(days=3)),
+        )
+        candidatos = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+
+        saida = []
+        for l in pendentes:
+            centavos_l = _centavos(l["valor"])
+            vistos = []
+            for c in candidatos:
+                if _centavos(c["valor"]) != centavos_l:
+                    continue
+                c_atual, c_total = _parcela_na_descricao(c["descricao"])
+                mesma_familia = bool(
+                    c_total and l["parcela_total"] and c_total == l["parcela_total"]
+                )
+                motivos = []
+                if str(c["transacao_id"]) in bloqueadas:
+                    motivos.append("já vinculado a outra fatura")
+                if not (ciclo_inicio <= c["data_local"] <= fim_busca):
+                    motivos.append(
+                        f"fora do ciclo {ciclo_inicio}..{fim_busca}"
+                    )
+                if (mesma_familia and c_atual and l["parcela_atual"]
+                        and c_atual != l["parcela_atual"]):
+                    motivos.append(f"parcela {c_atual} != {l['parcela_atual']}")
+                vistos.append({
+                    "transacao_id": str(c["transacao_id"]),
+                    "descricao": c["descricao"], "data": c["data_local"].isoformat(),
+                    "parcela_declarada": f"{c_atual}/{c_total}" if c_atual else None,
+                    "recusado_por": motivos or None,
+                })
+            saida.append({
+                "linha": l["descricao"], "data": l["data"].isoformat(),
+                "valor": float(l["valor"]),
+                "parcela": f"{l['parcela_atual']}/{l['parcela_total']}"
+                           if l["parcela_atual"] else None,
+                "candidatos_de_mesmo_valor": vistos,
+            })
+        return jsonify({
+            "ok": True,
+            "fatura": f"{fatura['mes_referencia']:02d}/{fatura['ano_referencia']}",
+            "ciclo_do_arquivo": bool(fatura.get("ciclo_do_arquivo")),
+            "janela": {"inicio": str(ciclo_inicio), "fim": str(fim_busca)},
+            "linhas_sem_vinculo": len(pendentes),
+            "detalhe": saida[:40],
+        })
+    except Exception as exc:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": False, "erro": f"Falhou: {exc}"}), 400
