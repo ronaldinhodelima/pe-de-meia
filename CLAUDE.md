@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 04/09/2026 · **Schema:** migração 55 · **Testes:** 314 aprovados, 6 ignorados
+**Última revisão:** 04/09/2026 · **Schema:** migração 55 · **Testes:** 319 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1337,20 +1337,39 @@ o arquivo quando ele informa, e só o PDF continua deduzindo.
 `POST /api/faturas/recalcular-ciclo-do-arquivo` relê o `DTSTART` do arquivo guardado em
 `pdf_arquivo` (18 ciclos corrigidos) — **não deduz**: se o arquivo não disser, a fatura fica como está.
 
-**PENDENTE, e é a raiz real.** Corrigir a janela **não** desfez os vínculos trocados. O matcher
-agrupa parcelamento por titular + lojista + nº de parcelas + **valor** (§6.5 nº 1), e dentro de um
-parcelamento todas as parcelas têm o mesmo valor — nada ali distingue a 4/10 da 5/10, só a data.
-**A correção certa é comparar `parcela_atual` quando os dois lados o informam**, e não seguir
-ajustando janela. Mexe no `_conciliar_linhas`, que a Unicred também usa — exige decisão do usuário.
+**O matcher compara o número da parcela** (aprovado pelo usuário em 04/09/2026). O agrupamento é
+por titular + lojista + nº de parcelas + **valor** (§6.5 nº 1), e dentro de um parcelamento todas
+as parcelas valem o mesmo — nada ali distingue a 4/10 da 5/10, só a data. `_parcela_na_descricao()`
+lê `Parc.9/12` (Unicred), `Parcela 5/10` e `5/10` (Nubank), e recusa `1/1` e número de cartão.
 
-Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **9 fecham 100%**,
-R$ 3.037,19 sem vínculo. As 8 de 2025 fecharam com 107 lançamentos criados pela fatura
-(R$ 8.178,18, §5 — o Pluggy não tem nada dessa conta antes de 09/2025). **O cartão Nubank Ronaldo
-ainda não tem nenhuma fatura importada.**
+**A recusa é estreita, e tem que continuar sendo: na dúvida a fatura decide.** Só rejeita quando o
+candidato declara parcela do **mesmo** parcelamento com número **diferente**. Candidato que não
+declara nada segue elegível — o agregado do Pluggy às vezes nem traz o número de parcelas, chegando
+a mostrar "Parcela: A vista" num parcelamento real (§6.5 nº 8).
+
+**Três correções de ciclo pareceram não fazer efeito porque o caminho que grava os vínculos nunca
+as enxergou.** A rota `vincular-automatico` carregava a fatura por **lista de colunas** e
+`ciclo_do_arquivo` não estava nela: `.get()` devolvia `None`, o ciclo caía de volta na dedução e a
+janela ficava um dia deslocada. **Consulta que carrega `periodo_inicio` tem que trazer
+`ciclo_do_arquivo`** — há teste cobrando isso. É a mesma classe do `account_id` ausente no item de
+órfão (§5): coluna que falta num `.get()` desliga a regra **sem erro nenhum**.
+
+`GET /api/diagnostico/casamento/<fatura_id>` foi o que achou isso, e é somente leitura: devolve,
+por linha sem vínculo, cada candidato de mesmo valor com o veredito de cada filtro. Foi ele que
+mostrou o candidato certo com `recusado_por: null` enquanto a linha seguia pendente — duas leituras
+da mesma fatura chegando a janelas diferentes. **Usar antes de mexer no matcher**, em vez de
+tentativa e erro sobre dado real.
+
+Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **16 fecham 100%**, restando
+R$ 1.018,50 sem vínculo (09/2025 R$ 819,26 · 05 e 07/2026 R$ 99,16 cada · 08/2026 R$ 0,92). As 8 de
+2025 fecharam com 107 lançamentos criados pela fatura (R$ 8.178,18, §5 — o Pluggy não tem nada
+dessa conta antes de 09/2025). **O DRE não se moveu em nenhuma etapa**: R$ 319.112,22 em 2025 e
+R$ 484.073,91 em 2026, do começo ao fim. **O cartão Nubank Ronaldo ainda não tem nenhuma fatura
+importada.**
 
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Comparar `parcela_atual` no matcher** (acima) e refazer os vínculos do Nubank.
+1. **Importar as faturas do Nubank Ronaldo** e conciliar, agora que o caminho está validado.
 2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
    vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos (PIX,
    transferência entre contas próprias, depósito em espécie).
