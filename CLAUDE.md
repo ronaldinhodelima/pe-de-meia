@@ -1208,12 +1208,12 @@ precisam de decisão caso a caso.
   tela antes de agir — os números mudam conforme o Pluggy traz categorias.
 - **Classificar o que não tem consenso**, caso a caso, principalmente pedágio, combustível e
   serviços digitais.
-- **LISCIA sem vínculo, julho/2026:** `Parcela Lojista Visa - LISCIA` R$ 107,50 em 12/06/2026. O
-  parcelamento LISCIA R$ 215,00 em 2× já está completo — Parc.1/2 cobrada em maio e Parc.2/2 em
-  junho, ambas vinculadas e contabilizadas. A fatura de julho **não tem linha de LISCIA**. É o
-  padrão das mensais tardias (dia 12): o Pluggy repetindo a Parc.2/2. A tela de duplicidades já o
-  classifica como "Parcela cobrada de novo" e oferece o vínculo — **falta só a decisão do
-  usuário**, porque marcação de duplicidade é dele (§1.3).
+- **LISCIA — resolvido em 04/09/2026.** `Parcela Lojista Visa - LISCIA` R$ 107,50 em 12/06/2026
+  era o Pluggy repetindo a Parc.2/2 do dia 11, padrão das mensais tardias (dia 12). O parcelamento
+  de R$ 215,00 em 2× já estava completo e a fatura de julho não tinha linha de LISCIA. Marcado
+  `substituido_por` apontando para a Parc.2/2, por decisão do usuário: despesa de 2026 caiu
+  R$ 107,50. **Não usar `duplicada`** — existe par identificável, então o estado certo é o que diz
+  qual registro conta (§4.3).
 
 ## 11.2-A Vínculos que ligam estabelecimentos diferentes (varredura de 01/09/2026)
 
