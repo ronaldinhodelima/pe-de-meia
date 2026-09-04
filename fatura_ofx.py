@@ -63,11 +63,11 @@ _PARCELA = re.compile(
 def _partir_parcela(memo):
     """Separa "LOJA X - Parcela 3/10" em ("LOJA X", 3, 10).
 
-    NAO foi validado contra uma fatura do Nubank COM parcelamento - o unico
-    arquivo real disponivel nao tinha nenhuma. Se o formato for outro, a
-    descricao inteira segue como `descricao_base` e a parcela fica nula, que e
-    o comportamento seguro: o parcelamento aparece como compra a vista e o
-    usuario corrige, em vez de o extrator inventar um numero de parcelas.
+    Formato confirmado na fatura 09/2026 do Nubank, com 16 parcelamentos:
+    "LOJA - Parcela N/M". Se vier outro formato, a descricao inteira segue como
+    `descricao_base` e a parcela fica nula - o parcelamento aparece como compra
+    a vista e o usuario corrige, em vez de o extrator inventar um numero de
+    parcelas e o regime de caixa distribuir errado pelos meses (secao 4.5).
     """
     texto = " ".join((memo or "").split())
     achado = _PARCELA.search(texto)
@@ -187,5 +187,9 @@ def extrair_fatura(arquivo):
         "vencimento": None,
         "periodo_inicio": periodo_inicio,
         "periodo_fim": periodo_fim,
+        # O arquivo INFORMA o ciclo. Quem le nao deve deduzi-lo pelo mes
+        # anterior: no Nubank duas faturas seguidas compartilham o dia da
+        # virada, e e nele que todas as parcelas do ciclo sao lancadas.
+        "ciclo_do_arquivo": True,
         "linhas": linhas,
     }

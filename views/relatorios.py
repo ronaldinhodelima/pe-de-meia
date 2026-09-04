@@ -926,6 +926,22 @@ def _ciclo_inicio_encadeado(cur, fatura_row):
     return fatura_row["periodo_inicio"]
 
 
+def _ciclo_inicio(cur, fatura_row):
+    """Inicio do ciclo, respeitando quem tem autoridade sobre ele.
+
+    Quando o ARQUIVO informa o periodo (OFX, em DTSTART), ele manda: e o proprio
+    banco dizendo onde o ciclo comeca. So o PDF da Unicred - que nao imprime
+    fechamento (secao 6.2) - precisa da deducao pelo mes anterior.
+
+    No Nubank duas faturas seguidas COMPARTILHAM o dia da virada, e e nesse dia
+    que todas as parcelas do ciclo sao lancadas. Deduzir "+1 dia" ali deixava as
+    parcelas fora da propria fatura e dentro da anterior.
+    """
+    if fatura_row.get("ciclo_do_arquivo") and fatura_row.get("periodo_inicio"):
+        return fatura_row["periodo_inicio"]
+    return _ciclo_inicio_encadeado(cur, fatura_row)
+
+
 def _estado_fatura(cur, fatura_row):
     """Retrato da fatura a partir dos VINCULOS gravados - nao por heuristica.
     A fatura e' a autoridade: cada linha dela aparece com os lancamentos que
@@ -965,7 +981,7 @@ def _estado_fatura(cur, fatura_row):
 
     # orfas: no ciclo desta fatura e sem vinculo com nenhuma fatura
     datas_linhas = [l["data"] for l in linhas]
-    periodo_inicio = _ciclo_inicio_encadeado(cur, fatura_row) or (min(datas_linhas) if datas_linhas else None)
+    periodo_inicio = _ciclo_inicio(cur, fatura_row) or (min(datas_linhas) if datas_linhas else None)
     periodo_fim = fatura_row["periodo_fim"] or (max(datas_linhas) if datas_linhas else None)
     if not periodo_inicio or not periodo_fim:
         # fatura sem linha nenhuma (nao deveria acontecer: o import recusa PDF
@@ -1068,7 +1084,7 @@ def _vincular_automatico(cur, fatura_row, usuario):
 
     resultado = _conciliar_linhas(
         cur, str(fatura_row["account_id"]), linhas, ids_por_linha, ids_por_linha,
-        _ciclo_inicio_encadeado(cur, fatura_row), transacoes_bloqueadas=bloqueadas,
+        _ciclo_inicio(cur, fatura_row), transacoes_bloqueadas=bloqueadas,
         ciclo_fim_real=fatura_row["periodo_fim"],
     )
 
@@ -1194,9 +1210,18 @@ def conciliar_fatura():
                     (account_id, fatura["ano_referencia"], fatura["mes_referencia"]),
                 )
                 fatura_anterior = cur.fetchone()
+                # Quando o arquivo INFORMA o ciclo (OFX/DTSTART), ele manda.
+                # A deducao pelo mes anterior existe so para o PDF da Unicred,
+                # que nao imprime fechamento (secao 6.2) - e no Nubank ela
+                # empurrava o inicio para depois do dia em que todas as parcelas
+                # do ciclo sao lancadas.
+                ciclo_do_arquivo = bool(fatura.get("ciclo_do_arquivo"))
                 periodo_inicio = (
-                    fatura_anterior["periodo_fim"] + timedelta(days=1)
-                    if fatura_anterior else fatura["periodo_inicio"]
+                    fatura["periodo_inicio"] if ciclo_do_arquivo
+                    else (
+                        fatura_anterior["periodo_fim"] + timedelta(days=1)
+                        if fatura_anterior else fatura["periodo_inicio"]
+                    )
                 )
 
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
@@ -1210,18 +1235,19 @@ def conciliar_fatura():
                 cur.execute(
                     "INSERT INTO cartao.fatura_importada "
                     "(account_id, mes_referencia, ano_referencia, total, cartao_final4, arquivo_nome, importado_por, "
-                    "periodo_inicio, periodo_fim, vencimento, pdf_arquivo) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "periodo_inicio, periodo_fim, vencimento, pdf_arquivo, ciclo_do_arquivo) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (account_id, mes_referencia, ano_referencia) DO UPDATE SET "
                     "total=EXCLUDED.total, cartao_final4=EXCLUDED.cartao_final4, "
                     "arquivo_nome=EXCLUDED.arquivo_nome, importado_por=EXCLUDED.importado_por, importado_em=now(), "
                     "periodo_inicio=EXCLUDED.periodo_inicio, periodo_fim=EXCLUDED.periodo_fim, "
-                    "vencimento=EXCLUDED.vencimento, pdf_arquivo=EXCLUDED.pdf_arquivo "
+                    "vencimento=EXCLUDED.vencimento, pdf_arquivo=EXCLUDED.pdf_arquivo, "
+                    "ciclo_do_arquivo=EXCLUDED.ciclo_do_arquivo "
                     "RETURNING id;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"], fatura["total"],
                      fatura["cartao_final4"], arquivo.filename, session.get("user"),
                      periodo_inicio, periodo_fim, fatura["vencimento"],
-                     psycopg2.Binary(pdf_bytes)),
+                     psycopg2.Binary(pdf_bytes), ciclo_do_arquivo),
                 )
                 fatura_id = cur.fetchone()["id"]
                 # Reenviar o mesmo PDF (ex: corrigir algo, ou so pra recalcular
@@ -1268,7 +1294,8 @@ def conciliar_fatura():
                 # tela: GET nao pode gravar - e assim o resultado para de mudar
                 # sozinho entre uma visita e outra.
                 cur.execute(
-                    "SELECT id, account_id, ano_referencia, mes_referencia, periodo_inicio, periodo_fim "
+                    "SELECT id, account_id, ano_referencia, mes_referencia, "
+                    "periodo_inicio, periodo_fim, ciclo_do_arquivo "
                     "FROM cartao.fatura_importada WHERE id = %s;",
                     (fatura_id,),
                 )
@@ -1336,11 +1363,12 @@ def conciliar_fatura():
         f"(SELECT COUNT(*) FROM cartao.transacao t WHERE t.account_id = f.account_id "
         f" AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
         f" AND COALESCE(t.somente_conciliacao,false) = false "
-        f" AND ({DATA_LOCAL_SQL})::date BETWEEN COALESCE(("
+        f" AND ({DATA_LOCAL_SQL})::date BETWEEN CASE WHEN f.ciclo_do_arquivo "
+        f"   THEN f.periodo_inicio ELSE COALESCE(("
         f"   SELECT ant.periodo_fim + 1 FROM cartao.fatura_importada ant "
         f"   WHERE ant.account_id = f.account_id AND ant.periodo_fim IS NOT NULL "
         f"   AND (ant.ano_referencia, ant.mes_referencia) < (f.ano_referencia, f.mes_referencia) "
-        f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) "
+        f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) END "
         f" AND f.periodo_fim "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
         f") AS orfaos "
@@ -1357,7 +1385,7 @@ def conciliar_fatura():
         historico.append({
             **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
-            "periodo_inicio": _ciclo_inicio_encadeado(cur, r),
+            "periodo_inicio": _ciclo_inicio(cur, r),
             "fecha_100": not r["linhas_sem_vinculo"] and not r["orfaos"],
         })
 

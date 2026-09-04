@@ -1524,3 +1524,35 @@ def test_orfao_carrega_a_conta_e_a_trava_dos_409_filtra_por_ela():
     assert "ini_janela <= quando <= fim_janela" in rota
     # na duvida, bloqueia: sem data dos dois lados o orfao conta como ameaca
     assert rota.index("ini_janela <= quando <= fim_janela") < rota.index("return True")
+
+
+def test_ciclo_informado_pelo_arquivo_nao_e_deduzido_pelo_mes_anterior():
+    """Secao 6.2 ao contrario: a deducao existe porque o PDF da Unicred NAO
+    imprime o fechamento. O OFX imprime.
+
+    No Nubank duas faturas seguidas compartilham o dia da virada, e e nesse dia
+    que todas as parcelas do ciclo sao lancadas. Deduzir "fim da anterior + 1"
+    ali deixava as parcelas fora da propria fatura e dentro da anterior - com o
+    valor batendo, porque parcelas do mesmo parcelamento tem sempre o mesmo
+    valor. O resultado eram vinculos apontando para a parcela errada.
+    """
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    ofx = (RAIZ / "fatura_ofx.py").read_text(encoding="utf-8")
+
+    assert '"ciclo_do_arquivo": True' in ofx, "o extrator OFX declara que informa o ciclo"
+
+    fn = codigo.split("def _ciclo_inicio(cur, fatura_row)", 1)[1].split("\ndef ", 1)[0]
+    assert 'fatura_row.get("ciclo_do_arquivo")' in fn
+    assert "return fatura_row[\"periodo_inicio\"]" in fn
+
+    # nenhum uso pode ter ficado no encadeamento direto: so _ciclo_inicio chama
+    chamadas = [
+        n for n, linha in enumerate(codigo.splitlines(), 1)
+        if "_ciclo_inicio_encadeado(cur," in linha and not linha.lstrip().startswith("def ")
+    ]
+    assert len(chamadas) == 1, (
+        f"_ciclo_inicio_encadeado deve ser chamado so por _ciclo_inicio; "
+        f"chamado nas linhas {chamadas}"
+    )
+    # e a contagem de orfaos em SQL segue a mesma regra
+    assert "CASE WHEN f.ciclo_do_arquivo " in codigo

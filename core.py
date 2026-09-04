@@ -4666,6 +4666,43 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (54);")
             conn.commit()
 
+        if versao_atual < 55:
+            # O ciclo veio do ARQUIVO ou foi deduzido?
+            #
+            # O PDF da Unicred nao imprime a data de fechamento (secao 6.2),
+            # entao o inicio do ciclo e' deduzido: fim da fatura anterior + 1
+            # dia. O OFX INFORMA o periodo em DTSTART/DTEND - e no Nubank duas
+            # faturas seguidas compartilham o dia da virada.
+            #
+            # Aplicar a deducao por cima da informacao empurrava o inicio um dia
+            # para frente e deixava de fora exatamente o dia em que o Nubank
+            # lanca TODAS as parcelas do ciclo. Efeito medido: as parcelas
+            # ficavam invisiveis para a propria fatura e eram capturadas pela
+            # fatura ANTERIOR, cujo intervalo ainda alcancava aquele dia - com o
+            # valor batendo, porque parcelas do mesmo parcelamento tem sempre o
+            # mesmo valor. Vinculos gravados apontando para a parcela errada.
+            cur.execute(
+                "ALTER TABLE cartao.fatura_importada "
+                "ADD COLUMN IF NOT EXISTS ciclo_do_arquivo boolean NOT NULL DEFAULT false;"
+            )
+            # As ja importadas por OFX passam a valer pelo proprio arquivo.
+            cur.execute(
+                "UPDATE cartao.fatura_importada SET ciclo_do_arquivo = true "
+                "WHERE arquivo_nome ILIKE %s AND COALESCE(ciclo_do_arquivo,false) = false;",
+                ("%.ofx",),
+            )
+            marcadas_v55 = max(cur.rowcount, 0)
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Ciclo informado pelo arquivo (OFX)',"
+                "jsonb_build_object('versao',55,'faturas_marcadas',%s,"
+                "'motivo','no Nubank duas faturas seguidas compartilham o dia da "
+                "virada, e a deducao do PDF excluia o dia das parcelas'));",
+                (marcadas_v55,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (55);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
