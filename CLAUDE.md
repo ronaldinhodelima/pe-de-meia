@@ -712,6 +712,14 @@ Travas: campo em `(não alterar)` não é tocado; observação só sobrescreve c
 um a um (§1.2); rateado fica fora (o pai não pode ser editado sem quebrar as partes); quem o
 servidor recusar é listado com o motivo. Na fatura em andamento o "marcar OK" nem aparece (§7.5).
 
+**Sair da barra também mora no núcleo**: o `×` no canto esquerdo do topo e o `Esc` chamam o mesmo
+`ligarFechar`, e ambos limpam a seleção — inclusive de linha que o filtro escondeu depois de
+marcada, que voltaria a entrar no próximo Salvar sem aparecer na tela. O `Esc` é o último da fila:
+não age com combobox aberto (o combobox dá `preventDefault`), com modal aberto, nem com foco em
+campo, porque nesses casos a tecla já pertence a outro. Ao fim de um Salvar **sem recusa** a seleção
+é limpa e a barra fica visível só para mostrar o resultado; **havendo recusa a seleção permanece**,
+porque ela é a lista de quem precisa de nova tentativa.
+
 O núcleo aplica **4 em paralelo** — uma de cada vez fica lento com o ano inteiro selecionado, e
 muitas de uma vez só enfileiram no processo único do Gunicorn (§2.2). Na Detalhada, depois de
 aplicar a tela **recarrega o estado real do servidor** em vez de inferir: é o servidor que decide
