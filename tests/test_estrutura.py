@@ -300,13 +300,20 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert "atualizarResumoPagina(novo && status && status.value === 'pendente_ok')" in js
     assert "if (ocultarAusentes)" in js
     assert "linha.remove()" in js
+    # Com a classificacao na propria linha, Titular e Parcela deixaram de ser
+    # colunas (viraram avatar e legenda dentro da descricao) e a coluna
+    # "Classificacao" deu lugar aos campos em si. Em troca da largura, perdeu-se
+    # a ordenacao por esses tres - e ganhou-se ordenar por Categoria e por cada
+    # dimensao, que antes nao existia.
     assert 'data-ordenar="data"' in template
-    assert 'data-ordenar="descricao"' in template
-    assert 'data-ordenar="titular"' in template
-    assert 'data-ordenar="parcela"' in template
+    assert 'data-ordenar="desc"' in template
     assert 'data-ordenar="valor"' in template
-    assert 'data-ordenar="classificacao"' in template
+    assert 'data-ordenar="cat"' in template
+    assert 'data-ordenar="dim_{{ d.id }}"' in template
     assert 'data-ordenar="ok"' in template
+    # e a ordenacao le por data-col, nunca por indice de celula
+    assert "linha.querySelector('[data-col=\"' + chave + '\"]')" in js
+    assert "celulas[1]" not in js
     assert "function ordenarFatura(cabecalho)" in js
     assert "corpo.appendChild(item.detalhe)" in js
 

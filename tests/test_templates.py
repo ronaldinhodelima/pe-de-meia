@@ -534,3 +534,17 @@ def test_setas_andam_por_fatura_so_com_um_cartao_que_tenha_fatura():
 
     # sem ciclos, o comportamento por mes segue intacto
     assert "if (ciclos.length && !document.getElementById('periodoAno').checked)" in js
+
+
+def test_busca_da_detalhada_nao_casa_com_opcao_nao_escolhida():
+    """Com a classificacao na linha, `textContent` traria TODAS as opcoes de
+    cada select - e toda linha casaria com quase qualquer termo. E o titular,
+    que virou avatar, so existe no tooltip: sem le-lo, buscar por 'Andrea'
+    deixaria de funcionar."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    fn = js.split("function textoPesquisavel(no)", 1)[1].split("\n  }", 1)[0]
+    assert "select.remove()" in fn, "as opcoes nao escolhidas saem do texto"
+    assert "select.options[select.selectedIndex]" in fn
+    assert "data-tip" in fn, "o titular do avatar continua pesquisavel"

@@ -31,22 +31,33 @@
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  // O texto de um <select> inclui TODAS as opcoes, nao a escolhida: com a
+  // classificacao dentro da linha, usar textContent cru faria toda linha casar
+  // com quase qualquer termo. Aqui os selects entram so pela opcao selecionada.
+  function textoPesquisavel(no) {
+    const clone = no.cloneNode(true);
+    clone.querySelectorAll('select').forEach(select => select.remove());
+    const partes = [clone.textContent || ''];
+    no.querySelectorAll('select').forEach(select => {
+      const opcao = select.options[select.selectedIndex];
+      if (opcao) partes.push(opcao.textContent || '');
+    });
+    no.querySelectorAll('input').forEach(input => {
+      if (!['checkbox', 'radio', 'hidden'].includes(input.type)) partes.push(input.value || '');
+    });
+    // O titular virou avatar: o nome so existe no tooltip, e continuar
+    // encontravel pela busca e o que torna a troca aceitavel.
+    no.querySelectorAll('[data-tip]').forEach(el => partes.push(el.dataset.tip || ''));
+    return partes.join(' ');
+  }
+
   function textoFiltravelDoGrupo(linha, detalhe) {
-    const partes = [linha.textContent || ''];
-    if (detalhe) {
-      const clone = detalhe.cloneNode(true);
-      clone.querySelectorAll('select').forEach(select => select.remove());
-      partes.push(clone.textContent || '');
-      detalhe.querySelectorAll('input').forEach(input => {
-        if (!['checkbox', 'radio', 'hidden'].includes(input.type)) partes.push(input.value || '');
-      });
-      detalhe.querySelectorAll('select').forEach(select => {
-        const opcao = select.options[select.selectedIndex];
-        if (opcao) partes.push(opcao.textContent || '');
-      });
-    }
+    const partes = [textoPesquisavel(linha)];
+    if (detalhe) partes.push(textoPesquisavel(detalhe));
     return normalizarBusca(partes.join(' '));
   }
+
+
 
   const buscaFatura = document.getElementById('buscaFatura');
   const contadorBusca = document.getElementById('buscaFaturaContador');
@@ -77,26 +88,27 @@
 
   const tabelaFatura = document.querySelector('.fatura-tabela');
   function valorOrdenacao(linha, chave) {
-    const celulas = linha.children;
+    // Le por data-col, nunca por indice de celula: a ordem das colunas mudou
+    // quando a classificacao veio para a linha, e indice fixo quebraria em
+    // silencio - a coluna certa passa a ser lida da errada.
+    const celula = linha.querySelector('[data-col="' + chave + '"]');
     if (chave === 'data') {
-      const partes = (celulas[1]?.textContent || '').trim().split('/').map(Number);
+      const partes = (celula?.textContent || '').trim().split('/').map(Number);
       return partes.length === 3 ? new Date(partes[2], partes[1] - 1, partes[0]).getTime() : 0;
     }
-    if (chave === 'descricao') return (celulas[2]?.textContent || '').trim();
-    if (chave === 'titular') return (celulas[3]?.textContent || '').trim();
-    if (chave === 'parcela') {
-      const texto = (celulas[4]?.textContent || '').trim();
-      const partes = texto.match(/(\d+)\s*\/\s*(\d+)/);
-      return partes ? Number(partes[1]) / Number(partes[2]) : 0;
-    }
     if (chave === 'valor') {
-      const texto = (celulas[5]?.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
+      const texto = (celula?.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
       return Number(texto) || 0;
     }
-    if (chave === 'classificacao') return (celulas[6]?.textContent || '').trim();
     if (chave === 'ok') return linha.querySelector('[data-ok-lancamento]')?.checked ? 1 : 0;
-    return '';
+    if (!celula) return '';
+    // Coluna de classificacao: ordena pelo rotulo escolhido, nao pelo id.
+    const escolha = celula.querySelector('select');
+    if (escolha) return (escolha.selectedOptions[0]?.textContent || '').trim();
+    return (celula.textContent || '').trim();
   }
+
+
 
   function ordenarFatura(cabecalho) {
     if (!tabelaFatura) return;
@@ -300,9 +312,16 @@
   }
 
   function atualizarAvisoClassificacao(editor) {
-    const detalhe = editor.closest('tr.vinculos-detalhe');
-    const linha = detalhe && detalhe.previousElementSibling;
-    const destino = linha && linha.querySelector('[data-classificacao]');
+    // O editor pode ser a PROPRIA linha (classificacao inline) ou o painel
+    // aberto abaixo dela. Nos dois casos o aviso mora na linha.
+    let destino = null;
+    if (editor.matches('tr[data-linha]')) {
+      destino = editor.querySelector('[data-classificacao]');
+    } else {
+      const detalhe = editor.closest('tr.vinculos-detalhe');
+      const linha = detalhe && detalhe.previousElementSibling;
+      destino = linha && linha.querySelector('[data-classificacao]');
+    }
     if (!destino) return;
 
     const faltando = [];
@@ -317,7 +336,7 @@
     if (faltando.length) {
       const aviso = document.createElement('span');
       aviso.className = 'estado';
-      aviso.style.color = '#9a6a12';
+      aviso.style.color = 'var(--warn)';
       aviso.textContent = 'Faltam: ' + faltando.join(', ');
       destino.replaceChildren(aviso);
     } else if (destino.textContent.trim().startsWith('Faltam:')) {
