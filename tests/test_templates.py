@@ -568,3 +568,26 @@ def test_seletor_de_fatura_oferece_meses_futuros_com_dados():
     assert "· Previsto" in template
     assert "fatura.previsto" in template
     assert "fatura.value.startsWith('futuro-')" in js
+
+
+def test_setas_da_detalhada_seguem_a_mesma_ordem_do_seletor():
+    """As setas paravam na fatura mais nova: o ciclo em andamento e os meses
+    previstos so eram alcancaveis pelo seletor. A URL de cada entrada e montada
+    NO SERVIDOR - em dois lugares, a navegacao discordaria de si mesma."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+
+    url = view.split("def _url_da_fatura", 1)[1].split("\ndef ", 1)[0]
+    assert 'startswith("futuro-")' in url and "andamento=1&mes=" in url
+    assert 'item.get("em_andamento")' in url
+    assert "fatura_id=" in url
+
+    # o template so consome a url pronta, nao remonta nada
+    assert '{{ fatura_antiga.url }}' in template
+    assert '{{ fatura_nova.url }}' in template
+    assert 'fatura_nova.em_andamento' not in template
+
+    # e as duas telas calculam vizinhas pela posicao na lista do seletor
+    assert view.count("_vizinhas_no_seletor(") == 3

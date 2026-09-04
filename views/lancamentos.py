@@ -797,6 +797,36 @@ def _candidatos_fatura_equivalentes(candidatos):
     return len(assinaturas) == 1
 
 
+def _url_da_fatura(item, account_id):
+    """Endereco de uma entrada do seletor - oficial, em andamento ou prevista.
+
+    Fica no servidor porque as setas < > e o seletor precisam da MESMA regra:
+    montada em dois lugares, a navegacao passaria a discordar de si mesma.
+    """
+    if str(item["id"]).startswith("futuro-"):
+        return (f"/lancamentos/fatura?andamento=1&mes={str(item['id'])[7:]}"
+                f"&account_id={account_id}")
+    if item.get("em_andamento"):
+        return f"/lancamentos/fatura?andamento=1&account_id={account_id}"
+    return f"/lancamentos/fatura?fatura_id={item['id']}"
+
+
+def _vizinhas_no_seletor(lista, id_atual):
+    """A seguinte e a anterior segundo a MESMA ordem do seletor.
+
+    A lista vem do mais futuro para o mais antigo, entao "seguinte" e o item
+    acima e "anterior" e o de baixo. Calcular por posicao, e nao por data,
+    mantem as setas coerentes com o que o seletor mostra.
+    """
+    ids = [str(item["id"]) for item in lista]
+    if str(id_atual) not in ids:
+        return None, None
+    pos = ids.index(str(id_atual))
+    seguinte = lista[pos - 1] if pos > 0 else None
+    anterior = lista[pos + 1] if pos + 1 < len(lista) else None
+    return seguinte, anterior
+
+
 def _meses_futuros_com_dados(cur, account_id, hoje):
     """Meses AINDA POR VIR que ja tem lancamento do Pluggy.
 
@@ -982,7 +1012,10 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     lista_faturas = [f for f in futuros if f["id"] != fatura["id"]]
     if mes_futuro:
         lista_faturas = [f if f["id"] != fatura["id"] else fatura for f in futuros]
-    lista_faturas = lista_faturas + [andamento] + list(oficiais)
+    lista_faturas = lista_faturas + [andamento] + [dict(o) for o in oficiais]
+    for item in lista_faturas:
+        item["url"] = _url_da_fatura(item, account_id)
+    seguinte, anterior = _vizinhas_no_seletor(lista_faturas, fatura["id"])
 
     config = {
         "pode_editar": pode("lancamentos_editar"), "pode_conferir": False,
@@ -994,7 +1027,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     return render_template(
         "lancamentos_fatura.html", titulo="Fatura em andamento",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
-        fatura_nova=None, fatura_antiga=oficiais[0] if oficiais else None,
+        fatura_nova=seguinte, fatura_antiga=anterior,
         faturas=lista_faturas, conta=contas_by_id.get(account_id),
         contas_credito=contas_credito, account_id=account_id, linhas=linhas_visiveis,
         categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
@@ -1112,20 +1145,21 @@ def lancamentos_por_fatura():
         "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;",
         (account_id,),
     )
-    faturas = cur.fetchall()
-    ids_faturas = [r["id"] for r in faturas]
-    pos = ids_faturas.index(fatura_id)
-    fatura_nova = faturas[pos - 1] if pos > 0 else None
-    fatura_antiga = faturas[pos + 1] if pos + 1 < len(faturas) else None
+    faturas = [dict(f) for f in cur.fetchall()]
     if faturas and faturas[0].get("periodo_fim"):
         prox_mes, prox_ano = faturas[0]["mes_referencia"] + 1, faturas[0]["ano_referencia"]
         if prox_mes == 13:
             prox_mes, prox_ano = 1, prox_ano + 1
-        provisoria = {"id": "andamento", "mes_referencia": prox_mes, "ano_referencia": prox_ano, "em_andamento": True}
-        if pos == 0:
-            fatura_nova = provisoria
+        provisoria = {"id": "andamento", "mes_referencia": prox_mes,
+                      "ano_referencia": prox_ano, "em_andamento": True}
         futuros = _meses_futuros_com_dados(cur, account_id, datetime.now(FUSO_LOCAL).date())
         faturas = futuros + [provisoria] + faturas
+    # As setas seguem a MESMA ordem do seletor, entao andam pelos meses
+    # previstos e pelo ciclo em andamento tambem - antes paravam na fatura mais
+    # nova e o resto so era alcancavel pelo seletor.
+    for item in faturas:
+        item["url"] = _url_da_fatura(item, account_id)
+    fatura_nova, fatura_antiga = _vizinhas_no_seletor(faturas, fatura_id)
 
     cur.execute(
         "SELECT fl.* FROM cartao.fatura_linha fl WHERE fl.fatura_id=%s "
