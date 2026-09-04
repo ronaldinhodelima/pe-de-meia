@@ -1742,3 +1742,15 @@ def test_extrato_entra_na_maquina_da_fatura_mas_marcado_como_extrato():
     assert "INSERT INTO cartao.extrato_compromisso" in view
     compromissos = view.split("Compromissos: debitos JA AGENDADOS", 1)[1][:600]
     assert "fatura_linha" not in compromissos
+
+
+def test_conciliacao_oferece_conta_corrente_e_nao_so_cartao():
+    """O extrato da conta corrente cumpre o mesmo papel da fatura (secao 5):
+    e o documento oficial contra o qual o Pluggy e conferido. Sem a conta na
+    lista, nao havia como importar o extrato."""
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "conciliar_fatura.html").read_text(encoding="utf-8")
+    assert 'contas_by_id[o[0]]["tipo"] in ("CREDIT", "BANK")' in view
+    # a conta "manual" (dinheiro) fica fora: nao existe documento de banco dela
+    assert '"MANUAL"' not in view.split("contas_com_documento = [", 1)[1][:200]
+    assert "Conta ou cartão (origem)" in template

@@ -16,16 +16,16 @@
   {% if pode_editar_conciliacao %}
   <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
-      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Cartão (origem)</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Conta ou cartão (origem)</label>
       <select name="account_id" required style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);min-width:260px">
         <option value="">selecione…</option>
-        {% for aid, curto, completo, _, _ in contas_credito %}
+        {% for aid, curto, completo, _, _ in contas_com_documento %}
           <option value="{{ aid }}" {{ 'selected' if aid == account_id }}>{{ completo }}</option>
         {% endfor %}
       </select>
     </div>
     <div>
-      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura</label>
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura ou do extrato</label>
       <input type="file" name="fatura" accept=".pdf,.ofx,application/pdf,application/x-ofx" required
              style="padding:6px 0;font-size:var(--fonte-md)">
     </div>

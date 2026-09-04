@@ -1131,7 +1131,13 @@ def conciliar_fatura():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     contas_by_id, origem_opcoes = carregar_origens(cur)
-    contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
+    # Cartao E conta corrente: o extrato da conta corrente cumpre aqui o mesmo
+    # papel que a fatura no cartao - e o documento oficial contra o qual o
+    # Pluggy e conferido (secao 5). A conta "manual" (dinheiro) fica fora: nao
+    # existe documento de banco para ela.
+    contas_com_documento = [
+        o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] in ("CREDIT", "BANK")
+    ]
     cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     categorias = sorted(
@@ -1476,7 +1482,7 @@ def conciliar_fatura():
         fatura_mais_antiga=fatura_mais_antiga,
         titulo="Conciliar fatura",
         topbar=topbar_html("Conciliar fatura", "conciliar-fatura"),
-        contas_credito=contas_credito,
+        contas_com_documento=contas_com_documento,
         categorias=categorias_template,
         account_id=account_id,
         erro=erro,
