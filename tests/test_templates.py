@@ -560,7 +560,7 @@ def test_seletor_de_fatura_oferece_meses_futuros_com_dados():
     js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
     fn = view.split("def _meses_futuros_com_dados", 1)[1].split("\ndef ", 1)[0]
-    assert ")::date > %s" in fn, "so meses ainda por vir"
+    assert "'YYYY-MM') > %s" in fn, "do mes seguinte em diante, nao de amanha"
     assert "COALESCE(t.duplicada,false)=false" in fn
     assert "somente_conciliacao" in fn
     # e um ciclo PREVISTO, nao uma fatura: a janela e o mes civil

@@ -805,13 +805,16 @@ def _meses_futuros_com_dados(cur, account_id, hoje):
     intervalo fechamento-vencimento varia (secao 6.2) e projeta-lo seria
     palpite, entao a janela e o mes civil.
     """
+    # A partir do mes SEGUINTE, nao de amanha: o resto do mes corrente pertence
+    # ao ciclo em andamento, e listar "Setembro · Previsto" ao lado de
+    # "Setembro · Em andamento" poe o mesmo mes duas vezes no seletor.
     cur.execute(
         f"SELECT DISTINCT to_char({DATA_LOCAL_SQL}, 'YYYY-MM') AS mes "
         "FROM cartao.transacao t WHERE t.account_id=%s "
-        f"AND ({DATA_LOCAL_SQL})::date > %s "
+        f"AND to_char({DATA_LOCAL_SQL}, 'YYYY-MM') > %s "
         "AND COALESCE(t.duplicada,false)=false AND t.substituido_por IS NULL "
         "AND COALESCE(t.somente_conciliacao,false)=false ORDER BY 1 DESC;",
-        (account_id, hoje),
+        (account_id, hoje.strftime("%Y-%m")),
     )
     return [
         {"id": "futuro-" + r["mes"], "mes_referencia": int(r["mes"][5:]),
@@ -842,7 +845,11 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         fim = date(ano + (mes == 12), (mes % 12) + 1, 1) - timedelta(days=1)
     else:
         inicio = ultima["periodo_fim"] + timedelta(days=1)
-        fim = hoje
+        # Ate o fim do mes corrente, e nao ate hoje: o que o Pluggy ja entregou
+        # com data nos proximos dias tambem pertence a este ciclo, e sem isso
+        # ficava invisivel - nem aqui, nem nos meses previstos, que comecam no
+        # mes seguinte.
+        fim = date(hoje.year + (hoje.month == 12), (hoje.month % 12) + 1, 1) - timedelta(days=1)
         mes = ultima["mes_referencia"] + 1
         ano = ultima["ano_referencia"]
         if mes == 13:
