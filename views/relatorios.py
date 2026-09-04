@@ -942,6 +942,24 @@ def _ciclo_inicio(cur, fatura_row):
     return _ciclo_inicio_encadeado(cur, fatura_row)
 
 
+def _ciclo_fim(fatura_row):
+    """Ultimo dia que pertence a ESTA fatura.
+
+    Quando o arquivo informa o ciclo, o fim e' EXCLUSIVO: no Nubank o `DTEND` de
+    uma fatura e o `DTSTART` da seguinte, e e no DTSTART que o banco lanca todas
+    as parcelas do ciclo. Sem excluir o ultimo dia, as duas faturas disputam
+    esse dia - e a mais antiga, que roda primeiro, leva as parcelas que sao da
+    mais nova. Foi assim que 'Vestebem - Parcela 4/10' ficou ligada ao
+    lancamento da parcela 5/10.
+
+    No PDF da Unicred nao ha essa sobreposicao: o fim continua inclusivo.
+    """
+    fim = fatura_row.get("periodo_fim")
+    if fim and fatura_row.get("ciclo_do_arquivo"):
+        return fim - timedelta(days=1)
+    return fim
+
+
 def _estado_fatura(cur, fatura_row):
     """Retrato da fatura a partir dos VINCULOS gravados - nao por heuristica.
     A fatura e' a autoridade: cada linha dela aparece com os lancamentos que
@@ -982,7 +1000,7 @@ def _estado_fatura(cur, fatura_row):
     # orfas: no ciclo desta fatura e sem vinculo com nenhuma fatura
     datas_linhas = [l["data"] for l in linhas]
     periodo_inicio = _ciclo_inicio(cur, fatura_row) or (min(datas_linhas) if datas_linhas else None)
-    periodo_fim = fatura_row["periodo_fim"] or (max(datas_linhas) if datas_linhas else None)
+    periodo_fim = _ciclo_fim(fatura_row) or (max(datas_linhas) if datas_linhas else None)
     if not periodo_inicio or not periodo_fim:
         # fatura sem linha nenhuma (nao deveria acontecer: o import recusa PDF
         # sem lancamento) - sem ciclo nao da pra dizer o que e' orfao
@@ -1085,7 +1103,7 @@ def _vincular_automatico(cur, fatura_row, usuario):
     resultado = _conciliar_linhas(
         cur, str(fatura_row["account_id"]), linhas, ids_por_linha, ids_por_linha,
         _ciclo_inicio(cur, fatura_row), transacoes_bloqueadas=bloqueadas,
-        ciclo_fim_real=fatura_row["periodo_fim"],
+        ciclo_fim_real=_ciclo_fim(fatura_row),
     )
 
     criados = 0
@@ -1369,7 +1387,7 @@ def conciliar_fatura():
         f"   WHERE ant.account_id = f.account_id AND ant.periodo_fim IS NOT NULL "
         f"   AND (ant.ano_referencia, ant.mes_referencia) < (f.ano_referencia, f.mes_referencia) "
         f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) END "
-        f" AND f.periodo_fim "
+        f" AND CASE WHEN f.ciclo_do_arquivo THEN f.periodo_fim - 1 ELSE f.periodo_fim END "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
         f") AS orfaos "
         f"FROM cartao.fatura_importada f "

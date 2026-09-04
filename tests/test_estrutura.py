@@ -1557,3 +1557,23 @@ def test_ciclo_informado_pelo_arquivo_nao_e_deduzido_pelo_mes_anterior():
     )
     # e a contagem de orfaos em SQL segue a mesma regra
     assert "CASE WHEN f.ciclo_do_arquivo " in codigo
+
+
+def test_fim_do_ciclo_e_exclusivo_quando_o_arquivo_informa():
+    """No Nubank o DTEND de uma fatura e o DTSTART da seguinte, e e no DTSTART
+    que o banco lanca TODAS as parcelas do ciclo.
+
+    Sem excluir o ultimo dia as duas faturas disputam esse dia, e a mais antiga
+    - que roda primeiro no vinculo automatico - leva as parcelas que sao da mais
+    nova. Foi assim que "Vestebem - Parcela 4/10" ficou ligada ao lancamento da
+    parcela 5/10. No PDF da Unicred nao ha sobreposicao e o fim segue inclusivo.
+    """
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    fn = codigo.split("def _ciclo_fim(fatura_row)", 1)[1].split("\ndef ", 1)[0]
+    assert 'fatura_row.get("ciclo_do_arquivo")' in fn
+    assert "timedelta(days=1)" in fn
+    # nenhum consumidor pode ter ficado com o periodo_fim cru
+    assert 'ciclo_fim_real=fatura_row["periodo_fim"]' not in codigo
+    assert 'periodo_fim = fatura_row["periodo_fim"] or' not in codigo
+    # e a contagem de orfaos em SQL segue a mesma regra
+    assert "THEN f.periodo_fim - 1 ELSE f.periodo_fim END" in codigo
