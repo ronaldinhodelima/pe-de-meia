@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 03/09/2026 · **Schema:** migração 53 · **Testes:** 298 aprovados, 6 ignorados
+**Última revisão:** 04/09/2026 · **Schema:** migração 55 · **Testes:** 314 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1305,11 +1305,52 @@ Pendente de decisão do usuário.
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
 
+## 11.3-A Fatura em OFX e o cartão Nubank (03–04/09/2026)
+
+**O OFX é melhor que o PDF para conciliar.** `fatura_ofx.py` devolve o mesmo formato do extrator da
+Unicred — toda a máquina (`fatura_importada`, `fatura_linha`, `fatura_vinculo`, N:N, regime de
+caixa, "fecha 100%") já era agnóstica de formato; só o extrator era específico. O despachante
+escolhe pelo **conteúdo** do arquivo, nunca pela extensão.
+
+Vantagens medidas contra 20 arquivos reais: o ciclo vem explícito em `DTSTART`/`DTEND` (na Unicred
+a data de fechamento não é impressa, §6.2), cada linha tem `FITID`, e não há extração por posição
+— `Soma das linhas` bateu com o `LEDGERBAL` em 19 das 20 faturas, com R$ 0,01 numa delas.
+
+**Origem aprendida, nunca adivinhada.** O OFX traz `ORG`/`FID` (banco) e `ACCTID` (conta **no
+banco**). O `ACCTID` do Nubank **não é** o `account_id` do Pluggy — conferido contra as 7 contas,
+nenhuma bate. Na primeira importação de cada cartão o usuário escolhe e a ligação fica em
+`cartao.fatura_origem_externa` (migração 54). **Adivinhar por banco não serve: há duas contas
+Nubank e a fatura de um titular iria para o outro.**
+
+**O Nubank data toda parcela no dia da virada do ciclo**, e duas faturas seguidas **compartilham**
+esse dia (`DTEND` de uma = `DTSTART` da outra). Isso é o oposto da Unicred, onde a data impressa
+numa parcela é a da compra original (§6.5 nº 13).
+
+**Consequência que custou caro:** a dedução "fim da fatura anterior + 1 dia" — que existe só porque
+o PDF da Unicred não imprime fechamento — empurrava o início para depois do dia das parcelas. Elas
+ficavam invisíveis para a própria fatura e eram capturadas pela **anterior**, cujo intervalo ainda
+as alcançava. Como parcelas do mesmo parcelamento têm sempre o mesmo valor, o casamento aceitava:
+`Vestebem - Parcela 4/10` ficou ligada ao lançamento da parcela **5/10**.
+
+Migração 55 marca `fatura_importada.ciclo_do_arquivo`; `_ciclo_inicio()` e `_ciclo_fim()` respeitam
+o arquivo quando ele informa, e só o PDF continua deduzindo.
+`POST /api/faturas/recalcular-ciclo-do-arquivo` relê o `DTSTART` do arquivo guardado em
+`pdf_arquivo` (18 ciclos corrigidos) — **não deduz**: se o arquivo não disser, a fatura fica como está.
+
+**PENDENTE, e é a raiz real.** Corrigir a janela **não** desfez os vínculos trocados. O matcher
+agrupa parcelamento por titular + lojista + nº de parcelas + **valor** (§6.5 nº 1), e dentro de um
+parcelamento todas as parcelas têm o mesmo valor — nada ali distingue a 4/10 da 5/10, só a data.
+**A correção certa é comparar `parcela_atual` quando os dois lados o informam**, e não seguir
+ajustando janela. Mexe no `_conciliar_linhas`, que a Unicred também usa — exige decisão do usuário.
+
+Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **9 fecham 100%**,
+R$ 3.037,19 sem vínculo. As 8 de 2025 fecharam com 107 lançamentos criados pela fatura
+(R$ 8.178,18, §5 — o Pluggy não tem nada dessa conta antes de 09/2025). **O cartão Nubank Ronaldo
+ainda não tem nenhuma fatura importada.**
+
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Cartão Nubank.** Avaliar se os mesmos fenômenos existem (parcelamento agregado, eco
-   pending→posted, cobrança só na fatura). O parser de PDF é específico da Unicred — se o Nubank
-   for conciliado por fatura, precisa de parser próprio; se não, a hierarquia de fontes muda.
+1. **Comparar `parcela_atual` no matcher** (acima) e refazer os vínculos do Nubank.
 2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
    vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos (PIX,
    transferência entre contas próprias, depósito em espécie).
@@ -1356,3 +1397,5 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 51 | eco de 3h: mesma cobrança contando duas vezes no DRE (§6.7); `eco_backup_v51` |
 | 52 | decisões do usuário sobre lojistas divergentes de 2026 (§8.4); `classificacao_backup_v52` |
 | 53 | o único `duplicada` vira `substituido_por` (§4.3); `duplicada_backup_v53` |
+| 54 | `fatura_origem_externa`: de qual cartão daqui é o arquivo do banco (§11.3-A) |
+| 55 | `ciclo_do_arquivo`: o período informado pelo OFX manda sobre o deduzido (§11.3-A) |
