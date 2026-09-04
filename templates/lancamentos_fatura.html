@@ -122,6 +122,7 @@
 {% if pode_editar %}
 <div id="barraLote" class="barra-lote" hidden aria-live="polite">
   <div class="barra-lote-topo">
+    <button type="button" class="barra-lote-fechar" id="loteFechar" aria-label="Fechar a seleção" data-tip="Fecha e limpa a seleção (Esc)">&times;</button>
     <strong id="loteContagem">0 selecionados</strong>
     <span class="barra-lote-ajuda">Campo deixado em <em>(não alterar)</em> não é tocado.</span>
     <button type="button" class="ver-btn" id="loteSelecao">Selecionar tudo do filtro</button>
@@ -229,4 +230,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260901-1"></script><script src="/static/lancamentos_fatura.js?v=20260901-lote3"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260904-1"></script>{% endblock %}

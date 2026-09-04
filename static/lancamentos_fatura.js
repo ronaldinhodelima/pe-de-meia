@@ -475,13 +475,31 @@
     function atualizar() {
       atualizarBotaoSelecao();
       const n = marcados().length;
-      barra.hidden = n === 0;
-      contagem.textContent = n === 1 ? '1 lançamento selecionado'
+      // Igual a Resumida: a barra sobrevive a limpeza da selecao enquanto
+      // estiver mostrando o resultado da ultima aplicacao.
+      barra.hidden = n === 0 && barra.dataset.resultado !== '1';
+      contagem.textContent = n === 0 ? 'Nenhum lançamento selecionado'
+                           : n === 1 ? '1 lançamento selecionado'
                                      : n + ' lançamentos selecionados';
     }
 
+    // Todas, nao so as visiveis: a pesquisa esconde grupos inteiros.
+    function desmarcarTudo() {
+      document.querySelectorAll('tr[data-linha] .sel-fatura').forEach(cb => { cb.checked = false; });
+    }
+    function fecharBarra() {
+      desmarcarTudo();
+      saida.hidden = true;
+      barra.dataset.resultado = '';
+      atualizar();
+    }
+    window.pdmLote.ligarFechar(barra, fecharBarra);
+
     document.addEventListener('change', evento => {
-      if (evento.target.classList && evento.target.classList.contains('sel-fatura')) atualizar();
+      if (evento.target.classList && evento.target.classList.contains('sel-fatura')) {
+        barra.dataset.resultado = '';
+        atualizar();
+      }
     });
     // Um botao so, como na Resumida: seleciona tudo do filtro e, com tudo
     // marcado, vira "Limpar selecao".
@@ -501,7 +519,7 @@
     if (btnSelecao) btnSelecao.addEventListener('click', () => {
       const marcar = !tudoMarcado();
       selecionaveis().forEach(cb => { cb.checked = marcar; });
-      if (!marcar) saida.hidden = true;
+      if (!marcar) { saida.hidden = true; barra.dataset.resultado = ''; }
       atualizar();
     });
 
@@ -554,9 +572,16 @@
       // que e quem decide "Faltam:", natureza e OK de cada linha.
       await atualizarResumoPagina(false);
       btnSalvar.disabled = false;
+      // Sem recusa, limpa a selecao (a barra fica, com o resultado). Com
+      // recusa, mantem: e a lista de quem precisa de nova tentativa.
+      if (!r.falhas.length) {
+        barra.dataset.resultado = '1';
+        desmarcarTudo();
+      }
+      atualizar();
+      saida.hidden = false;
       saida.textContent = r.texto;
       saida.className = 'barra-lote-resultado' + (r.falhas.length ? ' com-falha' : '');
-      atualizar();
     });
 
     atualizar();

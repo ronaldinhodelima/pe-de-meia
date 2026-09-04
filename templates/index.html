@@ -140,6 +140,7 @@
 {% if pode_editar %}
 <div id="barraLote" class="barra-lote" hidden aria-live="polite">
   <div class="barra-lote-topo">
+    <button type="button" class="barra-lote-fechar" id="loteFechar" aria-label="Fechar a seleção" data-tip="Fecha e limpa a seleção (Esc)">&times;</button>
     <strong id="loteContagem">0 selecionados</strong>
     <span class="barra-lote-ajuda">Campo deixado em <em>(não alterar)</em> não é tocado.</span>
     <button type="button" class="ver-btn" id="loteSelecao">Selecionar tudo do filtro</button>
@@ -288,7 +289,7 @@
     </div>
     <details id="modalInfoSistema" class="detalhes-tecnicos" hidden>
       <summary>Informações internas do sistema</summary>
-      <div id="modalObservacaoSistema" class="nota-sistema" style="margin-top:8px"></div>
+      <div id="modalObservacaoSistema" class="nota-sistema"></div>
     </details>
     <div class="row">
       <span>Conferida</span>
@@ -318,6 +319,6 @@
 {# lancamentos.js le estes dois blocos em vez de receber o dado interpolado #}
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
-<script src="/static/lote.js?v=20260901-1"></script>
-<script src="/static/lancamentos.js?v=20260902-4"></script>
+<script src="/static/lote.js?v=20260904-1"></script>
+<script src="/static/lancamentos.js?v=20260904-1"></script>
 {% endblock %}

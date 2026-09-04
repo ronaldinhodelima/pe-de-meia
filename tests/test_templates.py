@@ -424,6 +424,36 @@ class TestEdicaoEmLote:
             assert "conferida = false" not in trecho, js
             assert "confirmar_desmarcacao" not in trecho, js
 
+    def test_sair_da_barra_e_uma_regra_so_para_as_duas_telas(self):
+        """Esc e o "x" fecham em qualquer uma das telas, pelo mesmo codigo.
+
+        Se cada tela escrevesse o proprio Escape, a segunda divergiria da
+        primeira - e o motivo de o nucleo existir.
+        """
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        nucleo = self.nucleo()
+        assert "ligarFechar" in nucleo
+        assert "e.key !== 'Escape'" in nucleo
+        for tela in ("index.html", "lancamentos_fatura.html"):
+            html = (raiz / "templates" / tela).read_text(encoding="utf-8")
+            assert 'class="barra-lote-fechar"' in html, tela
+        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / js).read_text(encoding="utf-8")
+            assert "window.pdmLote.ligarFechar" in texto, js
+            trecho = texto.split("Edicao em lote", 1)[-1]
+            assert "Escape" not in trecho, js + ": Escape do lote mora no nucleo"
+
+    def test_salvar_limpa_a_selecao_mas_nao_quando_houve_recusa(self):
+        """Com recusa, a selecao e a lista de quem precisa de nova tentativa."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / js).read_text(encoding="utf-8")
+            trecho = texto.split("Edicao em lote", 1)[-1]
+            assert "if (!r.falhas.length) {" in trecho, js
+            assert "desmarcarTudo();" in trecho, js
+
     def test_lote_nao_sobrescreve_observacao_sem_intencao(self):
         """A observacao pertence ao usuario (secao 7.3)."""
         nucleo = self.nucleo()

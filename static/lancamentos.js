@@ -1109,8 +1109,12 @@ atualizarBotaoDetalhado();
   function atualizarBarra() {
     atualizarBotaoSelecao();
     const n = selecionados().length;
-    barra.hidden = n === 0;
-    contagem.textContent = n === 1 ? '1 lançamento selecionado' : n + ' lançamentos selecionados';
+    // Depois de aplicar, a selecao e limpa mas a barra fica: e nela que mora o
+    // resultado ("9 de 9 atualizados"), que sumiria junto com a barra.
+    barra.hidden = n === 0 && barra.dataset.resultado !== '1';
+    contagem.textContent = n === 0 ? 'Nenhum lançamento selecionado'
+                         : n === 1 ? '1 lançamento selecionado'
+                                   : n + ' lançamentos selecionados';
     const total = linhasSelecionaveis().length;
     if (todos) {
       todos.checked = n > 0 && n === total;
@@ -1118,8 +1122,25 @@ atualizarBotaoDetalhado();
     }
   }
 
+  // Desmarca TODAS as linhas, nao so as visiveis: uma linha selecionada que o
+  // filtro escondeu depois continuaria marcada, invisivel, e voltaria a entrar
+  // no proximo "Salvar".
+  function desmarcarTudo() {
+    tabela.querySelectorAll('tbody tr[data-id] .sel-check').forEach(cb => { cb.checked = false; });
+  }
+  function fecharBarra() {
+    desmarcarTudo();
+    saida.hidden = true;
+    barra.dataset.resultado = '';
+    atualizarBarra();
+  }
+  window.pdmLote.ligarFechar(barra, fecharBarra);
+
   document.addEventListener('change', function (e) {
-    if (e.target.classList && e.target.classList.contains('sel-check')) atualizarBarra();
+    if (e.target.classList && e.target.classList.contains('sel-check')) {
+      barra.dataset.resultado = '';
+      atualizarBarra();
+    }
   });
   if (todos) {
     todos.addEventListener('change', function () {
@@ -1147,7 +1168,7 @@ atualizarBotaoDetalhado();
     btnSelecao.addEventListener('click', function () {
       const marcar = !tudoMarcado();
       linhasSelecionaveis().forEach(cb => { cb.checked = marcar; });
-      if (!marcar) saida.hidden = true;
+      if (!marcar) { saida.hidden = true; barra.dataset.resultado = ''; }
       atualizarBarra();
     });
   }
@@ -1198,6 +1219,15 @@ atualizarBotaoDetalhado();
       },
     });
     btnSalvar.disabled = false;
+    // Aplicado sem recusa: a selecao ja cumpriu o papel e limpar evita que o
+    // proximo campo escolhido caia sem querer nas mesmas linhas. Havendo
+    // recusa, a selecao FICA - o usuario precisa dela para tentar de novo.
+    if (!r.falhas.length) {
+      barra.dataset.resultado = '1';
+      desmarcarTudo();
+      atualizarBarra();
+    }
+    saida.hidden = false;
     saida.textContent = r.texto;
     saida.className = 'barra-lote-resultado' + (r.falhas.length ? ' com-falha' : '');
   });

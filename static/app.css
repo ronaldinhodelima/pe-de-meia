@@ -494,6 +494,19 @@
      simbolo que o combobox desenha, para os dois campos combinarem. */
   .modal-select-nativo { position: relative; display: inline-flex; align-items: center; }
   .modal-select-nativo::after { content: '\2304'; position: absolute; right: 5px; top: 45%; transform: translateY(-50%); color: var(--ink-faint); font-size: var(--fonte-xs); pointer-events: none; }
+  /* Sem regra propria, <summary> e a nota herdavam o 16px do navegador e
+     ficavam maiores que o titulo dos campos ao lado - a informacao menos
+     importante do modal com a maior letra da tela. */
+  .modal .detalhes-tecnicos { font-size: var(--fonte-sm); }
+  .modal .detalhes-tecnicos > summary {
+    cursor: pointer; color: var(--ink-faint); font-size: var(--fonte-sm);
+    font-weight: var(--peso-normal); list-style-position: outside;
+  }
+  .modal .detalhes-tecnicos > summary:hover { color: var(--ink); }
+  .modal .nota-sistema {
+    margin-top: 6px; color: var(--ink-soft); font-size: var(--fonte-sm);
+    line-height: 1.45; white-space: pre-wrap;
+  }
   .modal-conferencia { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .modal-conferencia select { min-width: 78px; }
   .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: 20px; line-height: 1; transition: color .15s; }
@@ -702,6 +715,16 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
   margin-bottom: 8px; font-size: var(--fonte-md);
 }
 .barra-lote-topo strong { font-weight: var(--peso-medio); color: var(--accent-strong); }
+/* Fica no canto esquerdo, antes da contagem: e a saida da barra, o mesmo papel
+   do "x" do modal. Nao usa cor de acento - fechar nao e a acao principal. */
+.barra-lote-fechar {
+  width: 20px; height: 20px; padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--radius-xs); background: transparent;
+  color: var(--ink-faint); font-size: var(--fonte-lg); line-height: 1; cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+.barra-lote-fechar:hover { background: var(--selecao-suave); color: var(--ink); }
 .barra-lote-ajuda { color: var(--ink-faint); font-size: var(--fonte-sm); }
 .barra-lote-topo #loteSelecao { margin-left: auto; }
 .barra-lote-campos { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }

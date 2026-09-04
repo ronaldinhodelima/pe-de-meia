@@ -72,5 +72,25 @@
     return {aplicados: aplicados, falhas: falhas, texto: texto};
   }
 
-  window.pdmLote = {aplicar: aplicar};
+  // Sair da barra e o mesmo comportamento nas duas telas, entao mora aqui pelo
+  // mesmo motivo que `aplicar`: duas copias divergem na primeira regra nova.
+  // `fechar` limpa a selecao; a barra some por consequencia disso.
+  function ligarFechar(barra, fechar) {
+    const botao = barra.querySelector('.barra-lote-fechar');
+    if (botao) botao.addEventListener('click', fechar);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || barra.hidden) return;
+      // Esc ja pertence a quem esta em foco: combobox cancela a lista (e chama
+      // preventDefault), a busca da fatura limpa o campo, o modal fecha. A
+      // barra e o ultimo da fila - so age quando ninguem mais tratou.
+      if (e.defaultPrevented) return;
+      if (document.querySelector('.modal-bg.show')) return;
+      const alvo = e.target;
+      if (alvo && alvo.closest && alvo.closest('input, select, textarea, .pdm-combobox')) return;
+      fechar();
+    });
+  }
+
+  window.pdmLote = {aplicar: aplicar, ligarFechar: ligarFechar};
 })();
