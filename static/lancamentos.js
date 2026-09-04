@@ -254,7 +254,51 @@ function alternarPeriodoIntervalo() {
 }
 // avanca/retrocede um mes no filtro. Usa Date pra virar o ano sozinho
 // (dezembro -> janeiro do ano seguinte) em vez de somar no numero do mes.
+// Ciclo de fatura que contem a data informada, ou o mais proximo dela.
+function ciclosDaFatura() {
+  return (window.configLancamentos || {}).ciclos_fatura || [];
+}
+function indiceCicloAtual(ciclos) {
+  const inicio = document.getElementById('dataInicioInput');
+  const fim = document.getElementById('dataFimInput');
+  if (inicio && inicio.value) {
+    const exato = ciclos.findIndex(c => c.inicio === inicio.value && c.fim === (fim ? fim.value : ''));
+    if (exato >= 0) return exato;
+    const dentro = ciclos.findIndex(c => c.inicio <= inicio.value && inicio.value <= c.fim);
+    if (dentro >= 0) return dentro;
+  }
+  // Sem intervalo aplicado ainda: parte do mes aberto e cai no ciclo que o
+  // contem - assim a primeira seta ja anda uma fatura, e nao um mes.
+  const campo = document.getElementById('mesInput');
+  const referencia = (campo && campo.value ? campo.value : '') + '-15';
+  const dentro = ciclos.findIndex(c => c.inicio <= referencia && referencia <= c.fim);
+  if (dentro >= 0) return dentro;
+  return ciclos.length - 1;
+}
+function irParaCiclo(ciclo) {
+  document.getElementById('periodoIntervalo').checked = true;
+  document.getElementById('periodoAno').checked = false;
+  document.getElementById('dataInicioInput').value = ciclo.inicio;
+  document.getElementById('dataFimInput').value = ciclo.fim;
+  // alternarPeriodoIntervalo() ja navega sozinha; chamar as duas faria duas
+  // navegacoes e a primeira iria com as datas do ciclo anterior.
+  document.getElementById('intervaloWrap').style.display = 'flex';
+  aplicarFiltros(true);
+}
+
 function mudarMes(delta) {
+  // Com UMA origem de cartao que tenha fatura importada, as setas andam por
+  // FATURA - o mesmo passo da Detalhada. O servidor so manda ciclos nesse caso;
+  // nos demais (varias origens, conta corrente, cartao sem PDF) a lista vem
+  // vazia e o comportamento por mes continua igual.
+  const ciclos = ciclosDaFatura();
+  if (ciclos.length && !document.getElementById('periodoAno').checked) {
+    const atual = indiceCicloAtual(ciclos);
+    const alvo = atual + delta;
+    if (alvo >= 0 && alvo < ciclos.length) { irParaCiclo(ciclos[alvo]); return; }
+    // Antes da primeira ou depois da ultima fatura nao ha ciclo: segue por mes,
+    // em vez de travar a navegacao numa ponta.
+  }
   const campo = document.getElementById('mesInput');
   const partes = (campo.value || '').split('-').map(Number);
   if (partes.length !== 2 || !partes[0] || !partes[1]) return;

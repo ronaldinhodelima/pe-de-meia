@@ -1540,12 +1540,17 @@ def test_ciclo_informado_pelo_arquivo_nao_e_deduzido_pelo_mes_anterior():
     valor batendo, porque parcelas do mesmo parcelamento tem sempre o mesmo
     valor. O resultado eram vinculos apontando para a parcela errada.
     """
-    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    # os helpers de ciclo moraram em views/relatorios.py ate serem
+    # compartilhados: a tela de Lancamentos tambem precisa deles, e view nao
+    # importa de view. Agora vivem no core; as chamadas continuam sendo varridas
+    # nos dois arquivos.
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    codigo = core + (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     ofx = (RAIZ / "fatura_ofx.py").read_text(encoding="utf-8")
 
     assert '"ciclo_do_arquivo": True' in ofx, "o extrator OFX declara que informa o ciclo"
 
-    fn = codigo.split("def _ciclo_inicio(cur, fatura_row)", 1)[1].split("\ndef ", 1)[0]
+    fn = core.split("def _ciclo_inicio(cur, fatura_row)", 1)[1].split("\ndef ", 1)[0]
     assert 'fatura_row.get("ciclo_do_arquivo")' in fn
     assert "return fatura_row[\"periodo_inicio\"]" in fn
 
@@ -1571,8 +1576,9 @@ def test_fim_do_ciclo_e_exclusivo_quando_o_arquivo_informa():
     nova. Foi assim que "Vestebem - Parcela 4/10" ficou ligada ao lancamento da
     parcela 5/10. No PDF da Unicred nao ha sobreposicao e o fim segue inclusivo.
     """
-    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
-    fn = codigo.split("def _ciclo_fim(fatura_row)", 1)[1].split("\ndef ", 1)[0]
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    codigo = core + (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    fn = core.split("def _ciclo_fim(fatura_row)", 1)[1].split("\ndef ", 1)[0]
     assert 'fatura_row.get("ciclo_do_arquivo")' in fn
     assert "timedelta(days=1)" in fn
     # nenhum consumidor pode ter ficado com o periodo_fim cru

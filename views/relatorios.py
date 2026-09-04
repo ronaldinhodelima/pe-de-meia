@@ -50,6 +50,9 @@ from core import (
     aplicar_consenso_classificacao,
     _normalizar_desc,
     _tokens_significativos,
+    _ciclo_fim,
+    _ciclo_inicio,
+    _ciclo_inicio_encadeado,
     exige_dimensoes,
     _canonizar_v45,
     _consenso_por_categoria,
@@ -944,62 +947,6 @@ def _parcela_na_descricao(descricao):
         if 2 <= total <= 99 and 1 <= atual <= total:
             achado = (atual, total)
     return achado
-
-
-def _ciclo_inicio_encadeado(cur, fatura_row):
-    """Inicio real do ciclo = fim da fatura do mes anterior + 1 dia, calculado
-    na LEITURA e nao congelado no import.
-
-    Congelar no import tornava o resultado dependente da ORDEM em que os PDFs
-    foram enviados: quem mandasse da fatura mais nova para a mais antiga ficava
-    com todas no palpite generico de 35 dias, porque a anterior ainda nao
-    existia no banco na hora. Aconteceu de verdade com as faturas de 2025.
-    Calculando aqui, a ordem de envio deixa de importar."""
-    cur.execute(
-        "SELECT periodo_fim FROM cartao.fatura_importada "
-        "WHERE account_id = %s AND (ano_referencia, mes_referencia) < (%s, %s) "
-        "AND periodo_fim IS NOT NULL "
-        "ORDER BY ano_referencia DESC, mes_referencia DESC LIMIT 1;",
-        (fatura_row["account_id"], fatura_row["ano_referencia"], fatura_row["mes_referencia"]),
-    )
-    anterior = cur.fetchone()
-    if anterior and anterior["periodo_fim"]:
-        return anterior["periodo_fim"] + timedelta(days=1)
-    return fatura_row["periodo_inicio"]
-
-
-def _ciclo_inicio(cur, fatura_row):
-    """Inicio do ciclo, respeitando quem tem autoridade sobre ele.
-
-    Quando o ARQUIVO informa o periodo (OFX, em DTSTART), ele manda: e o proprio
-    banco dizendo onde o ciclo comeca. So o PDF da Unicred - que nao imprime
-    fechamento (secao 6.2) - precisa da deducao pelo mes anterior.
-
-    No Nubank duas faturas seguidas COMPARTILHAM o dia da virada, e e nesse dia
-    que todas as parcelas do ciclo sao lancadas. Deduzir "+1 dia" ali deixava as
-    parcelas fora da propria fatura e dentro da anterior.
-    """
-    if fatura_row.get("ciclo_do_arquivo") and fatura_row.get("periodo_inicio"):
-        return fatura_row["periodo_inicio"]
-    return _ciclo_inicio_encadeado(cur, fatura_row)
-
-
-def _ciclo_fim(fatura_row):
-    """Ultimo dia que pertence a ESTA fatura.
-
-    Quando o arquivo informa o ciclo, o fim e' EXCLUSIVO: no Nubank o `DTEND` de
-    uma fatura e o `DTSTART` da seguinte, e e no DTSTART que o banco lanca todas
-    as parcelas do ciclo. Sem excluir o ultimo dia, as duas faturas disputam
-    esse dia - e a mais antiga, que roda primeiro, leva as parcelas que sao da
-    mais nova. Foi assim que 'Vestebem - Parcela 4/10' ficou ligada ao
-    lancamento da parcela 5/10.
-
-    No PDF da Unicred nao ha essa sobreposicao: o fim continua inclusivo.
-    """
-    fim = fatura_row.get("periodo_fim")
-    if fim and fatura_row.get("ciclo_do_arquivo"):
-        return fim - timedelta(days=1)
-    return fim
 
 
 def _estado_fatura(cur, fatura_row):

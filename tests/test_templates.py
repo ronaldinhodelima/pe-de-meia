@@ -515,3 +515,22 @@ def test_bloqueio_de_ok_por_falta_de_pdf_tem_mensagem_propria():
         assert "Conciliar fatura" in js, (
             f"{arquivo} precisa dizer ONDE resolver, nao so que esta bloqueado"
         )
+
+
+def test_setas_andam_por_fatura_so_com_um_cartao_que_tenha_fatura():
+    """Com varias origens nao existe 'a fatura'; sem PDF/OFX o ciclo seria
+    palpite. Nos dois casos as setas continuam andando por mes."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+    bloco = view.split("Ciclos de fatura da origem selecionada", 1)[1].split("config_lancamentos", 1)[0]
+    assert 'len(origem_sel) == 1' in bloco
+    assert '"tipo") == "CREDIT"' in bloco
+    assert "periodo_fim IS NOT NULL" in bloco
+    # a coluna que decide quem manda no ciclo tem que vir junto (secao 11.3-A)
+    assert "ciclo_do_arquivo" in bloco
+
+    # sem ciclos, o comportamento por mes segue intacto
+    assert "if (ciclos.length && !document.getElementById('periodoAno').checked)" in js

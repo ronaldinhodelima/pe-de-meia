@@ -24,6 +24,9 @@ from core import (
     NATUREZA_SQL,
     VAL_DESPESA,
     aplicar_regras,
+    MESES_ABREV,
+    _ciclo_fim,
+    _ciclo_inicio,
     carregar_origens,
     rotulo_valor_dimensao,
     cat_pt,
@@ -414,6 +417,37 @@ def index():
                 for tecnico_id, alvos in destinos.items() if len(alvos) == 1
             }
 
+    # Ciclos de fatura da origem selecionada, para as setas < > andarem por
+    # fatura em vez de por mes - o mesmo passo da Detalhada.
+    #
+    # So quando ha EXATAMENTE uma origem marcada e ela e cartao COM fatura
+    # importada. Com varias origens nao existe "a fatura"; sem PDF/OFX o ciclo
+    # seria palpite, e o periodo mostrado deixaria de ser o ciclo real.
+    ciclos_fatura = []
+    if len(origem_sel) == 1 and contas_by_id.get(origem_sel[0], {}).get("tipo") == "CREDIT":
+        cur.execute(
+            "SELECT id, ano_referencia, mes_referencia, account_id, "
+            # ciclo_do_arquivo decide quem manda no inicio e no fim (secao 11.3-A):
+            # sem ela na consulta, o .get() devolveria None e o ciclo cairia na
+            # deducao, desligando a regra sem erro nenhum.
+            "periodo_inicio, periodo_fim, ciclo_do_arquivo "
+            "FROM cartao.fatura_importada WHERE account_id = %s "
+            "AND periodo_fim IS NOT NULL "
+            "ORDER BY ano_referencia, mes_referencia;",
+            (origem_sel[0],),
+        )
+        for fatura in cur.fetchall():
+            inicio = _ciclo_inicio(cur, fatura)
+            fim = _ciclo_fim(fatura)
+            if not inicio or not fim:
+                continue
+            ciclos_fatura.append({
+                "id": fatura["id"],
+                "rotulo": f'{MESES_ABREV[fatura["mes_referencia"] - 1]}/{str(fatura["ano_referencia"])[2:]}',
+                "inicio": inicio.strftime("%Y-%m-%d"),
+                "fim": fim.strftime("%Y-%m-%d"),
+            })
+
     cur.close()
     conn.close()
 
@@ -643,7 +677,9 @@ def index():
     gasto_real = resumo["gasto_real"] or 0
     receita_mes = resumo["receita_mes"] or 0
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
+
     config_lancamentos = {
+        "ciclos_fatura": ciclos_fatura,
         "pode_editar": pode_editar,
         "pode_conferir": pode_conferir,
         "origens_credito": [
