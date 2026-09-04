@@ -858,7 +858,9 @@ números do DRE ficaram com o verde e o vermelho antigos depois do redesenho, e 
 | Marca (botão primário, foco, link) | `--accent`, `--accent-strong`, `--accent-soft` |
 | Seleção e hover | `--selecao`, `--selecao-forte`, `--selecao-suave`, `--selecao-simbolo` |
 | Semântica | `--good`, `--bad`, `--warn`, `--neutro` (+ `-soft`) |
-| Superfície | `--bg`, `--surface`, `--raise`, `--line` |
+| Superfície | `--bg`, `--surface`, `--raise`, `--line`, `--modal-fundo` |
+| Sobre fundo colorido | `--sobre-cor` (texto/símbolo em botão ou selo colorido), `--selo-neutro` |
+| Campo | `--campo-sombra`, `--campo-sombra-forte`, `--campo-linha-hover`, `--campo-linha-invalida`, `--campo-linha-invalida-forte`, `--campo-sombra-invalida` |
 | Texto | `--ink`, `--ink-soft`, `--ink-faint` |
 | Escala de texto | `--fonte-xxs` a `--fonte-lg` (10 a 14px) |
 | Raio | `--radius-xxs` a `--radius-lg`, `--radius-pill` |
@@ -899,8 +901,9 @@ chegaram a **fixar o formato errado** como esperado — teste que copia o compor
 cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
-fora do sistema. Eram 522 em 01/09/2026; hoje são 53, e o que restou é intenção (círculos `50%`,
-fio de cabelo `1px`, títulos grandes, branco sobre botão colorido, o painel navy do login).
+fora do sistema. Eram 522 em 01/09/2026; hoje são **38**, e o grosso do que restou são os títulos
+de 15px para cima — cada um ainda um valor cru, à espera da escala de títulos — mais o que é
+intenção (círculos `50%`, fio de cabelo `1px`, o painel navy do login).
 `test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
 folgado**, pedindo para abaixá-lo — o número só pode cair.
 
@@ -1200,10 +1203,6 @@ precisam de decisão caso a caso.
 
 ## 11.2 Pendências que dependem do usuário
 
-- **Rotar o token do Coolify.** Foi colado no chat em 21/08/2026 e deve ser considerado
-  comprometido. Gerar novo em Coolify → Keys & Tokens e revogar o antigo. **Aconteceu de novo em
-  01/09/2026**, outro token colado em texto puro no chat para investigar um deploy travado — mesma
-  regra se aplica, esse também precisa ser rotacionado.
 - **Revisar `/pendencias`.** Categoria sem natureza assume `despesa` e pode inflar o DRE. Abrir a
   tela antes de agir — os números mudam conforme o Pluggy traz categorias.
 - **Classificar o que não tem consenso**, caso a caso, principalmente pedágio, combustível e

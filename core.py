@@ -469,7 +469,7 @@ BANCOS_ESTILO = {
 def selo_banco_html(banco, tipo=None):
     """Selo colorido do banco. Para a conta manual usa um selo neutro."""
     if tipo == "MANUAL":
-        return '<span class="selo" style="background:#5c6672">R$</span>'
+        return '<span class="selo" style="background:var(--selo-neutro)">R$</span>'
     estilo = BANCOS_ESTILO.get(banco)
     if estilo:
         cor, sigla = estilo[0], estilo[1]

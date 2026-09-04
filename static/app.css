@@ -50,6 +50,16 @@
     --fonte-sm: 12px;
     --fonte-md: 13px;
     --fonte-lg: 14px;
+    /* Desenhado SOBRE fundo colorido (botao primario, botao de perigo, selo):
+       nao acompanha o tema, porque o fundo ja e escuro nos dois. */
+    --sobre-cor: #fff;
+    --selo-neutro: #5c6672;
+    --modal-fundo: rgba(15,15,15,.5);
+    --campo-linha-hover: rgba(92,95,102,.24);
+    --campo-linha-invalida: rgba(194,60,52,.45);
+    --campo-linha-invalida-forte: rgba(194,60,52,.75);
+    --campo-sombra-invalida: 0 3px 10px rgba(194,60,52,.12);
+    --tooltip-sombra: 0 4px 14px rgba(0,0,0,.18);
     --campo-sombra: 0 1px 3px rgba(20,20,20,.08);
     --campo-sombra-forte: 0 3px 10px rgba(20,20,20,.11);
     --shadow-1: 0 1px 2px rgba(22,32,58,.05), 0 1px 1px rgba(22,32,58,.04);
@@ -88,6 +98,14 @@
       --warn-soft: rgba(227,179,65,.14);
       --neutro: #a599f2;
       --neutro-soft: rgba(165,153,242,.16);
+      --sobre-cor: #fff;
+      --selo-neutro: #8b93a3;
+      --modal-fundo: rgba(0,0,0,.62);
+      --campo-linha-hover: rgba(226,232,245,.26);
+      --campo-linha-invalida: rgba(248,113,113,.45);
+      --campo-linha-invalida-forte: rgba(248,113,113,.75);
+      --campo-sombra-invalida: 0 3px 10px rgba(248,113,113,.14);
+      --tooltip-sombra: 0 4px 14px rgba(0,0,0,.5);
       --campo-sombra: 0 1px 3px rgba(0,0,0,.35);
       --campo-sombra-forte: 0 3px 10px rgba(0,0,0,.45);
       --shadow-1: 0 1px 2px rgba(0,0,0,.3);
@@ -127,6 +145,14 @@
     --warn-soft: rgba(227,179,65,.14);
     --neutro: #a599f2;
     --neutro-soft: rgba(165,153,242,.16);
+    --sobre-cor: #fff;
+    --selo-neutro: #8b93a3;
+    --modal-fundo: rgba(0,0,0,.62);
+    --campo-linha-hover: rgba(226,232,245,.26);
+    --campo-linha-invalida: rgba(248,113,113,.45);
+    --campo-linha-invalida-forte: rgba(248,113,113,.75);
+    --campo-sombra-invalida: 0 3px 10px rgba(248,113,113,.14);
+    --tooltip-sombra: 0 4px 14px rgba(0,0,0,.5);
     --campo-sombra: 0 1px 3px rgba(0,0,0,.35);
       --campo-sombra-forte: 0 3px 10px rgba(0,0,0,.45);
       --shadow-1: 0 1px 2px rgba(0,0,0,.3);
@@ -205,7 +231,7 @@
     color-scheme: light dark;
   }
   select:focus, input:not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:26px;box-sizing:border-box;border:1px solid transparent!important;border-radius:var(--radius-xs)!important;padding:1px 18px 1px 3px!important;background:transparent!important;box-shadow:var(--campo-sombra)!important;color:var(--ink);font-size:var(--fonte-sm);cursor:text;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}.pdm-combobox-input:hover,.pdm-combobox-input:focus{background:var(--raise)!important;border-color:rgba(92,95,102,.24)!important;box-shadow:var(--campo-sombra-forte)!important;transform:scale(1.012)}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:var(--fonte-xs);pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--ink-soft)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 12px 30px rgba(27,31,36,.13);padding:2px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:7px 4px;border-radius:var(--radius-xs);font-size:var(--fonte-sm);line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-color:rgba(194,60,52,.45)!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:hover,.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-color:rgba(194,60,52,.75)!important;background:var(--bad-soft)!important;box-shadow:0 3px 10px rgba(194,60,52,.12)!important}
+  .pdm-combobox{position:relative;width:100%;min-width:0}.pdm-select-original{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.pdm-combobox-input{width:100%;height:26px;box-sizing:border-box;border:1px solid transparent!important;border-radius:var(--radius-xs)!important;padding:1px 18px 1px 3px!important;background:transparent!important;box-shadow:var(--campo-sombra)!important;color:var(--ink);font-size:var(--fonte-sm);cursor:text;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}.pdm-combobox-input:hover,.pdm-combobox-input:focus{background:var(--raise)!important;border-color:var(--campo-linha-hover)!important;box-shadow:var(--campo-sombra-forte)!important;transform:scale(1.012)}.pdm-combobox::after{content:'⌄';position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:var(--fonte-xs);pointer-events:none}.pdm-combobox.aberto::after{content:'⌃';color:var(--ink-soft)}.pdm-combobox-lista{position:fixed;z-index:1200;max-height:240px;overflow:auto;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--shadow-2);padding:2px}.pdm-combobox-opcao,.pdm-combobox-vazio{padding:7px 4px;border-radius:var(--radius-xs);font-size:var(--fonte-sm);line-height:1.25}.pdm-combobox-opcao{display:flex;align-items:center;cursor:pointer}.pdm-combobox-opcao:hover,.pdm-combobox-opcao.ativo{background:var(--accent-soft);color:var(--accent)}.pdm-combobox-vazio{color:var(--ink-faint)}.pdm-combobox-disabled .pdm-combobox-input{opacity:.65;cursor:not-allowed}.pdm-combobox.classificacao-faltando .pdm-combobox-input{border-color:var(--campo-linha-invalida)!important;background:transparent!important}.pdm-combobox.classificacao-faltando .pdm-combobox-input:hover,.pdm-combobox.classificacao-faltando .pdm-combobox-input:focus{border-color:var(--campo-linha-invalida-forte)!important;background:var(--bad-soft)!important;box-shadow:var(--campo-sombra-invalida)!important}
 
   /* ---------- table ---------- */
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
@@ -331,8 +357,8 @@
     background: transparent; border-radius: 2px;
   }
   table.ajustavel th[data-col] .col-resize-handle:hover::after { background: var(--accent); }
-  table.ajustavel th[data-col].sort-asc::after { content: " ▲"; font-size: 9px; color: var(--accent); }
-  table.ajustavel th[data-col].sort-desc::after { content: " ▼"; font-size: 9px; color: var(--accent); }
+  table.ajustavel th[data-col].sort-asc::after { content: " ▲"; font-size: var(--fonte-xxs); color: var(--accent); }
+  table.ajustavel th[data-col].sort-desc::after { content: " ▼"; font-size: var(--fonte-xxs); color: var(--accent); }
 
   /* ---------- chips dos filtros selecionados ---------- */
   .chips-sel { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -344,7 +370,7 @@
   .chip-tag b { cursor: pointer; font-weight: var(--peso-destaque); opacity: .65; }
   .chip-tag b:hover { opacity: 1; }
 
-  .btn-perigo { background: var(--bad); color: #fff; border: none; padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--fonte-md); font-weight: var(--peso-medio); }
+  .btn-perigo { background: var(--bad); color: var(--sobre-cor); border: none; padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--fonte-md); font-weight: var(--peso-medio); }
   .btn-perigo:hover { opacity: .88; }
   /* O gatilho de uma acao destrutiva nao e a acao: ele so abre a
      confirmacao. Vermelho solido ali grita antes de haver erro nenhum
@@ -385,7 +411,7 @@
     position: fixed; z-index: 9999; pointer-events: none;
     background: var(--tooltip-fundo); color: var(--tooltip-texto); padding: 6px 9px; border-radius: var(--radius-sm);
     font-size: var(--fonte-sm); line-height: 1.4; max-width: 360px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.18);
+    box-shadow: var(--tooltip-sombra);
     opacity: 0; transition: opacity .1s; white-space: normal;
   }
   #tooltip.show { opacity: 1; }
@@ -448,7 +474,7 @@
   .ver-btn:hover { background: var(--bg); border-color: var(--ink-faint); color: var(--ink); }
 
   /* ---------- modal ---------- */
-  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(15,15,15,.5); align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
+  .modal-bg { display: none; position: fixed; inset: 0; background: var(--modal-fundo); align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
   .modal-bg.show { display: flex; }
   .modal { background: var(--surface); border-radius: var(--radius); padding: 26px; width: 420px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: var(--shadow-2); border: 1px solid var(--line); }
   .modal h3 { margin-top: 0; font-size: 16px; letter-spacing: -0.01em; }
@@ -632,7 +658,7 @@ td.cel-sel, th.cel-sel { padding-left: 4px; padding-right: 4px; }
    repetia o mesmo `style="background:#1d2b3a;color:#fff;..."` inline, fora do
    sistema de tokens - e por isso invisivel ao modo escuro. */
 .btn-primario {
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--sobre-cor);
   border: 1px solid var(--accent); border-radius: var(--radius-sm);
   padding: 9px 16px; font-size: var(--fonte-md); font-family: inherit; font-weight: var(--peso-medio);
   cursor: pointer;

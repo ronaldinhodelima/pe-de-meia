@@ -46,7 +46,9 @@ def test_layout_sombra_flutuante_e_compacto():
     assert "box-shadow:var(--campo-sombra)!important" in css
     assert ".pdm-combobox-input:hover,.pdm-combobox-input:focus" in css
     assert "background:var(--raise)!important" in css
-    assert "border-color:rgba(92,95,102,.24)!important" in css
+    # o contorno de hover tambem e token: em cor fixa ele nao acompanha o
+    # fundo do modo escuro (secao 7.8-A)
+    assert "border-color:var(--campo-linha-hover)!important" in css
     assert "transform:scale(1.012)" in css
     assert "table.compacta .pdm-combobox-input { font-size: var(--fonte-xs); }" in css
 
