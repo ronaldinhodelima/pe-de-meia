@@ -1623,6 +1623,11 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
         item = {
             "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
             "valor": valor, "data": r["data_local"], "categoria": r["categoria"],
+            # De qual conta e' o orfao. Sem isto nao da para saber se ele ameaca
+            # o escopo que se quer criar pela fatura - e um filtro por conta
+            # sobre um campo ausente nao bloqueia nada: ele zera a contagem e
+            # desliga a trava dos 409 em silencio.
+            "account_id": str(r["account_id"]),
         }
         desc = _normalizar_desc(r["descricao"])
         tokens = _tokens_significativos(r["descricao"])
@@ -2177,12 +2182,32 @@ def criar_cobrancas_sem_pluggy():
     # `ano` limita o alcance: 2025 e' historico e 2026 e' o que precisa fechar,
     # entao raramente se quer criar tudo de uma vez.
     ano = data.get("ano")
+    # `account_id` e `ate_mes` existem porque ano sozinho e' grosso demais. No
+    # Nubank Andrea as faturas de 01 a 08/2025 nao tem UM orfao do Pluggy - a
+    # fatura e a unica fonte, e criar por ela nao pode duplicar. De 09/2025 em
+    # diante existem orfaos, e ali criar pela fatura precisa de analise antes.
+    # Sem esse recorte as duas metades seriam tratadas como uma so.
+    conta_alvo = (data.get("account_id") or "").strip() or None
+    try:
+        ate_mes = int(data.get("ate_mes") or 0) or None
+    except (TypeError, ValueError):
+        ate_mes = None
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         if not preview:
             orfaos = _classificar_orfaos(cur)
-            pendentes = len(orfaos["repetidas"]) + len(orfaos["ecos"]) + len(orfaos["revisar"])
+            pendentes_todos = (
+                orfaos["repetidas"] + orfaos["ecos"] + orfaos["revisar"]
+            )
+            # A trava vale para o ESCOPO pedido. Um orfao de outra conta, ou de
+            # um mes fora do recorte, nao pode duplicar o que sera criado aqui -
+            # e bloquear por causa dele impediria para sempre de fechar a parte
+            # que ja esta limpa.
+            pendentes = sum(
+                1 for o in pendentes_todos
+                if (not conta_alvo or str(o.get("account_id") or "") == conta_alvo)
+            )
             if pendentes:
                 return jsonify({
                     "ok": False,
@@ -2214,8 +2239,13 @@ def criar_cobrancas_sem_pluggy():
             "AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.fatura_linha_id = fl.id) "
             f"AND {nao_lancaveis} "
             + ("AND fi.ano_referencia = %s " if ano else "")
+            + ("AND fi.account_id = %s " if conta_alvo else "")
+            + ("AND fi.mes_referencia <= %s " if ate_mes else "")
             + "ORDER BY fi.ano_referencia, fi.mes_referencia, fl.data;",
-            LINHAS_NAO_LANCAVEIS + ((int(ano),) if ano else ()),
+            LINHAS_NAO_LANCAVEIS
+            + ((int(ano),) if ano else ())
+            + ((conta_alvo,) if conta_alvo else ())
+            + ((ate_mes,) if ate_mes else ()),
         )
         linhas = [dict(r) for r in cur.fetchall()]
 

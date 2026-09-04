@@ -1501,3 +1501,22 @@ def test_migracao_54_cria_a_origem_aprendida_por_conta_do_banco():
     bloco = _bloco_migracao(core, 54)
     assert "fatura_origem_externa" in bloco
     assert "PRIMARY KEY (banco, conta_externa)" in bloco
+
+
+def test_orfao_carrega_a_conta_e_a_trava_dos_409_filtra_por_ela():
+    """A recusa de criar pela fatura enquanto ha orfao do Pluggy so vale se der
+    para saber DE QUAL CONTA e o orfao.
+
+    Sem `account_id` no item, o filtro por conta compara com string vazia,
+    nenhum orfao casa, a contagem da zero e a trava some sem erro nenhum - o app
+    passaria a criar lancamentos por cima de gasto que ja existe.
+    """
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    item = codigo.split("        item = {", 1)[1].split("}", 1)[0]
+    assert '"account_id": str(r["account_id"])' in item
+
+    rota = codigo.split("def criar_cobrancas_sem_pluggy", 1)[1].split("\n@bp.route", 1)[0]
+    assert 'o.get("account_id")' in rota, "a trava precisa filtrar pela conta"
+    # o recorte tem que chegar tambem na consulta que escolhe as linhas
+    assert "AND fi.account_id = %s " in rota
+    assert "AND fi.mes_referencia <= %s " in rota
