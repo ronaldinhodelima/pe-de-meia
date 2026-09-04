@@ -4868,6 +4868,21 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (57);")
             conn.commit()
 
+        if versao_atual < 58:
+            # Valor REAL da compra, informado ao marcar "Comprei".
+            #
+            # Coluna nova em vez de sobrescrever valor_previsto: o previsto e o
+            # que sustenta o provisionamento, e apaga-lo perderia a unica
+            # comparacao que a lista oferece - "previ R$ 1.200, saiu R$ 1.480".
+            # Um numero que muda de significado depois do fato nao serve para
+            # conferir previsao nenhuma.
+            cur.execute(
+                "ALTER TABLE cartao.compra_futura "
+                "ADD COLUMN IF NOT EXISTS valor_real numeric(14,2);"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (58);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

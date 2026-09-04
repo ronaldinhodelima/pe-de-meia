@@ -27,6 +27,25 @@ function criarCompra(e) {
   return false;
 }
 
+// Ao marcar "Comprei", o valor real e perguntado ali mesmo, ja preenchido com o
+// previsto: na maioria das vezes e so confirmar, e quando difere o numero certo
+// entra sem abrir outra tela.
+function abrirConfirmacaoCompra(botao) {
+  const celula = botao.closest('td');
+  const id = botao.dataset.comprar;
+  celula.innerHTML =
+    '<div class="confirma-compra">' +
+      '<label>Valor real (R$)</label>' +
+      '<input type="number" step="0.01" min="0" class="compra-valor-real">' +
+      '<button type="button" class="btn-primario" data-confirmar-compra="' + id + '">Confirmar</button>' +
+      '<button type="button" class="ver-btn" data-cancelar-compra="1">Cancelar</button>' +
+    '</div>';
+  const campo = celula.querySelector('.compra-valor-real');
+  campo.value = botao.dataset.previsto || '';
+  campo.focus();
+  campo.select();
+}
+
 function alterarCompra(id, corpo) {
   return fetch('/api/compra-futura/' + id, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -42,12 +61,22 @@ function alterarCompra(id, corpo) {
 document.addEventListener('click', function (e) {
   const comprar = e.target.closest('[data-comprar]');
   if (comprar) {
-    // Marcar como comprada NAO cria lancamento nenhum: o gasto real entra pela
-    // sincronizacao ou pelo lancamento manual, como qualquer outro.
-    if (!confirm('Marcar como comprada? Isso não cria lançamento — o gasto real entra pela sincronização ou por um lançamento manual.')) return;
-    alterarCompra(comprar.dataset.comprar, {situacao: 'comprada'});
+    abrirConfirmacaoCompra(comprar);
     return;
   }
+  const confirmar = e.target.closest('[data-confirmar-compra]');
+  if (confirmar) {
+    const celula = confirmar.closest('td');
+    const campo = celula.querySelector('.compra-valor-real');
+    // Marcar como comprada NAO cria lancamento nenhum: o gasto real entra pela
+    // sincronizacao ou pelo lancamento manual, como qualquer outro.
+    alterarCompra(confirmar.dataset.confirmarCompra, {
+      situacao: 'comprada', valor_real: campo.value
+    });
+    return;
+  }
+  const cancelar = e.target.closest('[data-cancelar-compra]');
+  if (cancelar) { guardarPosicaoAtual(); window.location.reload(); return; }
   const reabrir = e.target.closest('[data-reabrir]');
   if (reabrir) { alterarCompra(reabrir.dataset.reabrir, {situacao: 'aberta'}); return; }
   const excluir = e.target.closest('[data-excluir]');

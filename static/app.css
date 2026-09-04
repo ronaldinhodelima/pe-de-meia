@@ -813,3 +813,12 @@ tr.compra-feita { opacity: .6; }
 .prio-baixa { background: var(--line-soft); color: var(--ink-faint); }
 #compraStatus { font-size: var(--fonte-sm); color: var(--ink-faint); }
 #compraStatus.erro { color: var(--bad); }
+.compra-previsto { display: block; font-size: var(--fonte-xxs); color: var(--ink-faint); }
+.confirma-compra { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.confirma-compra label { font-size: var(--fonte-xxs); color: var(--ink-faint); }
+.confirma-compra input {
+  width: 110px; padding: 5px 8px; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); font-size: var(--fonte-md);
+  background: var(--surface); color: var(--ink); font-family: inherit;
+}
+.confirma-compra input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

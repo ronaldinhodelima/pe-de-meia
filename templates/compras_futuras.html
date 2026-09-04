@@ -92,12 +92,16 @@
         <td data-col="mes">{{ l.mes_alvo_rotulo }}</td>
         <td data-col="prio"><span class="prio prio-{{ l.prioridade }}">{{ l.prioridade_rotulo }}</span></td>
         {% for d in dimensoes %}<td data-col="dim_{{ d.id }}">{{ l.dims_rotulos.get(d.id) or '—' }}</td>{% endfor %}
-        <td data-col="valor" class="valor">{{ l.valor_previsto|moeda if l.valor_previsto is not none else '—' }}</td>
+        <td data-col="valor" class="valor">
+          {{ l.valor_vigente|moeda if l.valor_vigente is not none else '—' }}
+          {% if l.mostra_previsto %}<small class="compra-previsto">previsto {{ l.valor_previsto|moeda }}</small>{% endif %}
+        </td>
         <td data-col="situacao">{{ l.situacao_rotulo }}</td>
         <td data-col="acoes" style="white-space:nowrap">
           {% if pode_editar %}
             {% if l.situacao == 'aberta' %}
-              <button type="button" class="ver-btn" data-comprar="{{ l.id }}">Comprei</button>
+              <button type="button" class="ver-btn" data-comprar="{{ l.id }}"
+                      data-previsto="{{ '%.2f'|format(l.valor_previsto) if l.valor_previsto is not none else '' }}">Comprei</button>
             {% else %}
               <button type="button" class="ver-btn" data-reabrir="{{ l.id }}">Reabrir</button>
             {% endif %}
@@ -112,4 +116,4 @@
 </div>
 {% endblock %}
 
-{% block scripts %}<script src="/static/compras.js?v=20260902-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/compras.js?v=20260903-1"></script>{% endblock %}

@@ -90,6 +90,15 @@ def compras_futuras():
         linha["situacao_rotulo"] = SITUACOES.get(linha["situacao"], linha["situacao"])
         linha["mes_alvo_rotulo"] = linha["mes_alvo"].strftime("%m/%Y") if linha["mes_alvo"] else "—"
         linha["mes_alvo_iso"] = linha["mes_alvo"].strftime("%Y-%m") if linha["mes_alvo"] else ""
+        # O valor que vale e o real quando ele existe; o previsto continua
+        # visivel ao lado para a comparacao nao se perder.
+        linha["valor_vigente"] = (
+            linha["valor_real"] if linha["valor_real"] is not None else linha["valor_previsto"]
+        )
+        linha["mostra_previsto"] = (
+            linha["valor_real"] is not None and linha["valor_previsto"] is not None
+            and linha["valor_real"] != linha["valor_previsto"]
+        )
 
     # Provisionamento: o que interessa e quanto falta desembolsar, entao os
     # totais contam SO o que esta em aberto - item comprado ja virou lancamento
@@ -205,6 +214,10 @@ def editar_compra_futura(compra_id):
             return jsonify({"ok": False, "erro": "A descrição não pode ficar vazia."}), 400
         sets.append("descricao=%s")
         valores.append(descricao)
+    if "valor_real" in dados:
+        bruto = str(dados.get("valor_real") or "").strip().replace(",", ".")
+        sets.append("valor_real=%s")
+        valores.append(round(float(bruto), 2) if bruto else None)
     if "valor_previsto" in dados:
         bruto = str(dados.get("valor_previsto") or "").strip().replace(",", ".")
         sets.append("valor_previsto=%s")
@@ -224,7 +237,10 @@ def editar_compra_futura(compra_id):
         # "comprada" sem lancamento vinculado continua valendo: pode ter sido
         # paga em dinheiro e ainda nao lancada. O vinculo vem depois.
         if dados["situacao"] != "comprada":
-            sets.extend(["transacao_id=NULL", "comprada_em=NULL"])
+            # Reabrir desfaz o fato: o valor real e o vinculo deixam de existir,
+            # senao a lista mostraria "a comprar" com o preco de uma compra que
+            # foi desfeita.
+            sets.extend(["transacao_id=NULL", "comprada_em=NULL", "valor_real=NULL"])
         else:
             sets.append("comprada_em=COALESCE(comprada_em, now())")
     if "transacao_id" in dados:
