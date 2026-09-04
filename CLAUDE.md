@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 04/09/2026 · **Schema:** migração 55 · **Testes:** 319 aprovados, 6 ignorados
+**Última revisão:** 04/09/2026 · **Schema:** migração 56 · **Testes:** 322 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -260,6 +260,24 @@ OK para sempre**. A condição tem ponto único de verdade — `EXIGE_DIMENSOES_
 `exige_dimensoes()` no `core` — usado pela detalhada, pela fatura em andamento e pela trava do
 servidor. Espalhar a regra foi o que gerou os 57 falsos pendentes da §6.5 nº 10. A **categoria**
 continua obrigatória: é ela que diz que o lançamento é neutro.
+
+**Pagamento de fatura tem DOIS lados, e os dois precisam da mesma categoria.** No cartão chega
+como `Pagamento recebido`; na conta corrente sai como `Pagamento de fatura`. Os dois vão para
+**Pagamento de Fatura** (`Credit card payment`, natureza `transferencia`). Em 04/09/2026 o lado da
+conta corrente estava em `Transfers`, cuja natureza é **`fluxo`** — ali a *direção* decide, e saída
+de conta corrente vira **despesa**. Com as compras do cartão já contadas, o pagamento entrava de
+novo: R$ 3.939,52 em 2025 e R$ 11.357,07 em 2026. Migração 56 moveu os 14 lançamentos e criou regra
+para os próximos; backup em `classificacao_backup_v56`.
+
+Como classificar: **só a categoria**. Responsável, Projeto e Portfólio ficam vazios — o gasto foi
+das compras que a fatura cobrou, e essas já estão classificadas. Preencher aqui faria o mesmo
+dinheiro aparecer duas vezes nos relatórios por dimensão. Com a categoria certa o OK já libera.
+
+**Cuidado com `fluxo` em geral.** Sobraram ~203 lançamentos em `Transfers` (R$ 92 mil em 2026) e há
+`Transfer - PIX`, `Transfer - TED`, `Transfer - Cash` — **todos entram no DRE**. Ali há
+transferência entre contas próprias (que não é despesa) misturada com movimento que é receita ou
+despesa de verdade. Não mexer em bloco: exige análise caso a caso, como a §11.3 já registra para os
+depósitos em espécie.
 
 **Centro de custo só se aplica a categorias de despesa.** Vincular receita ou transferência a
 centro de custo não faz sentido contábil — por isso `/pendencias` só cobra vínculo das categorias
@@ -1439,3 +1457,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 53 | o único `duplicada` vira `substituido_por` (§4.3); `duplicada_backup_v53` |
 | 54 | `fatura_origem_externa`: de qual cartão daqui é o arquivo do banco (§11.3-A) |
 | 55 | `ciclo_do_arquivo`: o período informado pelo OFX manda sobre o deduzido (§11.3-A) |
+| 56 | pagamento de fatura sai de `Transfers` e deixa de contar duas vezes (§4.1); `classificacao_backup_v56` |
