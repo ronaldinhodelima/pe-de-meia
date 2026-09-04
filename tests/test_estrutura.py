@@ -1589,11 +1589,19 @@ def test_quem_calcula_ciclo_carrega_a_coluna_que_decide():
     carregava a fatura por lista de colunas e a coluna nova nao entrou nela.
     """
     codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
-    for trecho in codigo.split("FROM cartao.fatura_importada WHERE id = %s")[:-1]:
+    # Qualquer SELECT sobre fatura_importada que traga periodo_inicio alimenta o
+    # calculo de ciclo. A primeira versao deste teste so olhava "WHERE id = %s" e
+    # por isso deixou passar o SELECT da LISTA de faturas - a tela mostrava o
+    # ciclo encadeado enquanto o casamento usava o do arquivo.
+    for trecho in codigo.split("FROM cartao.fatura_importada")[:-1]:
         select = trecho[trecho.rfind("SELECT"):]
         if "periodo_inicio" not in select:
             continue  # consulta que nao alimenta calculo de ciclo
+        if "MIN(periodo_inicio)" in select or "MAX(periodo_inicio)" in select:
+            # agregado nao produz uma LINHA de fatura, entao nunca vai parar em
+            # _ciclo_inicio/_ciclo_fim - a coluna ali nao teria significado
+            continue
         assert "ciclo_do_arquivo" in select, (
             "consulta que carrega periodo_inicio precisa trazer ciclo_do_arquivo:\n"
-            + select[:200]
+            + select[:220]
         )

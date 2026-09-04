@@ -1410,11 +1410,12 @@ def conciliar_fatura():
 
     # historico de faturas ja importadas, pra reabrir sem reenviar o PDF
     # `fecha_100` por fatura, no proprio SELECT: linha sem vinculo E lancamento
-    # do Pluggy sem vinculo, ambos zerados. O inicio do ciclo e' o encadeado
-    # (fim da anterior + 1 dia), o mesmo que a tela mostra - nao o congelado.
+    # do Pluggy sem vinculo, ambos zerados. O inicio do ciclo respeita
+    # `ciclo_do_arquivo` - sem trazer essa coluna a tela mostrava o encadeado
+    # enquanto o casamento usava o do arquivo, ou seja, mentia sobre o ciclo.
     cur.execute(
         f"SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
-        f"f.periodo_inicio, f.periodo_fim, f.vencimento, "
+        f"f.periodo_inicio, f.periodo_fim, f.vencimento, f.ciclo_do_arquivo, "
         f"(SELECT COUNT(*) FROM cartao.fatura_linha fl WHERE fl.fatura_id = f.id "
         f" AND fl.descricao NOT ILIKE 'Pagamento Recebido%%' "
         f" AND fl.descricao NOT ILIKE 'Pag de Fatura%%' "
@@ -1624,7 +1625,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     # na fatura seguinte, que ainda nao existe no sistema)
     cur.execute(
         "SELECT DISTINCT ON (account_id) account_id, periodo_inicio, periodo_fim, "
-        "mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "ciclo_do_arquivo, mes_referencia, ano_referencia FROM cartao.fatura_importada "
         "WHERE periodo_fim IS NOT NULL "
         "ORDER BY account_id, ano_referencia DESC, mes_referencia DESC;"
     )
@@ -3574,7 +3575,8 @@ def recalcular_ciclo_do_arquivo():
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT id, mes_referencia, ano_referencia, periodo_inicio, pdf_arquivo "
+            "SELECT id, mes_referencia, ano_referencia, periodo_inicio, "
+            "ciclo_do_arquivo, pdf_arquivo "
             "FROM cartao.fatura_importada "
             "WHERE COALESCE(ciclo_do_arquivo,false) = true AND pdf_arquivo IS NOT NULL "
             + ("AND account_id = %s " if conta_alvo else "")
