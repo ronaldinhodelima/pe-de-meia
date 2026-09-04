@@ -1364,17 +1364,30 @@ Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **16 fec
 R$ 1.018,50 sem vínculo (09/2025 R$ 819,26 · 05 e 07/2026 R$ 99,16 cada · 08/2026 R$ 0,92). As 8 de
 2025 fecharam com 107 lançamentos criados pela fatura (R$ 8.178,18, §5 — o Pluggy não tem nada
 dessa conta antes de 09/2025). **O DRE não se moveu em nenhuma etapa**: R$ 319.112,22 em 2025 e
-R$ 484.073,91 em 2026, do começo ao fim. **O cartão Nubank Ronaldo ainda não tem nenhuma fatura
-importada.**
+R$ 484.073,91 em 2026, do começo ao fim.
+
+**Nubank Ronaldo (04/09/2026): 2 faturas, conferido e encerrado.** A 10/2025 fecha 100%. A 08/2025
+tem uma linha sem contraparte — `Andreabressandeli`, R$ 1,00, com **zero candidatos** no Pluggy:
+cobrança antiga que o Pluggy nunca sincronizou, e o usuário decidiu ignorar. O ciclo largo dela
+(16/01 a 16/08/2025) **não é defeito**: é a primeira fatura do cartão e o próprio `DTSTART` diz
+isso. Se um dia aparecer contraparte, ela casa sozinha no próximo vínculo automático.
+
+**Coluna ausente num `.get()` desliga a regra sem erro nenhum — aconteceu TRÊS vezes em 04/09/2026.**
+`account_id` fora do item de órfão desligava a trava dos 409; `ciclo_do_arquivo` fora da consulta do
+vínculo automático anulava três correções de ciclo seguidas; e a mesma coluna fora do `SELECT` da
+lista fazia a tela **exibir um ciclo diferente do que a conciliação usava**. Os três têm teste, e o
+da coluna do ciclo vale para **qualquer** `SELECT` sobre `fatura_importada` que traga
+`periodo_inicio` — a primeira versão dele só olhava `WHERE id = %s` e por isso deixou passar
+justamente a consulta da lista. Agregado (`MIN`/`MAX`) é exceção explicada: não produz linha de
+fatura.
 
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Importar as faturas do Nubank Ronaldo** e conciliar, agora que o caminho está validado.
-2. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
+1. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
    vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos (PIX,
    transferência entre contas próprias, depósito em espécie).
-3. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
-4. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria e o que
+2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
+3. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria e o que
    sobrou entra no DRE como despesa por padrão.
 
 **Não transportar regras entre origens.** Criar regras e eventuais correções de horário
