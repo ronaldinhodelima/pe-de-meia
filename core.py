@@ -1125,6 +1125,87 @@ LOJISTAS_RECUSADOS = ("POUSADA FOGO*RESE", "ESTACAO")
 CATEGORIAS_RECUSADAS = ("Leisure", "Insurance")
 
 
+def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
+    """OK dado pela FATURA, na importacao — decisao do usuario em 05/09/2026.
+
+    Ate aqui o OK era sempre humano (era a secao 1.2). A regra mudou porque a
+    base amadureceu: a fatura e a autoridade sobre o que foi cobrado (secao 5),
+    e quando ela confirma a cobranca e a classificacao ja esta completa, pedir
+    um clique humano nao acrescenta conferencia nenhuma - so atrasa.
+
+    As TRES condicoes sao cumulativas, e faltando qualquer uma a linha continua
+    pendente:
+
+    1. vinculo persistido com a linha da fatura, e um so lancamento elegivel
+       ligado a ela. Com dois candidatos nao se sabe qual foi cobrado;
+    2. valor batendo AO CENTAVO entre a linha e o lancamento. Nao ha tolerancia
+       aqui de proposito: a de R$ 1,00 que existe no casamento serve para
+       ENCONTRAR o par, e usa-la para assinar deixaria passar diferenca real;
+    3. classificacao completa, pela mesma regra da tela - categoria sempre, e as
+       dimensoes obrigatorias so quando a natureza participa do resultado
+       (secao 4.1).
+
+    Nunca desmarca, nunca toca em lancamento ja conferido e nunca sobrescreve
+    `conferida_por`: quem ja tem assinatura humana continua com ela. O carimbo
+    "fatura MM/AAAA" e o que permite separar depois o que a fatura assinou do
+    que uma pessoa assinou.
+    """
+    cur.execute(
+        "SELECT ano_referencia, mes_referencia FROM cartao.fatura_importada WHERE id=%s;",
+        (fatura_id,),
+    )
+    referencia = cur.fetchone()
+    if not referencia:
+        return {"marcados": 0, "rotulo": None}
+    rotulo = f"fatura {referencia[1]:02d}/{referencia[0]}"
+
+    # Uma linha, um lancamento elegivel, valor identico em centavos.
+    candidatos_sql = (
+        "WITH elegiveis AS ("
+        "  SELECT fl.id AS linha_id, t.transacao_id, "
+        "         round(abs(fl.valor)*100) AS centavos_linha, "
+        "         round(abs(COALESCE(t.valor_brl, t.valor_original))*100) AS centavos_transacao "
+        "  FROM cartao.fatura_linha fl "
+        "  JOIN cartao.fatura_vinculo fv ON fv.fatura_linha_id = fl.id "
+        "  JOIN cartao.transacao t ON t.transacao_id = fv.transacao_id "
+        "  WHERE fl.fatura_id = %s "
+        "    AND COALESCE(t.duplicada,false) = false "
+        "    AND COALESCE(t.somente_conciliacao,false) = false "
+        "    AND t.substituido_por IS NULL "
+        "), unicos AS ("
+        "  SELECT linha_id FROM elegiveis GROUP BY linha_id HAVING COUNT(*) = 1"
+        ") "
+        "SELECT e.transacao_id FROM elegiveis e JOIN unicos u ON u.linha_id = e.linha_id "
+        "  JOIN cartao.transacao t ON t.transacao_id = e.transacao_id "
+        "  LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
+        " WHERE e.centavos_linha = e.centavos_transacao "
+        "   AND COALESCE(t.conferida,false) = false "
+        "   AND NULLIF(t.categoria,'') IS NOT NULL "
+        # rateado fica de fora: quem decide ali sao as partes, e a soma delas
+        # pode nem fechar com o lancamento pai
+        "   AND NOT EXISTS (SELECT 1 FROM cartao.transacao_rateio r "
+        "                    WHERE r.transacao_id = t.transacao_id) "
+        "   AND NOT EXISTS ("
+        "     SELECT 1 FROM cartao.dimensao d "
+        "     LEFT JOIN cartao.transacao_dimensao td "
+        "       ON td.dimensao_id = d.id AND td.transacao_id = t.transacao_id::text "
+        "     WHERE d.obrigatoria = true AND td.valor_id IS NULL AND " + EXIGE_DIMENSOES_SQL +
+        "   );"
+    )
+    cur.execute(candidatos_sql, (fatura_id,))
+    alvos = [linha[0] for linha in cur.fetchall()]
+    if preview or not alvos:
+        return {"marcados": len(alvos), "rotulo": rotulo}
+
+    cur.execute(
+        "UPDATE cartao.transacao SET conferida=true, conferida_por=%s, "
+        "conferida_em=now(), atualizado_em=now() "
+        "WHERE transacao_id = ANY(%s) AND COALESCE(conferida,false)=false;",
+        (rotulo, alvos),
+    )
+    return {"marcados": max(cur.rowcount, 0), "rotulo": rotulo}
+
+
 def aplicar_consenso_classificacao(cur, account_id=None, preview=False):
     """Completa campo VAZIO com o consenso dos OK, nos dois eixos.
 

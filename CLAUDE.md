@@ -33,15 +33,38 @@ Na prática:
 - Toda vez que mexer em relatório, DRE ou natureza de categoria, **explicar o raciocínio
   contábil** — nunca só aplicar.
 
-## 1.2 O OK é uma assinatura humana
+## 1.2 Quem pode assinar o OK
 
-**Nunca marcar nem desmarcar o "conferido" de um lançamento.** Só o Ronaldo ou outro usuário
-marca. O Claude pode ajustar categoria, dimensão, natureza e observação; o check é a confirmação
-humana de que o lançamento foi conciliado. Lançamento manual criado pelo Claude nasce desmarcado.
+**O Claude nunca marca nem desmarca o "conferido".** Ele pode ajustar categoria, dimensão,
+natureza e observação; o check não é dele. Lançamento manual criado pelo Claude nasce desmarcado.
 
-Sincronização, regra automática, migração, importação e edição de qualquer campo **nunca** podem
-alterar `conferida`, `conferida_por` ou `conferida_em`. Retirar um OK ou marcar duplicidade exige
-confirmação explícita na tela.
+**Duas fontes podem assinar: o usuário e a fatura.** A segunda foi decidida em 05/09/2026, quando
+a base já estava consistente e com centenas de OK conferidos — a fatura é a autoridade sobre o que
+foi cobrado (§5), e quando ela confirma a cobrança e a classificação já está completa, pedir um
+clique humano não acrescenta conferência nenhuma. Antes desta data a regra era "só o usuário".
+
+**O OK da fatura exige as TRÊS condições, cumulativas** (`marcar_ok_automatico_da_fatura`):
+
+1. **vínculo persistido** com a linha da fatura, e **um único** lançamento elegível ligado a ela —
+   com dois candidatos não se sabe qual foi cobrado;
+2. **valor batendo ao centavo** entre a linha e o lançamento. Sem tolerância, de propósito: a de
+   R$ 1,00 do casamento serve para *encontrar* o par (§6.5), e usá-la para assinar deixaria passar
+   diferença real;
+3. **classificação completa**, pela mesma regra da tela — categoria sempre, dimensões obrigatórias
+   só quando a natureza participa do resultado (§4.1).
+
+Faltando qualquer uma, a linha continua pendente. Rateado fica de fora: ali quem decide são as
+partes. Roda só em **POST** (importação da fatura e vínculo automático), nunca ao abrir a tela —
+assinar num GET seria o oposto de uma conferência.
+
+**O que continua proibido para todos, inclusive a fatura:** desmarcar, tocar em lançamento já
+conferido e sobrescrever `conferida_por`. Quem já tem assinatura humana continua com ela. O
+carimbo `fatura MM/AAAA` em `conferida_por` é o que permite separar depois o que a fatura assinou
+do que uma pessoa assinou — sem ele, a informação de "o que eu olhei com os próprios olhos" se
+perderia para sempre.
+
+Sincronização, regra automática, migração e edição de qualquer campo **continuam sem poder**
+alterar `conferida`. Retirar um OK exige confirmação explícita na tela.
 
 ## 1.3 Marcação de duplicidade é decisão do usuário
 

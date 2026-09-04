@@ -31,6 +31,7 @@ from core import (
     _montar_filtro_relatorio,
     aplicar_regras,
     carregar_origens,
+    marcar_ok_automatico_da_fatura,
     rotulo_valor_dimensao,
     cat_pt_puro,
     calcular_totais_dre_fatura,
@@ -1317,6 +1318,16 @@ def conciliar_fatura():
                 resumo_parcelas = _sincronizar_parcelas_de_agregado(
                     cur, session.get("user"), account_id=account_id
                 )
+                # O OK da fatura vem DEPOIS das parcelas: e a sincronizacao que
+                # define quem e agregado (fora do resultado) e quem e a parcela
+                # que conta. Assinar antes marcaria o registro errado.
+                ok_automatico = marcar_ok_automatico_da_fatura(cur, fatura_id)
+                if ok_automatico["marcados"]:
+                    registrar_auditoria(
+                        "alteracao", "OK dado pela fatura na importação",
+                        detalhes={"fatura_id": fatura_id, "rotulo": ok_automatico["rotulo"],
+                                  "lancamentos": ok_automatico["marcados"]},
+                    )
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -2426,13 +2437,26 @@ def vincular_automatico_fatura(fatura_id):
             )
             removidos = cur.rowcount or 0
         criados = _vincular_automatico(cur, fatura_row, session.get("user"))
+        # Vinculo novo pode ser justamente o que faltava para a linha atender as
+        # tres condicoes. Nao roda em GET: assinar ao abrir a tela seria o
+        # oposto de uma conferencia.
+        ok_automatico = marcar_ok_automatico_da_fatura(cur, fatura_id)
         conn.commit()
         if criados or removidos:
             registrar_mudanca_auditoria(
                 f"Vínculos automáticos recalculados (fatura_id={fatura_id})",
                 {"removidos": removidos}, {"criados": criados},
             )
-        return jsonify({"ok": True, "criados": criados, "removidos": removidos})
+        if ok_automatico["marcados"]:
+            registrar_auditoria(
+                "alteracao", "OK dado pela fatura ao vincular",
+                detalhes={"fatura_id": fatura_id, "rotulo": ok_automatico["rotulo"],
+                          "lancamentos": ok_automatico["marcados"]},
+            )
+        return jsonify({
+            "ok": True, "criados": criados, "removidos": removidos,
+            "ok_automatico": ok_automatico["marcados"],
+        })
     except Exception as exc:
         conn.rollback()
         return jsonify({"ok": False, "erro": f"Não consegui vincular: {exc}"}), 400

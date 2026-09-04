@@ -1674,3 +1674,43 @@ def test_compra_futura_nunca_entra_no_resultado():
     financeiro = core.split("CREATE OR REPLACE VIEW cartao.lancamento_financeiro", 1)
     if len(financeiro) == 2:
         assert "compra_futura" not in financeiro[1][:4000]
+
+
+def test_ok_da_fatura_exige_as_tres_condicoes_e_nunca_desmarca():
+    """A regra do OK mudou em 05/09/2026: a fatura pode assinar.
+
+    Mudou porque a base amadureceu e a fatura e a autoridade sobre o que foi
+    cobrado (secao 5). Mas as tres condicoes sao cumulativas, e o que a fatura
+    NAO pode fazer continua valendo: desmarcar, tocar em lancamento ja conferido
+    ou apagar uma assinatura humana.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    fn = core.split("def marcar_ok_automatico_da_fatura", 1)[1].split("\ndef ", 1)[0]
+
+    # 1. vinculo persistido, com UM unico lancamento elegivel
+    assert "cartao.fatura_vinculo" in fn
+    assert "HAVING COUNT(*) = 1" in fn
+    assert "COALESCE(t.duplicada,false) = false" in fn
+    assert "COALESCE(t.somente_conciliacao,false) = false" in fn
+    assert "t.substituido_por IS NULL" in fn
+
+    # 2. valor ao centavo, sem a tolerancia de R$ 1,00 do casamento
+    assert "e.centavos_linha = e.centavos_transacao" in fn
+    assert "100" in fn and "round(abs(" in fn
+
+    # 3. classificacao completa, pela mesma regra da tela
+    assert "NULLIF(t.categoria,'') IS NOT NULL" in fn
+    assert "d.obrigatoria = true" in fn
+    assert "EXIGE_DIMENSOES_SQL" in fn, "natureza neutra nao exige dimensao (secao 4.1)"
+
+    # nunca desmarca nem encosta em quem ja tem assinatura
+    assert "COALESCE(t.conferida,false) = false" in fn
+    assert "COALESCE(conferida,false)=false" in fn
+    assert "conferida=false" not in fn.replace(" ", "")
+    # e o carimbo separa quem assinou
+    assert 'rotulo = f"fatura {referencia[1]:02d}/{referencia[0]}"' in fn
+
+    # so em POST: assinar ao abrir a tela nao seria conferencia
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    for trecho in view.split("marcar_ok_automatico_da_fatura(cur")[1:]:
+        assert "GET" not in trecho[:200]
