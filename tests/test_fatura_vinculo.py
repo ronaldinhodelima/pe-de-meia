@@ -449,3 +449,72 @@ def test_par_legitimo_sem_palavra_em_comum_continua_casando():
     view = (pathlib.Path(__file__).resolve().parent.parent / "views" / "relatorios.py").read_text(
         encoding="utf-8")
     assert "if melhor_chave is None or chave > melhor_chave:" in view
+
+
+def test_numero_da_parcela_separa_a_4_da_5_quando_os_dois_lados_declaram():
+    """Caso real do Nubank (secao 11.3-A): "Vestebem - Parcela 4/10" ficava
+    ligada ao lancamento da parcela 5/10.
+
+    Dentro de um parcelamento TODAS as parcelas tem o mesmo valor, o mesmo
+    lojista e o mesmo numero de parcelas - o numero da parcela e a unica coisa
+    que as distingue. Sem compara-lo, so a data separava, e bastava o dia da
+    virada cair na janela errada para o vinculo ir para a parcela vizinha.
+    """
+    # havendo as duas, a certa tem que vencer
+    candidatos = [
+        _transacao("t5", date(2026, 5, 2), "Vestebem 5/10", 23.98, parcela_total=10),
+        _transacao("t4", date(2026, 4, 2), "Vestebem 4/10", 23.98, parcela_total=10),
+    ]
+    linhas = [_linha(date(2026, 4, 2), "Vestebem - Parcela 4/10", 23.98,
+                     parcela_atual=4, parcela_total=10)]
+    r = _conciliar_linhas(CursorFake(candidatos), "conta-1", linhas)
+    assert len(r["batidos"]) == 1
+    assert r["batidos"][0]["transacao_id"] == "t4", "casou com a parcela errada"
+
+    # e o caso que de fato aconteceu: a parcela errada e o UNICO candidato.
+    # Sem RECUSAR (e nao apenas despriorizar), o vinculo ia para ela.
+    # `ciclo_fim_real` reproduz a janela da fatura de verdade: no Nubank o dia
+    # da virada (02/05) cai dentro do ciclo, e era exatamente por isso que a
+    # parcela seguinte virava candidata.
+    so_a_errada = [
+        _transacao("t5", date(2026, 5, 2), "Vestebem 5/10", 23.98, parcela_total=10),
+    ]
+    r2 = _conciliar_linhas(CursorFake(so_a_errada), "conta-1", linhas,
+                           ciclo_fim_real=date(2026, 5, 2))
+    assert r2["batidos"] == [], "a parcela 5/10 nao pode casar com a linha da 4/10"
+
+
+def test_na_duvida_a_fatura_decide_e_o_candidato_continua_elegivel():
+    """Recusar so quando o candidato declara parcela do MESMO parcelamento com
+    numero DIFERENTE. Quem nao declara nada segue elegivel - o agregado do
+    Pluggy as vezes nem traz o numero de parcelas (secao 6.5 n.8)."""
+    candidatos = [
+        _transacao("t1", date(2026, 4, 2), "Parcela Lojista Visa - VESTEBEM", 23.98),
+    ]
+    linhas = [_linha(date(2026, 4, 2), "Vestebem - Parcela 4/10", 23.98,
+                     parcela_atual=4, parcela_total=10)]
+    r = _conciliar_linhas(CursorFake(candidatos), "conta-1", linhas)
+    assert len(r["batidos"]) == 1, "candidato sem numero de parcela nao pode ser recusado"
+    assert r["batidos"][0]["transacao_id"] == "t1"
+
+
+def test_parcelamento_diferente_com_mesmo_valor_nao_e_recusado_por_engano():
+    """Total diferente = outro parcelamento: nao da para afirmar nada sobre a
+    parcela, entao nao bloqueia (a fatura decide)."""
+    candidatos = [
+        _transacao("t1", date(2026, 4, 2), "Vestebem 2/3", 23.98, parcela_total=3),
+    ]
+    linhas = [_linha(date(2026, 4, 2), "Vestebem - Parcela 4/10", 23.98,
+                     parcela_atual=4, parcela_total=10)]
+    r = _conciliar_linhas(CursorFake(candidatos), "conta-1", linhas)
+    assert len(r["batidos"]) == 1
+
+
+def test_extrator_do_numero_da_parcela():
+    from views.relatorios import _parcela_na_descricao as p
+    assert p("Vestebem 5/10") == (5, 10)
+    assert p("AQUAMATER Parc.9/12") == (9, 12)
+    assert p("Vestebem - Parcela 4/10") == (4, 10)
+    assert p("LOJA 1/1") == (None, None), "1/1 nao e parcelamento"
+    assert p("Dafiti *4595253890") == (None, None), "numero de cartao nao e parcela"
+    assert p("Jetshr") == (None, None)

@@ -719,8 +719,31 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
                 # par legitimo sem palavra em comum existe ("Pagamento Recebido"
                 # x "Pag de Fatura Via Deb Aut", secao 6.5 n.12) e continua
                 # casando quando nao ha candidato melhor.
+                # O numero da parcela, quando os DOIS lados o declaram, e a
+                # unica coisa que distingue a 4/10 da 5/10: dentro de um
+                # parcelamento todas as parcelas tem o MESMO valor, entao valor,
+                # lojista e numero de parcelas sao iguais em todas. Sem isto o
+                # casamento pegava a parcela vizinha - "Vestebem - Parcela 4/10"
+                # ficou ligada ao lancamento da 5/10 (secao 11.3-A).
+                #
+                # Na duvida quem manda e a FATURA: so recusa quando o candidato
+                # declara parcela do MESMO parcelamento com numero DIFERENTE.
+                # Candidato que nao declara nada, ou que declara outro total,
+                # continua elegivel - o agregado do Pluggy, por exemplo, as
+                # vezes nem traz o numero de parcelas.
+                c_atual, c_total = _parcela_na_descricao(c["descricao"])
+                mesma_familia = bool(
+                    c_total and l.get("parcela_total") and c_total == l["parcela_total"]
+                )
+                if mesma_familia and c_atual and l.get("parcela_atual") \
+                        and c_atual != l["parcela_atual"]:
+                    continue
+                casa_parcela = bool(
+                    mesma_familia and c_atual and c_atual == l.get("parcela_atual")
+                )
                 casa_lojista = bool(tokens_l and (tokens_l & _tokens_significativos(c["descricao"])))
-                chave = (casa_lojista, c["_data_local"])
+                # a parcela certa vence o lojista, que vence a data
+                chave = (casa_parcela, casa_lojista, c["_data_local"])
                 if melhor_chave is None or chave > melhor_chave:
                     melhor_linha, melhor_chave = c, chave
             if melhor_linha:
@@ -902,6 +925,25 @@ def _transacoes_vinculadas(cur, ignorar_fatura_id=None):
             (ignorar_fatura_id,),
         )
     return {str(r["transacao_id"]) for r in cur.fetchall()}
+
+
+_PARCELA_NA_DESC = re.compile(r"(?:parc(?:ela)?\.?\s*)?(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", re.I)
+
+
+def _parcela_na_descricao(descricao):
+    """(atual, total) que a descricao declara, ou (None, None).
+
+    Cobre "Parc.9/12" (Unicred), "Parcela 5/10" e "5/10" (Nubank). Exige
+    total >= 2 e atual <= total para nao confundir com data, codigo de loja ou
+    fracao solta. Fica com a ULTIMA ocorrencia: o numero da parcela vem no fim
+    da descricao, e um prefixo do Pluggy pode conter digitos.
+    """
+    achado = (None, None)
+    for m in _PARCELA_NA_DESC.finditer(descricao or ""):
+        atual, total = int(m.group(1)), int(m.group(2))
+        if 2 <= total <= 99 and 1 <= atual <= total:
+            achado = (atual, total)
+    return achado
 
 
 def _ciclo_inicio_encadeado(cur, fatura_row):
