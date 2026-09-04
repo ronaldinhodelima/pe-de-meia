@@ -1,6 +1,7 @@
 """Tela de Lancamentos e a API que ela usa."""
 import uuid
-from datetime import datetime, timedelta
+import re
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import psycopg2
@@ -796,8 +797,36 @@ def _candidatos_fatura_equivalentes(candidatos):
     return len(assinaturas) == 1
 
 
-def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
-    """Mostra o ciclo atual do Pluggy sem fingir que ja existe um PDF oficial."""
+def _meses_futuros_com_dados(cur, account_id, hoje):
+    """Meses AINDA POR VIR que ja tem lancamento do Pluggy.
+
+    Parcela futura chega adiantada e, sem isto, nao aparecia em lugar nenhum: o
+    ciclo em andamento termina hoje. Sao ciclos PREVISTOS, nao faturas - o
+    intervalo fechamento-vencimento varia (secao 6.2) e projeta-lo seria
+    palpite, entao a janela e o mes civil.
+    """
+    cur.execute(
+        f"SELECT DISTINCT to_char({DATA_LOCAL_SQL}, 'YYYY-MM') AS mes "
+        "FROM cartao.transacao t WHERE t.account_id=%s "
+        f"AND ({DATA_LOCAL_SQL})::date > %s "
+        "AND COALESCE(t.duplicada,false)=false AND t.substituido_por IS NULL "
+        "AND COALESCE(t.somente_conciliacao,false)=false ORDER BY 1 DESC;",
+        (account_id, hoje),
+    )
+    return [
+        {"id": "futuro-" + r["mes"], "mes_referencia": int(r["mes"][5:]),
+         "ano_referencia": int(r["mes"][:4]), "em_andamento": True, "previsto": True}
+        for r in cur.fetchall()
+    ]
+
+
+def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, mes_futuro=None):
+    """Mostra o ciclo atual do Pluggy sem fingir que ja existe um PDF oficial.
+
+    Com `mes_futuro` ('AAAA-MM'), mostra um mes que ainda nem comecou a ser
+    cobrado: parcela futura que o Pluggy ja entregou. Ali a janela e o MES
+    CIVIL, e nao um ciclo - projetar fechamento seria palpite (secao 6.2).
+    """
     cur.execute(
         "SELECT * FROM cartao.fatura_importada WHERE account_id=%s "
         "ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC LIMIT 1;",
@@ -806,12 +835,18 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
     ultima = cur.fetchone()
     if not ultima or not ultima["periodo_fim"]:
         return None
-    inicio = ultima["periodo_fim"] + timedelta(days=1)
     hoje = datetime.now(FUSO_LOCAL).date()
-    mes = ultima["mes_referencia"] + 1
-    ano = ultima["ano_referencia"]
-    if mes == 13:
-        mes, ano = 1, ano + 1
+    if mes_futuro:
+        ano, mes = int(mes_futuro[:4]), int(mes_futuro[5:])
+        inicio = date(ano, mes, 1)
+        fim = date(ano + (mes == 12), (mes % 12) + 1, 1) - timedelta(days=1)
+    else:
+        inicio = ultima["periodo_fim"] + timedelta(days=1)
+        fim = hoje
+        mes = ultima["mes_referencia"] + 1
+        ano = ultima["ano_referencia"]
+        if mes == 13:
+            mes, ano = 1, ano + 1
 
     cur.execute(
         "SELECT t.transacao_id, t.data_transacao, t.descricao, t.descricao_bruta, "
@@ -824,7 +859,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
         "AND (" + DATA_LOCAL_SQL + ")::date >= %s AND (" + DATA_LOCAL_SQL + ")::date <= %s "
         "AND COALESCE(t.duplicada,false)=false AND t.substituido_por IS NULL "
         "AND COALESCE(t.somente_conciliacao,false)=false ORDER BY t.data_transacao, t.transacao_id;",
-        (account_id, inicio, hoje),
+        (account_id, inicio, fim),
     )
     transacoes = [dict(r) for r in cur.fetchall()]
     ids = [r["transacao_id"] for r in transacoes]
@@ -915,9 +950,10 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
         (status == "fora" and l["natureza_estado"] == "fora")
     )]
     fatura = {
-        "id": "andamento", "mes_referencia": mes, "ano_referencia": ano,
-        "periodo_inicio": inicio, "periodo_fim": hoje, "vencimento": None,
-        "em_andamento": True,
+        "id": ("futuro-" + mes_futuro) if mes_futuro else "andamento",
+        "mes_referencia": mes, "ano_referencia": ano,
+        "periodo_inicio": inicio, "periodo_fim": fim, "vencimento": None,
+        "em_andamento": True, "previsto": bool(mes_futuro),
     }
     oficiais = []
     cur.execute(
@@ -925,6 +961,22 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
         "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;", (account_id,),
     )
     oficiais = cur.fetchall()
+    # O seletor mostra o mesmo conjunto nas duas telas: previstos, em andamento
+    # e oficiais. Sem isto, entrar num mes futuro escondia os demais.
+    andamento = {
+        "id": "andamento", "mes_referencia": mes, "ano_referencia": ano, "em_andamento": True,
+    } if not mes_futuro else {
+        "id": "andamento",
+        "mes_referencia": (ultima["mes_referencia"] % 12) + 1,
+        "ano_referencia": ultima["ano_referencia"] + (ultima["mes_referencia"] == 12),
+        "em_andamento": True,
+    }
+    futuros = _meses_futuros_com_dados(cur, account_id, hoje)
+    lista_faturas = [f for f in futuros if f["id"] != fatura["id"]]
+    if mes_futuro:
+        lista_faturas = [f if f["id"] != fatura["id"] else fatura for f in futuros]
+    lista_faturas = lista_faturas + [andamento] + list(oficiais)
+
     config = {
         "pode_editar": pode("lancamentos_editar"), "pode_conferir": False,
         "em_andamento": True, "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
@@ -936,14 +988,14 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id):
         "lancamentos_fatura.html", titulo="Fatura em andamento",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
         fatura_nova=None, fatura_antiga=oficiais[0] if oficiais else None,
-        faturas=[fatura] + oficiais, conta=contas_by_id.get(account_id),
+        faturas=lista_faturas, conta=contas_by_id.get(account_id),
         contas_credito=contas_credito, account_id=account_id, linhas=linhas_visiveis,
         categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
         totais={"pdf": total, "dre": total_dre, "fora": total_fora, "pendente": sum(abs(l["valor"]) for l in linhas if not l["classificada"]), "pendente_ok": Decimal("0"), "sem_vinculo": Decimal("0"), "divergencia": Decimal("0")},
         contagens={"linhas": len(linhas), "vinculadas": len(linhas), "classificadas": classificadas, "conferidas": 0, "multiplos": 0, "pendente_classificacao": len(linhas)-classificadas, "pendente_ok": 0, "divergencias": 0},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
-        url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={hoje.isoformat()}&origem={account_id}&status=todas",
+        url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
     )
 
@@ -994,11 +1046,18 @@ def lancamentos_por_fatura():
     account_id = request.args.get("account_id") or ""
     fatura_id = request.args.get("fatura_id", type=int)
     em_andamento = request.args.get("andamento") == "1"
+    # mes=AAAA-MM abre um ciclo PREVISTO (parcela que o Pluggy ja entregou para
+    # um mes que ainda nem comecou a ser cobrado). Formato validado aqui: vai
+    # direto para a janela da consulta.
+    mes_futuro = request.args.get("mes") or ""
+    if not re.fullmatch(r"\d{4}-\d{2}", mes_futuro):
+        mes_futuro = None
 
     if not account_id and contas_credito:
         account_id = _conta_credito_padrao(cur, contas_credito)
     if em_andamento:
-        resposta = _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id)
+        resposta = _render_fatura_em_andamento(
+            cur, account_id, contas_credito, contas_by_id, mes_futuro=mes_futuro)
         if resposta is not None:
             cur.close()
             conn.close()
@@ -1058,7 +1117,8 @@ def lancamentos_por_fatura():
         provisoria = {"id": "andamento", "mes_referencia": prox_mes, "ano_referencia": prox_ano, "em_andamento": True}
         if pos == 0:
             fatura_nova = provisoria
-        faturas = [provisoria] + faturas
+        futuros = _meses_futuros_com_dados(cur, account_id, datetime.now(FUSO_LOCAL).date())
+        faturas = futuros + [provisoria] + faturas
 
     cur.execute(
         "SELECT fl.* FROM cartao.fatura_linha fl WHERE fl.fatura_id=%s "

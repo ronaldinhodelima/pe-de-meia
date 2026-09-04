@@ -548,3 +548,23 @@ def test_busca_da_detalhada_nao_casa_com_opcao_nao_escolhida():
     assert "select.remove()" in fn, "as opcoes nao escolhidas saem do texto"
     assert "select.options[select.selectedIndex]" in fn
     assert "data-tip" in fn, "o titular do avatar continua pesquisavel"
+
+
+def test_seletor_de_fatura_oferece_meses_futuros_com_dados():
+    """Parcela futura chega adiantada do Pluggy e nao aparecia em lugar nenhum:
+    o ciclo em andamento termina hoje."""
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    template = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+
+    fn = view.split("def _meses_futuros_com_dados", 1)[1].split("\ndef ", 1)[0]
+    assert ")::date > %s" in fn, "so meses ainda por vir"
+    assert "COALESCE(t.duplicada,false)=false" in fn
+    assert "somente_conciliacao" in fn
+    # e um ciclo PREVISTO, nao uma fatura: a janela e o mes civil
+    assert "mes civil" in fn or "MES CIVIL" in fn
+    assert "· Previsto" in template
+    assert "fatura.previsto" in template
+    assert "fatura.value.startsWith('futuro-')" in js

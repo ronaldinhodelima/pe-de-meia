@@ -92,7 +92,7 @@
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
 <div class="fatura-cabecalho">
   {% if fatura_antiga %}<a class="nav" href="/lancamentos/fatura?fatura_id={{ fatura_antiga.id }}" title="Fatura anterior">‹</a>{% else %}<span class="nav" style="opacity:.3">‹</span>{% endif %}
-  <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}{% if fatura.em_andamento %} · Em andamento{% endif %}</h2>
+  <h2>Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}{% if fatura.previsto %} · Previsto{% elif fatura.em_andamento %} · Em andamento{% endif %}</h2>
   {% if fatura.periodo_inicio and fatura.periodo_fim %}<span class="fatura-ciclo">Ciclo {{ fatura.periodo_inicio.strftime('%d/%m/%Y') }} a {{ fatura.periodo_fim.strftime('%d/%m/%Y') }}{% if fatura.vencimento %} · vence {{ fatura.vencimento.strftime('%d/%m/%Y') }}{% elif fatura.em_andamento %} · aguardando PDF oficial{% endif %}</span>{% endif %}
   {% if fatura_nova %}<a class="nav" href="/lancamentos/fatura?{% if fatura_nova.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura_nova.id }}{% endif %}" title="Fatura seguinte">›</a>{% else %}<span class="nav" style="opacity:.3">›</span>{% endif %}
   {% if not fatura.em_andamento %}<a href="/relatorios/conciliar-fatura?fatura_id={{ fatura.id }}" class="ver-btn fatura-conciliacao" style="text-decoration:none">Ver conciliação do PDF</a>{% else %}<span class="estado fatura-conciliacao">Valores provisórios do Pluggy</span>{% endif %}
@@ -105,7 +105,7 @@
   </select>
   <label>Fatura</label>
   <select id="faturaSelecionada" data-pdm-native>
-    {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{{ ' · Em andamento' if item.em_andamento else '' }}</option>{% endfor %}
+    {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{% if item.previsto %} · Previsto{% elif item.em_andamento %} · Em andamento{% endif %}</option>{% endfor %}
   </select>
   <label>Status</label>
   <select id="faturaStatus" data-pdm-native>
@@ -124,7 +124,7 @@
   </div>
 </div>
 
-{% if fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não possui PDF oficial. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação do PDF.</div>{% endif %}
+{% if fatura.previsto %}<div class="aviso" style="margin-bottom:10px">Mês que a fatura <b>ainda não cobrou</b>: são parcelas que o Pluggy já entregou com data futura. O período é o mês civil, não um ciclo de fatura — o fechamento só se conhece quando a fatura chega. Classifique à vontade; o OK vem depois da conciliação.</div>{% elif fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não possui PDF oficial. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação do PDF.</div>{% endif %}
 <div class="cards fatura-cards">
   <div class="card" data-filtro="todas"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas no PDF' }}</div></div>
   {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">PDF oficial</div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}
@@ -274,4 +274,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-3"></script>{% endblock %}
