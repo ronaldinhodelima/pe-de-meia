@@ -45,6 +45,13 @@
        ruido (11 x 11,5 x 12 x 12,5 x 13 x 13,5). Titulos de 15px para cima
        ficam de fora de proposito: cada um e uma decisao isolada, e agrupa-los
        mudaria o desenho em vez de padronizar. */
+    /* Escala de titulos, acima da de texto. Quatro degraus para os nove
+       tamanhos crus que existiam entre 15 e 32px - um por tela. Nao varia com
+       o tema, entao vive so aqui. */
+    --titulo-sm: 15px;
+    --titulo-md: 17px;
+    --titulo-lg: 21px;
+    --titulo-xl: clamp(24px, 3.4vw, 32px);
     --fonte-xxs: 10px;
     --fonte-xs: 11px;
     --fonte-sm: 12px;
@@ -181,7 +188,7 @@
     border-bottom: 1px solid var(--line);
   }
   .topbar > div:first-child { display: flex; align-items: center; gap: 9px; }
-  .marca { font-weight: var(--peso-forte); font-size: 15px; letter-spacing: -0.02em; color: var(--ink); }
+  .marca { font-weight: var(--peso-forte); font-size: var(--titulo-sm); letter-spacing: -0.02em; color: var(--ink); }
   .marca-box { display: flex; align-items: center; gap: 9px; }
   .marca-icon { width: 30px; height: 30px; border-radius: var(--radius-sm); display: block; object-fit: cover; }
 
@@ -441,7 +448,7 @@
     font-size: var(--fonte-xxs); color: var(--ink-faint); text-transform: uppercase; letter-spacing: .03em; font-weight: var(--peso-normal);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .card .val { font-size: 21px; font-weight: var(--peso-medio); margin-top: 5px; letter-spacing: -0.015em; white-space: nowrap; }
+  .card .val { font-size: var(--titulo-lg); font-weight: var(--peso-medio); margin-top: 5px; letter-spacing: -0.015em; white-space: nowrap; }
   .card .sub { font-size: var(--fonte-xs); color: var(--ink-faint); margin-top: 3px; white-space: nowrap; }
 
   .visao-lancamentos { display:flex;justify-content:flex-end;gap:4px;margin:-7px 0 14px; }
@@ -477,7 +484,7 @@
   .modal-bg { display: none; position: fixed; inset: 0; background: var(--modal-fundo); align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
   .modal-bg.show { display: flex; }
   .modal { background: var(--surface); border-radius: var(--radius); padding: 26px; width: 420px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: var(--shadow-2); border: 1px solid var(--line); }
-  .modal h3 { margin-top: 0; font-size: 16px; letter-spacing: -0.01em; }
+  .modal h3 { margin-top: 0; font-size: var(--titulo-sm); letter-spacing: -0.01em; }
   .modal .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-size: var(--fonte-md); }
   .modal .row > span:last-child { text-align: right; }
   .modal .row-pareada { gap: 22px; }
@@ -535,7 +542,7 @@
   }
   .modal-conferencia { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .modal-conferencia select { min-width: 78px; }
-  .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: 20px; line-height: 1; transition: color .15s; }
+  .modal .close { float: right; cursor: pointer; color: var(--ink-faint); font-size: var(--fonte-lg); line-height: 1; transition: color .15s; }
   .modal .close:hover { color: var(--ink); }
   .modal-confirmacao { margin-top: 14px; padding: 13px; border: 1px solid var(--bad-line); border-radius: var(--radius-sm); background: var(--bad-soft); }
   .modal-confirmacao[hidden] { display: none; }

@@ -991,6 +991,7 @@ números do DRE ficaram com o verde e o vermelho antigos depois do redesenho, e 
 | Campo | `--campo-sombra`, `--campo-sombra-forte`, `--campo-linha-hover`, `--campo-linha-invalida`, `--campo-linha-invalida-forte`, `--campo-sombra-invalida` |
 | Texto | `--ink`, `--ink-soft`, `--ink-faint` |
 | Escala de texto | `--fonte-xxs` a `--fonte-lg` (10 a 14px) |
+| Escala de títulos | `--titulo-sm` 15px, `--titulo-md` 17px, `--titulo-lg` 21px, `--titulo-xl` `clamp()` |
 | Raio | `--radius-xxs` a `--radius-lg`, `--radius-pill` |
 | Peso | `--peso-normal`, `--peso-medio`, `--peso-forte`, `--peso-destaque` |
 
@@ -1024,13 +1025,21 @@ rótulos ao lado. Não aparece em busca por valor cru justamente porque não há
 nenhum. **Tag semântica sem regra é decisão do navegador, não sua** — todo bloco de texto do sistema
 precisa dizer o próprio tamanho por token.
 
-**A escala de títulos ainda NÃO existe — decisão aberta com o usuário (05/09/2026).** De 15px para
-cima cada tela ainda usa um valor cru, e são nove: 15, 16, 17, 18, 19, 20, 21 e o `clamp()` do
-login. A proposta apresentada, aguardando aprovação, é de quatro degraus — `--titulo-sm` 15px
-(título de modal, marca do topbar), `--titulo-md` 17px (título de tela, total de grupo),
-`--titulo-lg` 21px (número grande de card, título de fatura) e `--titulo-xl` `clamp(24px,3.4vw,32px)`
-(só o herói do login). **Até ela ser aprovada, não invente tamanho de título novo:** reuse um dos
-que já existem, senão a escala nasce com mais exceções do que degraus.
+**A escala de títulos** (aprovada pelo usuário em 05/09/2026) tem quatro degraus acima da de
+texto: `--titulo-sm` 15px (título de modal, marca do topbar, setas de mês), `--titulo-md` 17px
+(título de tela, total de grupo do DRE, card de investimentos), `--titulo-lg` 21px (número grande
+de card, título de fatura, cartão do login) e `--titulo-xl` `clamp(24px,3.4vw,32px)`, usado **só**
+no herói do login. Substituiu nove valores crus, um por tela — 15, 16, 17, 18, 19, 20, 21 e o
+`clamp()`. Nenhum título mudou mais de 2px.
+
+**O `×` não é título, é ícone.** Ele estava em 20px, o maior glifo do modal sendo a ação menos
+importante dele. Passou para `--fonte-lg`, o mesmo da barra de lote — os dois "fechar" do sistema
+agora têm o mesmo tamanho.
+
+`test_titulos_saem_da_escala_e_nao_de_um_valor_cru` proíbe `font-size` cru de 15px para cima nos
+arquivos já convertidos. **`templates/lancamentos_fatura.html` ficou de fora**: a tela estava sendo
+remontada em outra frente quando a escala foi aplicada, e converter arquivo em movimento só gera
+conflito. Entra na próxima revisão daquela tela — são 6 tamanhos, sendo dois deles já 17px.
 
 **Contorno semântico também é token.** `--accent-line`, `--good-line` e `--bad-line` existem
 porque três bordas estavam em cor fixa (`#b9dfe4`, `#cfe9d9`, `#efb3ae`) sobre fundo que já era
@@ -1044,9 +1053,9 @@ chegaram a **fixar o formato errado** como esperado — teste que copia o compor
 cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
-fora do sistema. Eram 522 em 01/09/2026; hoje são **38**, e o grosso do que restou são os títulos
-de 15px para cima — cada um ainda um valor cru, à espera da escala de títulos — mais o que é
-intenção (círculos `50%`, fio de cabelo `1px`, o painel navy do login).
+fora do sistema. Eram 522 em 01/09/2026; hoje são **24**, e o que restou é intenção (círculos
+`50%`, fio de cabelo `1px`, os raios de 12/16/18px que a regra abaixo mantém separados, o painel
+navy do login) mais os 6 tamanhos da Detalhada, que esperam a revisão daquela tela.
 `test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
 folgado**, pedindo para abaixá-lo — o número só pode cair.
 

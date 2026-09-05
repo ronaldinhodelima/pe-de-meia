@@ -6,10 +6,10 @@
     {# sem rotulo: o campo de mes e os botoes ‹ › ja dizem o que e #}
     <div style="display:flex;align-items:center;gap:4px">
       <button type="button" onclick="mudarMes(-1)" id="btnMesAnterior" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}"
-              style="padding:6px 12px;font-size:15px;line-height:1">‹</button>
+              style="padding:6px 12px;font-size:var(--titulo-sm);line-height:1">‹</button>
       <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltros(true)">
       <button type="button" onclick="mudarMes(1)" id="btnMesProximo" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}"
-              style="padding:6px 12px;font-size:15px;line-height:1">›</button>
+              style="padding:6px 12px;font-size:var(--titulo-sm);line-height:1">›</button>
     </div>
   </div>
   <div>

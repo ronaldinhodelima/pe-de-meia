@@ -95,7 +95,7 @@
   <div class="cat-breakdown">
     <div style="display:flex;justify-content:space-between;align-items:baseline">
       <h3 style="margin:0">{{ g.nome }}</h3>
-      <span style="font-size:18px;font-weight:var(--peso-forte)">{{ g.total|moeda }}</span>
+      <span style="font-size:var(--titulo-md);font-weight:var(--peso-forte)">{{ g.total|moeda }}</span>
     </div>
     {% for s in g.subgrupos %}
       <div style="padding:10px 0;border-top:1px solid #f2f2f2">

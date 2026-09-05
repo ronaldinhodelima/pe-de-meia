@@ -1241,6 +1241,33 @@ def test_checkbox_tem_uma_unica_definicao_visual_em_todo_o_sistema():
     )
 
 
+def test_titulos_saem_da_escala_e_nao_de_um_valor_cru():
+    """De 15px para cima, tamanho e token - a escala de titulos (secao 7.8-A).
+
+    Eram nove valores crus, um por tela: 15, 16, 17, 18, 19, 20, 21 e o clamp
+    do login. Um decimo apareceria sem erro nenhum e so seria notado por quem
+    abrisse duas telas lado a lado.
+
+    `lancamentos_fatura.html` ainda esta fora: a tela estava sendo remontada
+    quando a escala foi aplicada, e converter arquivo em movimento so gera
+    conflito. Entra na proxima revisao daquela tela.
+    """
+    import re
+
+    alvos = ["static/app.css", "templates/login.html", "templates/dre.html",
+             "templates/index.html", "templates/investimentos.html",
+             "templates/conciliar_fatura.html"]
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    for token in ("--titulo-sm: 15px", "--titulo-md: 17px", "--titulo-lg: 21px", "--titulo-xl:"):
+        assert token in css, token
+
+    cru = re.compile(r"font-size:\s*(1[5-9]|[2-9]\d)(\.\d+)?px")
+    for alvo in alvos:
+        texto = (RAIZ / alvo).read_text(encoding="utf-8")
+        achados = cru.findall(texto)
+        assert not achados, f"{alvo}: tamanho de titulo cru {achados} - use --titulo-*"
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1253,7 +1280,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 38
+    TETO = 24
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

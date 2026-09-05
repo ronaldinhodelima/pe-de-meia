@@ -12,9 +12,9 @@
 {% else %}
   <div class="cards">
     <div class="card"><div class="label">Saldo líquido</div><div class="val">{{ saldo_total|moeda }}</div></div>
-    <div class="card"><div class="label">Valor aplicado</div><div class="val" style="font-size:19px">{{ aplicado_total|moeda }}</div></div>
-    <div class="card"><div class="label">Rendimento bruto</div><div class="val" style="color:var(--good);font-size:19px">{{ rendimento_bruto|moeda }}</div><div class="sub">{{ "%.1f"|format(rend_pct) }}% sobre o aplicado</div></div>
-    <div class="card"><div class="label">IR a recolher</div><div class="val" style="color:var(--bad);font-size:19px">{{ ir_total|moeda }}</div></div>
+    <div class="card"><div class="label">Valor aplicado</div><div class="val" style="font-size:var(--titulo-md)">{{ aplicado_total|moeda }}</div></div>
+    <div class="card"><div class="label">Rendimento bruto</div><div class="val" style="color:var(--good);font-size:var(--titulo-md)">{{ rendimento_bruto|moeda }}</div><div class="sub">{{ "%.1f"|format(rend_pct) }}% sobre o aplicado</div></div>
+    <div class="card"><div class="label">IR a recolher</div><div class="val" style="color:var(--bad);font-size:var(--titulo-md)">{{ ir_total|moeda }}</div></div>
     <div class="card"><div class="label">Aplicações ativas</div><div class="val">{{ ativos|length }}</div><div class="sub">{{ encerrados }} encerradas</div></div>
   </div>
 

@@ -85,7 +85,7 @@
       <span class="ver-btn" style="opacity:.35;cursor:default">‹</span>
     {% endif %}
     <div>
-      <div style="font-size:20px;font-weight:var(--peso-forte);line-height:1.2">
+      <div style="font-size:var(--titulo-lg);font-weight:var(--peso-forte);line-height:1.2">
         Fatura {{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}
         {%- if resultado.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}
       </div>
