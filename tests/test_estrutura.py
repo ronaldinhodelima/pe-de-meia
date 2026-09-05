@@ -1788,3 +1788,28 @@ def test_importacao_de_fatura_nunca_devolve_500_sem_mensagem():
     assert "conn.rollback()" in bloco
     assert "traceback.format_exc()" in bloco
     assert "não consegui gravar a conciliação" in bloco
+
+
+def test_extrato_mostra_movimento_de_caixa_e_nao_despesa_no_dre():
+    """"Despesas no DRE" foi feito para fatura, onde TUDO e despesa.
+
+    Num extrato ha entrada e saida misturadas, e somar as duas sob esse rotulo
+    produz numero sem significado - foi o que apareceu na tela: 'Despesas no
+    DRE: -R$ 16.302,96'. Extrato responde outra pergunta: quanto entrou, quanto
+    saiu, quanto o saldo variou. E movimento de caixa, nao resultado -
+    transferencia entre contas proprias entra e sai sem ser despesa (secao 1.1).
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "conciliar_fatura.html").read_text(encoding="utf-8")
+
+    assert "FILTER (WHERE valor > 0)" in view and "FILTER (WHERE valor < 0)" in view
+    assert '"variacao": movimento["entradas"] - movimento["saidas"]' in view
+
+    assert "{% if resumo_extrato %}" in template
+    assert "Entradas no período" in template
+    assert "Saídas no período" in template
+    assert "Variação do saldo" in template
+    # e a fatura continua com os cards dela
+    assert "Despesas no DRE" in template and "Fora do DRE" in template
+    # o rotulo do total tambem muda: extrato nao tem "SALDO TOTAL impresso"
+    assert "Movimento do período" in template

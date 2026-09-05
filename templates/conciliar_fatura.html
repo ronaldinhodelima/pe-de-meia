@@ -112,7 +112,7 @@
     <div class="cards" style="margin-top:12px">
       <div class="card"><div class="label" title="Referência da fatura">Referência</div>
         <div class="val">{{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}</div></div>
-      <div class="card"><div class="label" title="SALDO TOTAL impresso na fatura">Total impresso na fatura</div>
+      <div class="card"><div class="label" title="{{ 'Movimento líquido do período, conferido contra o saldo inicial e final do extrato' if resumo_extrato else 'SALDO TOTAL impresso na fatura' }}">{{ 'Movimento do período' if resumo_extrato else 'Total impresso na fatura' }}</div>
         <div class="val">{{ f.total|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas que o sistema leu da fatura (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura da fatura está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
         <div class="val" style="color:{{ 'var(--good)' if (resultado.soma_fatura - f.total)|abs < 0.01 else 'var(--bad)' }}">{{ resultado.soma_fatura|moeda }}</div></div>
@@ -120,10 +120,22 @@
         <div class="val">{{ resultado.soma_vinculada|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas da fatura que ainda não têm vínculo com nenhum lançamento do Pluggy. Não é 'total menos soma' - é o quanto da fatura ainda não foi conciliado.">Falta vincular</div>
         <div class="val" style="color:{{ 'var(--good)' if resultado.diferenca == 0 else 'var(--bad)' }}">{{ resultado.diferenca|moeda }}</div></div>
-      <div class="card"><div class="label" title="Somente lançamentos deste ciclo classificados com natureza de despesa e contabilizados no DRE">Despesas no DRE</div>
-        <div class="val">{{ resultado.despesas_dre|moeda }}</div></div>
-      <div class="card"><div class="label" title="Diferença explicável entre a fatura e o DRE: investimentos e outras naturezas que continuam conciliadas, mas não são despesas">Fora do DRE</div>
-        <div class="val">{{ resultado.fora_dre|moeda }}</div></div>
+      {% if resumo_extrato %}
+        {# Extrato responde outra pergunta: nao "quanto gastei" (transferencia
+           entre contas proprias entra e sai sem ser despesa), e sim quanto
+           entrou, quanto saiu e quanto o saldo variou. #}
+        <div class="card"><div class="label" title="Soma dos créditos do período: recebimentos, transferências recebidas, depósitos">Entradas no período</div>
+          <div class="val" style="color:var(--good)">{{ resumo_extrato.entradas|moeda }}</div></div>
+        <div class="card"><div class="label" title="Soma dos débitos do período: pagamentos, transferências enviadas, saques">Saídas no período</div>
+          <div class="val" style="color:var(--bad)">{{ resumo_extrato.saidas|moeda }}</div></div>
+        <div class="card"><div class="label" title="Entradas menos saídas — é movimento de caixa, não o resultado do DRE. Transferência entre contas próprias entra e sai sem ser receita nem despesa.">Variação do saldo</div>
+          <div class="val">{{ resumo_extrato.variacao|moeda }}</div></div>
+      {% else %}
+        <div class="card"><div class="label" title="Somente lançamentos deste ciclo classificados com natureza de despesa e contabilizados no DRE">Despesas no DRE</div>
+          <div class="val">{{ resultado.despesas_dre|moeda }}</div></div>
+        <div class="card"><div class="label" title="Diferença explicável entre a fatura e o DRE: investimentos e outras naturezas que continuam conciliadas, mas não são despesas">Fora do DRE</div>
+          <div class="val">{{ resultado.fora_dre|moeda }}</div></div>
+      {% endif %}
     </div>
     <div style="font-size:var(--fonte-sm);color:var(--ink-faint);margin-top:10px">
       {{ resultado.linhas|length }} linha(s) na fatura ·

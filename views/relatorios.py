@@ -1474,7 +1474,7 @@ def conciliar_fatura():
     # Compromissos do extrato: debitos ja agendados pelo banco. Nao sao
     # movimento do periodo e nao entram em nenhum total - a tela mostra a parte,
     # para o dinheiro que ainda nao saiu nunca virar resultado (secao 1.1).
-    compromissos, tipo_documento = [], "fatura"
+    compromissos, tipo_documento, resumo_extrato = [], "fatura", None
     if fatura_id:
         cur.execute(
             "SELECT tipo_documento FROM cartao.fatura_importada WHERE id=%s;", (fatura_id,)
@@ -1488,12 +1488,34 @@ def conciliar_fatura():
                 (fatura_id,),
             )
             compromissos = [dict(r) for r in cur.fetchall()]
+            # Cards proprios: "Despesas no DRE" e "Fora do DRE" foram feitos
+            # para fatura, onde TUDO e despesa. Num extrato ha entrada e saida
+            # misturadas, e somar as duas sob o rotulo "despesas" produz um
+            # numero que nao significa nada - foi o que apareceu na tela.
+            #
+            # Aqui os numeros vem do proprio documento: movimento de caixa, e
+            # NAO resultado. Extrato nao responde "quanto gastei" (transferencia
+            # entre contas proprias entra e sai sem ser despesa, secao 1.1) -
+            # responde "quanto entrou, quanto saiu, quanto o saldo variou".
+            cur.execute(
+                "SELECT COALESCE(SUM(valor) FILTER (WHERE valor > 0),0) AS entradas, "
+                "COALESCE(SUM(-valor) FILTER (WHERE valor < 0),0) AS saidas "
+                "FROM cartao.fatura_linha WHERE fatura_id=%s;",
+                (fatura_id,),
+            )
+            movimento = dict(cur.fetchone())
+            resumo_extrato = {
+                "entradas": movimento["entradas"],
+                "saidas": movimento["saidas"],
+                "variacao": movimento["entradas"] - movimento["saidas"],
+            }
 
     cur.close()
     conn.close()
     return render_template(
         "conciliar_fatura.html",
         compromissos=compromissos,
+        resumo_extrato=resumo_extrato,
         total_compromissos=sum((c["valor"] for c in compromissos), Decimal("0")),
         tipo_documento=tipo_documento,
         fatura_mais_nova=fatura_mais_nova,
