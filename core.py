@@ -1175,7 +1175,7 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
         "), unicos AS ("
         "  SELECT linha_id FROM elegiveis GROUP BY linha_id HAVING COUNT(*) = 1"
         ") "
-        "SELECT e.transacao_id FROM elegiveis e JOIN unicos u ON u.linha_id = e.linha_id "
+        "SELECT e.transacao_id::text FROM elegiveis e JOIN unicos u ON u.linha_id = e.linha_id "
         "  JOIN cartao.transacao t ON t.transacao_id = e.transacao_id "
         "  LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
         " WHERE e.centavos_linha = e.centavos_transacao "
@@ -1200,7 +1200,9 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
     cur.execute(
         "UPDATE cartao.transacao SET conferida=true, conferida_por=%s, "
         "conferida_em=now(), atualizado_em=now() "
-        "WHERE transacao_id = ANY(%s) AND COALESCE(conferida,false)=false;",
+        # `transacao_id` e uuid e a lista chega como texto: sem o ::text dos dois
+        # lados o Postgres recusa a comparacao e a importacao inteira estoura.
+        "WHERE transacao_id::text = ANY(%s) AND COALESCE(conferida,false)=false;",
         (rotulo, alvos),
     )
     return {"marcados": max(cur.rowcount, 0), "rotulo": rotulo}

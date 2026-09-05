@@ -1754,3 +1754,25 @@ def test_conciliacao_oferece_conta_corrente_e_nao_so_cartao():
     # a conta "manual" (dinheiro) fica fora: nao existe documento de banco dela
     assert '"MANUAL"' not in view.split("contas_com_documento = [", 1)[1][:200]
     assert "Conta ou cartão (origem)" in template
+
+
+def test_comparacao_de_uuid_em_lista_usa_texto_dos_dois_lados():
+    """`transacao_id` e uuid e as listas circulam como texto no app.
+
+    Postgres nao tem operador `uuid = text`: comparar sem ::text derruba a
+    consulta inteira. Foi assim que a importacao do extrato deu 500 - e teria
+    derrubado tambem a importacao de qualquer fatura, porque o OK automatico
+    roda nas duas.
+    """
+    import re
+
+    for caminho in [RAIZ / "core.py", *sorted((RAIZ / "views").glob("*.py"))]:
+        texto = caminho.read_text(encoding="utf-8")
+        # `ANY(%s::uuid[])` converte a lista e tambem esta certo - o que nao
+        # pode e comparar uuid com texto sem conversao de nenhum lado.
+        for achado in re.finditer(r"transacao_id\s*=\s*ANY\(%s\)", texto):
+            linha = texto[:achado.start()].count("\n") + 1
+            raise AssertionError(
+                f"{caminho.name}:{linha} compara uuid com lista de texto; "
+                "use transacao_id::text = ANY(%s)"
+            )
