@@ -1297,6 +1297,25 @@ def test_campo_em_caixa_tem_uma_definicao_so():
     assert "border-radius:6px" not in js, "o campo voltou a ser desenhado no JS"
 
 
+def test_glifos_saem_da_escala_de_icone():
+    """Icone nao e texto nem titulo: o tamanho vem do alvo de clique.
+
+    Estavam soltos 8, 8.4, 10, 11, 12, 14 e 17px em seis regras diferentes -
+    dois "x" de fechar com desenhos proprios, duas setas de ordenacao com
+    tamanhos diferentes entre as duas telas de lancamentos.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    for token in ("--icone-xxs: 8px", "--icone-sm: 11px", "--icone-md: 14px", "--icone-lg: 17px"):
+        assert token in css, token
+
+    # os dois "fechar" do sistema leem o mesmo degrau
+    assert css.count("font-size: var(--icone-md)") == 2, "modal e barra de lote"
+
+    fatura = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "font-size:var(--icone-lg)" in fatura, "expandir e detalhe"
+    assert "font-size:var(--icone-sm)" in fatura, "seta de ordenacao"
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1309,7 +1328,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 21
+    TETO = 17
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

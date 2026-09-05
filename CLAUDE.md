@@ -992,6 +992,7 @@ números do DRE ficaram com o verde e o vermelho antigos depois do redesenho, e 
 | Texto | `--ink`, `--ink-soft`, `--ink-faint` |
 | Escala de texto | `--fonte-xxs` a `--fonte-lg` (10 a 14px) |
 | Escala de títulos | `--titulo-sm` 15px, `--titulo-md` 17px, `--titulo-lg` 21px, `--titulo-xl` `clamp()` |
+| Escala de ícone | `--icone-xxs` 8px, `--icone-sm` 11px, `--icone-md` 14px, `--icone-lg` 17px |
 | Raio | `--radius-xxs` a `--radius-lg`, `--radius-pill` |
 | Peso | `--peso-normal`, `--peso-medio`, `--peso-forte`, `--peso-destaque` |
 
@@ -1032,6 +1033,15 @@ de card, título de fatura, cartão do login) e `--titulo-xl` `clamp(24px,3.4vw,
 no herói do login. Substituiu nove valores crus, um por tela — 15, 16, 17, 18, 19, 20, 21 e o
 `clamp()`. Nenhum título mudou mais de 2px.
 
+**Ícone tem escala própria — o tamanho vem do alvo de clique, não da leitura** (05/09/2026).
+`--icone-xxs` 8px é indicador micro (expoente da parcela, contador do chip de filtro);
+`--icone-sm` 11px é glifo dentro de campo ou cabeçalho (chevron do combobox, setas de ordenação,
+marcador de `<details>`); `--icone-md` 14px é o `×` de fechar; `--icone-lg` 17px é glifo de botão
+(o `+` de expandir, o `⌄` de detalhes). Substituiu 8, 8.4, 10, 11, 12, 14 e 17px espalhados por seis
+regras — as setas de ordenação chegaram a ter **tamanhos diferentes entre as duas telas de
+lançamentos**. `test_glifos_saem_da_escala_de_icone` trava isso. **Não misture as três escalas:**
+texto é o que se lê, título é o que hierarquiza, ícone é o que se clica.
+
 **O `×` não é título, é ícone.** Ele estava em 20px, o maior glifo do modal sendo a ação menos
 importante dele. Passou para `--fonte-lg`, o mesmo da barra de lote — os dois "fechar" do sistema
 agora têm o mesmo tamanho.
@@ -1066,11 +1076,10 @@ chegaram a **fixar o formato errado** como esperado — teste que copia o compor
 cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
-fora do sistema. Eram 522 em 01/09/2026; hoje são **21**, com uma rede mais larga que a de ontem
-(o JS entrou na varredura). O que restou é intenção — círculos `50%`, fio de cabelo `1px`, os raios
-de 12/16/18px que a regra abaixo mantém separados, o painel navy do login — mais **quatro glifos de
-ícone** (17px do `+` e do `⌄`, 8px do expoente, 8,4px do contador de filtro), que não são texto nem
-título: **falta decidir uma escala de ícone**, e forçá-los na escala de texto seria redesenho.
+fora do sistema. Eram 522 em 01/09/2026; hoje são **17**, e **nenhum é tamanho de fonte** — cor,
+tamanho, peso e sombra estão inteiramente dentro do sistema. Os 17 são 15 raios que a regra abaixo
+mantém separados (círculos `50%`, fio de `1px`, 12/16/18px) e as duas cores do painel navy do
+login.
 `test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
 folgado**, pedindo para abaixá-lo — o número só pode cair.
 
