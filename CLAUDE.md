@@ -946,7 +946,7 @@ permissões, validações e salvamento automático.
   Tab confirma a opção destacada e segue, Shift+Tab volta, Escape cancela. **Nunca criar ou
   escolher silenciosamente uma opção que não esteja destacada.**
 - Visual final: 26px, campo transparente, borda normalmente invisível, sombra mínima; hover/foco
-  em cinza neutro (`#f2f2f0`) com contorno translúcido e escala 1,012. Obrigatório incompleto
+  em cinza neutro (`--raise`, contorno `--campo-linha-hover`) e escala 1,012. Obrigatório incompleto
   mantém sinalização vermelha discreta. **Não exibir o lembrete textual `Enter`.**
 - O campo nativo fica oculto **também da árvore de acessibilidade** — leitores de tela encontram
   só o combobox, sem controles duplicados.
@@ -1016,6 +1016,21 @@ semântica, não tamanho** — quem decide o tamanho é o token. O padrão de ca
 (§7.7), porque ele já é a maioria; `--campo-sombra` e `--campo-sombra-forte` existem para que os
 dois leiam o mesmo valor em vez de copiá-lo.
 `tests/test_estrutura.py::test_modal_tem_uma_tipografia_de_rotulo_e_um_desenho_de_campo` trava isso.
+
+**Elemento sem regra nenhuma não fica neutro — fica com o padrão do navegador.** O bloco
+"Informações internas do sistema" do modal não tinha uma linha de CSS, então `<summary>` e a nota
+herdavam os **16px** do agente: a informação menos importante da tela com a letra maior que a dos
+rótulos ao lado. Não aparece em busca por valor cru justamente porque não há valor escrito em lugar
+nenhum. **Tag semântica sem regra é decisão do navegador, não sua** — todo bloco de texto do sistema
+precisa dizer o próprio tamanho por token.
+
+**A escala de títulos ainda NÃO existe — decisão aberta com o usuário (05/09/2026).** De 15px para
+cima cada tela ainda usa um valor cru, e são nove: 15, 16, 17, 18, 19, 20, 21 e o `clamp()` do
+login. A proposta apresentada, aguardando aprovação, é de quatro degraus — `--titulo-sm` 15px
+(título de modal, marca do topbar), `--titulo-md` 17px (título de tela, total de grupo),
+`--titulo-lg` 21px (número grande de card, título de fatura) e `--titulo-xl` `clamp(24px,3.4vw,32px)`
+(só o herói do login). **Até ela ser aprovada, não invente tamanho de título novo:** reuse um dos
+que já existem, senão a escala nasce com mais exceções do que degraus.
 
 **Contorno semântico também é token.** `--accent-line`, `--good-line` e `--bad-line` existem
 porque três bordas estavam em cor fixa (`#b9dfe4`, `#cfe9d9`, `#efb3ae`) sobre fundo que já era
