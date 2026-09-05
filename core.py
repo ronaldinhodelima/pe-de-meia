@@ -466,6 +466,19 @@ BANCOS_ESTILO = {
 }
 
 
+def cor_banco(banco):
+    """Cor da marca do banco: (fundo, texto). Mesma tabela do selo.
+
+    O avatar do titular usa isso para dizer de que cartao e a compra sem
+    ocupar mais uma coluna. Sai da MESMA fonte do selo de propósito: duas
+    tabelas de cor divergiriam no primeiro banco novo.
+    """
+    estilo = BANCOS_ESTILO.get(banco)
+    if not estilo:
+        return "var(--selo-neutro)", "var(--sobre-cor)"
+    return estilo[0], (estilo[2] if len(estilo) > 2 else "var(--sobre-cor)")
+
+
 def selo_banco_html(banco, tipo=None):
     """Selo colorido do banco. Para a conta manual usa um selo neutro."""
     if tipo == "MANUAL":

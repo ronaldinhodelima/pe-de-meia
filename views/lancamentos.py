@@ -32,6 +32,7 @@ from core import (
     rotulo_valor_dimensao,
     cat_pt,
     cat_pt_puro,
+    cor_banco,
     calcular_totais_dre_fatura,
     chave_alfa,
     chip_filter_html,
@@ -933,6 +934,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
     nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
 
+    titular_conexao = (contas_by_id.get(account_id) or {}).get("titular")
+
     linhas, total, total_dre, total_fora, classificadas = [], Decimal("0"), Decimal("0"), Decimal("0"), 0
     for indice, tx in enumerate(transacoes, 1):
         tid = str(tx["transacao_id"])
@@ -964,7 +967,14 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         # ainda; ele costuma aparecer quando o Pluggy confirma o POSTED.
         linhas.append({
             "id": "andamento-" + str(indice), "data": tx["data_local"].date(),
-            "descricao": tx["descricao"], "titular": None,
+            "descricao": tx["descricao"],
+            # O nome impresso do portador so existe no PDF. Ate a fatura chegar,
+            # o avatar mostra o que o Pluggy tem: o apelido do cartao (por final4)
+            # ou, na falta dele, o titular da conexao. Quando a fatura e
+            # importada, o titular dela substitui isto - e a fonte que manda
+            # sobre o que foi cobrado (secao 5).
+            "titular": nomes_cartao.get(tx["numero_cartao_final"]) or titular_conexao,
+            "titular_fonte": "pluggy",
             "cartao_aguardando": not tx["numero_cartao_final"],
             "parcela_atual": tx["parcela_atual"], "parcela_total": tx["parcela_total"],
             "valor": valor, "pagamento": False, "vinculos": [tx], "principal": tx,
@@ -1029,6 +1039,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
         fatura_nova=seguinte, fatura_antiga=anterior,
         faturas=lista_faturas, conta=contas_by_id.get(account_id),
+        avatar_banco=cor_banco((contas_by_id.get(account_id) or {}).get("banco")),
         contas_credito=contas_credito, account_id=account_id, linhas=linhas_visiveis,
         categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
@@ -1463,6 +1474,7 @@ def lancamentos_por_fatura():
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
         fatura_nova=fatura_nova, fatura_antiga=fatura_antiga,
         faturas=faturas, conta=conta, contas_credito=contas_credito,
+        avatar_banco=cor_banco((conta or {}).get("banco")),
         account_id=account_id, linhas=linhas_visiveis, categorias=categorias_template,
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
         totais={

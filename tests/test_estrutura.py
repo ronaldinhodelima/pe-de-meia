@@ -1338,6 +1338,31 @@ def test_pendencia_da_linha_nao_muda_a_altura_da_tabela():
     assert "destino.dataset.pendencia" in js
 
 
+def test_avatar_do_titular_existe_na_fatura_em_andamento_e_usa_a_cor_do_banco():
+    """O avatar diz de que cartao e a compra, inclusive antes do PDF chegar.
+
+    Na fatura em andamento o titular impresso ainda nao existe - ele so vem no
+    documento. Ate la o avatar mostra o que o Pluggy tem (apelido do cartao por
+    final4, ou o titular da conexao) e diz isso no tooltip; quando a fatura e
+    importada, o titular dela substitui (secao 5).
+
+    A cor sai da MESMA tabela do selo de banco: duas tabelas de cor divergiriam
+    no primeiro banco novo.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert '"titular": nomes_cartao.get(tx["numero_cartao_final"]) or titular_conexao' in view
+    assert '"titular_fonte": "pluggy"' in view
+    assert view.count("avatar_banco=cor_banco(") >= 2, "andamento e fatura oficial"
+
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "def cor_banco(" in core
+    assert core.count("BANCOS_ESTILO = {") == 1, "uma unica tabela de cor de banco"
+
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "avatar_banco[0]" in html and "avatar_banco[1]" in html
+    assert "var(--accent-soft)" not in html.split(".avatar-titular{", 1)[1].split("}", 1)[0]
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 

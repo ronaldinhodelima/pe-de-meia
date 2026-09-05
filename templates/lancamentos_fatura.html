@@ -40,7 +40,7 @@
   .estado.invalido{color:var(--bad)}
 
   .quem{display:flex;align-items:center;gap:7px}
-  .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:var(--fonte-xxs);font-weight:var(--peso-medio);flex:none}
+  .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--selo-neutro);color:var(--sobre-cor);display:grid;place-items:center;font-size:var(--fonte-xxs);font-weight:var(--peso-forte);flex:none;letter-spacing:.02em}
 
   .vinculos-detalhe{background:var(--bg)}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:var(--radius-xs);transition:background-color .12s}
   .vinculo-grid.principal{background:var(--good-soft)}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid.tecnico:hover{background:var(--bg)}.vinculo-grid small{display:block;color:var(--ink-faint)}
@@ -201,7 +201,7 @@
     {% set cartao_info %}{% if linha.cartao_nome %}{{ linha.cartao_nome }}{% elif linha.cartao_aguardando %}cartão pendente{% endif %}{% endset %}
     <td class="desc" data-col="desc">
       <div class="quem">
-        {% if linha.titular %}<span class="avatar-titular" data-tip="{{ linha.titular }}{% if cartao_info %} · {{ cartao_info }}{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
+        {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if cartao_info and cartao_info != linha.titular %} · {{ cartao_info }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
           <span class="desc-loja">{{ linha.descricao }}</span>
           {% if 'Parc' not in linha.descricao %}<span class="desc-parcela">{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</span>{% endif %}
@@ -282,4 +282,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-5"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-6"></script>{% endblock %}

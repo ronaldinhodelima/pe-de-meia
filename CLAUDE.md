@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 350 aprovados, 6 ignorados
+**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 351 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -765,6 +765,13 @@ duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tab
   intercalar a classificação entre os registros — impede comparar candidatos em divergências.
 - Cada registro mostra a fonte: **`F`** = criado pela fatura, **`P`** = trazido pelo
   Pluggy, com tooltip CSS imediato (não o `title` nativo).
+- **O avatar antes da descrição existe também na fatura em andamento**, e pinta a cor da marca do
+  banco (Unicred verde, Nubank roxo) — a mesma tabela `BANCOS_ESTILO` do selo, via `cor_banco()`.
+  Duas tabelas de cor divergiriam no primeiro banco novo. Ali o nome impresso do portador **ainda
+  não existe**: ele só vem no documento, então o avatar usa o que o Pluggy tem — apelido do cartão
+  por final4, ou o titular da conexão — e **o tooltip diz que a origem é o Pluggy e que a fatura
+  confirma ao ser importada**. Depois do import, o titular do documento substitui (§5). Sem nenhum
+  dos dois, não há avatar: inventar inicial seria dizer de quem é a compra sem saber.
 - **Titular/cartão** identifica quem realizou a compra e é separado da dimensão financeira
   **Responsável**.
 
@@ -1320,7 +1327,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**350 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**351 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
