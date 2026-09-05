@@ -23,6 +23,7 @@ A descricao quebra em ate tres linhas de texto, com a data e os valores no
 meio. Se a Unicred mudar o modelo, o fechamento por saldo acusa - e por isso
 este parser levanta erro em vez de devolver numero errado.
 """
+import io
 import re
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
@@ -59,12 +60,25 @@ def _data(txt):
 
 def eh_extrato(conteudo):
     """Reconhece pelo CONTEUDO, nunca pela extensao: o despachante precisa
-    distinguir extrato de fatura, e os dois sao PDF da mesma cooperativa."""
+    distinguir extrato de fatura, e os dois sao PDF da mesma cooperativa.
+
+    Aceita texto ja extraido OU os bytes do arquivo. Num PDF o texto vem
+    comprimido (FlateDecode), entao procurar a palavra nos bytes crus nunca
+    acha - foi assim que o extrato caiu no leitor de fatura e o usuario viu
+    "nao encontrei o mes de referencia". Quando chegam bytes de PDF, o texto e
+    extraido antes de decidir.
+    """
     if isinstance(conteudo, bytes):
-        try:
+        if conteudo[:5] == b"%PDF-":
+            try:
+                with pdfplumber.open(io.BytesIO(conteudo)) as pdf:
+                    conteudo = "\n".join(
+                        (pagina.extract_text() or "") for pagina in pdf.pages[:2]
+                    )
+            except Exception:
+                return False
+        else:
             conteudo = conteudo.decode("latin-1", errors="replace")
-        except Exception:
-            return False
     return "Extrato" in conteudo and "Saldo no final do per" in conteudo
 
 

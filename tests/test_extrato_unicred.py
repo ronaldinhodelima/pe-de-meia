@@ -54,6 +54,25 @@ def test_reconhece_o_extrato_pelo_conteudo_e_nao_pela_extensao():
     assert not eh_extrato("Fatura do cartão Visa\nSALDO TOTAL R$ 100,00")
 
 
+def test_deteccao_abre_o_pdf_em_vez_de_procurar_nos_bytes_crus():
+    """Num PDF o texto vem comprimido: procurar a palavra nos bytes nunca acha.
+
+    Foi assim que o extrato caiu no leitor de FATURA e o usuario recebeu
+    "nao encontrei o mes de referencia" - erro do parser errado, que nao diz
+    nada sobre o problema real.
+    """
+    import inspect
+
+    import extrato_unicred
+
+    fonte = inspect.getsource(extrato_unicred.eh_extrato)
+    assert 'conteudo[:5] == b"%PDF-"' in fonte
+    assert "pdfplumber.open" in fonte
+    # bytes que nao sao PDF continuam sendo lidos como texto
+    assert eh_extrato(TEXTO.encode("latin-1"))
+    assert not eh_extrato(b"%PDF-1.5 conteudo binario que nao abre")
+
+
 def test_descricao_quebrada_em_tres_pedacos_e_remontada():
     """O lojista fica cortado no meio se as tres partes nao forem juntadas, e
     nenhuma regra de classificacao consegue casar com meia descricao."""
