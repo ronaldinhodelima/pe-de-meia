@@ -1708,7 +1708,7 @@ def test_ok_da_fatura_exige_as_tres_condicoes_e_nunca_desmarca():
     assert "COALESCE(conferida,false)=false" in fn
     assert "conferida=false" not in fn.replace(" ", "")
     # e o carimbo separa quem assinou
-    assert 'rotulo = f"fatura {referencia[1]:02d}/{referencia[0]}"' in fn
+    assert 'rotulo = f"fatura {mes:02d}/{ano}"' in fn
 
     # so em POST: assinar ao abrir a tela nao seria conferencia
     view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")

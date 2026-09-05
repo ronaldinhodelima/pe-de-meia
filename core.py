@@ -1125,6 +1125,19 @@ LOJISTAS_RECUSADOS = ("POUSADA FOGO*RESE", "ESTACAO")
 CATEGORIAS_RECUSADAS = ("Leisure", "Insurance")
 
 
+def _campo(linha, nome, posicao):
+    """Le uma coluna sem depender do tipo de cursor de quem chamou.
+
+    A importacao usa RealDictCursor (linha e dicionario) e as migracoes usam
+    cursor comum (linha e tupla). Funcao compartilhada pelos dois caminhos nao
+    pode escolher um formato: indexar por posicao num RealDictRow levanta
+    KeyError e derrubou a importacao inteira, com 500 e sem mensagem.
+    """
+    if isinstance(linha, dict):
+        return linha[nome]
+    return linha[posicao]
+
+
 def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
     """OK dado pela FATURA, na importacao — decisao do usuario em 05/09/2026.
 
@@ -1150,6 +1163,9 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
     "fatura MM/AAAA" e o que permite separar depois o que a fatura assinou do
     que uma pessoa assinou.
     """
+    # Acesso por NOME, nunca por posicao: esta funcao roda com o cursor de quem
+    # a chama, e a importacao usa RealDictCursor - ali `linha[0]` levanta
+    # KeyError e derruba a importacao inteira. Foi o que aconteceu.
     cur.execute(
         "SELECT ano_referencia, mes_referencia FROM cartao.fatura_importada WHERE id=%s;",
         (fatura_id,),
@@ -1157,7 +1173,9 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
     referencia = cur.fetchone()
     if not referencia:
         return {"marcados": 0, "rotulo": None}
-    rotulo = f"fatura {referencia[1]:02d}/{referencia[0]}"
+    ano = _campo(referencia, "ano_referencia", 0)
+    mes = _campo(referencia, "mes_referencia", 1)
+    rotulo = f"fatura {mes:02d}/{ano}"
 
     # Uma linha, um lancamento elegivel, valor identico em centavos.
     candidatos_sql = (
@@ -1175,7 +1193,8 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
         "), unicos AS ("
         "  SELECT linha_id FROM elegiveis GROUP BY linha_id HAVING COUNT(*) = 1"
         ") "
-        "SELECT e.transacao_id::text FROM elegiveis e JOIN unicos u ON u.linha_id = e.linha_id "
+        "SELECT e.transacao_id::text AS transacao_id "
+        "  FROM elegiveis e JOIN unicos u ON u.linha_id = e.linha_id "
         "  JOIN cartao.transacao t ON t.transacao_id = e.transacao_id "
         "  LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
         " WHERE e.centavos_linha = e.centavos_transacao "
@@ -1193,7 +1212,7 @@ def marcar_ok_automatico_da_fatura(cur, fatura_id, preview=False):
         "   );"
     )
     cur.execute(candidatos_sql, (fatura_id,))
-    alvos = [linha[0] for linha in cur.fetchall()]
+    alvos = [_campo(linha, "transacao_id", 0) for linha in cur.fetchall()]
     if preview or not alvos:
         return {"marcados": len(alvos), "rotulo": rotulo}
 
