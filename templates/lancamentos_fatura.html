@@ -36,6 +36,8 @@
   .estado.dre{color:var(--ink-soft);background:var(--raise);border-color:transparent}
   .estado.fora{color:var(--neutro);background:var(--neutro-soft);border-color:transparent}
   .estado.ok{color:var(--good);background:var(--good-soft);border-color:transparent}
+  .estado.pendente{color:var(--warn)}
+  .estado.invalido{color:var(--bad)}
 
   .quem{display:flex;align-items:center;gap:7px}
   .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:var(--fonte-xxs);font-weight:var(--peso-medio);flex:none}
@@ -50,7 +52,8 @@
   .fonte-badge:hover{transform:scale(1.12)}
   .fonte-badge.fatura{background:var(--neutro-soft);color:var(--neutro);border-color:transparent}
 
-  .status-salvamento{align-self:end;min-height:20px;font-size:var(--fonte-sm);color:var(--ink-faint)}.status-salvamento.erro{color:var(--bad)}
+  .status-salvamento{align-self:end;min-height:20px;font-size:var(--fonte-sm);color:var(--ink-faint);transition:opacity .3s ease}.status-salvamento.erro{color:var(--bad)}
+  .status-salvamento.sumindo{opacity:0}
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:var(--icone-lg);line-height:1;cursor:pointer;border-radius:var(--radius-xxs);transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:var(--raise);color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--ink-faint);font-weight:var(--peso-normal)}
@@ -71,6 +74,13 @@
   .desc-texto{display:flex;flex-direction:column;gap:1px;min-width:0}
   .desc-loja{display:block;overflow:hidden;text-overflow:ellipsis}
   .desc-parcela{font-size:var(--fonte-xxs);color:var(--ink-faint)}
+  /* A pilula de pendencia ocupa uma linha FIXA, mesmo vazia: sem isso a linha
+     encolhe quando o ultimo campo e preenchido e a tabela inteira pula sob o
+     cursor. E nao pode alargar a coluna - com table-layout:auto, cada palavra
+     que sai da pilula redesenha a largura de todas as colunas. */
+  .desc-texto [data-classificacao]{display:block;min-height:19px}
+  .desc-texto [data-classificacao] .estado{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:top;transition:opacity .18s ease}
+  .desc-texto [data-classificacao].sumindo .estado{opacity:0}
   .expande sup{font-size:var(--icone-xxs);margin-left:1px;color:var(--ink-faint);font-weight:var(--peso-medio)}
   .status-inline{display:block;font-size:var(--fonte-xxs);color:var(--ink-faint);line-height:1.2}
   .status-inline.erro{color:var(--bad)}
@@ -195,7 +205,7 @@
         <div class="desc-texto">
           <span class="desc-loja">{{ linha.descricao }}</span>
           {% if 'Parc' not in linha.descricao %}<span class="desc-parcela">{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</span>{% endif %}
-          <span data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado" style="color:var(--bad)">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado" style="color:var(--warn)">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</span>
+          <span data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado invalido" data-tip="Validar: {{ linha.validacao_motivos|join(', ') }}">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado pendente" data-tip="Faltam: {{ linha.faltando|join(', ') }}">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</span>
 
         </div>
       </div>
@@ -272,4 +282,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-4"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-5"></script>{% endblock %}

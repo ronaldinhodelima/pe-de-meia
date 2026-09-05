@@ -336,14 +336,33 @@
       faltando.push(campo.dataset.dimensaoNome || 'Classificação');
     });
 
+    // Reaproveita a pilula que ja esta na linha em vez de recria-la: recriar
+    // pisca e faz o texto saltar a cada campo preenchido. O CSS reserva a
+    // linha, entao a altura da tabela nao muda quando ela some.
     if (faltando.length) {
-      const aviso = document.createElement('span');
-      aviso.className = 'estado';
-      aviso.style.color = 'var(--warn)';
-      aviso.textContent = 'Faltam: ' + faltando.join(', ');
-      destino.replaceChildren(aviso);
-    } else if (destino.textContent.trim().startsWith('Faltam:')) {
-      destino.replaceChildren();
+      let aviso = destino.querySelector('.estado');
+      if (!aviso || !destino.dataset.pendencia) {
+        aviso = document.createElement('span');
+        aviso.className = 'estado pendente';
+        destino.replaceChildren(aviso);
+        destino.dataset.pendencia = '1';
+      }
+      aviso.classList.add('pendente');
+      const texto = 'Faltam: ' + faltando.join(', ');
+      aviso.textContent = texto;
+      aviso.dataset.tip = texto;   // o texto pode ser cortado com reticencias
+      destino.classList.remove('sumindo');
+    } else if (destino.dataset.pendencia || destino.textContent.trim().startsWith('Faltam:')) {
+      // Some com transicao: o corte seco no meio do preenchimento e o que da a
+      // sensacao de a linha "pular".
+      destino.classList.add('sumindo');
+      delete destino.dataset.pendencia;
+      setTimeout(function () {
+        if (!destino.dataset.pendencia) {
+          destino.replaceChildren();
+          destino.classList.remove('sumindo');
+        }
+      }, 200);
     }
   }
 
@@ -369,7 +388,14 @@
       linha.className = nova.className;
       const classificacao = linha.querySelector('[data-classificacao]');
       const classificacaoNova = nova.querySelector('[data-classificacao]');
-      if (classificacao && classificacaoNova) classificacao.innerHTML = classificacaoNova.innerHTML;
+      if (classificacao && classificacaoNova) {
+        classificacao.innerHTML = classificacaoNova.innerHTML;
+        // o servidor acabou de redesenhar a pilula: o estado local tem que
+        // acompanhar, senao a proxima edicao recria e pisca de novo
+        classificacao.classList.remove('sumindo');
+        if (classificacao.querySelector('.estado.pendente')) classificacao.dataset.pendencia = '1';
+        else delete classificacao.dataset.pendencia;
+      }
       const ok = linha.querySelector('[data-ok-lancamento]');
       const okNovo = nova.querySelector('[data-ok-lancamento]');
       if (ok && okNovo) {
@@ -390,6 +416,24 @@
     });
   }
 
+  // "Salvo" e confirmacao, nao estado: depois de lido nao acrescenta nada, e
+  // deixado na tela vira ruido em toda linha aberta. Some sozinho, com
+  // transicao; erro NAO some - ali a mensagem e a unica pista do que houve.
+  function mostrarSalvo(aviso) {
+    aviso.textContent = 'Salvo';
+    aviso.classList.remove('erro', 'sumindo');
+    clearTimeout(aviso._sumir);
+    aviso._sumir = setTimeout(function () {
+      aviso.classList.add('sumindo');
+      aviso._sumir = setTimeout(function () {
+        if (aviso.classList.contains('sumindo')) {
+          aviso.textContent = '';
+          aviso.classList.remove('sumindo');
+        }
+      }, 320);
+    }, 2200);
+  }
+
   function salvarEditor(editor, alterado) {
     const id = editor.dataset.editor;
     const aviso = editor.querySelector('[data-status]');
@@ -401,20 +445,22 @@
     const anterior = filaSalvar[id] || Promise.resolve();
     const atual = anterior.catch(() => {}).then(async () => {
       editor.dataset.salvando = '1';
-      aviso.textContent = 'Salvando…'; aviso.classList.remove('erro');
+      clearTimeout(aviso._sumir);
+      aviso.textContent = 'Salvando…'; aviso.classList.remove('erro', 'sumindo');
       try {
         const resp = await fetch('/api/transacao/' + encodeURIComponent(id), {
           method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
         });
         const json = await resp.json();
         if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível salvar.');
-        if (editor.dataset.versaoSalva === versao) aviso.textContent = 'Salvo automaticamente';
+        if (editor.dataset.versaoSalva === versao) mostrarSalvo(aviso);
         try { await atualizarResumoPagina(); } catch (e) {
           if (editor.dataset.versaoSalva === versao) aviso.textContent = 'Salvo; resumo atualiza ao reabrir';
         }
         aplicarBuscaFatura();
       } catch (e) {
-        aviso.textContent = e.message; aviso.classList.add('erro');
+        clearTimeout(aviso._sumir);
+        aviso.textContent = e.message; aviso.classList.add('erro'); aviso.classList.remove('sumindo');
       } finally {
         if (editor.dataset.versaoSalva === versao) delete editor.dataset.salvando;
       }

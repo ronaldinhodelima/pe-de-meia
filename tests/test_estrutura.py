@@ -264,7 +264,9 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert '"dim_id_projeto"' in trecho and '"dim_id_portfolio"' in trecho
     assert "data-salvar" not in template
     assert "Salvar</button>" not in template
-    assert "Salvo automaticamente" in js
+    # a confirmacao e "Salvo" e some sozinha; o que importa e que exista uma,
+    # e que ela nao dependa de botao
+    assert "mostrarSalvo" in js and "'Salvo'" in js
     assert "setTimeout(() => salvarEditor(editor, campo), 650)" in js
     assert "config.projeto_portfolio_map" in js
     assert "/regras?transacao=" in template
@@ -1314,6 +1316,26 @@ def test_glifos_saem_da_escala_de_icone():
     fatura = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "font-size:var(--icone-lg)" in fatura, "expandir e detalhe"
     assert "font-size:var(--icone-sm)" in fatura, "seta de ordenacao"
+
+
+def test_pendencia_da_linha_nao_muda_a_altura_da_tabela():
+    """A pilula "Faltam:" ocupa uma linha fixa e nao alarga a coluna.
+
+    Ela vive dentro da descricao, numa coluna de tabela com table-layout:auto.
+    Sem espaco reservado, preencher o ultimo campo apagava a pilula, a linha
+    encolhia e a tabela inteira pulava sob o cursor; e cada palavra que saia do
+    texto redesenhava a largura de todas as colunas.
+    """
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    regra = [l for l in html.splitlines() if "[data-classificacao]{" in l]
+    assert regra, "a linha reservada da pendencia sumiu"
+    assert "min-height" in regra[0]
+    assert "text-overflow:ellipsis" in html and "white-space:nowrap" in html
+
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    # reaproveita a pilula existente: recriar a cada tecla pisca
+    assert "destino.querySelector('.estado')" in js
+    assert "destino.dataset.pendencia" in js
 
 
 def test_valores_visuais_fora_do_sistema_nao_aumentam():

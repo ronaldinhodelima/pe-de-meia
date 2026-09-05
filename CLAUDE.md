@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 349 aprovados, 6 ignorados
+**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 350 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -818,6 +818,24 @@ Nunca inferir família por descrição, data ou valor semelhante. Só preencher 
 houver um único valor não vazio e inequívoco; em conflito, deixar vazio para revisão humana. Nunca
 sobrescrever campo já preenchido.
 
+### Estado que aparece e some não pode mexer no layout
+
+Duas correções de 05/09/2026, ambas na Detalhada, ambas da mesma família: **informação temporária
+não pode empurrar o que está fixo.**
+
+A pilula **"Faltam: ..."** mora dentro da descrição, numa tabela com `table-layout:auto`. A cada
+campo preenchido ela encolhia uma palavra e, no último, desaparecia — a linha perdia altura, a
+coluna mudava de largura e **a tabela inteira pulava sob o cursor**, justamente enquanto o usuário
+clicava no campo seguinte. Agora a linha é **reservada** (`min-height`, mesmo vazia), o texto é
+`nowrap` com reticências e o texto inteiro fica no tooltip, e a pilula **é reaproveitada** em vez de
+recriada — recriar pisca. Ela sai com transição, não com corte seco.
+`test_pendencia_da_linha_nao_muda_a_altura_da_tabela` trava isso.
+
+**"Salvo automaticamente" virou "Salvo" e some depois de ~2 s.** Confirmação não é estado: depois de
+lida não acrescenta nada, e deixada na tela vira ruído em toda linha aberta. **Erro não some** — ali
+a mensagem é a única pista do que aconteceu. O contêiner mantém a altura reservada, senão sumir a
+mensagem reintroduziria o mesmo pulo.
+
 ## 7.2-A Edição em lote
 
 Coluna de seleção por linha nas duas visualizações; com um ou mais selecionados aparece uma barra
@@ -1302,7 +1320,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**349 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**350 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
