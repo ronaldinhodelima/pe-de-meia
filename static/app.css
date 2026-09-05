@@ -257,6 +257,29 @@
   tr.pendente-banco,tr.pendente-banco:hover { background: transparent; }
   .valor { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: var(--peso-medio); }
 
+  /* Campo em CAIXA: o de formulario, busca e barra de lote. E a segunda das
+     duas formas de campo do sistema - a outra e a do combobox (secao 7.7),
+     usada dentro de tabela e modal, onde a borda some e a caixa e a sombra.
+     Estava definida cinco vezes, com tres paddings (6/8, 7/10, 8/10), dois
+     raios e duas fontes; nenhuma das copias parecia errada sozinha. */
+  .filtro-tabela { width: 200px; }
+  .barra-colunas { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .barra-colunas-esq { display: flex; align-items: center; gap: 8px; }
+  .barra-colunas-contador { font-size: var(--fonte-sm); color: var(--ink-faint); }
+  .campo-caixa,
+  .filtro-tabela,
+  .busca-fatura input,
+  .editor-financeiro input[type=text],
+  .editor-manual input[type=text],
+  .editor-manual input[type=date],
+  .editor-manual input[type=number],
+  .barra-lote-campos input[type=text] {
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    font-size: var(--fonte-md); background: var(--surface); color: var(--ink);
+    font-family: inherit; box-sizing: border-box;
+    transition: border-color .12s, box-shadow .12s;
+  }
+
   .obs-input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fonte-sm); background: var(--surface); color: var(--ink); font-family: inherit; }
   .cat-select { padding: 6px 7px; border-radius: var(--radius-sm); border: 1px solid var(--line); font-size: var(--fonte-sm); max-width: 180px; color: var(--ink); }
   .status { font-size: var(--fonte-xs); color: var(--good); margin-left: 6px; opacity: 0; transition: opacity .3s; font-weight: var(--peso-medio); }
@@ -765,11 +788,7 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
   display: flex; flex-direction: column; gap: 4px;
   font-size: var(--fonte-xs); color: var(--ink-faint);
 }
-.barra-lote-campos select, .barra-lote-campos input[type=text] {
-  min-width: 150px; padding: 6px 8px; font-size: var(--fonte-md);
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--ink); font-family: inherit;
-}
+.barra-lote-campos select, .barra-lote-campos input[type=text] { min-width: 150px; }
 .barra-lote-obs input { min-width: 200px; }
 .barra-lote-inline {
   flex-direction: row !important; align-items: center; gap: 6px;
@@ -797,11 +816,7 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 }
 .editor-manual label.obrigatorio::after { content: ' *'; }
 .editor-manual input, .editor-manual select { width: 100%; box-sizing: border-box; }
-.editor-manual input[type=text], .editor-manual input[type=date], .editor-manual input[type=number] {
-  padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  font-size: var(--fonte-md); background: var(--surface); color: var(--ink); font-family: inherit;
-  transition: border-color .12s, box-shadow .12s;
-}
+
 .editor-manual input:focus {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }

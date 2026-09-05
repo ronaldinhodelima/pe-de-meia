@@ -8,13 +8,13 @@ function fecharModalLancDim() {
 function carregarLancDim(query, titulo) {
   const corpo = document.getElementById('modalLancDimBody');
   document.getElementById('modalLancDimTitulo').textContent = titulo;
-  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:13px">Carregando…</div>';
+  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:var(--fonte-md)">Carregando…</div>';
   document.getElementById('modalLancDimBg').classList.add('show');
   fetch('/api/dimensao-lancamentos?' + query)
     .then(r => r.json())
     .then(lista => {
       if (!lista.length) {
-        corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:13px">Nenhum lançamento encontrado.</div>';
+        corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:var(--fonte-md)">Nenhum lançamento encontrado.</div>';
         return;
       }
       corpo.innerHTML = lista.map(l =>

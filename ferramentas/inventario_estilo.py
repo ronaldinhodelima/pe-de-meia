@@ -52,6 +52,10 @@ def fontes():
         yield caminho
     for caminho in sorted((RAIZ / "templates").glob("*.html")):
         yield caminho
+    # O JS tambem escreve estilo: tabelas.js montava o campo de busca por
+    # style.cssText, com 6px, 13px e 12px crus que nenhuma varredura via.
+    for caminho in sorted((RAIZ / "static").glob("*.js")):
+        yield caminho
     yield RAIZ / "core.py"
     # views/ tambem montam style= inline: os dois #c23c34 do valor do
     # lancamento moravam ali, invisiveis para a varredura anterior.

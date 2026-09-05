@@ -107,18 +107,16 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   if (!table.previousElementSibling || !table.previousElementSibling.classList.contains('barra-colunas')) {
     const barra = document.createElement('div');
     barra.className = 'barra-colunas';
-    barra.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px';
 
     const esq = document.createElement('div');
-    esq.style.cssText = 'display:flex;align-items:center;gap:8px';
+    esq.className = 'barra-colunas-esq';
     const busca = document.createElement('input');
     busca.type = 'search';
-    busca.className = 'filtro-tabela';
+    busca.className = 'filtro-tabela campo-caixa';
     busca.placeholder = 'Filtrar';
     busca.setAttribute('aria-label', 'Filtrar');
-    busca.style.cssText = 'padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:200px;background:var(--surface);color:var(--ink);font-family:inherit';
     const contador = document.createElement('span');
-    contador.style.cssText = 'font-size:12px;color:var(--ink-faint)';
+    contador.className = 'barra-colunas-contador';
     esq.appendChild(busca);
     esq.appendChild(contador);
 

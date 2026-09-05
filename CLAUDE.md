@@ -1037,9 +1037,22 @@ importante dele. Passou para `--fonte-lg`, o mesmo da barra de lote — os dois 
 agora têm o mesmo tamanho.
 
 `test_titulos_saem_da_escala_e_nao_de_um_valor_cru` proíbe `font-size` cru de 15px para cima nos
-arquivos já convertidos. **`templates/lancamentos_fatura.html` ficou de fora**: a tela estava sendo
-remontada em outra frente quando a escala foi aplicada, e converter arquivo em movimento só gera
-conflito. Entra na próxima revisão daquela tela — são 6 tamanhos, sendo dois deles já 17px.
+arquivos já convertidos. A Detalhada entrou na escala em 05/09/2026, junto com a revisão das duas telas: `h2` → `--titulo-md`
+(mesmo tamanho), setas `‹ ›` → `--titulo-sm` (as duas telas agora têm a mesma seta) e o avatar do
+titular → `--fonte-xxs`.
+
+**Duas formas de campo, e só duas.** A **em linha** (tabela e modal) é a do combobox — 26px, borda
+invisível, a caixa é a sombra (§7.7). A **em caixa** (formulário, busca, barra de lote) é
+`.campo-caixa`: `7px 10px`, `--radius-sm`, `--fonte-md`. A segunda estava definida **cinco vezes**,
+com três paddings (6/8, 7/10, 8/10), dois raios e duas fontes — e uma **sexta** dentro do
+`tabelas.js`, montada por `style.cssText`, que nenhuma varredura de CSS enxergava. Cada cópia
+parecia certa sozinha; a diferença só aparecia com as duas telas lado a lado.
+`test_campo_em_caixa_tem_uma_definicao_so` trava isso, inclusive contra a volta do desenho no JS.
+
+**O inventário agora varre `static/*.js`.** O JS monta HTML e escreve `style.cssText`: o campo de
+busca das tabelas, as cores `#888`/`#aaa`/`#999` do DRE e vários `13px` moravam ali, fora do sistema
+e invisíveis. Foi a terceira lacuna da ferramenta — antes já haviam faltado o `border:` abreviado e
+os `views/*.py`. **Ao procurar valor cru, lembrar de onde mais o estilo nasce.**
 
 **Contorno semântico também é token.** `--accent-line`, `--good-line` e `--bad-line` existem
 porque três bordas estavam em cor fixa (`#b9dfe4`, `#cfe9d9`, `#efb3ae`) sobre fundo que já era
@@ -1053,9 +1066,11 @@ chegaram a **fixar o formato errado** como esperado — teste que copia o compor
 cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
-fora do sistema. Eram 522 em 01/09/2026; hoje são **24**, e o que restou é intenção (círculos
-`50%`, fio de cabelo `1px`, os raios de 12/16/18px que a regra abaixo mantém separados, o painel
-navy do login) mais os 6 tamanhos da Detalhada, que esperam a revisão daquela tela.
+fora do sistema. Eram 522 em 01/09/2026; hoje são **21**, com uma rede mais larga que a de ontem
+(o JS entrou na varredura). O que restou é intenção — círculos `50%`, fio de cabelo `1px`, os raios
+de 12/16/18px que a regra abaixo mantém separados, o painel navy do login — mais **quatro glifos de
+ícone** (17px do `+` e do `⌄`, 8px do expoente, 8,4px do contador de filtro), que não são texto nem
+título: **falta decidir uma escala de ícone**, e forçá-los na escala de texto seria redesenho.
 `test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
 folgado**, pedindo para abaixá-lo — o número só pode cair.
 

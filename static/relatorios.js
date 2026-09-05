@@ -155,7 +155,7 @@ function renderGrupos(grupos, ehPeriodo) {
   window.__grupos = lista;
   const cont = document.getElementById('gruposCont');
   if (!lista.length) {
-    cont.innerHTML = '<div style="color:#888;padding:10px 0">Nenhum lancamento encontrado com esses filtros.</div>';
+    cont.innerHTML = '<div style="color:var(--ink-faint);padding:10px 0">Nenhum lancamento encontrado com esses filtros.</div>';
     return;
   }
   // na linha do tempo a barra fica proporcional ao maior mes (fica legivel),
@@ -163,7 +163,7 @@ function renderGrupos(grupos, ehPeriodo) {
   const maxTotal = Math.max.apply(null, lista.map(g => Math.abs(g.total)).concat([1]));
   cont.innerHTML = lista.map((g, i) => {
     const larguraBarra = ehPeriodo ? (Math.abs(g.total) / maxTotal * 100) : Math.max(g.pct, 0);
-    let direita = '<strong>' + fmtMoeda(g.total) + '</strong> <span style="color:#aaa">' + g.pct + '%</span>';
+    let direita = '<strong>' + fmtMoeda(g.total) + '</strong> <span style="color:var(--ink-faint)">' + g.pct + '%</span>';
     // lista invertida: o mes anterior e o de baixo (i + 1)
     if (ehPeriodo && i < lista.length - 1) {
       const ant = lista[i + 1].total;
@@ -172,7 +172,7 @@ function renderGrupos(grupos, ehPeriodo) {
         const cor = varPct > 0 ? 'var(--bad)' : 'var(--good)';
         const sinal = varPct > 0 ? '▲' : '▼';
         direita = '<strong>' + fmtMoeda(g.total) + '</strong> ' +
-                  '<span style="color:' + cor + ';font-size:12px" title="variação em relação ao mês anterior">' +
+                  '<span style="color:' + cor + ';font-size:var(--fonte-sm)" title="variação em relação ao mês anterior">' +
                   sinal + ' ' + Math.abs(varPct).toFixed(1) + '%</span>';
       }
     }
@@ -180,7 +180,7 @@ function renderGrupos(grupos, ehPeriodo) {
       '<div class="rel-grupo-row" style="cursor:pointer" onclick="toggleGrupoDetalhe(' + i + ')">' +
         '<div style="flex:1">' +
           '<div style="display:flex;justify-content:space-between">' +
-            '<span>' + (g.selo || '') + escHtml(g.nome) + ' <span style="color:#aaa">(' + escHtml(g.qtd) + ')</span></span>' +
+            '<span>' + (g.selo || '') + escHtml(g.nome) + ' <span style="color:var(--ink-faint)">(' + escHtml(g.qtd) + ')</span></span>' +
             '<span>' + direita + '</span>' +
           '</div>' +
           '<div class="barra"><div style="width:' + larguraBarra + '%"></div></div>' +
@@ -197,7 +197,7 @@ function toggleGrupoDetalhe(i) {
   if (!abrir) { el.style.display = 'none'; return; }
   el.style.display = 'block';
   if (el.dataset.loaded === '1') return;
-  el.innerHTML = '<div style="padding:10px;color:#888;font-size:13px">Carregando...</div>';
+  el.innerHTML = '<div style="padding:10px;color:var(--ink-faint);font-size:var(--fonte-md)">Carregando...</div>';
   const g = window.__grupos[i];
   const params = coletarQuery();
   if (g.valor === null || g.valor === undefined) { params.set('valor_none', '1'); }
@@ -207,7 +207,7 @@ function toggleGrupoDetalhe(i) {
     .then(data => {
       el.dataset.loaded = '1';
       if (!data.lancamentos.length) {
-        el.innerHTML = '<div style="padding:10px;color:#888;font-size:13px">Nenhum lancamento.</div>';
+        el.innerHTML = '<div style="padding:10px;color:var(--ink-faint);font-size:var(--fonte-md)">Nenhum lancamento.</div>';
         return;
       }
       // descricao, origem e categoria sao texto do banco (Pluggy ou digitado) e
@@ -221,7 +221,7 @@ function toggleGrupoDetalhe(i) {
           '<td class="valor">' + fmtMoeda(l.valor) + '</td></tr>'
         )).join('') +
         '</tbody></table>' +
-        (data.total >= 300 ? '<div style="padding:8px 10px;color:#999;font-size:12px">Mostrando os 300 lancamentos mais recentes deste grupo.</div>' : '');
+        (data.total >= 300 ? '<div style="padding:8px 10px;color:var(--ink-faint);font-size:var(--fonte-sm)">Mostrando os 300 lancamentos mais recentes deste grupo.</div>' : '');
     });
 }
 

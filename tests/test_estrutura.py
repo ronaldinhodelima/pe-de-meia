@@ -466,7 +466,9 @@ def test_posicao_da_pagina_e_mantida_em_todas_as_telas():
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
     assert "function manterPosicaoAoSalvar" in tabelas
     assert "addEventListener('DOMContentLoaded', manterPosicaoAoSalvar)" in tabelas
-    assert '<script src="/static/tabelas.js">' in (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+    # o src leva parametro de versao quando o comportamento muda (secao 2.2)
+    assert '<script src="/static/tabelas.js' in base
 
 
 def test_filtros_criam_historico_e_botao_voltar_restaura_estado():
@@ -1268,6 +1270,33 @@ def test_titulos_saem_da_escala_e_nao_de_um_valor_cru():
         assert not achados, f"{alvo}: tamanho de titulo cru {achados} - use --titulo-*"
 
 
+def test_campo_em_caixa_tem_uma_definicao_so():
+    """Formulario, busca e barra de lote desenham o MESMO campo.
+
+    Estava definido cinco vezes - tres paddings (6/8, 7/10, 8/10), dois raios e
+    duas fontes - e uma sexta vez dentro do tabelas.js, por style.cssText, que
+    nenhuma varredura de CSS enxergava. Cada copia parecia certa sozinha; a
+    diferenca so aparecia abrindo duas telas lado a lado.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    bloco = css.split(".campo-caixa,", 1)
+    assert len(bloco) == 2, "a caixa unica sumiu do app.css"
+    corpo = bloco[1].split("}", 1)[0]
+    for hook in (".filtro-tabela", ".busca-fatura input", ".editor-financeiro input[type=text]",
+                 ".editor-manual input[type=text]", ".barra-lote-campos input[type=text]"):
+        assert hook in corpo, hook
+
+    # nenhuma tela redefine o proprio desenho por cima
+    for alvo in ("templates/lancamentos_fatura.html", "templates/index.html"):
+        texto = (RAIZ / alvo).read_text(encoding="utf-8")
+        for proibido in ("input[type=text]{padding", "input{padding"):
+            assert proibido not in texto, f"{alvo}: {proibido}"
+
+    js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "campo-caixa" in js
+    assert "border-radius:6px" not in js, "o campo voltou a ser desenhado no JS"
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1280,7 +1309,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 24
+    TETO = 21
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

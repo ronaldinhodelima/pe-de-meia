@@ -3,8 +3,8 @@
 {% block head_extra %}
 <style>
   .fatura-cabecalho{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;min-height:42px}
-  .fatura-cabecalho h2{margin:0;font-size:17px;line-height:1.15}
-  .fatura-cabecalho .nav{font-size:16px;text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);color:var(--ink);transition:background-color .12s,border-color .12s}
+  .fatura-cabecalho h2{margin:0;font-size:var(--titulo-md);line-height:1.15}
+  .fatura-cabecalho .nav{font-size:var(--titulo-sm);text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);color:var(--ink);transition:background-color .12s,border-color .12s}
   .fatura-cabecalho .nav:hover{background:var(--bg);border-color:var(--ink-faint)}
   .fatura-ciclo{font-size:var(--fonte-sm);color:var(--ink-faint);white-space:nowrap}
   .fatura-conciliacao{margin-left:auto}
@@ -38,15 +38,13 @@
   .estado.ok{color:var(--good);background:var(--good-soft);border-color:transparent}
 
   .quem{display:flex;align-items:center;gap:7px}
-  .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:9px;font-weight:var(--peso-medio);flex:none}
+  .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;font-size:var(--fonte-xxs);font-weight:var(--peso-medio);flex:none}
 
   .vinculos-detalhe{background:var(--bg)}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:var(--radius-xs);transition:background-color .12s}
   .vinculo-grid.principal{background:var(--good-soft)}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid.tecnico:hover{background:var(--bg)}.vinculo-grid small{display:block;color:var(--ink-faint)}
 
   .editor-financeiro{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.editor-financeiro label{font-size:var(--fonte-xs);color:var(--ink-faint);display:block;margin-bottom:4px}
   .editor-financeiro select,.editor-financeiro input{width:100%;transition:border-color .12s,box-shadow .12s}
-  .editor-financeiro input[type=text]{padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:var(--fonte-md);background:var(--surface);color:var(--ink);font-family:inherit;box-sizing:border-box}
-  .editor-financeiro input[type=text]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 
   .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:var(--fonte-xs);font-weight:var(--peso-medio);background:var(--accent-soft);color:var(--accent-strong);border:1px solid transparent;cursor:default;transition:transform .12s}
   .fonte-badge:hover{transform:scale(1.12)}
@@ -58,7 +56,7 @@
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--ink-faint);font-weight:var(--peso-normal)}
   .ajuda-fatura{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
-  .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%);padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-xs);font-size:var(--fonte-md);background:var(--surface);color:var(--ink);font-family:inherit;transition:border-color .12s,box-shadow .12s}.busca-fatura input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
+  .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
   .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:var(--fonte-xxs)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
   /* ---- Layout B: uma linha por lancamento, classificacao em colunas largas.
      A largura vem de encolher data/valor e de fundir titular+parcela na

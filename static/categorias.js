@@ -9,13 +9,13 @@ function verLancamentosCategoria(btn) {
   const corpo = document.getElementById('modalLancBody');
   document.getElementById('modalLancTitulo').textContent =
     'Lançamentos — ' + btn.closest('tr').querySelector('input[name=novo_nome]').value;
-  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:13px">Carregando…</div>';
+  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:var(--fonte-md)">Carregando…</div>';
   document.getElementById('modalLancBg').classList.add('show');
   fetch('/api/categoria-lancamentos?categoria=' + encodeURIComponent(categoria))
     .then(r => r.json())
     .then(lista => {
       if (!lista.length) {
-        corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:13px">Nenhum lançamento encontrado.</div>';
+        corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:var(--fonte-md)">Nenhum lançamento encontrado.</div>';
         return;
       }
       // cada linha abre os detalhes do lancamento; o id vai em data-attribute e o
@@ -53,7 +53,7 @@ window.aoFecharModal = function () { txAtual = null; };
 function verTransacao(id) {
   txAtual = id;
   const corpo = document.getElementById('modalTxBody');
-  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:13px">Carregando…</div>';
+  corpo.innerHTML = '<div style="padding:12px 0;color:var(--ink-faint);font-size:var(--fonte-md)">Carregando…</div>';
   document.getElementById('modalTxStatus').textContent = '';
   document.getElementById('modalTxBg').classList.add('show');
 
