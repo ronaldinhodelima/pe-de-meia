@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 346 aprovados, 6 ignorados
+**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 347 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1278,10 +1278,10 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**346 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**347 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
-automáticas, rateio, conciliação de fatura, consenso de classificação e fluxos com PostgreSQL
-temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
+automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
+e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
 do `skip`, não tratar como falha.
 
 ```bash
