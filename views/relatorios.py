@@ -1,5 +1,6 @@
 """Relatorios, DRE e investimentos."""
 import io
+import traceback
 import re
 import uuid
 from datetime import datetime, timedelta
@@ -1211,6 +1212,11 @@ def conciliar_fatura():
                 )
 
             if not erro:
+              # Um 500 sem mensagem e o pior desfecho possivel aqui: o usuario
+              # nao sabe se o arquivo esta errado, se a conta esta errada ou se
+              # o app quebrou. Falhando, a transacao volta atras, o traceback
+              # vai para a auditoria e a tela diz o que aconteceu.
+              try:
                 # As datas do ciclo vem inteiramente das proprias faturas
                 # importadas, nunca de cadastro manual em /contas. periodo_fim
                 # ja e' confiavel (e' a data do ultimo lancamento REAL desta
@@ -1372,6 +1378,18 @@ def conciliar_fatura():
                         "linhas": len(fatura["linhas"]),
                         "parcelas": resumo_parcelas,
                     },
+                )
+              except Exception as exc:
+                conn.rollback()
+                fatura_id = None
+                erro = (
+                    "Li o arquivo, mas não consegui gravar a conciliação: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                registrar_auditoria(
+                    "alteracao", "relatorios.conciliar_fatura_importar", sucesso=False,
+                    detalhes={"conta": account_id, "erro": str(exc),
+                              "traceback": traceback.format_exc()[-2000:]},
                 )
 
     if not erro and fatura_id:

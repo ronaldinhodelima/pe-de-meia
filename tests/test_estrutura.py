@@ -1776,3 +1776,15 @@ def test_comparacao_de_uuid_em_lista_usa_texto_dos_dois_lados():
                 f"{caminho.name}:{linha} compara uuid com lista de texto; "
                 "use transacao_id::text = ANY(%s)"
             )
+
+
+def test_importacao_de_fatura_nunca_devolve_500_sem_mensagem():
+    """500 em branco e o pior desfecho: o usuario nao sabe se errou o arquivo,
+    a conta, ou se o app quebrou. Falhando, a transacao volta atras e o
+    traceback vai para a auditoria."""
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    bloco = view.split("def conciliar_fatura", 1)[1].split("\n@bp.route", 1)[0]
+    assert "except Exception as exc:" in bloco
+    assert "conn.rollback()" in bloco
+    assert "traceback.format_exc()" in bloco
+    assert "não consegui gravar a conciliação" in bloco
