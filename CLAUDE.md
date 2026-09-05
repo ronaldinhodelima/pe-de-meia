@@ -1,11 +1,12 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 04/09/2026 · **Schema:** migração 56 · **Testes:** 322 aprovados, 6 ignorados
+**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 346 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
 corrente via Open Finance (Pluggy) do Unicred e Nubank (duas contas Nubank: Ronaldo e Andrea),
-e concilia o cartão Unicred contra a fatura oficial em PDF.
+e concilia cada origem contra o documento oficial do banco — fatura do cartão em PDF ou OFX, e
+extrato da conta corrente em PDF.
 
 Este arquivo existe para que qualquer sessão do Claude retome o projeto sem redescobrir decisões
 já tomadas. **Leia inteiro antes de mexer em qualquer coisa.** Ele é normativo, não é diário:
@@ -107,9 +108,11 @@ deploy: conferir os logs, abrir a tela afetada em produção e comparar os núme
 - `app.py` — cria o Flask app, sessão/auditoria, filtros Jinja, registra blueprints.
 - `core.py` — constantes, acesso ao banco, permissões, migrações, helpers.
   **Não importa nada de `views/` nem de `app.py`.**
-- `views/` — blueprints `auth`, `sistema`, `lancamentos`, `relatorios`, `cadastros`, `usuarios`,
-  `logs`. Cada módulo importa do `core` só os nomes que usa.
+- `views/` — blueprints `auth`, `sistema`, `lancamentos`, `relatorios`, `cadastros`, `compras`,
+  `usuarios`, `logs`. Cada módulo importa do `core` só os nomes que usa.
 - `templates/` (Jinja2) e `static/` (CSS, JS, logos). Sem framework front-end — JS puro.
+- `fatura_unicred.py` / `fatura_ofx.py` / `extrato_unicred.py` — extratores. Toda a máquina de
+  conciliação é agnóstica de formato; **só o extrator conhece o layout**.
 - `bussola/app.py` — worker de sincronização Pluggy (serviço separado).
 
 A dependência corre sempre `app.py → views/ → core.py`. Inverter recria o import circular.
@@ -233,7 +236,9 @@ verdade: fazer o app chamar o worker pela rede interna e remover o domínio púb
 | `regra_classificacao` / `regra_dimensao_valor` | regras automáticas |
 | `dimensao` / `dimensao_valor` / `transacao_dimensao` | dimensões livres + tetos de gasto |
 | `transacao_rateio` / `transacao_rateio_dimensao` | partes internas de um lançamento |
-| `fatura_importada` / `fatura_linha` / `fatura_vinculo` | conciliação do PDF |
+| `fatura_importada` / `fatura_linha` / `fatura_vinculo` | conciliação do documento oficial (fatura ou extrato; ver `tipo_documento`) |
+| `extrato_compromisso` | débitos já agendados que o extrato lista à parte |
+| `compra_futura` / `compra_futura_dimensao` | lista de compras futuras, fora do resultado |
 | `schema_version` | controle de migração |
 
 **Um cartão de crédito (uma linha em `conta`) pode ter vários cartões físicos/virtuais.** A
@@ -681,6 +686,62 @@ setembro/2026 for importada** — os dois casos estavam na fatura mais recente q
 pode ser a borda de um fenômeno contínuo, não o fim dele.
 
 
+## 6.8 Extrato de conta corrente (05/09/2026)
+
+O extrato da Unicred entra na **mesma máquina** da fatura — `fatura_importada`, `fatura_linha`,
+`fatura_vinculo`, N:N, órfãos, "fecha 100%", OK automático. Ela sempre foi agnóstica de formato;
+só o extrator conhece o layout, como já havia sido provado com o OFX (§11.3-A).
+
+**`fatura_importada.tipo_documento`** (`'fatura'` | `'extrato'`) diz o que cada registro é. **Toda
+rotina específica de cartão pergunta antes de rodar** — sem essa marca, uma regra de fatura
+alcançaria o extrato em silêncio. Já pagou o próprio custo três vezes:
+
+1. o **regime de caixa não roda** sobre extrato: conta corrente não tem parcelamento, e rodá-lo
+   marcaria lançamento como agregado sem nenhuma parcela para ocupar o lugar — o defeito da §6.6;
+2. os **compromissos** ficam em seção própria;
+3. os **cards** são outros (abaixo).
+
+**Três diferenças em relação à fatura, todas no `extrato_unicred.py`:**
+
+- **O período vem impresso** ("Período de 01/08/2026 a 31/08/2026"), então não há a dedução de
+  ciclo que o PDF do cartão exige (§6.2): entra com `ciclo_do_arquivo=True`, como o OFX.
+- **A prova de leitura é outra.** No cartão é `soma das linhas = total impresso`; aqui é
+  **`saldo inicial + soma = saldo final`**. É o que garante que nenhuma linha se perdeu na quebra
+  de página — e o parser **recusa o arquivo** quando não fecha, em vez de devolver número errado.
+- **Lançamentos futuros existem**, numa seção própria do PDF: débitos já agendados pelo banco.
+  Ficam **fora de `fatura_linha`**, em `cartao.extrato_compromisso`, e fora de qualquer total —
+  contar dinheiro que ainda não saiu inflaria o resultado (§1.1).
+
+**Os cards do extrato são de caixa, não de DRE.** "Despesas no DRE" e "Fora do DRE" pressupõem
+cartão, onde tudo é despesa; num extrato há entrada e saída misturadas e a soma sob aquele rótulo
+não significa nada (apareceu como `-R$ 16.302,96` na tela). Extrato mostra **Entradas / Saídas /
+Variação do saldo** — e o terceiro chama-se *variação*, não *resultado*: transferência entre contas
+próprias entra e sai sem ser receita nem despesa, e chamar isso de resultado seria dado mascarado.
+
+**A descrição quebra em até três pedaços**, com a data e os valores no meio:
+
+```
+TRANSFERENCIA TEF PIX ( Doc.: 2362112 / CLINICA
+03/08/2026 - R$ 1.700,00 R$ 3.449,47
+DE ANESTESIOLOGIA MACCARINI VIEIRA LTDA )
+```
+
+Duas armadilhas que só o arquivo real revelou, ambas travadas por teste: o **fecho de uma descrição
+virava o início da seguinte** (`Doc.: 114159 ) DEBITO MONGERAL...`), e o compromisso com descrição
+longa saía **sem nome nenhum**.
+
+**Resultado da primeira importação (08/2026):** 28 lançamentos, **fecha 100%**, zero órfãos dos dois
+lados, 8 compromissos (R$ 5.920,65) e 8 lançamentos assinados pelo OK automático. Entradas
+R$ 153.048,26 − saídas R$ 148.091,59 = R$ 4.956,67 = saldo final − saldo inicial impressos.
+
+**O que ainda não se sabe:** como o extrato de setembro se comporta. Ele deve trazer como movimento
+realizado os débitos que hoje são compromissos, e é aí que o vínculo automático será testado de
+verdade.
+
+**A interface fala em "fatura", não em "PDF".** O sistema aceita PDF e OFX, e agora extrato — dizer
+PDF na tela virou falso. Nome interno (`pdf_arquivo`, `_pdf_fatura`) e comentário sobre o PDF
+específico da Unicred continuam como estão: renomeá-los seria churn de schema sem ganho.
+
 ---
 
 # 7. Telas e comportamento de interface
@@ -702,12 +763,35 @@ duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tab
 - Ordem visual fixa dentro do grupo: lançamento principal, registros agregados um abaixo do
   outro, detalhes técnicos de cada um e, **por último**, o editor único de classificação. Nunca
   intercalar a classificação entre os registros — impede comparar candidatos em divergências.
-- Cada registro mostra a fonte: **`F`** = criado pela fatura em PDF, **`P`** = trazido pelo
+- Cada registro mostra a fonte: **`F`** = criado pela fatura, **`P`** = trazido pelo
   Pluggy, com tooltip CSS imediato (não o `title` nativo).
 - **Titular/cartão** identifica quem realizou a compra e é separado da dimensão financeira
   **Responsável**.
-- Cabeçalhos ordenáveis (Data, Descrição, Titular/Cartão, Parcela, Valor PDF, Classificação, OK);
-  ordenar é local, não recarrega e não desmonta o grupo.
+
+### A classificação mora na linha (layout escolhido em 05/09/2026)
+
+Categoria, Responsável, Projeto e Portfólio são **colunas próprias e largas**, editáveis sem abrir
+nada. A largura veio de encolher Data e Valor e de **fundir titular e parcela na descrição** — o
+titular virou o avatar, com o nome no tooltip. O `+` deixou de ser formulário e virou **detalhe**:
+registros agregados, observação, natureza e criação de regra.
+
+**Os campos não são duplicados nos dois lugares.** Dois campos para o mesmo dado divergem na
+primeira edição. E não há segundo caminho de gravação: a `<tr>` carrega o próprio `data-editor`,
+então valem os mesmos handlers, a mesma fila e o mesmo `POST /api/transacao/<id>`.
+
+Duas armadilhas que a mudança criou, ambas travadas por teste:
+
+- **a ordenação lia por ÍNDICE de célula** — com as colunas trocadas leria a coluna errada em
+  silêncio. Passa a ler por `data-col`, que é nome e não posição;
+- **o `textContent` de um `<select>` traz TODAS as opções** — com selects na linha, a pesquisa local
+  casaria com quase qualquer termo (digitar "viagem" acharia tudo). Entra só a opção escolhida, mais
+  o `data-tip` do avatar, senão buscar por titular pararia de funcionar junto com a coluna.
+
+**Troca assumida:** perdeu-se ordenar por Titular, Parcela e Classificação; ganhou-se ordenar por
+Categoria e por cada dimensão. Buscar por titular continua funcionando pela pesquisa.
+
+Cabeçalhos ordenáveis: Data, Descrição, Valor, Categoria, cada dimensão e OK. Ordenar é local, não
+recarrega e não desmonta o grupo.
 - Pesquisa local filtra as linhas já carregadas; linha principal e agregados aparecem ou somem
   juntos. `Esc` limpa.
 - No filtro **Pendentes de OK**, ao marcar, a linha sai da fila **somente depois da confirmação do
@@ -799,6 +883,27 @@ houver um único destino visível e inequívoco.
 Enquanto o agregado atende **uma única** linha de fatura e o valor não bate com
 `parcela × total`, ele não vira `somente_conciliacao` e **o valor cheio conta no mês da compra**.
 Corrige-se sozinho quando a fatura seguinte traz a Parc.2/N.
+
+## 7.4-A Navegação por fatura (05/09/2026)
+
+**Na Resumida**, com **exatamente uma** origem marcada, sendo cartão **com fatura importada**, as
+setas `‹ ›` andam por **ciclo de fatura** e aplicam o período personalizado — o mesmo passo da
+Detalhada. Nos demais casos (nenhuma origem, várias, conta corrente, cartão sem arquivo) continuam
+mês a mês: com várias origens não existe "a fatura", e sem arquivo o ciclo seria palpite. Nas
+pontas volta a andar por mês, em vez de travar.
+
+**Na Detalhada**, o seletor lista também os **meses previstos** — cada mês por vir que já tenha
+lançamento do Pluggy. Parcela futura chega adiantada e, sem isso, não aparecia em tela nenhuma: o
+ciclo em andamento termina no fim do mês corrente. O Nubank Andrea tem previstos até março/2027.
+
+São **ciclos previstos, não faturas**, e o rótulo diz isso. A janela é o **mês civil** de propósito:
+o intervalo fechamento–vencimento varia de 9 a 14 dias (§6.2) e projetar um ciclo futuro seria
+palpite apresentado como fato. Os previstos começam no **mês seguinte** — o resto do mês corrente
+pertence ao ciclo em andamento, e listar o mesmo mês duas vezes no seletor confundia.
+
+As setas seguem a **mesma ordem do seletor**, então percorrem previstos, em andamento e oficiais
+numa sequência só. A URL de cada entrada é montada **no servidor** (`_url_da_fatura`): montada nos
+dois lugares, seta e seletor discordariam na primeira regra nova.
 
 ## 7.5 Fatura em andamento
 
@@ -943,6 +1048,32 @@ mais rápidos que o `title` nativo.
 
 **Favicon:** fica em `static/favicon.png`. Se sumir após deploy, verificar a referência versionada
 em `templates/base.html` e renovar o parâmetro de cache — **não recriar a imagem**.
+
+## 7.10 Compras futuras (05/09/2026)
+
+Menu próprio, preenchido à mão: o que a família **pretende** comprar, com valor previsto, mês-alvo,
+prioridade, Responsável/Projeto/Portfólio e observação. Os cards somam o total em aberto e o
+previsto por mês — o provisionamento de caixa.
+
+**Plano não é fato, e a separação é estrutural.** Tabela própria (`cartao.compra_futura`), fora de
+`cartao.transacao` e fora da view financeira: se um item virasse lançamento, apareceria no DRE como
+dinheiro que saiu e inflaria o resultado com uma intenção (§1.1). Há teste cobrando que a tela nunca
+escreva em `transacao` e que nenhuma consulta financeira conheça a tabela.
+
+**Marcar "Comprei" não cria lançamento nenhum.** O gasto real entra pela sincronização ou por
+lançamento manual, como qualquer outro, e o item aponta para ele — daí nasce o par previsto ×
+realizado, com caminho de volta (reabrir), no mesmo padrão explícito de `substituido_por`.
+
+Ao marcar, o **valor real** é pedido na própria linha, já preenchido com o previsto. Ele vai para
+uma coluna nova (`valor_real`) em vez de sobrescrever o previsto: o previsto é o que sustenta o
+provisionamento, e apagá-lo perderia a única comparação que a lista oferece. Reabrir desfaz o fato —
+valor real e vínculo voltam a não existir.
+
+**Os totais contam só o que está em aberto:** item comprado já virou lançamento de verdade, e somar
+de novo seria contar duas vezes.
+
+**Ainda sem interface:** o vínculo com o lançamento real existe no banco e na API, mas não há
+seletor na tela. Decisão do usuário — fica para quando o uso mostrar qual caminho é natural.
 
 ---
 
@@ -1123,7 +1254,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**270 aprovados e 6 ignorados** (01/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**346 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação e fluxos com PostgreSQL
 temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -1138,6 +1269,12 @@ pytest tests/ -v
 - `tests/test_consenso_classificacao.py` roda a lógica de consenso de verdade, com dados
   sintéticos. Existe porque o bug do `valor_id` NULL passou por toda a suíte estrutural sem ser
   notado: o código "parecia certo" e só o dado real revelava.
+- `tests/test_ok_automatico.py` **executa** o OK da fatura com cursor dublado, nos dois formatos de
+  linha. Existe porque a suíte estrutural lê código e nunca pegaria `referencia[1]` num
+  `RealDictCursor` — o erro que derrubou a importação (§10.4 nº 7).
+- `tests/test_extrato_unicred.py` usa o layout REAL do extrato com valores trocados: o arquivo da
+  família não entra no repositório. A forma é o que importa — descrição quebrada em três pedaços e
+  a seção de lançamentos futuros.
 - Validação do parser contra dado real (refazer se mexer em `fatura_unicred.py`): parsear os PDFs e
   conferir que a soma das linhas, sem "Pagamento Recebido", bate com o total impresso. Em
   29/08/2026 bateu **centavo a centavo nas 14 faturas**.
@@ -1193,7 +1330,26 @@ outra derrubou `/relatorios` em produção. O que funciona:
    qualquer outro cai no default `todas`. Relatei como "OK incompletos" um levantamento que era de
    **todos** os lançamentos, e cheguei a diagnosticar como bug um comportamento correto do código.
    **Validar o filtro contra um total conhecido antes de tirar conclusão dele.**
-5. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+5. **Instrumentar antes de adivinhar.** Em 05/09/2026 a importação do extrato deu 500 duas vezes
+   seguidas e eu tentei achar a causa **lendo código**, gastando dois deploys. Só então embrulhei a
+   gravação em `try/except` com o traceback indo para a auditoria — e o erro apareceu com nome e
+   linha na tentativa seguinte. Falha opaca: instrumente primeiro, teorize depois. Um 500 em branco
+   também é defeito por si só: o usuário não sabe se errou o arquivo, a conta, ou se o app quebrou.
+6. **`uuid` não se compara com lista de texto.** `WHERE transacao_id = ANY(%s)` derruba a consulta:
+   o Postgres não tem operador `uuid = text`. Todo o resto do código já usava
+   `transacao_id::text = ANY(%s)` (ou `ANY(%s::uuid[])`); só o código novo destoava, e o defeito
+   teria quebrado **toda** importação, não só a do extrato. Há teste varrendo isso.
+7. **Função compartilhada não pode escolher o tipo de cursor.** A importação usa `RealDictCursor`
+   (linha é dicionário) e as migrações usam cursor comum (linha é tupla). `referencia[1]` funciona
+   numa e levanta `KeyError` na outra — foi o que derrubou a importação. `_campo(linha, nome, pos)`
+   lê dos dois jeitos. **A suíte estrutural não pega isso: ela lê código, não executa.** Só um teste
+   com cursor dublado pega — e foi escrevendo esse teste que meu primeiro conserto se mostrou errado
+   também (`dict(tupla)` estoura).
+8. **Detectar formato de PDF exige ABRIR o PDF.** O texto vem comprimido: procurar a palavra nos
+   bytes crus nunca acha. O extrato caía no leitor de fatura e o usuário via "não encontrei o mês de
+   referência" — erro do parser errado, que não diz nada sobre o problema real. O teste passava
+   porque exercitava a função com o texto já extraído, que **não é como o despachante a chama**.
+9. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
 
@@ -1431,9 +1587,11 @@ fatura.
 
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Conta corrente.** **Não tem fatura**, então a hierarquia nasce diferente: o extrato do Pluggy
-   vira a única fonte de "houve cobrança", e provavelmente aparecem outros fenômenos (PIX,
-   transferência entre contas próprias, depósito em espécie).
+1. **Conta corrente — em andamento.** O extrato oficial já é conciliado (§6.8) e a primeira
+   importação fechou 100%. Falta ver o extrato de **setembro**, que trará como movimento realizado
+   os débitos hoje agendados — é aí que o vínculo automático será testado de verdade. Continuam em
+   aberto os fenômenos próprios da conta: PIX, transferência entre contas próprias e depósito em
+   espécie (§11.3).
 2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
 3. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria e o que
    sobrou entra no DRE como despesa por padrão.
@@ -1480,3 +1638,6 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 54 | `fatura_origem_externa`: de qual cartão daqui é o arquivo do banco (§11.3-A) |
 | 55 | `ciclo_do_arquivo`: o período informado pelo OFX manda sobre o deduzido (§11.3-A) |
 | 56 | pagamento de fatura sai de `Transfers` e deixa de contar duas vezes (§4.1); `classificacao_backup_v56` |
+| 57 | `compra_futura` + `compra_futura_dimensao`: a lista de compras futuras (§7.10) |
+| 58 | `compra_futura.valor_real`: o valor que a compra teve de fato |
+| 59 | `fatura_importada.tipo_documento` e `extrato_compromisso`: extrato de conta corrente (§6.8) |
