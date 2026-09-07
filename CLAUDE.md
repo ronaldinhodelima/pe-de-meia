@@ -1036,6 +1036,12 @@ deixou a tela pesada, com caixas em azul-petróleo.
 **Componente repetido vira classe, não estilo inline.** O mesmo botão escuro estava copiado em 6
 telas por `style=`; virou `.btn-primario`. Estilo inline fica fora do sistema e some das buscas.
 
+**Seletor descendente alcança o que está DENTRO do combobox.** No modo cartão, a regra
+`td input[type=text] { max-width: 62% }` pegou também o campo interno do combobox — que já é um
+wrapper — e ele ficou com 120px dentro de uma caixa de 194px, com o chevron solto na ponta. Ao
+limitar campo dentro de célula, use **filho direto** (`td > input`), porque metade dos campos do
+sistema são componentes com estrutura própria.
+
 **Especificidade é o inimigo silencioso.** Três vezes nesta sessão uma regra mais específica
 desfez uma decisão geral sem nenhum erro aparente: `table.compacta input[type=checkbox]` (caixa
 14px dentro da tabela, 16px fora), `table.ajustavel th[data-col]` (cabeçalho de volta ao negrito)
