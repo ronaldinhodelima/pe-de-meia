@@ -1139,6 +1139,10 @@ desktop no primeiro item novo, como já aconteceria com um segundo caminho de gr
 **Os cards viraram `grid auto-fit`** com mínimo de 180px (140px no celular). Com `flex: 1 1 0`,
 cinco cards em 390px viravam fatias de 60px, cada uma cortando o próprio número.
 
+**Conferido em produção (07/09/2026), em 375×812:** topbar recolhida, cabeçalho e filtros
+empilhados, cards em duas colunas, `pointer: coarse` reconhecido (checkbox medindo 20px) e **o
+corpo da página sem rolagem lateral** — a tabela rola dentro do próprio contêiner, com 1.093px.
+
 **O que ficou de fora, por decisão:** a tabela ainda rola de lado no celular. Transformá-la em
 lista de cartões é o passo seguinte, e vale **só para a Resumida** — a Detalhada e a conciliação
 existem para comparar colunas lado a lado, e escondê-las não deixa a tela pior, deixa a tela
@@ -1457,11 +1461,17 @@ outra derrubou `/relatorios` em produção. O que funciona:
    bytes crus nunca acha. O extrato caía no leitor de fatura e o usuário via "não encontrei o mês de
    referência" — erro do parser errado, que não diz nada sobre o problema real. O teste passava
    porque exercitava a função com o texto já extraído, que **não é como o despachante a chama**.
-9. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
+9. **Conferir deploy é uma requisição a cada 15–30 s, com teto — não um laço apertado.** Em
+   06/09/2026 o polling com parâmetro aleatório para acompanhar builds derrubou o acesso: a borda
+   passou a responder **403 `Forbidden` sem o cabeçalho `server: gunicorn`** (quem recusa é o
+   proxy, não a aplicação) para todo o IP, inclusive `/health` e o painel do navegador. **A
+   verificação não pode custar o acesso ao sistema.** Sintoma para reconhecer: 403 em rota pública
+   e sem cabeçalho do Gunicorn é bloqueio de borda, não bug do app.
+10. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
    checagem algumas vezes, com parâmetro aleatório na URL**, e só então concluir.
-10. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+11. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
 
