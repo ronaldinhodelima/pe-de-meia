@@ -262,7 +262,15 @@ def index():
         # ter classificacao completa e nao e trabalho pendente (secao 10.4 n.11).
         where.append(PENDENTE_CLASSIFICACAO_SQL)
     elif status in ("receita", "despesa"):
-        where.append(f"{NATUREZA_SQL} = %s")
+        # Os cards de Receitas/Despesas somam sobre a view financeira, que exclui
+        # substituido/somente_conciliacao/duplicada. O filtro le cartao.transacao
+        # direto, entao precisa repetir a exclusao - senao o card promete um
+        # total e a lista entrega outro, com registro que nao conta no resultado.
+        where.append(
+            "t.substituido_por IS NULL AND NOT COALESCE(t.somente_conciliacao, false) "
+            "AND COALESCE(t.duplicada, false) = false "
+            f"AND {NATUREZA_SQL} = %s"
+        )
         params.append(status)
     elif status == "fora_resultado":
         where.append("(t.substituido_por IS NOT NULL OR COALESCE(t.somente_conciliacao,false))")

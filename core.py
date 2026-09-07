@@ -5096,7 +5096,8 @@ def aplicar_regras(cur, account_id=None):
         # e valor). Nao decide nada sozinho - so fica visivel em Logs para o
         # usuario avaliar se e mesmo duplicata ou coincidencia de valor.
         cur.execute(
-            "SELECT DISTINCT t.transacao_id::text, t.descricao, t.data_transacao "
+            "SELECT DISTINCT t.transacao_id::text AS transacao_id, t.descricao, "
+            "t.data_transacao "
             "FROM cartao.transacao t "
             "JOIN cartao.regra_classificacao r ON COALESCE(r.ativa,true)=true "
             " AND (r.account_id IS NULL OR r.account_id=t.account_id) "
@@ -5121,8 +5122,21 @@ def aplicar_regras(cur, account_id=None):
             "  ) LIMIT 50;",
             escopo_params,
         )
+        # `_campo` porque quem chama escolhe o cursor: a tela de Lancamentos usa
+        # RealDictCursor e as demais rotas usam cursor comum. Indexar por posicao
+        # num RealDictRow levanta KeyError - e como o corpo inteiro roda dentro
+        # do SAVEPOINT, a regra falhava e voltava atras EM SILENCIO, com o log
+        # gravando so `"erro": "0"` (a mensagem de `KeyError: 0`). Resultado: a
+        # classificacao automatica nao rodava na tela onde mais importa.
         resultado["duplicatas_ignoradas"] = [
-            {"transacao_id": row[0], "descricao": row[1], "data": row[2].isoformat() if row[2] else None}
+            {
+                "transacao_id": _campo(row, "transacao_id", 0),
+                "descricao": _campo(row, "descricao", 1),
+                "data": (
+                    _campo(row, "data_transacao", 2).isoformat()
+                    if _campo(row, "data_transacao", 2) else None
+                ),
+            }
             for row in cur.fetchall()
         ]
         cur.execute(

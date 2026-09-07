@@ -2204,3 +2204,49 @@ def test_comparacao_com_transacao_dimensao_sempre_casta_o_uuid():
                     "(TEXT) e transacao.transacao_id (UUID) sem `::text` - isso "
                     "derruba a consulta inteira, nao so o campo"
                 )
+
+
+def test_filtro_de_natureza_exclui_o_que_esta_fora_do_resultado():
+    """Regra obrigatoria: o filtro de um card ve o mesmo conjunto que o card soma.
+
+    Os cards de Receitas/Despesas somam sobre `cartao.lancamento_financeiro`, que
+    ja exclui `substituido_por`, `somente_conciliacao` e `duplicada`. Os filtros
+    "So receitas"/"So despesas" leem `cartao.transacao` direto, entao precisam
+    repetir a exclusao. Sem ela o card dizia R$ 463 mil e a lista somava R$ 538
+    mil, cheia de registro que nao conta no resultado (secao 4.2).
+    """
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    bloco = fonte.split('elif status in ("receita", "despesa"):', 1)
+    assert len(bloco) == 2, "o filtro de natureza sumiu"
+    corpo = bloco[1].split("\n    cur.execute", 1)[0]
+    for exigido in ("substituido_por IS NULL", "somente_conciliacao", "duplicada"):
+        assert exigido in corpo, (
+            "filtro de natureza nao exclui " + exigido + ": a lista mostraria "
+            "lancamento que o card nao soma"
+        )
+
+
+def test_aplicar_regras_nao_indexa_linha_por_posicao():
+    """Regra obrigatoria: funcao compartilhada nao escolhe o tipo de cursor.
+
+    `aplicar_regras` e chamada pela tela de Lancamentos com RealDictCursor e por
+    outras rotas com cursor comum. Um `row[0]` levanta `KeyError: 0` no primeiro
+    caso - e como o corpo roda dentro de um SAVEPOINT, a falha voltava atras EM
+    SILENCIO: o log gravava `"erro": "0"` e a classificacao automatica nunca
+    rodava na tela onde mais importa. E a licao da secao 10.4 n.7 de novo.
+    """
+    import ast
+    import re
+
+    fonte = (RAIZ / "core.py").read_text(encoding="utf-8")
+    arvore = ast.parse(fonte)
+    for no in ast.walk(arvore):
+        if isinstance(no, ast.FunctionDef) and no.name == "aplicar_regras":
+            corpo = "\n".join(fonte.split("\n")[no.lineno - 1:no.end_lineno])
+            achados = re.findall(r"\brow\s*\[\s*\d+\s*\]", corpo)
+            assert not achados, (
+                "aplicar_regras voltou a indexar a linha por posicao " + str(achados)
+                + " - use _campo(linha, nome, posicao)"
+            )
+            return
+    raise AssertionError("aplicar_regras nao foi encontrada em core.py")
