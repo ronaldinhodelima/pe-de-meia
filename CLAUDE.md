@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 361 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 362 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1058,6 +1058,25 @@ permissões, validações e salvamento automático.
   dinamicamente. **Nunca usar quantidade de opções como critério automático** — quebrou o
   alinhamento dos filtros Fatura e Status. Seletores de navegação (cartão, fatura, status, ano,
   tipo) continuam nativos, protegidos com `data-pdm-native`.
+### Tabular por um campo não pode editá-lo (07/09/2026)
+
+**Tab confirma a opção destacada** — e por isso o destaque nunca pode estar defasado. Escolher o
+Projeto dispara a gravação e é **na resposta dela** que a regra preenche o Portfólio padrão. Se o
+usuário tabula para o Portfólio antes disso, a lista abre com o valor ainda vazio e destaca
+`(não definido)`; quando a resposta chega, o campo passa a mostrar `Imóveis` **e o destaque
+continua onde estava**. O Tab seguinte confirma o destaque e apaga o que a regra acabara de
+preencher: a tela mostrava um valor e gravava outro.
+
+Duas travas, e as duas são necessárias:
+
+- **`sincronizar()` re-alinha o destaque** quando o valor do `<select>` muda por fora com a lista
+  aberta. Sem isso a lista mente sobre o que o Tab vai confirmar.
+- **O Tab só confirma se o usuário navegou (seta) ou filtrou.** Passar pelo campo não é escolher;
+  gravar ali transformaria "tabular" em "editar". De quebra, sai um POST por campo tabulado.
+
+A navegação do usuário tem precedência: assim que ele mexe na lista, o re-alinhamento para de
+seguir o valor de fundo. `test_tab_nao_apaga_valor_que_o_usuario_nao_escolheu` trava as duas.
+
 - Campos pesquisáveis não podem causar rolagem horizontal. Em `/pendencias`, scripts de ações em
   lote precisam verificar se `formLote` existe — a seção é condicional.
 
@@ -1454,7 +1473,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**361 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**362 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
