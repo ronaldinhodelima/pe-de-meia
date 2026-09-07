@@ -2174,3 +2174,33 @@ def test_card_de_classificacao_conta_o_mesmo_que_o_filtro_dele():
         assert "EXIGE_DIMENSOES_SQL" in bloco, (
             nome + " cobra dimensao sem olhar a natureza do lancamento"
         )
+
+
+def test_comparacao_com_transacao_dimensao_sempre_casta_o_uuid():
+    """Regra obrigatoria: `transacao_dimensao.transacao_id` e TEXT.
+
+    `cartao.transacao.transacao_id` e UUID, e o Postgres nao tem operador
+    `uuid = text`: a comparacao sem cast nao devolve resultado errado - derruba
+    a consulta inteira com 500 (secao 10.4 n.6). Todo o codigo ja castava; ao
+    escrever a contagem do card "Classificacao" eu copiei a forma da consulta do
+    core e deixei o `::text` para tras, e a tela de Lancamentos caiu inteira em
+    producao. A suite nao pegou porque nao ha Postgres em toda execucao - os
+    testes de integracao ficam entre os 6 ignorados.
+    """
+    import re
+
+    alvos = [RAIZ / "core.py"] + sorted((RAIZ / "views").glob("*.py"))
+    for caminho in alvos:
+        fonte = caminho.read_text(encoding="utf-8")
+        # qualquer comparacao entre a coluna TEXT e a coluna UUID, nos dois
+        # sentidos, sem o cast explicito de um dos lados
+        for lado_a, lado_b in (
+            (r"td\.transacao_id", r"t\.transacao_id"),
+            (r"t\.transacao_id", r"td\.transacao_id"),
+        ):
+            for achado in re.findall(lado_a + r"\s*=\s*" + lado_b + r"(::text)?", fonte):
+                assert achado == "::text", (
+                    caminho.name + ": comparacao entre transacao_dimensao.transacao_id "
+                    "(TEXT) e transacao.transacao_id (UUID) sem `::text` - isso "
+                    "derruba a consulta inteira, nao so o campo"
+                )

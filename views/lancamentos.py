@@ -811,7 +811,10 @@ _PENDENTE_SIMPLES = (
     "(t.categoria IS NULL OR t.categoria = '' OR EXISTS ("
     "  SELECT 1 FROM cartao.dimensao d"
     "  LEFT JOIN cartao.transacao_dimensao td"
-    "    ON td.dimensao_id = d.id AND td.transacao_id = t.transacao_id"
+    # `transacao_dimensao.transacao_id` e TEXT, `transacao.transacao_id` e UUID:
+    # o Postgres nao tem operador `uuid = text` e a consulta inteira quebra
+    # (secao 10.4 n.6). Todo o resto do codigo ja castava; so este destoava.
+    "    ON td.dimensao_id = d.id AND td.transacao_id = t.transacao_id::text"
     "  WHERE d.obrigatoria = true AND td.valor_id IS NULL AND " + EXIGE_DIMENSOES_SQL +
     "))"
 )
