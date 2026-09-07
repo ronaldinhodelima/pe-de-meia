@@ -946,6 +946,9 @@ tr.compra-feita { opacity: .6; }
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     width: auto !important; max-width: none !important;
     border: 0; padding: 4px 0; white-space: normal !important; overflow: visible;
+    /* colunas de numero e de OK sao centradas/direita no desktop; no cartao o
+       rotulo e o valor ja se separam pelo flex, e a heranca so desalinhava */
+    text-align: left !important;
   }
   table.compacta > tbody > tr > td::before {
     content: attr(data-rotulo); flex: 0 0 38%;
