@@ -24,6 +24,22 @@
   {% endfor %}
 {% endmacro %}
 
+{# Origem da regra. Vazio = todas, que e como as regras se comportavam antes
+   deste campo existir. Prender a origem e o que impede uma regra de conta
+   corrente alcancar uma compra de cartao com descricao parecida. #}
+{% macro sel_origem(selecionada='') %}
+  <div>
+    <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Origem</label>
+    <select name="account_id" class="regra-preview-campo" data-pdm-combobox aria-label="Origem"
+            style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius-xs)">
+      <option value="">Todas as origens</option>
+      {% for o in origens %}
+        <option value="{{ o.account_id }}" {{ 'selected' if o.account_id == selecionada }}>{{ o.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endmacro %}
+
 {% macro filtro_valor(operador='', limite='') %}
   <div>
     <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Condição do valor (opcional)</label>
@@ -58,6 +74,7 @@
       <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Texto na descricao</label>
       <input name="padrao" class="regra-preview-campo" value="{{ novo.padrao }}" placeholder="Ex: BOCO GAS" style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:220px">
     </div>
+    {{ sel_origem(novo.account_id|default('')) }}
     {{ filtro_valor(novo.valor_operador, novo.valor_limite) }}
     <div>
       <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Categoria</label>
@@ -71,11 +88,11 @@
 </div>
 
 <table>
-  <thead><tr><th>Texto procurado</th><th>Valor</th><th>Categoria</th><th>Dimensões</th><th></th></tr></thead>
+  <thead><tr><th>Texto procurado</th><th>Origem</th><th>Valor</th><th>Categoria</th><th>Dimensões</th><th></th></tr></thead>
   <tbody>
     {% for r in regras %}
       {% if r.id == editar_id %}
-        <tr><td colspan="5">
+        <tr><td colspan="6">
           <form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;padding:8px 0">
             <input type="hidden" name="acao" value="editar_regra">
             <input type="hidden" name="regra_id" value="{{ r.id }}">
@@ -83,6 +100,7 @@
               <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Texto na descricao</label>
               <input name="padrao" value="{{ r.padrao }}" style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:220px">
             </div>
+            {{ sel_origem(r.account_id|default('')) }}
             {{ filtro_valor(r.valor_operador|default(''), r.valor_limite|default('')) }}
             <div>
               <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Categoria</label>
@@ -96,6 +114,7 @@
       {% else %}
         <tr>
           <td><strong>"{{ r.padrao }}"</strong></td>
+          <td>{{ r.origem_nome }}</td>
           <td>{{ r.valor_condicao|default('qualquer valor') }}</td>
           <td>{{ r.categoria_nome }}</td>
           <td>{{ r.dims_txt }}</td>
@@ -115,7 +134,7 @@
         </tr>
       {% endif %}
     {% else %}
-      <tr><td colspan="5" style="text-align:center;color:var(--ink-faint);padding:16px">Nenhuma regra cadastrada ainda.</td></tr>
+      <tr><td colspan="6" style="text-align:center;color:var(--ink-faint);padding:16px">Nenhuma regra cadastrada ainda.</td></tr>
     {% endfor %}
   </tbody>
 </table>
@@ -139,7 +158,9 @@
       const q = new URLSearchParams({
         padrao: padrao,
         valor_operador: form.elements.valor_operador.value,
-        valor_limite: form.elements.valor_limite.value
+        valor_limite: form.elements.valor_limite.value,
+        // a previa tem que ver o mesmo recorte que a regra vai aplicar
+        account_id: form.elements.account_id ? form.elements.account_id.value : ''
       });
       fetch('/api/regras/preview?' + q.toString()).then(r => r.json()).then(d => {
         painel.style.display = 'block';

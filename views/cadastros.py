@@ -347,7 +347,7 @@ def regras_view():
 
     def estado_regra(regra_id):
         cur.execute(
-            "SELECT id, padrao, categoria, valor_operador, valor_limite "
+            "SELECT id, padrao, categoria, valor_operador, valor_limite, account_id "
             "FROM cartao.regra_classificacao WHERE id=%s;",
             (regra_id,),
         )
@@ -364,6 +364,7 @@ def regras_view():
             "padrao": regra["padrao"],
             "valor_operador": regra["valor_operador"],
             "valor_limite": float(regra["valor_limite"]) if regra["valor_limite"] is not None else None,
+            "account_id": str(regra["account_id"]) if regra["account_id"] else None,
             "categoria": {
                 "chave": regra["categoria"],
                 "nome": cat_pt_puro(regra["categoria"]),
@@ -375,6 +376,9 @@ def regras_view():
 
     if request.method == "POST":
         acao = request.form.get("acao")
+        # Origem da regra. Vazio = vale para todas, que e exatamente como as
+        # regras se comportavam antes deste campo - regra antiga nao muda.
+        account_id = (request.form.get("account_id") or "").strip() or None
         if acao == "criar_regra":
             padrao = (request.form.get("padrao") or "").strip()
             categoria = request.form.get("categoria") or ""
@@ -395,8 +399,9 @@ def regras_view():
             else:
                 cur.execute(
                     "INSERT INTO cartao.regra_classificacao "
-                    "(padrao, categoria, valor_operador, valor_limite) VALUES (%s,%s,%s,%s) RETURNING id;",
-                    (padrao, categoria, valor_operador, valor_limite),
+                    "(padrao, categoria, valor_operador, valor_limite, account_id) "
+                    "VALUES (%s,%s,%s,%s,%s) RETURNING id;",
+                    (padrao, categoria, valor_operador, valor_limite, account_id),
                 )
                 regra_id = cur.fetchone()["id"]
                 for chave, valor in request.form.items():
@@ -457,8 +462,8 @@ def regras_view():
                 else:
                     cur.execute(
                         "UPDATE cartao.regra_classificacao SET padrao=%s, categoria=%s, "
-                        "valor_operador=%s, valor_limite=%s WHERE id=%s;",
-                        (padrao, categoria, valor_operador, valor_limite, regra_id),
+                        "valor_operador=%s, valor_limite=%s, account_id=%s WHERE id=%s;",
+                        (padrao, categoria, valor_operador, valor_limite, account_id, regra_id),
                     )
             if not erro:
                 cur.execute("DELETE FROM cartao.regra_dimensao_valor WHERE regra_id = %s;", (regra_id,))
@@ -486,7 +491,7 @@ def regras_view():
     conn.commit()
 
     cur.execute(
-        "SELECT id, padrao, categoria, ordem, valor_operador, valor_limite "
+        "SELECT id, padrao, categoria, ordem, valor_operador, valor_limite, account_id "
         "FROM cartao.regra_classificacao WHERE COALESCE(ativa,true)=true ORDER BY ordem, id;"
     )
     regras_db = cur.fetchall()
@@ -505,11 +510,23 @@ def regras_view():
     cur.execute("SELECT COUNT(*) AS n FROM cartao.transacao WHERE regra_aplicada_id IS NOT NULL;")
     total_aplicadas = cur.fetchone()["n"]
 
-    prefill = {"padrao": "", "valor_operador": "", "valor_limite": "", "dimensoes": {}, "categoria": ""}
+    # Mesmo helper que a tela de Lancamentos usa para montar o filtro de origem:
+    # duas listas de conta divergiriam no primeiro banco novo.
+    contas_by_id, _origem_opcoes = carregar_origens(cur)
+    origens = sorted(
+        ({"account_id": aid, "nome": dados["label"]} for aid, dados in contas_by_id.items()),
+        key=lambda o: o["nome"],
+    )
+
+    prefill = {
+        "padrao": "", "valor_operador": "", "valor_limite": "",
+        "dimensoes": {}, "categoria": "", "account_id": "",
+    }
     transacao_prefill = (request.args.get("transacao") or "").strip()
     if transacao_prefill:
         cur.execute(
-            "SELECT descricao, ABS(COALESCE(valor_brl,valor_original)) AS valor, categoria "
+            "SELECT descricao, ABS(COALESCE(valor_brl,valor_original)) AS valor, categoria, "
+            "account_id "
             "FROM cartao.transacao WHERE transacao_id::text=%s;",
             (transacao_prefill,),
         )
@@ -519,6 +536,9 @@ def regras_view():
                 "padrao": tx["descricao"] or "",
                 "valor_limite": f'{tx["valor"]:.2f}' if tx["valor"] is not None else "",
                 "categoria": tx["categoria"] or "",
+                # a regra nasce restrita a origem do lancamento que a inspirou:
+                # e o padrao seguro, e um clique desfaz
+                "account_id": str(tx["account_id"]) if tx["account_id"] else "",
             })
             cur.execute(
                 "SELECT dimensao_id, valor_id FROM cartao.transacao_dimensao WHERE transacao_id=%s;",
@@ -563,6 +583,11 @@ def regras_view():
             ),
             "dims_txt": ", ".join(dims_txt) or "-",
             "dims_selecionadas": selecionadas,
+            "account_id": str(r["account_id"]) if r["account_id"] else "",
+            "origem_nome": (
+                contas_by_id.get(str(r["account_id"]), {}).get("label", "origem removida")
+                if r["account_id"] else "todas as origens"
+            ),
         })
 
     return render_template(
@@ -578,6 +603,7 @@ def regras_view():
         editar_id=editar_id,
         prefill=prefill,
         operadores_valor=OPERADORES_VALOR,
+        origens=origens,
     )
 
 
@@ -593,11 +619,18 @@ def regra_preview():
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     condicao = _condicao_valor_sql(operador)
-    params = [f"%{padrao}%"] + ([limite] if operador else [])
+    # A previa precisa aplicar a MESMA restricao de origem que `aplicar_regras`
+    # aplica (`r.account_id IS NULL OR r.account_id = t.account_id`). Sem isso a
+    # previa promete N lancamentos e a regra alcanca outro conjunto - e o
+    # numero que o usuario usa para decidir seria falso.
+    account_id = (request.args.get("account_id") or "").strip() or None
+    condicao_origem = " AND t.account_id = %s" if account_id else ""
+    params = [f"%{padrao}%"] + ([limite] if operador else []) + ([account_id] if account_id else [])
     cur.execute(
         "SELECT COUNT(*) AS total FROM cartao.transacao t "
         "WHERE t.descricao ILIKE %s AND t.regra_aplicada_id IS NULL "
-        "AND t.conferida=false AND COALESCE(t.categoria_manual,false)=false" + condicao,
+        "AND t.conferida=false AND COALESCE(t.categoria_manual,false)=false"
+        + condicao + condicao_origem,
         params,
     )
     total = cur.fetchone()["total"]
@@ -606,7 +639,7 @@ def regra_preview():
         "t.descricao, ABS(COALESCE(t.valor_brl,t.valor_original)) AS valor "
         "FROM cartao.transacao t WHERE t.descricao ILIKE %s "
         "AND t.regra_aplicada_id IS NULL AND t.conferida=false "
-        "AND COALESCE(t.categoria_manual,false)=false" + condicao +
+        "AND COALESCE(t.categoria_manual,false)=false" + condicao + condicao_origem +
         " ORDER BY t.data_transacao DESC LIMIT 10;",
         params,
     )

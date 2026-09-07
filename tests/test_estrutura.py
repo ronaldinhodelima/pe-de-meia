@@ -2250,3 +2250,50 @@ def test_aplicar_regras_nao_indexa_linha_por_posicao():
             )
             return
     raise AssertionError("aplicar_regras nao foi encontrada em core.py")
+
+
+def test_regra_pode_ser_presa_a_uma_origem():
+    """Regra obrigatoria: a tela de regras oferece a origem, e a previa a respeita.
+
+    `aplicar_regras` sempre honrou `r.account_id IS NULL OR r.account_id =
+    t.account_id`, mas a tela nao tinha o campo - entao toda regra nascia global.
+    E a secao 8.1 e explicita: regra que poderia confundir conta corrente com
+    cartao precisa de origem vinculada. Sem o campo, a unica saida era escolher
+    um trecho de descricao artificialmente especifico.
+
+    A previa e a parte que mais importa aqui: ela e o numero que o usuario le
+    para decidir. Se ela ignorar a origem, promete N lancamentos e a regra
+    alcanca outro conjunto - o mesmo defeito de card e filtro discordando.
+    """
+    fonte = (RAIZ / "views" / "cadastros.py").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "regras.html").read_text(encoding="utf-8")
+
+    assert 'name="account_id"' in html, "a tela de regras nao oferece a origem"
+    assert "{% macro sel_origem(" in html, (
+        "o seletor de origem precisa ser macro: criar e editar tem que oferecer "
+        "exatamente as mesmas opcoes"
+    )
+    assert html.count("sel_origem(") >= 3, (
+        "o seletor de origem nao esta nos dois formularios (criar e editar)"
+    )
+
+    # grava na criacao E na edicao
+    assert "(padrao, categoria, valor_operador, valor_limite, account_id)" in fonte, (
+        "criar_regra nao grava a origem"
+    )
+    assert "valor_limite=%s, account_id=%s WHERE id=%s" in fonte, (
+        "editar_regra nao grava a origem"
+    )
+
+    # a previa filtra pela origem
+    previa = fonte.split('@bp.route("/api/regras/preview")', 1)[1]
+    assert "condicao_origem" in previa, (
+        "a previa ignora a origem: o numero que o usuario le nao seria o que a "
+        "regra vai alcancar"
+    )
+    assert previa.count("condicao_origem") >= 3, (
+        "a previa aplica a origem na contagem OU na lista, mas nao nas duas"
+    )
+    assert "account_id" in html.split("URLSearchParams", 1)[1][:400], (
+        "o JS da previa nao envia a origem escolhida"
+    )
