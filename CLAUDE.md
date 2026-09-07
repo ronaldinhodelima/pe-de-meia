@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 362 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 363 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1304,7 +1304,13 @@ seletor na tela. Decisão do usuário — fica para quando o uso mostrar qual ca
   A prévia mostra quais lançamentos pendentes receberão a regra.
 - **Nunca se aplicam a lançamento conferido nem a categoria escolhida manualmente.**
 - `regra_classificacao.account_id` limita a regra à origem; regra sem origem é geral. **Regras que
-  poderiam confundir conta corrente com cartão devem ter origem vinculada.**
+  poderiam confundir conta corrente com cartão devem ter origem vinculada.** O seletor de origem
+  existe na tela desde 07/09/2026 — antes disso o motor já respeitava a coluna, mas **toda regra
+  nascia global**, e a única saída era inventar um trecho de descrição artificialmente específico.
+  Vazio = todas, que é como as regras se comportavam antes; nenhuma regra antiga mudou.
+  **A prévia filtra pela origem também** — ela é o número que decide, e ignorando a origem
+  prometeria N lançamentos enquanto a regra alcançaria outro conjunto. Criar regra a partir de um
+  lançamento já sugere a origem dele.
 - Regras são globais e gravadas sobre a transação: uma regra criada em qualquer visualização vale
   para ambas. O botão `+` só abre o cadastro já preenchido.
 - **Reaplicar** libera todos os pendentes ligados à regra, em qualquer mês; conferidos são
@@ -1419,6 +1425,27 @@ viagem ou cirurgia são preservados); anuidades e bonificações Unicred são Ta
 Família / Serviços Financeiros / Vida Familiar; EVENTIM e SAN JUAN do show vão para Iron Maiden
 2026 / Eventos; `Reformas da casa` sempre aponta para Imóveis.
 
+**Água da concessionária (Visan) — regra criada em 07/09/2026.** São 13 boletos mensais na conta
+corrente (ago/2025 a ago/2026), de R$ 180,96 a R$ 290,99: **Água - Visan / Família / Casa /
+Vida Familiar**. O portfólio veio dos próprios OK do usuário — 17 lançamentos da categoria `Água`
+conferidos, todos em Vida Familiar, e 222 do projeto `Casa`. O único que destoava (10/07/2026,
+assinado com `Imóveis`) foi alinhado por decisão dele, mantendo a assinatura.
+
+Três armadilhas desse caso, todas gerais:
+
+- **`ARREC CONVÊNIOS` é o descritor do BANCO, não da conta.** Ele também cobre IPVA,
+  licenciamento e RG — uma regra nele pega 17 lançamentos, não 11. Quem identifica a conta é o
+  **rótulo que o usuário digita** no boleto (`agua`, `visan`, `Ipva jeep 2a cota`).
+- **A descrição tem DOIS espaços** entre o rótulo e o descritor: `agua␣␣ARREC CONVÊNIOS`. Buscar
+  `agua ARREC` com um espaço devolve **zero**. Sempre conferir o padrão pela prévia antes de criar
+  a regra.
+- **Sem filtro de valor, de propósito:** a conta varia todo mês. É o oposto do GuilhermeDaSilva,
+  onde o valor é justamente o que separa água de gás.
+
+`Água` e `Água - Visan` **não são a mesma categoria**: a primeira são compras no cartão (água de
+galão — GuilhermeDaSilva e Visa à vista), a segunda é o boleto da concessionária na conta
+corrente. Não unificar.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
@@ -1473,7 +1500,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**362 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**363 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
