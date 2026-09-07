@@ -373,6 +373,21 @@ registro bancário e as partes aparecem recolhidas abaixo dele com `+`/`−`, de
   completo e válido; **desfazer o rateio inteiro exige retirar o OK antes**.
 - Primeiro caso validado: DEB MONGERAL R$ 705,28 → R$ 505,46 Ronaldo + R$ 199,82 Andrea.
 
+**DEB MONGERAL — a PROPORÇÃO é fixa, não os valores** (decisão do usuário, 07/09/2026). O
+seguro de vida é dividido em **71,6680% Ronaldo / 28,3320% Andrea** (505,46 ÷ 705,28), e o
+prêmio reajusta: R$ 675,16 em 2025 e R$ 705,28 em 2026, +4,46% aplicados aos dois. Aplicar o
+par de valores absolutos nos meses de 2025 **não fecharia** com o débito.
+
+A parte do Ronaldo sai do arredondamento da proporção e **a da Andrea é o resto** — assim a
+soma fecha ao centavo sempre (§4.4), sem depender de os dois arredondamentos se acertarem.
+Em 2025 dá R$ 483,87 + R$ 191,29; em 2026, exatamente os R$ 505,46 + R$ 199,82 já validados,
+o que confirma o modelo.
+
+Cada parte leva **Seguros / Seguro de Vida / Proteção e Futuro**, mudando só o Responsável.
+Aplicado aos 13 débitos (5 em 2025, 8 em 2026): DRE inalterado nos dois anos —
+R$ 315.991,96 e R$ 474.868,68 antes e depois, como tem que ser, já que as partes substituem
+o pai e somam o mesmo. **Nenhum OK foi tocado** (§1.2).
+
 ## 4.5 Regime de caixa para parcelamento
 
 **Decisão do usuário (29/08/2026):** parcelamento vira despesa **mês a mês, conforme a fatura
