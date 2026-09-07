@@ -34,6 +34,9 @@
       <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
       <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes de conferência</option>
       <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
+      <option value="pendente_classificacao" {{ 'selected' if status == 'pendente_classificacao' }}>Pendentes de classificação</option>
+      <option value="receita" {{ 'selected' if status == 'receita' }}>Só receitas</option>
+      <option value="despesa" {{ 'selected' if status == 'despesa' }}>Só despesas</option>
       <option value="pendente_banco" {{ 'selected' if status == 'pendente_banco' }}>Pendentes no banco</option>
       <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
       <option value="fora_resultado" {{ 'selected' if status == 'fora_resultado' }}>Fora do resultado</option>
@@ -103,14 +106,28 @@
 </div>
 
 <div class="cards">
-  <div class="card"><div class="label" title="Somente receitas contabilizadas no DRE">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div></div>
-  <div class="card"><div class="label" title="Somente despesas contabilizadas no DRE; investimentos continuam fora">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div></div>
+  <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
+  <div class="card" data-filtro="despesa" title="Ver só as despesas deste período; investimentos continuam fora"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
+  {# Resultado nao filtra: nao existe "linha de resultado" - ele e a conta
+     entre os dois cards ao lado, nao um recorte de lancamentos. #}
   <div class="card"><div class="label" title="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ 'var(--good)' if resultado_mes >= 0 else 'var(--bad)' }}">{{ resultado_mes|moeda }}</div></div>
-  <div class="card">
-    <div class="label" title="Contabilizados / todos os registros recebidos no período">Lançamentos do período</div>
+  <div class="card {{ 'card-ok' if pendente_classificacao == 0 else 'card-aviso' }}" data-filtro="pendente_classificacao" title="Ver os lançamentos que ainda faltam classificar">
+    <div class="label">Classificação</div>
+    <div class="val">{{ classificados_reais }} / {{ total_reais }}</div>
+    <div class="card-explicacao">Faltam {{ pendente_classificacao }}</div>
+    <div class="card-progresso"><i style="width:{{ pct_classificados }}%"></i></div>
+  </div>
+  <div class="card {{ 'card-ok' if conf_reais == total_reais else 'card-aviso' }}" data-filtro="pendente" title="Ver os lançamentos que ainda não foram conferidos">
+    <div class="label">OK dos lançamentos</div>
+    <div class="val">{{ conf_reais }} / {{ total_reais }}</div>
+    <div class="card-explicacao">Faltam {{ pendentes_ok }}</div>
+    <div class="card-progresso"><i style="width:{{ pct_conferidos }}%"></i></div>
+  </div>
+  <div class="card" data-filtro="todas" title="Ver todos os lançamentos do período">
+    <div class="label">Lançamentos do período</div>
     <div class="val">{{ total_reais }} / {{ total_recebidos }}</div>
     <div class="card-explicacao">contabilizados / recebidos</div>
-    <div class="card-explicacao">{{ conf_reais }} conferidos · {{ total_fora }} fora do resultado</div>
+    <div class="card-explicacao">{{ total_fora }} fora do resultado</div>
   </div>
 </div>
 
@@ -183,6 +200,7 @@
   <tbody>
     {% for r in linhas %}
       <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}"
+          data-exige-dimensoes="{{ '0' if r.get('exige_dimensoes', True) == False else '1' }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
         {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
         <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
@@ -202,7 +220,7 @@
         </td>
         {% for d in dimensoes %}
           <td class="cel-dim" data-col="dim_{{ d.id }}">
-            <select data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select {{ 'classificacao-faltando' if d.obrigatoria and not r.dims.get(d.id) }}" data-dim="{{ d.id }}" data-lazy-options="dimensao"
+            <select data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select {{ 'classificacao-faltando' if d.obrigatoria and r.get('exige_dimensoes', True) and not r.dims.get(d.id) }}" data-dim="{{ d.id }}" data-lazy-options="dimensao"
                     {{ 'disabled' if not pode_editar or r.rateios }}>
               <option value="{{ r.dims.get(d.id) or '' }}" selected>{{ r.dims_rotulos.get(d.id) }}</option>
             </select>
@@ -320,5 +338,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260904-1"></script>
-<script src="/static/lancamentos.js?v=20260904-2"></script>
+<script src="/static/lancamentos.js?v=20260907-1"></script>
 {% endblock %}

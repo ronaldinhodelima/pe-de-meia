@@ -303,10 +303,35 @@
     return payload;
   }
 
+  // O editor pode ser a PROPRIA linha (classificacao inline) ou o painel
+  // aberto abaixo dela. A flag de obrigatoriedade mora sempre na linha.
+  function linhaDoEditor(editor) {
+    if (!editor) return null;
+    if (editor.matches('tr[data-linha]')) return editor;
+    const detalhe = editor.closest('tr.vinculos-detalhe');
+    if (detalhe) return detalhe.previousElementSibling;
+    return editor.closest('tr[data-linha]');
+  }
+
+  // Dimensao obrigatoria NAO se aplica a natureza neutra - pagamento de fatura,
+  // transferencia entre contas proprias, bem e investimento nao participam do
+  // resultado (secao 4.1). Cobrar Responsavel/Projeto/Portfolio deles pinta de
+  // vermelho um campo que o servidor nao exige, e preenche-lo faria o mesmo
+  // dinheiro aparecer de novo na visao por dimensao.
+  function exigeDimensoes(editor) {
+    const linha = linhaDoEditor(editor);
+    return !linha || linha.dataset.exigeDimensoes !== '0';
+  }
+
+  function dimensoesObrigatorias(editor) {
+    if (!exigeDimensoes(editor)) return new Set();
+    return new Set((config.dimensoes_obrigatorias || []).map(String));
+  }
+
   function atualizarDestaquesObrigatorios(editor) {
     const categoria = editor.querySelector('[data-campo="categoria"]');
     if (categoria) categoria.classList.toggle('classificacao-faltando', !categoria.value);
-    const obrigatorias = new Set((config.dimensoes_obrigatorias || []).map(String));
+    const obrigatorias = dimensoesObrigatorias(editor);
     editor.querySelectorAll('[data-dimensao]').forEach(campo => {
       campo.classList.toggle(
         'classificacao-faltando', obrigatorias.has(String(campo.dataset.dimensao)) && !campo.value
@@ -330,7 +355,7 @@
     const faltando = [];
     const categoria = editor.querySelector('[data-campo="categoria"]');
     if (categoria && !categoria.value) faltando.push('Categoria');
-    const obrigatorias = new Set((config.dimensoes_obrigatorias || []).map(String));
+    const obrigatorias = dimensoesObrigatorias(editor);
     editor.querySelectorAll('[data-dimensao]').forEach(campo => {
       if (!obrigatorias.has(String(campo.dataset.dimensao)) || campo.value) return;
       faltando.push(campo.dataset.dimensaoNome || 'Classificação');
@@ -454,6 +479,15 @@
         const json = await resp.json();
         if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível salvar.');
         if (editor.dataset.versaoSalva === versao) mostrarSalvo(aviso);
+        // Trocar a categoria pode trocar a NATUREZA, e com ela a
+        // obrigatoriedade das dimensoes. So o servidor sabe: releia a flag da
+        // resposta em vez de deduzir no cliente.
+        if ('exige_dimensoes' in json) {
+          const linha = linhaDoEditor(editor);
+          if (linha) linha.dataset.exigeDimensoes = json.exige_dimensoes ? '1' : '0';
+          atualizarDestaquesObrigatorios(editor);
+          atualizarAvisoClassificacao(editor);
+        }
         try { await atualizarResumoPagina(); } catch (e) {
           if (editor.dataset.versaoSalva === versao) aviso.textContent = 'Salvo; resumo atualiza ao reabrir';
         }

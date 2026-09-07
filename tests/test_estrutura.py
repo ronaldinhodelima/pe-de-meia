@@ -2042,3 +2042,135 @@ def test_extrato_mostra_movimento_de_caixa_e_nao_despesa_no_dre():
     assert "Despesas no DRE" in template and "Fora do DRE" in template
     # o rotulo do total tambem muda: extrato nao tem "SALDO TOTAL impresso"
     assert "Movimento do período" in template
+
+
+def test_pintura_de_pendencia_nunca_decide_obrigatoriedade_sem_a_natureza():
+    """Regra obrigatoria: quem PINTA a pendencia le a mesma regra de quem a CALCULA.
+
+    Dimensao obrigatoria nao se aplica a natureza neutra (secao 4.1): pagamento
+    de fatura, transferencia entre contas proprias, bem e investimento nao
+    participam do resultado. O servidor sempre soube disso - `EXIGE_DIMENSOES_SQL`
+    e `exige_dimensoes()` sao o ponto unico de verdade, e e por eles que a fatura
+    consegue assinar o OK de um pagamento de fatura sem dimensao nenhuma.
+
+    A interface, porem, reimplementou "obrigatoria" por conta propria: as duas
+    telas decidiam so por `d.obrigatoria`, uma propriedade GLOBAL da dimensao que
+    nao sabe de que lancamento se trata. O resultado era um Projeto/Portfolio
+    vermelho num lancamento que o servidor nao cobra - e que, se alguem
+    preenchesse, faria o mesmo dinheiro aparecer de novo na visao por dimensao.
+
+    E a mesma classe dos 57 falsos pendentes da secao 6.5 n.10: a regra tem ponto
+    unico de verdade, mas quem desenha a pendencia nao o consulta.
+    """
+    import re
+
+    # 1. Nos templates, toda pintura que olha `obrigatoria` tem que olhar a
+    #    natureza junto. A condicao mora numa linha so, entao a checagem e por
+    #    trecho ao redor de cada ocorrencia de `classificacao-faltando`.
+    for nome in ("index.html", "lancamentos_fatura.html"):
+        html = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
+        for trecho in re.findall(r"\{\{[^{}]*classificacao-faltando[^{}]*\}\}", html):
+            if "obrigatoria" not in trecho:
+                continue  # pintura de categoria: categoria e sempre obrigatoria
+            assert "exige_dimensoes" in trecho, (
+                nome + ": pintura decide obrigatoriedade so por `obrigatoria`, "
+                "sem consultar a natureza do lancamento: " + trecho
+            )
+
+    # 2. No JS, `dimensoes_obrigatorias` e a lista GLOBAL. Le-la direto ignora a
+    #    natureza; ela so pode ser lida dentro do helper que aplica a excecao.
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "function dimensoesObrigatorias(" in js, (
+        "o helper que aplica a excecao de natureza sumiu do lancamentos_fatura.js"
+    )
+    corpo_helper = js.split("function dimensoesObrigatorias(", 1)[1].split("\n  }", 1)[0]
+    assert "exigeDimensoes(" in corpo_helper, (
+        "o helper parou de consultar a natureza da linha"
+    )
+    fora_do_helper = js.replace(corpo_helper, "")
+    assert "config.dimensoes_obrigatorias" not in fora_do_helper, (
+        "lancamentos_fatura.js voltou a ler a lista global de dimensoes "
+        "obrigatorias fora do helper - isso ignora a natureza do lancamento"
+    )
+
+    # 3. A flag tem que chegar as duas telas pelo servidor, senao o JS le
+    #    `undefined` e cai no comportamento antigo em silencio.
+    for nome in ("index.html", "lancamentos_fatura.html"):
+        html = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
+        assert "data-exige-dimensoes" in html, nome + " nao publica a flag na linha"
+
+    # 3b. A flag e opcional no template DE PROPOSITO: ausente, a tela COBRA,
+    #     igual ao servidor. O contrario esconderia pendencia de verdade em
+    #     silencio. Mas isso so e seguro se a rota publicar a flag de fato -
+    #     senao a excecao nunca chega a tela e ninguem percebe (secao 11.3-A:
+    #     coluna ausente num `.get()` desliga a regra sem erro nenhum).
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert '"exige_dimensoes": exige_dimensoes(' in fonte, (
+        "a Resumida parou de publicar `exige_dimensoes` na linha"
+    )
+    assert 'principal["exige_dimensoes"] = exige' in fonte, (
+        "a Detalhada parou de publicar `exige_dimensoes` no lancamento principal"
+    )
+    assert '"exige_dimensoes": exige_dims,' in fonte, (
+        "POST /api/transacao parou de devolver `exige_dimensoes` - trocar a "
+        "categoria troca a natureza, e so o servidor sabe a nova"
+    )
+
+    # 4. E a trava do lancamento manual, que RECUSA a criacao, tambem: sem isto
+    #    um lancamento manual de natureza neutra nunca poderia receber OK.
+    bloco = fonte.split("faltando_ids = [d for d in obrigatorias", 1)[0]
+    assert "exige_dims" in bloco[-1200:], (
+        "a trava do lancamento manual voltou a cobrar dimensao sem olhar a natureza"
+    )
+
+
+def test_card_de_classificacao_conta_o_mesmo_que_o_filtro_dele():
+    """Regra obrigatoria: o card e o filtro que ele abre veem o mesmo conjunto.
+
+    Um card e uma promessa: "faltam N". Se o filtro atras dele mostrar outro
+    numero, o card mente - e mente sem erro nenhum, porque as duas consultas
+    rodam bem. E o mesmo motivo pelo qual a edicao em lote nao tem endpoint
+    proprio (secao 7.2-A): dois caminhos comecam iguais e divergem na primeira
+    regra nova.
+
+    Duas armadilhas concretas, ja pagas ao escrever isto:
+
+    * a condicao tem que rodar sobre `cartao.transacao`, nao sobre a view
+      financeira - na view um rateado vira N linhas e as dimensoes moram noutra
+      chave (`lancamento_financeiro_dimensao`), entao a mesma condicao nas duas
+      bases da respostas diferentes;
+    * num lancamento RATEADO a classificacao mora nas partes. Sem o ramo de
+      rateio, TODO rateado apareceria como pendente, inclusive os completos.
+    """
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+
+    assert "PENDENTE_CLASSIFICACAO_SQL = (" in fonte, (
+        "a condicao de pendencia de classificacao deixou de ter ponto unico"
+    )
+    # Usada nos DOIS lugares: no filtro (where) e na contagem do card.
+    assert fonte.count("PENDENTE_CLASSIFICACAO_SQL") >= 3, (
+        "a condicao deixou de ser compartilhada entre o card e o filtro"
+    )
+    assert "where.append(PENDENTE_CLASSIFICACAO_SQL)" in fonte, (
+        "o filtro parou de usar a condicao compartilhada"
+    )
+    contagem = fonte.split("AS pendente_classificacao FROM ", 1)
+    assert len(contagem) == 2, "a contagem do card sumiu"
+    base = contagem[1].split(" ", 1)[0]
+    assert base == "cartao.transacao", (
+        "a contagem do card saiu de cartao.transacao para " + base + ": na view "
+        "financeira um rateado vira N linhas e a condicao muda de significado"
+    )
+
+    # O ramo de rateio tem que existir e olhar as PARTES.
+    assert "_PENDENTE_RATEADO" in fonte, "o ramo de rateio sumiu da condicao"
+    ramo = fonte.split("_PENDENTE_RATEADO = (", 1)[1].split("\n)\n", 1)[0]
+    assert "cartao.transacao_rateio" in ramo and "transacao_rateio_dimensao" in ramo, (
+        "o ramo de rateio parou de olhar a classificacao das partes"
+    )
+    # E a excecao de natureza vale nos dois ramos.
+    for nome in ("_PENDENTE_SIMPLES", "_PENDENTE_RATEADO"):
+        bloco = fonte.split(nome + " = (", 1)[1].split("\n)\n", 1)[0]
+        assert "EXIGE_DIMENSOES_SQL" in bloco, (
+            nome + " cobra dimensao sem olhar a natureza do lancamento"
+        )

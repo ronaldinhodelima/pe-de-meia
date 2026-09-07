@@ -239,12 +239,45 @@ class TestIndex:
     def test_cards_separam_recebidos_contabilizados_e_conferidos(self, ctx):
         html = self.render(
             [], total_reais=245, total_recebidos=273, conf_reais=185, total_fora=28,
+            pendente_classificacao=60, classificados_reais=185, pendentes_ok=60,
+            pct_classificados=75.5, pct_conferidos=75.5,
         )
         assert "Receitas no DRE" in html
         assert "Despesas no DRE" in html
         assert "245 / 273" in html
         assert "contabilizados / recebidos" in html
-        assert "185 conferidos · 28 fora do resultado" in html
+        assert "28 fora do resultado" in html
+        # Conferidos e classificados sao trabalho pendente, entao ganharam card
+        # proprio - com o numero, o quanto falta e o clique que leva ate as
+        # linhas. Antes viviam como uma linha de texto que nao levava a lugar
+        # nenhum.
+        assert "185 / 245" in html
+        assert "Faltam 60" in html
+
+    def test_cada_card_que_parece_clicavel_leva_a_um_filtro_real(self, ctx):
+        """Card com `data-filtro` vira porta de entrada para as proprias linhas.
+
+        O atributo e tambem o gatilho do CSS (`.card[data-filtro]`), entao nao
+        existe card com cara de clicavel e sem filtro por tras - nem o contrario.
+        E todo valor que ele aponta precisa ser um status que a rota aceita,
+        senao o clique cai no default `todas` em silencio e a tela mente sobre o
+        recorte que esta mostrando.
+        """
+        import re
+
+        html = self.render([])
+        filtros = set(re.findall(r'data-filtro="([^"]+)"', html))
+        assert filtros, "os cards deixaram de oferecer filtro"
+        opcoes = set(re.findall(r'<option value="([^"]+)"', html))
+        assert filtros <= opcoes, (
+            "card aponta para status que o filtro nao oferece: "
+            + str(sorted(filtros - opcoes))
+        )
+        # "Resultado no DRE" nao filtra de proposito: ele e a conta entre os
+        # dois cards ao lado, nao um recorte de lancamentos.
+        bloco = html.split('class="cards"', 1)[1].split("</div>\n</div>", 1)[0]
+        resultado = bloco.split("Resultado no DRE", 1)[0].rsplit("<div class=", 1)[1]
+        assert "data-filtro" not in resultado
 
     def test_linha_exibe_todas_as_situacoes_sem_depender_so_da_cor(self, ctx):
         situacoes = [

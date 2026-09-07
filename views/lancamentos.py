@@ -182,7 +182,7 @@ def index():
     if status not in (
         "todas", "pendente", "conferida", "pendente_banco", "duplicidade",
         "fora_resultado", "somente_conciliacao", "substituido",
-        "rateio_incompleto",
+        "rateio_incompleto", "pendente_classificacao", "receita", "despesa",
     ):
         status = "todas"
     origem_sel = request.args.getlist("origem")
@@ -256,6 +256,14 @@ def index():
             where.append("false")
     elif status == "pendente_banco":
         where.append("upper(COALESCE(t.status,'')) = 'PENDING'")
+    elif status == "pendente_classificacao":
+        # Falta categoria, ou falta uma dimensao obrigatoria QUE ESTE
+        # lancamento exige. Registro que ja esta fora do resultado nunca vai
+        # ter classificacao completa e nao e trabalho pendente (secao 10.4 n.11).
+        where.append(PENDENTE_CLASSIFICACAO_SQL)
+    elif status in ("receita", "despesa"):
+        where.append(f"{NATUREZA_SQL} = %s")
+        params.append(status)
     elif status == "fora_resultado":
         where.append("(t.substituido_por IS NOT NULL OR COALESCE(t.somente_conciliacao,false))")
     elif status == "somente_conciliacao":
@@ -317,6 +325,16 @@ def index():
         f"SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
         f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
         f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
+        params_resumo,
+    )
+    resumo.update(dict(cur.fetchone()))
+
+    # Contado a parte, sobre cartao.transacao e com a MESMA condicao do filtro
+    # "Pendentes de classificacao": o card e o filtro tem que mostrar o mesmo
+    # conjunto, senao o numero promete N linhas e a tela entrega outra coisa.
+    cur.execute(
+        f"SELECT COUNT(*) AS pendente_classificacao FROM cartao.transacao t {JOIN_NATUREZA} "
+        "WHERE " + " AND ".join(where_resumo) + " AND " + PENDENTE_CLASSIFICACAO_SQL + ";",
         params_resumo,
     )
     resumo.update(dict(cur.fetchone()))
@@ -603,6 +621,12 @@ def index():
             "categoria": r["categoria"],
             "categoria_nome": cat_pt_puro(r["categoria"]) if r["categoria"] else "(sem categoria)",
             "dims": dims_sel,
+            # A obrigatoriedade de dimensao depende da NATUREZA do lancamento,
+            # nao so da dimensao (secao 4.1). Sem este campo a tela pintava de
+            # vermelho o Projeto/Portfolio de um pagamento de fatura - cobrando
+            # um preenchimento que o servidor nao exige e que, se atendido,
+            # faria o mesmo dinheiro aparecer de novo na visao por dimensao.
+            "exige_dimensoes": exige_dimensoes(r["natureza_efetiva"]),
             "dims_rotulos": {
                 d["id"]: nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
                 for d in dimensoes
@@ -745,6 +769,19 @@ def index():
         conf=resumo["conferidos_reais"] or 0,
         total=resumo["total_reais"] or 0,
         conf_reais=resumo["conferidos_reais"] or 0,
+        pendente_classificacao=resumo["pendente_classificacao"] or 0,
+        # Numero derivado se calcula AQUI, nunca no template: aritmetica em
+        # Jinja sobre variavel ausente levanta UndefinedError e derruba a tela
+        # inteira, enquanto imprimir a variavel apenas sai vazio.
+        classificados_reais=max(
+            (resumo["total_reais"] or 0) - (resumo["pendente_classificacao"] or 0), 0
+        ),
+        pendentes_ok=max((resumo["total_reais"] or 0) - (resumo["conferidos_reais"] or 0), 0),
+        pct_classificados=_pct(
+            (resumo["total_reais"] or 0) - (resumo["pendente_classificacao"] or 0),
+            resumo["total_reais"] or 0,
+        ),
+        pct_conferidos=_pct(resumo["conferidos_reais"] or 0, resumo["total_reais"] or 0),
         total_reais=resumo["total_reais"] or 0,
         total_recebidos=resumo["total_recebidos"] or 0,
         total_fora=max((resumo["total_recebidos"] or 0) - (resumo["total_reais"] or 0), 0),
@@ -752,6 +789,56 @@ def index():
         detalhes_json=json_script(detalhes_js),
         config_json=json_script(config_lancamentos),
     )
+
+
+# Ponto unico: o CARD "Classificacao" e o FILTRO "Pendentes de classificacao"
+# tem que contar exatamente a mesma coisa. Definidos separados, divergem na
+# primeira regra nova - e um card que promete N linhas e entrega outra coisa e
+# pior que card nenhum. A condicao respeita a natureza (secao 4.1): lancamento
+# neutro so precisa de categoria.
+def _pct(parte, total):
+    """Percentual para a barra de progresso do card. Sem total, a barra fica
+    cheia: "0 de 0 pendentes" e um estado completo, nao um estado vazio."""
+    if not total:
+        return 100.0
+    return round(parte / total * 100, 1)
+
+
+# Num lancamento RATEADO a classificacao mora nas partes, nao no pai: o pai nao
+# tem categoria propria nem linha em `transacao_dimensao`. Contar por ele daria
+# TODO rateado como pendente, inclusive os completos - por isso o CASE.
+_PENDENTE_SIMPLES = (
+    "(t.categoria IS NULL OR t.categoria = '' OR EXISTS ("
+    "  SELECT 1 FROM cartao.dimensao d"
+    "  LEFT JOIN cartao.transacao_dimensao td"
+    "    ON td.dimensao_id = d.id AND td.transacao_id = t.transacao_id"
+    "  WHERE d.obrigatoria = true AND td.valor_id IS NULL AND " + EXIGE_DIMENSOES_SQL +
+    "))"
+)
+
+_PENDENTE_RATEADO = (
+    "(EXISTS ("
+    "  SELECT 1 FROM cartao.transacao_rateio rx"
+    "  WHERE rx.transacao_id = t.transacao_id"
+    "    AND (rx.categoria IS NULL OR rx.categoria = '')"
+    ") OR EXISTS ("
+    "  SELECT 1 FROM cartao.transacao_rateio rx"
+    "  CROSS JOIN cartao.dimensao dx"
+    "  LEFT JOIN cartao.transacao_rateio_dimensao rdx"
+    "    ON rdx.rateio_id = rx.id AND rdx.dimensao_id = dx.id"
+    "  WHERE rx.transacao_id = t.transacao_id"
+    "    AND dx.obrigatoria = true AND rdx.valor_id IS NULL AND " + EXIGE_DIMENSOES_SQL +
+    "))"
+)
+
+# Registro que ja esta fora do resultado nunca vai ter classificacao completa e
+# nao e trabalho pendente (secao 10.4 n.11).
+PENDENTE_CLASSIFICACAO_SQL = (
+    "(t.substituido_por IS NULL AND NOT COALESCE(t.somente_conciliacao, false) "
+    "AND COALESCE(t.duplicada, false) = false AND CASE WHEN EXISTS ("
+    "  SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id = t.transacao_id"
+    ") THEN " + _PENDENTE_RATEADO + " ELSE " + _PENDENTE_SIMPLES + " END)"
+)
 
 
 def _eh_pagamento_fatura(descricao):
@@ -948,9 +1035,10 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         tx["principal"], tx["tecnico"], tx["fonte"], tx["fonte_nome"] = True, False, "P", "Pluggy"
         tx["dims"] = dims_por_tx.get(tid, {})
         tx["rateado"] = False
+        tx["exige_dimensoes"] = exige_dimensoes(tx["natureza_efetiva"])
         faltando = ([] if tx["categoria"] else ["Categoria"]) + [
             nomes_dimensoes[d] for d in obrigatorias
-            if exige_dimensoes(tx["natureza_efetiva"]) and not tx["dims"].get(d)
+            if tx["exige_dimensoes"] and not tx["dims"].get(d)
         ]
         completo = not faltando
         classificadas += int(completo)
@@ -1360,6 +1448,9 @@ def lancamentos_por_fatura():
             # cria pendencia que nunca sera resolvida (secao 4.1).
             exige = exige_dimensoes(principal["natureza_efetiva"])
             obrig_linha = obrigatorias if exige else set()
+            # publica a decisao para o template e para o JS: quem PINTA a
+            # pendencia tem que ler a mesma regra de quem a CALCULA.
+            principal["exige_dimensoes"] = exige
             completa = (
                 rateio_valido.get(tid, False) if principal["rateado"] else
                 bool(principal["categoria"]) and obrig_linha.issubset({k for k, v in principal["dims"].items() if v})
@@ -1519,8 +1610,18 @@ def lancamento_manual():
         observacao = (data.get("observacao") or "").strip() or None
         quer_conferir = bool(data.get("conferida")) and pode("lancamentos_conferir")
 
+        # Mesma regra da secao 4.1: natureza neutra nao exige dimensao. Sem
+        # isto, um lancamento manual de transferencia entre contas proprias ou
+        # de compra de um bem nunca poderia receber OK - a trava cobraria um
+        # Responsavel/Projeto/Portfolio que nao existe e nao faz sentido.
+        cur.execute(
+            "SELECT natureza FROM cartao.categoria_natureza WHERE categoria = %s;",
+            (categoria,),
+        )
+        linha_natureza = cur.fetchone() if categoria else None
+        exige_dims = exige_dimensoes(linha_natureza[0] if linha_natureza else None)
         cur.execute("SELECT id FROM cartao.dimensao WHERE obrigatoria = true;")
-        obrigatorias = [str(r[0]) for r in cur.fetchall()]
+        obrigatorias = [str(r[0]) for r in cur.fetchall()] if exige_dims else []
         faltando_ids = [d for d in obrigatorias if not str(dimensoes.get(d) or "").strip()]
         falta_categoria = not categoria
         if quer_conferir and (faltando_ids or falta_categoria):
@@ -1964,6 +2065,17 @@ def update_transacao(transacao_id):
         )
         if not categoria_final:
             faltando.append("categoria")
+    # A natureza vem da CATEGORIA, entao trocar a categoria pode trocar a
+    # obrigatoriedade das dimensoes. O cliente nao tem como deduzir isso
+    # sozinho: quem responde e o servidor, depois da gravacao.
+    cur.execute(
+        "SELECT " + EXIGE_DIMENSOES_SQL + " FROM cartao.transacao t "
+        "LEFT JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
+        "WHERE t.transacao_id = %s;",
+        (transacao_id,),
+    )
+    linha_exige = cur.fetchone()
+    exige_dims = bool(linha_exige[0]) if linha_exige else True
     conferida_atual = bool(transacao[0])
     # PENDING e um status provisorio do banco - o Pluggy pode ainda alterar
     # valor/data, ou ate substituir a transacao por outra com id diferente,
@@ -2152,6 +2264,9 @@ def update_transacao(transacao_id):
         "ok": True,
         "bloqueada": bloqueada,
         "faltando": faltando,
+        # Quem pinta a pendencia na tela le esta flag, nunca a lista global de
+        # dimensoes obrigatorias: natureza neutra nao exige dimensao (secao 4.1).
+        "exige_dimensoes": exige_dims,
         # A hora vem do servidor, nunca do relogio do navegador: o modal mostra
         # "Ultima alteracao" e um relogio adiantado ali seria uma mentira sutil.
         "atualizado_em": atualizado_em_fmt,

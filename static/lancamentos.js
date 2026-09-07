@@ -234,6 +234,25 @@ function filtrarSituacao(status) {
   campo.value = status;
   aplicarFiltros();
 }
+// Cada card e a porta de entrada das linhas que ele conta. A delegacao mora no
+// document de proposito: os cards sao TROCADOS a cada filtro (o AJAX substitui
+// o bloco .cards inteiro), entao um listener preso ao elemento morreria no
+// primeiro clique - o mesmo motivo pelo qual a secao 7.8 manda religar a tabela
+// ajustavel depois de recarregar por AJAX.
+document.addEventListener('click', function (evento) {
+  const card = evento.target.closest('.card[data-filtro]');
+  if (!card || !document.getElementById('statusInput')) return;
+  filtrarSituacao(card.dataset.filtro);
+});
+// Marca qual card corresponde ao filtro em vigor. Sem isso o usuario clica,
+// a tabela muda e nada na tela diz de onde veio o recorte.
+function marcarCardAtivo() {
+  const campo = document.getElementById('statusInput');
+  const atual = campo ? campo.value : 'todas';
+  document.querySelectorAll('.card[data-filtro]').forEach(function (card) {
+    card.classList.toggle('ativo', card.dataset.filtro === atual);
+  });
+}
 // "Periodo customizado" e "Ano inteiro" sao mutuamente exclusivos - ligar um
 // desliga o outro, senao os dois brigam pelo mesmo par mes/periodo na URL.
 function alternarPeriodoAno() {
@@ -313,6 +332,7 @@ function mudarMes(delta) {
 }
 function aplicarFiltros(recarregarPagina) {
   atualizarChipLabels();
+  marcarCardAtivo();
   const params = coletarQuery();
   atualizarBotaoDetalhado();
   const novaUrl = '/?' + params.toString();
@@ -338,7 +358,7 @@ function aplicarFiltros(recarregarPagina) {
         // antigo junto com tudo que estava anexado nele, entao precisa reativar
         ativarTabelaAjustavel(novaTabela, 'lancamentos');
       }
-      if (novosCards) document.querySelector('.cards').replaceWith(novosCards);
+      if (novosCards) { document.querySelector('.cards').replaceWith(novosCards); marcarCardAtivo(); }
       const catAtual = document.querySelector('details.cat-breakdown');
       if (novaCat && catAtual) {
         // preserva o estado aberto/fechado escolhido pelo usuario
