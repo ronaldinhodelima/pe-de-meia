@@ -962,9 +962,13 @@ tr.compra-feita { opacity: .6; }
     padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
   }
   table.compacta > tbody > tr > td[data-col="valor"] { justify-content: space-between; text-align: left; }
-  table.compacta > tbody > tr > td select,
-  table.compacta > tbody > tr > td input[type=text] { flex: 1 1 auto; max-width: 62%; }
-  table.compacta > tbody > tr > td .pdm-combobox { flex: 1 1 auto; max-width: 62%; }
+  /* so o filho DIRETO da celula: o combobox e um wrapper com um input dentro,
+     e a regra generica encolhia o input a 62% do proprio wrapper - campo de
+     120px dentro de uma caixa de 194px */
+  table.compacta > tbody > tr > td > select,
+  table.compacta > tbody > tr > td > input[type=text],
+  table.compacta > tbody > tr > td > .pdm-combobox { flex: 1 1 auto; max-width: 62%; }
+  table.compacta > tbody > tr > td .pdm-combobox-input { max-width: none; }
   /* celula vazia nao vira linha com rotulo solto */
   table.compacta > tbody > tr > td:empty { display: none; }
   table.compacta > tbody > tr.rateio-row { margin-left: 14px; background: var(--bg); }
