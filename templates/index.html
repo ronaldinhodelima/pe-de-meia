@@ -118,13 +118,13 @@
     <div class="card-progresso"><i style="width:{{ pct_classificados }}%"></i></div>
   </div>
   <div class="card {{ 'card-ok' if conf_reais == total_reais else 'card-aviso' }}" data-filtro="pendente" title="Ver os lançamentos que ainda não foram conferidos">
-    <div class="label">OK dos lançamentos</div>
+    <div class="label">Conferência</div>
     <div class="val">{{ conf_reais }} / {{ total_reais }}</div>
     <div class="card-explicacao">Faltam {{ pendentes_ok }}</div>
     <div class="card-progresso"><i style="width:{{ pct_conferidos }}%"></i></div>
   </div>
   <div class="card" data-filtro="todas" title="Ver todos os lançamentos do período">
-    <div class="label">Lançamentos do período</div>
+    <div class="label">Lançamentos</div>
     <div class="val">{{ total_reais }} / {{ total_recebidos }}</div>
     <div class="card-explicacao">contabilizados / recebidos</div>
     <div class="card-explicacao">{{ total_fora }} fora do resultado</div>
