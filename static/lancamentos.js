@@ -1147,6 +1147,9 @@ function salvarManual(e) {
 }
 atualizarChipLabels();
 atualizarBotaoDetalhado();
+// Tambem no carregamento, nao so ao filtrar: chegando por URL com `status=`,
+// sem isto nada na tela diria de qual card veio o recorte.
+marcarCardAtivo();
 
 // ---------------------------------------------------------------------------
 // Edicao em lote
