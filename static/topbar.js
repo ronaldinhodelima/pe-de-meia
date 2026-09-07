@@ -39,11 +39,42 @@
     clearTimeout(timer);
     if (el) el.classList.remove('show');
   });
-  document.addEventListener('click', function() {
+  // No toque nao existe hover, e o sistema inteiro explica estado por tooltip:
+  // os pontos da linha, o avatar do titular, o F/P, o "Faltam:" cortado com
+  // reticencias. Sem isto, essa informacao simplesmente nao existe no celular.
+  // O tooltip nao intercepta o toque (pointer-events:none), entao a acao da
+  // linha continua acontecendo normalmente.
+  const noToque = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  document.addEventListener('click', function(e) {
     clearTimeout(timer);
+    const alvo = noToque && e.target.closest && e.target.closest('[data-tip]');
+    const texto = alvo && alvo.getAttribute('data-tip');
+    if (!texto) {
+      if (el) el.classList.remove('show');
+      return;
+    }
+    const t = criar();
+    t.textContent = texto;
+    t.classList.add('show');
+    const r = alvo.getBoundingClientRect();
+    posicionar({clientX: r.left + r.width / 2, clientY: r.bottom}, t);
+  }, true);
+  document.addEventListener('scroll', function() {
     if (el) el.classList.remove('show');
-  });
+  }, true);
 })();
+
+// No celular o menu inteiro recolhe atras de um botao. O mesmo HTML das duas
+// larguras: uma barra separada para telefone divergiria da do desktop no
+// primeiro item novo.
+function menuMobile(btn) {
+  const menu = document.getElementById('navMenu');
+  if (!menu) return;
+  const abrir = !menu.classList.contains('aberto');
+  menu.classList.toggle('aberto', abrir);
+  btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  btn.setAttribute('aria-label', abrir ? 'Fechar menu' : 'Abrir menu');
+}
 
 // menu do topo: abre/fecha no clique e fecha ao clicar fora ou apertar Esc
 function menuToggle(e, btn) {

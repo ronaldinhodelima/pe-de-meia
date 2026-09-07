@@ -5340,7 +5340,9 @@ def topbar_html(titulo, ativo=None):
             <span class="marca-pagina">{titulo} · {session.get('user')}</span>
           </div>
         </a>
-        <div class="nav-menu">
+        <button type="button" class="menu-toggle" onclick="menuMobile(this)"
+                aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menu">&#9776;</button>
+        <div class="nav-menu" id="navMenu">
           {f'<a href="/" class="{cls("inicio")}">Lançamentos</a>' if pode("lancamentos_ver") else ""}
           {f'<a href="/compras-futuras" class="{cls("compras-futuras")}">Compras futuras</a>' if pode("lancamentos_ver") else ""}
           {f'''<div class="dropdown">
@@ -5377,7 +5379,7 @@ def topbar_html(titulo, ativo=None):
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js?v=20260901-3"></script>
+      <script src="/static/topbar.js?v=20260906-1"></script>
     """
 
 

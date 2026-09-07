@@ -468,10 +468,13 @@
   .summary { font-size: var(--fonte-md); color: var(--ink-soft); margin-bottom: 10px; }
 
   /* ---------- summary cards ---------- */
-  .cards { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; align-items: stretch; }
+  .cards {
+    display: grid; gap: 12px; margin-bottom: 18px; align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
   .card {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 15px;
-    flex: 1 1 0; min-width: 0; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    min-width: 0; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   }
   .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--selecao); }
   .card .label {
@@ -587,6 +590,7 @@
 
   /* ---------- nav ---------- */
   .nav-menu { display: flex; gap: 22px; align-items: center; }
+  .menu-toggle { display: none; }
   .nav-menu > a { color: var(--ink-soft); text-decoration: none; font-size: var(--fonte-md); font-weight: var(--peso-medio); transition: color .15s; }
   .nav-menu > a:hover { color: var(--ink); }
   .nav-menu > a.ativo { color: var(--ink); }
@@ -837,7 +841,7 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 }
 #manualStatus { font-size: var(--fonte-sm); color: var(--ink-faint); }
 #manualStatus.erro { color: var(--bad); }
-@media (max-width: 700px) { .editor-manual .campo-largo { grid-column: auto; } }
+@media (max-width: 760px) { .editor-manual .campo-largo { grid-column: auto; } }
 
 /* Descricao do lancamento manual, editavel na propria linha do modal. */
 /* Desenho: ver o bloco unico de campo do modal, mais acima. Aqui fica so o
@@ -877,3 +881,73 @@ tr.compra-feita { opacity: .6; }
   background: var(--surface); color: var(--ink); font-family: inherit;
 }
 .confirma-compra input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+
+/* ============================================================================
+   Responsivo — DOIS pontos de quebra, e so dois: 760px (celular) e 1100px
+   (janela estreita / tablet). @media nao aceita variavel CSS, entao a
+   disciplina vem de teste: `test_responsivo_usa_apenas_dois_pontos_de_quebra`
+   falha se um terceiro valor aparecer. Sem isso, em tres meses haveria 768,
+   760 e 750px no mesmo arquivo - exatamente o que a escala de fonte acabou de
+   eliminar.
+   ============================================================================ */
+
+@media (max-width: 1100px) {
+  .wrap { margin: 16px auto; padding: 0 14px; }
+  .nav-menu { gap: 14px; }
+}
+
+@media (max-width: 760px) {
+  /* topbar vira duas linhas e o menu recolhe atras de um botao: com 6 itens
+     mais o sync, ele ocupava a tela inteira antes do conteudo comecar. */
+  .topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .menu-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; padding: 0; margin-left: auto;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--ink-soft);
+    font-size: var(--icone-lg); line-height: 1; cursor: pointer;
+  }
+  .nav-menu {
+    display: none; order: 3; width: 100%;
+    flex-direction: column; align-items: stretch; gap: 2px;
+    padding-top: 6px; border-top: 1px solid var(--line);
+  }
+  .nav-menu.aberto { display: flex; }
+  .nav-menu > a, .dropbtn { padding: 11px 4px; }
+  /* o dropdown deixa de flutuar: no celular ele abre no fluxo, empurrando o
+     resto - menu suspenso perto da borda da tela sai cortado */
+  .dropdown { width: 100%; }
+  .dropdown-content { position: static; min-width: 0; box-shadow: none; border: 0; }
+  .dropdown-content a { padding: 11px 14px; }
+  .sync-widget { width: 100%; justify-content: space-between; }
+
+  .wrap { margin: 12px auto; padding: 0 12px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+
+  /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao
+     cabem sem cortar o rotulo */
+  .barra-lote-campos, .editor-manual, .editor-financeiro, .rel-filtros { grid-template-columns: 1fr; }
+  .barra-lote-campos { display: grid; }
+  .barra-lote-campos > label, .barra-lote-obs input, .barra-lote-campos select,
+  .barra-lote-campos input[type=text], .filtro-tabela { width: 100%; min-width: 0; }
+  .modal { padding: 18px; width: 100%; }
+}
+
+/* Toque: alvo de 40px onde o dedo e o ponteiro. Fica em `pointer: coarse`, nao
+   em largura - um notebook estreito continua com a densidade do desktop, e um
+   tablet grande ganha o alvo maior. */
+@media (pointer: coarse) {
+  input[type=checkbox] { width: 20px; height: 20px; }
+  .barra-lote-fechar, .modal .close, .info-toggle { width: 40px; height: 40px; }
+  .expande { width: 36px; height: 36px; }
+  .campo-caixa, .filtro-tabela, .busca-fatura input,
+  .editor-financeiro input[type=text], .editor-manual input[type=text],
+  .editor-manual input[type=date], .editor-manual input[type=number] { padding: 10px 12px; }
+  .pdm-combobox-input { height: 36px; }
+  .pdm-combobox-opcao, .pdm-combobox-vazio { padding: 11px 8px; }
+  .dropdown-content a, .nav-menu > a { padding-top: 12px; padding-bottom: 12px; }
+  /* hover nao existe no toque: o realce so atrapalha, fica "grudado" apos o
+     toque ate o proximo */
+  .card:hover { transform: none; box-shadow: none; }
+}

@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 06/09/2026 · **Schema:** migração 59 · **Testes:** 351 aprovados, 6 ignorados
+**Última revisão:** 06/09/2026 · **Schema:** migração 59 · **Testes:** 353 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1112,6 +1112,38 @@ folgado**, pedindo para abaixá-lo — o número só pode cair.
 distância. Foi por isso que 12px, 16px e 18px de raio ficaram fora da escala: agrupá-los mudaria o
 desenho, e isso é decisão do usuário, não faxina.
 
+## 7.8-B Responsivo e toque (base — 06/09/2026)
+
+**Dois pontos de quebra, e só dois: `760px` (celular) e `1100px` (janela estreita).** `@media` não
+aceita variável CSS, então a disciplina vem de teste —
+`test_responsivo_usa_apenas_dois_pontos_de_quebra` falha se um terceiro valor aparecer, e também se
+um dos dois deixar de ser usado. Antes havia 700, 820 e 900px, um por tela. **Não invente um
+terceiro:** é o mesmo caminho que levou a nove tamanhos de título.
+
+**Alvo de toque fica em `@media (pointer: coarse)`, nunca em largura.** É capacidade do
+dispositivo: um notebook estreito continua com a densidade do desktop, e um tablet grande ganha o
+alvo maior. Ali o checkbox vai a 20px, os botões de fechar a 40px, o combobox a 36px, e o realce de
+hover do card é desligado — no toque ele fica "grudado" até o próximo toque.
+
+**No toque não existe hover, e o sistema explica estado por tooltip** — os pontos da linha, o avatar
+do titular, o `F`/`P`, o "Faltam:" cortado com reticências. Sem tratamento, essa informação
+simplesmente não existiria no celular. O `topbar.js` mostra o tooltip **no toque** em ponteiro
+grosseiro, posicionado pelo retângulo do elemento; ele não intercepta o clique
+(`pointer-events:none`), então a ação da linha continua acontecendo.
+
+**O menu recolhe atrás de um botão abaixo de 760px** (`.menu-toggle` + `.nav-menu.aberto`), com o
+dropdown deixando de flutuar (`position: static`) — menu suspenso perto da borda da tela sai
+cortado. **É o mesmo HTML das duas larguras:** uma barra separada para telefone divergiria da do
+desktop no primeiro item novo, como já aconteceria com um segundo caminho de gravação (§7.2-A).
+
+**Os cards viraram `grid auto-fit`** com mínimo de 180px (140px no celular). Com `flex: 1 1 0`,
+cinco cards em 390px viravam fatias de 60px, cada uma cortando o próprio número.
+
+**O que ficou de fora, por decisão:** a tabela ainda rola de lado no celular. Transformá-la em
+lista de cartões é o passo seguinte, e vale **só para a Resumida** — a Detalhada e a conciliação
+existem para comparar colunas lado a lado, e escondê-las não deixa a tela pior, deixa a tela
+**mentirosa**. Essas duas devem ganhar um aviso honesto de "melhor no computador".
+
 ## 7.9 Identidade visual
 
 Nome **Pé de Meia**; logo oficial (meia de tricô com dinheiro) em fundo claro sólido no topbar e no
@@ -1327,7 +1359,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**351 aprovados e 6 ignorados** (05/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**353 aprovados e 6 ignorados** (06/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

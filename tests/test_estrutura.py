@@ -1363,6 +1363,50 @@ def test_avatar_do_titular_existe_na_fatura_em_andamento_e_usa_a_cor_do_banco():
     assert "var(--accent-soft)" not in html.split(".avatar-titular{", 1)[1].split("}", 1)[0]
 
 
+def test_responsivo_usa_apenas_dois_pontos_de_quebra():
+    """760px (celular) e 1100px (janela estreita). Nenhum terceiro valor.
+
+    `@media` nao aceita variavel CSS, entao a unica disciplina possivel e esta:
+    sem ela apareceriam 768, 760 e 750px no mesmo arquivo - exatamente o que a
+    escala de fonte acabou de eliminar. `pointer: coarse` fica de fora da conta
+    de proposito: e capacidade do dispositivo, nao largura.
+    """
+    import re
+
+    permitidos = {"760px", "1100px"}
+    achados = set()
+    for alvo in ("static/app.css",) + tuple(
+        "templates/" + a.name for a in sorted((RAIZ / "templates").glob("*.html"))
+    ):
+        texto = (RAIZ / alvo).read_text(encoding="utf-8")
+        for consulta in re.findall(r"@media[^{]+", texto):
+            if "prefers-color-scheme" in consulta or "pointer" in consulta:
+                continue
+            achados |= set(re.findall(r"(?:max|min)-width:\s*(\d+px)", consulta))
+    assert achados <= permitidos, f"ponto de quebra fora do padrao: {achados - permitidos}"
+    assert achados == permitidos, f"faltou usar: {permitidos - achados}"
+
+
+def test_celular_tem_menu_recolhido_e_tooltip_no_toque():
+    """Duas coisas que so quebram no telefone, e nenhuma aparece no desktop.
+
+    O menu tem 6 itens mais o sync: aberto, ocupava a tela inteira antes do
+    conteudo. E o sistema explica estado por tooltip (pontos da linha, avatar,
+    F/P, "Faltam:" com reticencias) - sem hover, essa informacao nao existiria.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert 'class="menu-toggle"' in core and 'id="navMenu"' in core
+    assert 'aria-expanded="false"' in core
+
+    js = (RAIZ / "static" / "topbar.js").read_text(encoding="utf-8")
+    assert "function menuMobile" in js
+    assert "'(pointer: coarse)'" in js, "tooltip no toque"
+
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "@media (pointer: coarse)" in css
+    assert ".nav-menu.aberto" in css
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
