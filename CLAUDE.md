@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 05/09/2026 · **Schema:** migração 59 · **Testes:** 351 aprovados, 6 ignorados
+**Última revisão:** 06/09/2026 · **Schema:** migração 59 · **Testes:** 351 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1386,7 +1386,10 @@ outra derrubou `/relatorios` em produção. O que funciona:
    todas as telas**: variável usada mas atribuída só dentro de um `if` passa por `py_compile`,
    passa pelos testes (que não executam view) e só aparece quando alguém abre a tela.
 4. **`replace` em código só com `assert` de que casou.** Um `replace` silencioso que não casa
-   deixa o código velho no lugar e a edição parece ter funcionado.
+   deixa o código velho no lugar e a edição parece ter funcionado. **E script de edição que só
+   grava no fim perde TUDO quando uma asserção falha no meio** — as trocas anteriores, já
+   aplicadas em memória, vão embora sem aviso. Aconteceu três vezes: gravar a cada troca, ou
+   reconferir o arquivo depois de qualquer falha, em vez de supor que só a última se perdeu.
 5. Em tela com número, **anotar os valores em produção antes do deploy** e comparar depois.
 
 ## 10.4 Lições de incidentes reais
