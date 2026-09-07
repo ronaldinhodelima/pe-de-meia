@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 359 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 361 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1454,7 +1454,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**359 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**361 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -1570,11 +1570,21 @@ outra derrubou `/relatorios` em produção. O que funciona:
    Lançamentos inteira com 500**. É a mesma lição do nº 6, de novo, e a suíte não pega
    porque não há Postgres em toda execução. Há teste varrendo as duas colunas nos dois
    sentidos.
-11. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
+11. **Falha dentro de SAVEPOINT some sem deixar rastro legível.** Em 07/09/2026 descobri que
+   `aplicar_regras` falhava em **toda** carga da tela de Lançamentos: ela monta
+   `duplicatas_ignoradas` com `row[0]`, e essa tela chama a função com `RealDictCursor` —
+   `KeyError: 0`. Como o corpo roda dentro de um savepoint, o rollback era limpo e a única
+   pista era o log gravando `"erro": "0"` (a mensagem do `KeyError`) com resultado FALHA. É a
+   lição do nº 7 outra vez: **função compartilhada não pode escolher o tipo de cursor**, e o
+   helper `_campo(linha, nome, posicao)` já existia para isso. Nenhum dado foi corrompido, mas
+   a classificação automática simplesmente não rodava ali — na primeira passada depois da
+   correção, **94 lançamentos e 134 dimensões**. **Log com FALHA repetida não é ruído: abra
+   um.**
+12. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
    checagem algumas vezes, com parâmetro aleatório na URL**, e só então concluir.
-12. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+13. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
 
@@ -1740,6 +1750,25 @@ Responsável faria o mesmo dinheiro aparecer duas vezes na visão por dimensão.
 foram preservados com as assinaturas originais (`fatura 08/2026` e `ronaldo`). **Esta
 descrição não contém "pagamento de fatura", então a migração 56 não a alcançou** — se
 aparecer outra grafia, conferir a categoria antes de supor que já está coberta.
+
+**Colégio Salvatoriano — padronizado em 07/09/2026.** A mensalidade chega como boleto na conta
+corrente (`escola Amanda LIQ TIT - IB`), R$ 1.206,50 em 2025 e R$ 1.263,87 em 2026 (+4,76%).
+São 6 em 2025 (ago–dez, mais a matrícula) e 8 em 2026 (jan–ago). Todos em **Educação / Amanda
+/ Colégio Salvatoriano / Educação**, padrão que os próprios OK do usuário já traziam, unânime
+em 11 lançamentos escolares conferidos.
+
+Três coisas que só aparecem olhando o conjunto:
+
+- **O mês de julho/2026 parecia faltar e não faltava:** a descrição ficou com o CNPJ
+  (`86552809000222 - INS LIQ TIT - IB`). Mesmo valor, mesmo dia 10, mesma conta — e já
+  conferido pelo usuário. **Procurar por valor e dia antes de concluir que um mês sumiu.**
+- **Janeiro/2026 vem R$ 500,00 mais barato porque a escola abate a matrícula**, que foi paga
+  à parte (`matricula amanda`, 12/09/2025). Não é desconto nem erro.
+- **2025 só tem de agosto em diante** porque a conta corrente só passou a sincronizar em
+  **05/08/2025** — conferido mês a mês. Não há nada anterior a recuperar.
+
+`HOSPITAL SALVATORIANO` é a mesma instituição, **mas despesa diferente** (decisão do usuário):
+não herda o projeto do colégio. Os 6 lançamentos de 2025 seguem **sem categoria**.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
