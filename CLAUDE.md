@@ -1487,6 +1487,11 @@ outra derrubou `/relatorios` em produção. O que funciona:
    proxy, não a aplicação) para todo o IP, inclusive `/health` e o painel do navegador. **A
    verificação não pode custar o acesso ao sistema.** Sintoma para reconhecer: 403 em rota pública
    e sem cabeçalho do Gunicorn é bloqueio de borda, não bug do app.
+   **Todo laço de espera precisa de teto e de uma condição alcançável**, e de ser encerrado quando
+   a confirmação vier por outro caminho: em 07/09/2026 dois laços meus ficaram girando por mais de
+   um dia — um deles sondava `/relatorios`, que **responde 302 para o login sem sessão**, então a
+   condição jamais seria satisfeita. **Rota que exige login não serve de sonda**; use um estático
+   ou `/health`.
 10. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
