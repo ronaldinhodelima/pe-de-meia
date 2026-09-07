@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 354 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 355 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1151,10 +1151,16 @@ cinco cards em 390px viravam fatias de 60px, cada uma cortando o próprio númer
 empilhados, cards em duas colunas, `pointer: coarse` reconhecido (checkbox medindo 20px) e **o
 corpo da página sem rolagem lateral** — a tabela rola dentro do próprio contêiner, com 1.093px.
 
-**O que ficou de fora, por decisão:** a tabela ainda rola de lado no celular. Transformá-la em
-lista de cartões é o passo seguinte, e vale **só para a Resumida** — a Detalhada e a conciliação
-existem para comparar colunas lado a lado, e escondê-las não deixa a tela pior, deixa a tela
-**mentirosa**. Essas duas devem ganhar um aviso honesto de "melhor no computador".
+**Abaixo de 760px, `table.compacta` vira lista de cartões** — cada linha é um cartão e cada célula
+diz o que é. O rótulo vem do próprio `<th>`, copiado pelo `rotularCelulas()` do `tabelas.js`: as
+colunas de dimensão são dinâmicas (Responsável, Projeto, Portfólio vêm do banco), então escrevê-los
+no template criaria uma segunda verdade. **As larguras do utilitário de colunas são inline**, então
+o modo cartão precisa de `!important` — sem isso a célula continuaria com os 116px do desktop.
+
+Vale para `table.compacta`, que é a Resumida. **A Detalhada e a conciliação continuam rolando de
+lado, de propósito:** elas existem para comparar colunas lado a lado, e esconder coluna ali não
+deixa a tela pior — deixa a tela **mentirosa**. Falta dar a elas um aviso honesto de "melhor no
+computador".
 
 ## 7.9 Identidade visual
 
@@ -1371,7 +1377,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**354 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**355 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

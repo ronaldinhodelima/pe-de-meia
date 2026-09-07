@@ -925,6 +925,51 @@ tr.compra-feita { opacity: .6; }
   .wrap { margin: 12px auto; padding: 0 12px; }
   .cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 
+  /* ---- tabela vira lista de cartoes ----
+     Rolar 1.100px de lado com o polegar nao e usar, e procurar. Cada linha
+     vira um cartao e cada celula diz o que e, pelo rotulo que o tabelas.js
+     copia do proprio <th> (as colunas de dimensao sao dinamicas).
+     As larguras que o utilitario de colunas grava sao INLINE, entao aqui
+     precisam de !important - sem isso a celula continuaria com 116px. */
+  table.compacta {
+    display: block; width: 100% !important; min-width: 0 !important;
+    table-layout: auto !important; border: 0; background: none; overflow: visible;
+  }
+  table.compacta thead { display: none; }
+  table.compacta tbody { display: block; }
+  table.compacta > tbody > tr {
+    display: block; width: auto !important;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 8px;
+  }
+  table.compacta > tbody > tr > td {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: auto !important; max-width: none !important;
+    border: 0; padding: 4px 0; white-space: normal !important; overflow: visible;
+  }
+  table.compacta > tbody > tr > td::before {
+    content: attr(data-rotulo); flex: 0 0 38%;
+    color: var(--ink-faint); font-size: var(--fonte-xxs);
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  /* descricao, selecao e o ponto de situacao ocupam a linha inteira: o rotulo
+     ali nao acrescenta nada e rouba metade da largura */
+  table.compacta > tbody > tr > td[data-col="desc"]::before,
+  table.compacta > tbody > tr > td[data-col="sel"]::before,
+  table.compacta > tbody > tr > td[data-col="status"]::before { content: none; }
+  table.compacta > tbody > tr > td[data-col="desc"] {
+    font-size: var(--fonte-md); font-weight: var(--peso-medio);
+    padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+  }
+  table.compacta > tbody > tr > td[data-col="valor"] { justify-content: space-between; text-align: left; }
+  table.compacta > tbody > tr > td select,
+  table.compacta > tbody > tr > td input[type=text] { flex: 1 1 auto; max-width: 62%; }
+  table.compacta > tbody > tr > td .pdm-combobox { flex: 1 1 auto; max-width: 62%; }
+  /* celula vazia nao vira linha com rotulo solto */
+  table.compacta > tbody > tr > td:empty { display: none; }
+  table.compacta > tbody > tr.rateio-row { margin-left: 14px; background: var(--bg); }
+  .tabela-scroll { overflow-x: visible; }
+
   /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao
      cabem sem cortar o rotulo */
   .barra-lote-campos, .editor-manual, .editor-financeiro, .rel-filtros { grid-template-columns: 1fr; }

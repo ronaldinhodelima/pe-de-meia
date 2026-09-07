@@ -1448,6 +1448,28 @@ def test_rotulo_de_parcela_nao_contradiz_a_descricao():
     assert html.count("rotulo_parcela(") == 2, "linha e painel de detalhes"
 
 
+def test_no_celular_a_tabela_vira_lista_de_cartoes():
+    """Rolar 1.100px de lado com o polegar nao e usar, e procurar.
+
+    O rotulo de cada celula e copiado do proprio <th> em runtime: as colunas de
+    dimensao vem do banco (Responsavel, Projeto, Portfolio), e escrever os
+    nomes no template criaria uma segunda verdade que diverge na primeira
+    dimensao nova.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    celular = css.split("@media (max-width: 760px)", 1)[1]
+    assert "table.compacta thead { display: none; }" in celular
+    assert 'content: attr(data-rotulo)' in celular
+    # a largura gravada pelo utilitario de colunas e inline: sem !important o
+    # modo cartao perde para ela e a celula continua com a largura do desktop
+    assert "width: auto !important" in celular
+
+    js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "function rotularCelulas" in js
+    assert "rotularCelulas(table);" in js
+    assert "th.dataset.col" in js
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 

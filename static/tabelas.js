@@ -19,6 +19,24 @@ function redefinirColunas(chave) {
   window.location.reload();
 }
 
+// No celular a tabela vira lista de cartoes (secao 7.8-B). Para cada celula
+// dizer o que e sem o cabecalho, ela leva o rotulo da propria coluna - lido do
+// <th> correspondente, e nao escrito na mao no template: as colunas de dimensao
+// sao dinamicas (Responsavel, Projeto, Portfolio vem do banco).
+function rotularCelulas(table) {
+  const thead = table.querySelector('thead tr');
+  if (!thead) return;
+  const rotulos = {};
+  [...thead.children].forEach(th => {
+    const col = th.dataset.col;
+    if (col) rotulos[col] = (th.textContent || '').trim();
+  });
+  table.querySelectorAll('tbody td[data-col]').forEach(td => {
+    const texto = rotulos[td.dataset.col];
+    if (texto) td.setAttribute('data-rotulo', texto);
+  });
+}
+
 function ativarTabelaAjustavel(table, chave, opcoes) {
   if (!table) return;
   opcoes = opcoes || {};
@@ -363,6 +381,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   // por ultimo: a preferencia de coluna escondida vale desde o carregamento
   aplicarOcultas();
   atualizarDicasDeTruncamento(table);
+  rotularCelulas(table);
 }
 
 // ativa sozinho toda tabela marcada com class="ajustavel" e data-tabela="chave"
