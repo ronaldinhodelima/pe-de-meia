@@ -56,6 +56,9 @@
 
     var filtradas = [];
     var ativo = -1;
+    // O usuario mexeu na lista (setas ou filtro) desde que ela abriu? Enquanto
+    // nao mexeu, o destaque continua seguindo o valor real do <select>.
+    var navegouNaLista = false;
 
     function selecionada() {
       return select.options[select.selectedIndex] || null;
@@ -67,6 +70,22 @@
       input.disabled = select.disabled;
       wrapper.classList.toggle('pdm-combobox-disabled', select.disabled);
       wrapper.classList.toggle('classificacao-faltando', select.classList.contains('classificacao-faltando'));
+      // O valor pode mudar POR FORA enquanto a lista esta aberta: o Portfolio
+      // padrao chega quando a gravacao do Projeto responde, e o usuario ja
+      // tabulou para ca antes disso. Sem re-destacar, o campo mostrava
+      // "Imoveis" com "(nao definido)" destacado na lista - e o Tab confirma a
+      // DESTACADA (secao 7.7), apagando o valor que a regra tinha acabado de
+      // preencher.
+      realinharDestaque();
+    }
+
+    // Poe o destaque na opcao que corresponde ao valor atual do <select>.
+    // So mexe quando a lista esta aberta e o usuario ainda nao navegou nem
+    // filtrou - navegacao dele tem precedencia sobre o valor de fundo.
+    function realinharDestaque() {
+      if (lista.hidden || !filtradas.length || navegouNaLista) return;
+      var indice = filtradas.findIndex(function (item) { return item.value === select.value; });
+      if (indice >= 0 && indice !== ativo) marcarAtivo(indice);
     }
 
     function fechar(restaurar) {
@@ -75,6 +94,7 @@
       input.setAttribute('aria-expanded', 'false');
       wrapper.classList.remove('aberto');
       ativo = -1;
+      navegouNaLista = false;
       if (restaurar) sincronizar();
     }
 
@@ -141,14 +161,16 @@
     input.addEventListener('focus', function () {
       if (input.disabled) return;
       select.dataset.valorAnterior = select.value;
+      navegouNaLista = false;
       renderizar('');
       input.select();
     });
-    input.addEventListener('input', function () { renderizar(input.value); });
+    input.addEventListener('input', function () { navegouNaLista = true; renderizar(input.value); });
     input.addEventListener('keydown', function (evento) {
       if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
         evento.preventDefault();
         if (lista.hidden) renderizar(input.value);
+        navegouNaLista = true;
         if (filtradas.length) marcarAtivo(ativo + (evento.key === 'ArrowDown' ? 1 : -1));
       } else if (evento.key === 'Enter') {
         if (!lista.hidden && ativo >= 0) {
@@ -156,7 +178,12 @@
           escolher(filtradas[ativo]);
         }
       } else if (evento.key === 'Tab') {
-        if (!lista.hidden && ativo >= 0) escolher(filtradas[ativo]);
+        // Tab confirma o que o usuario DESTACOU (secao 7.7). Se ele apenas
+        // passou pelo campo, sem seta e sem filtrar, nao ha escolha para
+        // confirmar: gravar aqui transformaria "tabular" em "editar", e era
+        // por esse caminho que o Portfolio preenchido pela regra virava
+        // "(nao definido)".
+        if (!lista.hidden && ativo >= 0 && navegouNaLista) escolher(filtradas[ativo]);
         else fechar(true);
       } else if (evento.key === 'Escape') {
         evento.preventDefault();

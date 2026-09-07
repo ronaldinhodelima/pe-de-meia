@@ -105,3 +105,48 @@ def test_pendente_banco_nao_colore_fundo_da_linha():
 
     assert "tr.pendente-banco,tr.pendente-banco:hover { background: transparent; }" in css
     assert "tr.pendente-banco { background: #fdf6e8; }" not in css
+
+
+def test_tab_nao_apaga_valor_que_o_usuario_nao_escolheu():
+    """Regra obrigatoria: tabular por um campo nao pode edita-lo.
+
+    O caso real (07/09/2026): escolher o Projeto dispara a gravacao e, na
+    RESPOSTA dela, a regra preenche o Portfolio padrao. O usuario tabula para o
+    Portfolio antes disso: a lista abre com o valor ainda vazio e destaca
+    "(nao definido)". Quando a resposta chega, o campo passa a mostrar "Imoveis"
+    - mas o destaque da lista aberta continuava em "(nao definido)". O Tab
+    seguinte confirma a DESTACADA (secao 7.7) e apaga o que a regra acabou de
+    preencher. A tela mostrava um valor e gravava outro.
+
+    Duas travas, e as duas sao necessarias:
+
+    * `sincronizar` re-alinha o destaque quando o valor do <select> muda POR
+      FORA com a lista aberta - senao a lista mente sobre o que sera confirmado;
+    * o Tab so confirma se o usuario tiver mesmo navegado (seta) ou filtrado.
+      Sem isso, passar pelo campo grava - e "tabular" viraria "editar".
+    """
+    js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
+
+    assert "function realinharDestaque()" in js, (
+        "o re-alinhamento do destaque sumiu: a lista volta a mentir sobre o "
+        "que o Tab vai confirmar"
+    )
+    corpo_sync = js.split("function sincronizar() {", 1)[1].split("\n    }", 1)[0]
+    assert "realinharDestaque()" in corpo_sync, (
+        "sincronizar parou de re-alinhar o destaque - o valor pode mudar por "
+        "fora enquanto a lista esta aberta"
+    )
+
+    tab = js.split("evento.key === 'Tab'", 1)[1].split("else if", 1)[0]
+    assert "navegouNaLista" in tab, (
+        "Tab voltou a confirmar sem o usuario ter escolhido nada: tabular por "
+        "um campo passaria a grava-lo"
+    )
+
+    # A bandeira precisa nascer limpa a cada abertura e subir quando o usuario
+    # realmente mexe - se ficar presa em true, a primeira trava se desliga.
+    foco = js.split("input.addEventListener('focus'", 1)[1].split("});", 1)[0]
+    assert "navegouNaLista = false" in foco, "a bandeira nao e limpa ao abrir"
+    assert js.count("navegouNaLista = true") >= 2, (
+        "seta e filtro precisam marcar que houve navegacao"
+    )
