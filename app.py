@@ -11,6 +11,7 @@ from flask import Flask, current_app, jsonify, request, session, g
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from core import (
+    rotulo_parcela,
     _fmt_moeda,
     _barra_html,
     registrar_auditoria,
@@ -197,7 +198,8 @@ def _filtro_num(v):
 @app.context_processor
 def _globais_template():
     # disponiveis em qualquer template, sem cada view precisar passar
-    return {"barra": _barra_html, "rotulo_dim": rotulo_valor_dimensao}
+    return {"barra": _barra_html, "rotulo_dim": rotulo_valor_dimensao,
+            "rotulo_parcela": rotulo_parcela}
 
 
 # a ordem nao importa: nenhum blueprint disputa o mesmo caminho

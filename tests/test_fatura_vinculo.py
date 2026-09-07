@@ -511,7 +511,8 @@ def test_parcelamento_diferente_com_mesmo_valor_nao_e_recusado_por_engano():
 
 
 def test_extrator_do_numero_da_parcela():
-    from views.relatorios import _parcela_na_descricao as p
+    # mora no core: a Detalhada tambem precisa dele, e views/ nao importa views/
+    from core import parcela_na_descricao as p
     assert p("Vestebem 5/10") == (5, 10)
     assert p("AQUAMATER Parc.9/12") == (9, 12)
     assert p("Vestebem - Parcela 4/10") == (4, 10)

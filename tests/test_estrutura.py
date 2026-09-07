@@ -999,8 +999,11 @@ def test_cartao_pendente_explica_por_que_falta_o_titular_na_fatura_em_andamento(
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert '"cartao_aguardando": not tx["numero_cartao_final"]' in view
     assert 'linha["cartao_aguardando"] = False' in view  # fatura fechada: nunca se aplica
-    assert template.count("cartao_aguardando") == 2  # celula da tabela + painel expandido
-    assert "cartão pendente" in template
+    # A explicacao mora no painel de detalhes, com o motivo. NAO entra no
+    # tooltip do avatar: ali o texto e uma lista de identificacao (titular ·
+    # cartao · banco), e "cartao pendente" no meio dela le mal.
+    assert template.count("cartao_aguardando") == 1
+    assert "cartão pendente (o Pluggy ainda não confirmou)" in template
 
 
 def _bloco_migracao(core, versao):
@@ -1405,6 +1408,44 @@ def test_celular_tem_menu_recolhido_e_tooltip_no_toque():
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
     assert "@media (pointer: coarse)" in css
     assert ".nav-menu.aberto" in css
+
+
+def test_rotulo_de_parcela_nao_contradiz_a_descricao():
+    """"Mercado de Tecidos Leo 1/6" nao pode aparecer como "À vista".
+
+    A regra antiga procurava a palavra "Parc" na descricao - o Nubank escreve
+    so "1/6", entao a tela concluia "À vista" e contradizia a propria linha.
+    Agora usa o mesmo parser do casamento de fatura (secao 11.3-A), que ja
+    sabia ler as tres grafias.
+    """
+    import ast
+
+    fonte = (RAIZ / "core.py").read_text(encoding="utf-8")
+    ns = {"re": __import__("re")}
+    for no in ast.parse(fonte).body:
+        nome = getattr(no, "name", None) or (
+            no.targets[0].id
+            if isinstance(no, ast.Assign) and isinstance(no.targets[0], ast.Name)
+            else None
+        )
+        if nome in ("_PARCELA_NA_DESC", "parcela_na_descricao", "rotulo_parcela"):
+            exec(compile(ast.Module([no], []), "core.py", "exec"), ns)
+    rotulo = ns["rotulo_parcela"]
+
+    assert rotulo("Mercado de Tecidos Leo 1/6", None, None) is None
+    assert rotulo("SEPHORA STORE 6/10", None, None) is None
+    assert rotulo("OTICA CALLIARI Parc.10/10", None, None) is None
+    assert rotulo("DELTA VIDEIRA", 3, 6) == "3/6"
+    assert rotulo("SUPERVIZA", 1, 1) == "À vista"
+    assert rotulo("Pagamento recebido", None, None) == "À vista"
+
+    # uma unica definicao: a tela e o casamento de fatura leem o MESMO parser
+    assert (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8").count(
+        "def parcela_na_descricao("
+    ) == 0
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "'Parc' not in linha.descricao" not in html
+    assert html.count("rotulo_parcela(") == 2, "linha e painel de detalhes"
 
 
 def test_valores_visuais_fora_do_sistema_nao_aumentam():

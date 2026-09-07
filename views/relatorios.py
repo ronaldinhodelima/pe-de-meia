@@ -19,6 +19,7 @@ from fatura_ofx import (
 )
 from core import (
     valor_pt,
+    parcela_na_descricao,
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
     CATEGORIA_PT_DB,
@@ -737,7 +738,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
                 # Candidato que nao declara nada, ou que declara outro total,
                 # continua elegivel - o agregado do Pluggy, por exemplo, as
                 # vezes nem traz o numero de parcelas.
-                c_atual, c_total = _parcela_na_descricao(c["descricao"])
+                c_atual, c_total = parcela_na_descricao(c["descricao"])
                 mesma_familia = bool(
                     c_total and l.get("parcela_total") and c_total == l["parcela_total"]
                 )
@@ -933,23 +934,6 @@ def _transacoes_vinculadas(cur, ignorar_fatura_id=None):
     return {str(r["transacao_id"]) for r in cur.fetchall()}
 
 
-_PARCELA_NA_DESC = re.compile(r"(?:parc(?:ela)?\.?\s*)?(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", re.I)
-
-
-def _parcela_na_descricao(descricao):
-    """(atual, total) que a descricao declara, ou (None, None).
-
-    Cobre "Parc.9/12" (Unicred), "Parcela 5/10" e "5/10" (Nubank). Exige
-    total >= 2 e atual <= total para nao confundir com data, codigo de loja ou
-    fracao solta. Fica com a ULTIMA ocorrencia: o numero da parcela vem no fim
-    da descricao, e um prefixo do Pluggy pode conter digitos.
-    """
-    achado = (None, None)
-    for m in _PARCELA_NA_DESC.finditer(descricao or ""):
-        atual, total = int(m.group(1)), int(m.group(2))
-        if 2 <= total <= 99 and 1 <= atual <= total:
-            achado = (atual, total)
-    return achado
 
 
 def _estado_fatura(cur, fatura_row):
@@ -3758,7 +3742,7 @@ def api_diagnostico_casamento(fatura_id):
             for c in candidatos:
                 if _centavos(c["valor"]) != centavos_l:
                     continue
-                c_atual, c_total = _parcela_na_descricao(c["descricao"])
+                c_atual, c_total = parcela_na_descricao(c["descricao"])
                 mesma_familia = bool(
                     c_total and l["parcela_total"] and c_total == l["parcela_total"]
                 )

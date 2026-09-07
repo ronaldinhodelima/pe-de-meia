@@ -198,13 +198,13 @@
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
     <td class="cel-sel-fatura" data-col="abre">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir detalhes{% else %}Abrir detalhes do lançamento{% endif %}">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button></td>
     <td class="cel-data-fatura" data-col="data">{{ linha.data.strftime('%d/%m/%Y') }}</td>
-    {% set cartao_info %}{% if linha.cartao_nome %}{{ linha.cartao_nome }}{% elif linha.cartao_aguardando %}cartão pendente{% endif %}{% endset %}
     <td class="desc" data-col="desc">
       <div class="quem">
-        {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if cartao_info and cartao_info != linha.titular %} · {{ cartao_info }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
+        {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
           <span class="desc-loja">{{ linha.descricao }}</span>
-          {% if 'Parc' not in linha.descricao %}<span class="desc-parcela">{{ (linha.parcela_atual|string ~ '/' ~ linha.parcela_total|string) if linha.parcela_total else 'À vista' }}</span>{% endif %}
+          {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
+          {% if parcela %}<span class="desc-parcela">{{ parcela }}</span>{% endif %}
           <span data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado invalido" data-tip="Validar: {{ linha.validacao_motivos|join(', ') }}">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado pendente" data-tip="Faltam: {{ linha.faltando|join(', ') }}">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</span>
 
         </div>
@@ -235,7 +235,7 @@
         <div><b>Fonte</b>{{ v.fonte_nome }}</div><div class="detalhe-id"><b>ID</b><span>{{ v.transacao_id }}</span></div>
         <div><b>Status</b>{{ v.status or '-' }}</div><div><b>Tipo</b>{{ v.tipo or '-' }}</div>
         <div><b>Valor original</b>{{ v.valor_original if v.valor_original is not none else '-' }} {{ v.moeda_original or '' }}</div>
-        <div><b>Parcela</b>{{ (v.parcela_atual|string ~ '/' ~ v.parcela_total|string) if v.parcela_total else 'À vista' }}</div>
+        <div><b>Parcela</b>{{ rotulo_parcela(v.descricao, v.parcela_atual, v.parcela_total) or 'na descrição' }}</div>
         <div><b>Primeira sincronização</b>{{ v.primeiro_sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.primeiro_sincronizado_local else '-' }}</div>
         <div><b>Última sincronização</b>{{ v.sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.sincronizado_local else '-' }}</div>
         {% if v.conferida %}<div><b>OK por</b>{{ v.conferida_por or '-' }}{% if v.conferida_local %} · {{ v.conferida_local.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>{% endif %}
@@ -282,4 +282,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260905-6"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260907-1"></script>{% endblock %}

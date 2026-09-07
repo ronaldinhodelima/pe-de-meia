@@ -466,6 +466,40 @@ BANCOS_ESTILO = {
 }
 
 
+_PARCELA_NA_DESC = re.compile(r"(?:parc(?:ela)?\.?\s*)?(\d{1,2})\s*/\s*(\d{1,2})(?!\d)", re.I)
+
+
+def parcela_na_descricao(descricao):
+    """(atual, total) que a descricao declara, ou (None, None).
+
+    Cobre "Parc.9/12" (Unicred), "Parcela 5/10" e "5/10" (Nubank). Exige
+    total >= 2 e atual <= total para nao confundir com data, codigo de loja ou
+    fracao solta. Fica com a ULTIMA ocorrencia: o numero da parcela vem no fim
+    da descricao, e um prefixo do Pluggy pode conter digitos.
+    """
+    achado = (None, None)
+    for m in _PARCELA_NA_DESC.finditer(descricao or ""):
+        atual, total = int(m.group(1)), int(m.group(2))
+        if 2 <= total <= 99 and 1 <= atual <= total:
+            achado = (atual, total)
+    return achado
+
+
+
+def rotulo_parcela(descricao, atual, total):
+    """O que mostrar embaixo da descricao: "3/6", "À vista" ou NADA.
+
+    Nada quando a propria descricao ja declara a parcela - o Nubank escreve
+    "Mercado de Tecidos Leo 1/6", e como ali nao aparece a palavra "Parc" a
+    tela concluia "À vista" e contradizia a descricao na MESMA linha.
+    """
+    if parcela_na_descricao(descricao)[1]:
+        return None
+    if total and total > 1:
+        return f"{atual or 1}/{total}"
+    return "À vista"
+
+
 def cor_banco(banco):
     """Cor da marca do banco: (fundo, texto). Mesma tabela do selo.
 
