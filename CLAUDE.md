@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 355 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 359 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -851,6 +851,62 @@ lida não acrescenta nada, e deixada na tela vira ruído em toda linha aberta. *
 a mensagem é a única pista do que aconteceu. O contêiner mantém a altura reservada, senão sumir a
 mensagem reintroduziria o mesmo pulo.
 
+### Quem PINTA a pendência tem que ler a mesma regra de quem a CALCULA (07/09/2026)
+
+A obrigatoriedade de dimensão sempre teve ponto único de verdade — `EXIGE_DIMENSOES_SQL`
+e `exige_dimensoes()` — e é por ele que a fatura assina o OK de um pagamento de fatura sem
+dimensão nenhuma. **A interface nunca o consultou.** As duas telas decidiam por
+`d.obrigatoria`, uma propriedade **global da dimensão** que não sabe de que lançamento se
+trata, e pintavam Projeto/Portfólio de vermelho num lançamento neutro — cobrando um
+preenchimento que o servidor não exige e que, se atendido, faria o mesmo dinheiro reaparecer
+na visão por dimensão (§4.1). É a mesma classe dos 57 falsos pendentes da §6.5 nº 10.
+
+**Eram cinco caminhos, e um deles não era só pintura:** o render das duas telas, a repintura
+e a pílula "Faltam:" da Detalhada, e a **trava do lançamento manual**, que *recusava a
+criação* — um lançamento manual de transferência ou de compra de um bem nunca poderia
+receber OK. Curiosidade que ajuda a reconhecer o padrão: a Detalhada calculava `faltando`
+com a natureza e mostrava a pílula corretamente vazia **enquanto os campos ao lado ficavam
+vermelhos** — a mesma tela discordando de si mesma.
+
+**A flag vem do servidor por linha (`data-exige-dimensoes`) e volta em cada
+`POST /api/transacao`:** trocar a categoria troca a natureza, e só o servidor sabe a nova —
+o cliente não tem como deduzir. **Ausente, a tela COBRA**, igual ao servidor: esconder
+pendência real é o defeito pior dos dois, e é o silencioso.
+`test_pintura_de_pendencia_nunca_decide_obrigatoriedade_sem_a_natureza` trava os cinco.
+
+## 7.2-B Cards que filtram (07/09/2026)
+
+Os cards da Resumida viraram porta de entrada para as próprias linhas, como já eram na
+Detalhada. **O gatilho do CSS é o próprio `data-filtro`** (`.card[data-filtro]`), não uma
+classe à parte: assim não existe card com cara de clicável e sem filtro por trás, nem o
+contrário. **"Resultado no DRE" não filtra de propósito** — ele é a conta entre os dois cards
+ao lado, não um recorte de lançamentos.
+
+Filtros novos: **Pendentes de classificação**, **Só receitas** e **Só despesas**. Os dois
+últimos usam `NATUREZA_SQL`, que já resolve `fluxo` pela direção — então batem exatamente com
+o que os cards de Receitas/Despesas somam.
+
+**Card e filtro compartilham a condição SQL e a mesma tabela** (`PENDENTE_CLASSIFICACAO_SQL`).
+Duas armadilhas, ambas pagas ao escrever isto:
+
+- **A contagem tem que rodar sobre `cartao.transacao`, não sobre a view financeira.** Na view
+  um rateado vira N linhas e as dimensões moram noutra chave
+  (`lancamento_financeiro_dimensao`, por `linha_id`) — a mesma condição nas duas bases dá
+  respostas diferentes.
+- **Num lançamento rateado a classificação mora nas partes**, e o pai não tem categoria
+  própria nem linha em `transacao_dimensao`. Sem o ramo de rateio, **todo** rateado apareceria
+  como pendente, inclusive os completos.
+
+Medido em produção: o card diz "Faltam 444" e o filtro lista **444** linhas.
+
+**O desenho dos cards de status subiu do template da Detalhada para o `app.css`** — definido
+dentro de uma tela só, ele não existia na outra, e copiá-lo criaria a segunda definição que a
+§7.8-A proíbe.
+
+**Aritmética de template é armadilha:** `{{ a - b }}` sobre variável ausente levanta
+`UndefinedError` e derruba a **tela inteira**, enquanto imprimir a variável apenas sai vazio.
+Número derivado se calcula na rota; o template só imprime.
+
 ## 7.2-A Edição em lote
 
 Coluna de seleção por linha nas duas visualizações; com um ou mais selecionados aparece uma barra
@@ -1383,7 +1439,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**355 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**359 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -1492,11 +1548,18 @@ outra derrubou `/relatorios` em produção. O que funciona:
    um dia — um deles sondava `/relatorios`, que **responde 302 para o login sem sessão**, então a
    condição jamais seria satisfeita. **Rota que exige login não serve de sonda**; use um estático
    ou `/health`.
-10. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
+10. **`uuid` = `text` derruba a consulta inteira — e a coluna de dimensão é TEXT.** Em
+   07/09/2026 copiei a forma da consulta de pendência do `core` (que castava) e deixei o
+   `::text` para trás: `transacao_dimensao.transacao_id` é **TEXT** e
+   `transacao.transacao_id` é **UUID**. Não deu número errado — **derrubou a tela de
+   Lançamentos inteira com 500**. É a mesma lição do nº 6, de novo, e a suíte não pega
+   porque não há Postgres em toda execução. Há teste varrendo as duas colunas nos dois
+   sentidos.
+11. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
    checagem algumas vezes, com parâmetro aleatório na URL**, e só então concluir.
-11. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+12. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
 
@@ -1652,6 +1715,16 @@ R$ 66,00 e Gás de R$ 114,99 a R$ 185,00 — o vão está entre 66 e 115, não e
 que a regra classificaria errado é o de **R$ 114,99 (12/03/2026)**, hoje em Gás, que pela letra da
 regra deveria ser Água. Mover o corte para **R$ 90,00** acerta esse e não move nenhum dos outros 23.
 Pendente de decisão do usuário.
+
+**`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado em 07/09/2026.** São 13 lançamentos
+(5 em 2025, 8 em 2026): o débito automático da fatura saindo da conta corrente. Todos já
+estavam em `Pagamento de Fatura` (natureza `transferencia`); dois tinham **Responsável =
+Ronaldo**, que foi retirado. Pela §4.1 a classificação certa aqui é **só a categoria** — o
+gasto foi das compras que a fatura cobrou, e essas já estão classificadas; preencher
+Responsável faria o mesmo dinheiro aparecer duas vezes na visão por dimensão. Os dois OK
+foram preservados com as assinaturas originais (`fatura 08/2026` e `ronaldo`). **Esta
+descrição não contém "pagamento de fatura", então a migração 56 não a alcançou** — se
+aparecer outra grafia, conferir a categoria antes de supor que já está coberta.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
