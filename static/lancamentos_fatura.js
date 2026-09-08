@@ -410,6 +410,20 @@
     }
   }
 
+  // O resumo (cards, pilula, OK) so precisa refletir o fim da rajada. Tabulando
+  // por Categoria, Responsavel, Projeto e Portfolio saiam QUATRO leituras da
+  // pagina inteira, cada uma chegando com o estado de antes da escolha seguinte.
+  let temporizadorResumo = null;
+  function agendarResumo(editor) {
+    if (editor) editor.dataset.pendente = '1';
+    clearTimeout(temporizadorResumo);
+    temporizadorResumo = setTimeout(async function () {
+      if (editor) delete editor.dataset.pendente;
+      try { await atualizarResumoPagina(); } catch (e) { /* volta na proxima */ }
+      aplicarBuscaFatura();
+    }, 700);
+  }
+
   async function atualizarResumoPagina(ocultarAusentes) {
     const resp = await fetch(window.location.href, {headers: {'X-Parcial': '1'}, cache: 'no-store'});
     if (!resp.ok) return;
@@ -447,15 +461,27 @@
         ok.title = okNovo.title;
       }
     });
+    // O resumo traz o estado do servidor - de ANTES do que o usuario acabou de
+    // escolher, porque o GET saiu antes. Sobrescrever aqui devolvia o valor
+    // antigo ao campo seguinte no meio da tabulacao: a pessoa escolhia Projeto,
+    // o resumo da gravacao do Responsavel chegava e apagava a escolha. Por isso
+    // esta atualizacao e a ULTIMA da fila e pula tudo que ainda esta em uso.
     document.querySelectorAll('[data-editor]').forEach(editor => {
       const novo = doc.querySelector('[data-editor="' + CSS.escape(editor.dataset.editor) + '"]');
-      if (!novo || editor.dataset.salvando === '1') return;
+      if (!novo || editor.dataset.salvando === '1' || editor.dataset.pendente === '1') return;
+      // foco dentro do editor, ou combobox aberto: o usuario esta ali
+      if (editor.contains(document.activeElement)) return;
+      if (editor.querySelector('.pdm-combobox.aberto')) return;
       editor.querySelectorAll('[data-campo],[data-dimensao]').forEach(campo => {
         const seletor = campo.dataset.campo
           ? '[data-campo="' + CSS.escape(campo.dataset.campo) + '"]'
           : '[data-dimensao="' + CSS.escape(campo.dataset.dimensao) + '"]';
         const campoNovo = novo.querySelector(seletor);
-        if (campoNovo) campo.value = campoNovo.value;
+        // so quando mudou de verdade: reescrever o mesmo valor faz o combobox
+        // se re-sincronizar e mover o destaque debaixo do usuario (secao 7.7)
+        if (!campoNovo || campo.value === campoNovo.value) return;
+        campo.value = campoNovo.value;
+        if (window.pdmCombobox) window.pdmCombobox.sincronizar(campo);
       });
     });
   }
@@ -501,10 +527,7 @@
           atualizarDestaquesObrigatorios(editor);
           atualizarAvisoClassificacao(editor);
         }
-        try { await atualizarResumoPagina(); } catch (e) {
-          if (editor.dataset.versaoSalva === versao) aviso.textContent = 'Salvo; resumo atualiza ao reabrir';
-        }
-        aplicarBuscaFatura();
+        agendarResumo(editor);
       } catch (e) {
         clearTimeout(aviso._sumir);
         aviso.textContent = e.message; aviso.classList.add('erro'); aviso.classList.remove('sumindo');

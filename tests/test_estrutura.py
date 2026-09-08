@@ -1783,6 +1783,29 @@ def test_toast_nao_atrapalha_quem_esta_preenchendo():
     assert ".toast-erro, .toast-aviso { pointer-events: auto;" in css
 
 
+def test_resumo_nunca_sobrescreve_o_campo_que_o_usuario_esta_usando():
+    """O GET do resumo sai ANTES da escolha seguinte e volta com o estado velho.
+
+    Tabulando por Responsavel, Projeto e Portfolio, a atualizacao disparada pela
+    gravacao do Responsavel chegava com o HTML de antes e **devolvia o valor
+    antigo** ao campo que o usuario acabava de preencher - a escolha sumia
+    debaixo dele. Tres guardas, e as tres sao necessarias: editor com gravacao
+    pendente, foco dentro do editor e combobox aberto.
+
+    E reescrever o MESMO valor tambem custa: o combobox se re-sincroniza e move
+    o destaque, que e o que o Tab vai confirmar (secao 7.7).
+    """
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "editor.dataset.pendente === '1'" in js
+    assert "editor.contains(document.activeElement)" in js
+    assert "editor.querySelector('.pdm-combobox.aberto')" in js
+    assert "campo.value === campoNovo.value" in js
+
+    # e uma atualizacao por RAJADA, nao uma por campo
+    assert "function agendarResumo" in js
+    assert "clearTimeout(temporizadorResumo)" in js
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
