@@ -1698,6 +1698,12 @@ def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
     # todas as colunas sao fixadas antes do arrasto, senao a tabela inteira anda
     assert "if (!outro.style.width) aplicarLargura(outro.dataset.col" in js
 
+    # com `fixed` + largura automatica o navegador trata as larguras como
+    # PROPORCAO e redistribui: alargar uma encolhia as outras e a tabela nunca
+    # crescia. Ela precisa dizer a propria largura.
+    assert "function ajustarLarguraDaTabela" in js
+    assert "table.style.width = soma" in js
+
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
     assert "table.ajustavel { width: auto !important; min-width: 100% !important;" in css
 

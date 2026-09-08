@@ -72,6 +72,19 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   function colunasNaOrdemAtual() {
     return [...thead.querySelectorAll('th[data-col]')].map(th => th.dataset.col);
   }
+  // Com `table-layout: fixed` e largura automatica, o navegador trata as
+  // larguras das colunas como PROPORCAO e redistribui dentro do espaco
+  // disponivel: alargar uma encolhia as outras e a tabela nunca crescia. Para
+  // ela empurrar de verdade, a tabela precisa dizer a propria largura.
+  function ajustarLarguraDaTabela() {
+    let soma = 0;
+    thead.querySelectorAll('th[data-col]').forEach(function (th) {
+      if (th.classList.contains('coluna-oculta')) return;
+      soma += parseFloat(th.style.width) || th.getBoundingClientRect().width;
+    });
+    table.style.width = soma ? Math.round(soma) + 'px' : '';
+  }
+
   function aplicarLargura(col, px) {
     const th = thead.querySelector('th[data-col="' + col + '"]');
     if (th) th.style.width = px + 'px';
@@ -100,6 +113,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     if (!mostrar) estado.ocultas.push(col);
     salvarEstado();
     aplicarOcultas();
+    ajustarLarguraDaTabela();
     atualizarDicasDeTruncamento(table);   // esconder coluna muda a largura das outras
   }
 
@@ -257,6 +271,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   if (temLarguraSalva) {
     // o que o usuario escolheu vale como escolhido, sem reescala
     Object.keys(estado.larguras).forEach(col => aplicarLargura(col, estado.larguras[col]));
+    ajustarLarguraDaTabela();
   } else {
     const larguraBase = {};
     thead.querySelectorAll('th[data-col]').forEach(th => {
@@ -295,6 +310,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
         const nova = larguraInicial + (e2.clientX - startX);
         if (nova < 40) return;
         aplicarLargura(th.dataset.col, nova);
+        ajustarLarguraDaTabela();
       }
       function soltar() {
         document.removeEventListener('mousemove', mover);
@@ -305,6 +321,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
         thead.querySelectorAll('th[data-col]').forEach(function (outro) {
           estado.larguras[outro.dataset.col] = outro.getBoundingClientRect().width;
         });
+        ajustarLarguraDaTabela();
         salvarEstado();
         // a coluna mudou de largura: o que cabia pode ter passado a nao caber
         atualizarDicasDeTruncamento(table);
