@@ -77,6 +77,10 @@
       if (exibir) visiveis += 1;
     });
     if (contadorBusca) contadorBusca.textContent = termo ? visiveis + ' de ' + linhas.length : '';
+    // o rodape conta o que esta A VISTA, entao acompanha a pesquisa local
+    if (window.atualizarTotaisVisiveis) {
+      window.atualizarTotaisVisiveis(document.querySelector('.fatura-tabela'));
+    }
   }
   if (buscaFatura) {
     buscaFatura.addEventListener('input', aplicarBuscaFatura);
@@ -137,6 +141,9 @@
     });
     aplicarBuscaFatura();
   }
+
+  // primeira carga: o rodape nasce preenchido, sem esperar uma pesquisa
+  if (window.atualizarTotaisVisiveis) window.atualizarTotaisVisiveis(tabelaFatura);
 
   if (tabelaFatura) tabelaFatura.querySelectorAll('th[data-ordenar]').forEach(cabecalho => {
     cabecalho.setAttribute('role', 'button');
@@ -583,9 +590,8 @@
       // Igual a Resumida: a barra sobrevive a limpeza da selecao enquanto
       // estiver mostrando o resultado da ultima aplicacao.
       barra.hidden = n === 0 && barra.dataset.resultado !== '1';
-      contagem.textContent = n === 0 ? 'Nenhum lançamento selecionado'
-                           : n === 1 ? '1 lançamento selecionado'
-                                     : n + ' lançamentos selecionados';
+      contagem.textContent = window.pdmLote.resumoSelecao(
+        marcados().map(cb => cb.closest('tr')));
     }
 
     // Todas, nao so as visiveis: a pesquisa esconde grupos inteiros.

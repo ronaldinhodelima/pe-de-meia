@@ -788,6 +788,15 @@ input[type=checkbox]:disabled {
 /* O anel de foco e sombra: celula com overflow:hidden o cortaria. */
 td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !important; }
 
+/* Rodape de totais: le como um fecho da tabela, nao como mais uma linha de
+   lancamento - fundo proprio, sem hover, sem borda de linha. */
+tfoot[data-total-rodape] td {
+  background: var(--raise); border-top: 1px solid var(--line);
+  font-weight: var(--peso-medio); color: var(--ink-soft); white-space: nowrap;
+}
+tfoot[data-total-rodape] .total-rodape-rotulo { color: var(--ink-faint); font-weight: var(--peso-normal); }
+tfoot[data-total-rodape] [data-total-valor] { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+
 .barra-lote {
   position: sticky; top: 0; z-index: 5;
   background: var(--surface); border: 1px solid var(--accent);

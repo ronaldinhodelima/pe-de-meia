@@ -161,6 +161,7 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
       busca.dispatchEvent(new Event('input'));
     }
   }
+  atualizarTotaisVisiveis(table);
 
   function menuColunas() {
     const caixa = document.createElement('div');
@@ -552,6 +553,36 @@ function textoFiltravelDaLinha(tr) {
   return tr.__textoFiltro;
 }
 
+// Valor em portugues. Mora aqui porque as duas telas de lancamentos e a barra
+// de lote precisam do mesmo formato - o toLocaleString solto em cada arquivo
+// divergiria na primeira opcao diferente.
+function pdmMoeda(v) {
+  const n = Number(v) || 0;
+  return (n < 0 ? '- R$ ' : 'R$ ') + Math.abs(n).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
+window.pdmMoeda = pdmMoeda;
+
+// Rodape: quantidade e soma do que esta A VISTA. Le `data-valor` da <tr>, que o
+// servidor ja escreve - somar o texto da celula dependeria da coluna Valor
+// existir e de ela nao estar oculta.
+function atualizarTotaisVisiveis(table) {
+  const rodape = table && table.querySelector('[data-total-rodape]');
+  if (!rodape) return;
+  let n = 0, soma = 0;
+  table.querySelectorAll('tbody tr[data-valor]').forEach(function (tr) {
+    if (tr.hidden || tr.style.display === 'none') return;
+    n++;
+    soma += parseFloat(tr.dataset.valor) || 0;
+  });
+  const qtd = rodape.querySelector('[data-total-qtd]');
+  const val = rodape.querySelector('[data-total-valor]');
+  if (qtd) qtd.textContent = n === 1 ? '1 lançamento' : n + ' lançamentos';
+  if (val) val.textContent = pdmMoeda(soma);
+}
+window.atualizarTotaisVisiveis = atualizarTotaisVisiveis;
+
 function ativarFiltroTabela(table, campo, contador) {
   const corpo = table.tBodies[0];
   if (!corpo) return;
@@ -577,6 +608,7 @@ function ativarFiltroTabela(table, campo, contador) {
     if (!q) {
       dados.forEach(function (tr) { tr.style.display = ''; });
       contador.textContent = '';
+      atualizarTotaisVisiveis(table);
       return;
     }
 
@@ -606,6 +638,7 @@ function ativarFiltroTabela(table, campo, contador) {
       if (visivel[i]) n++;
     });
     contador.textContent = n + ' de ' + dados.length;
+    atualizarTotaisVisiveis(table);
   }
 
   campo.addEventListener('input', aplicar);

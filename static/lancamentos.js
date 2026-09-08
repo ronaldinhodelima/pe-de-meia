@@ -1206,9 +1206,8 @@ marcarCardAtivo();
     // Depois de aplicar, a selecao e limpa mas a barra fica: e nela que mora o
     // resultado ("9 de 9 atualizados"), que sumiria junto com a barra.
     barra.hidden = n === 0 && barra.dataset.resultado !== '1';
-    contagem.textContent = n === 0 ? 'Nenhum lançamento selecionado'
-                         : n === 1 ? '1 lançamento selecionado'
-                                   : n + ' lançamentos selecionados';
+    contagem.textContent = window.pdmLote.resumoSelecao(
+      selecionados().map(cb => cb.closest('tr')));
     const total = linhasSelecionaveis().length;
     if (todos) {
       todos.checked = n > 0 && n === total;

@@ -72,6 +72,18 @@
     return {aplicados: aplicados, falhas: falhas, texto: texto};
   }
 
+  // Quantos e quanto: a soma sai do `data-valor` que o servidor escreve na
+  // <tr>, o mesmo numero que alimenta o rodape - dois calculos diferentes para
+  // "o valor da linha" divergiriam no primeiro caso de rateio.
+  function resumoSelecao(linhas) {
+    const n = linhas.length;
+    if (!n) return 'Nenhum lançamento selecionado';
+    let soma = 0;
+    linhas.forEach(function (tr) { soma += parseFloat(tr && tr.dataset.valor) || 0; });
+    const quantos = n === 1 ? '1 lançamento selecionado' : n + ' lançamentos selecionados';
+    return quantos + ' · ' + (window.pdmMoeda ? window.pdmMoeda(soma) : soma.toFixed(2));
+  }
+
   // Sair da barra e o mesmo comportamento nas duas telas, entao mora aqui pelo
   // mesmo motivo que `aplicar`: duas copias divergem na primeira regra nova.
   // `fechar` limpa a selecao; a barra some por consequencia disso.
@@ -92,5 +104,5 @@
     });
   }
 
-  window.pdmLote = {aplicar: aplicar, ligarFechar: ligarFechar};
+  window.pdmLote = {aplicar: aplicar, ligarFechar: ligarFechar, resumoSelecao: resumoSelecao};
 })();

@@ -1470,6 +1470,31 @@ def test_no_celular_a_tabela_vira_lista_de_cartoes():
     assert "th.dataset.col" in js
 
 
+def test_totais_da_tela_saem_de_um_calculo_so():
+    """Rodape e barra de selecao somam o MESMO `data-valor` da linha.
+
+    Dois calculos para "o valor da linha" divergiriam no primeiro rateado - o
+    pai carrega o total e as partes carregam pedacos dele.
+    """
+    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+        html = (RAIZ / alvo).read_text(encoding="utf-8")
+        assert "data-total-rodape" in html, alvo
+        assert "data-total-qtd" in html and "data-total-valor" in html, alvo
+        assert 'data-valor="' in html, alvo
+
+    tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "function atualizarTotaisVisiveis" in tabelas
+    assert "tbody tr[data-valor]" in tabelas
+    assert "function pdmMoeda" in tabelas, "formato de valor unico"
+
+    lote = (RAIZ / "static" / "lote.js").read_text(encoding="utf-8")
+    assert "function resumoSelecao" in lote
+    assert "tr.dataset.valor" in lote
+    for js in ("lancamentos.js", "lancamentos_fatura.js"):
+        texto = (RAIZ / "static" / js).read_text(encoding="utf-8")
+        assert "pdmLote.resumoSelecao(" in texto, js
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1482,7 +1507,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 17
+    TETO = 15
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

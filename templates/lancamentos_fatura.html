@@ -188,6 +188,7 @@
 <table class="compacta fatura-tabela"><thead><tr><th class="col-abre"></th><th class="col-data" data-ordenar="data" tabindex="0">Data</th><th data-ordenar="desc" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição na fatura' }}</th><th class="col-valor" data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor da fatura' }}</th><th class="col-classif" data-ordenar="cat" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-ok" data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}"
+      data-valor="{{ linha.valor }}"
       data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}"
       data-exige-dimensoes="{{ '0' if (linha.principal and not linha.principal.get('exige_dimensoes', True)) else '1' }}"
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
@@ -256,7 +257,12 @@
     {% endif %}
   </td></tr>
 {% else %}<tr><td colspan="{{ 6 + dimensoes|length }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
-</tbody></table></div>
+</tbody>
+<tfoot data-total-rodape><tr>
+  <td class="total-rodape-rotulo" colspan="3"><span data-total-qtd>—</span> à vista</td>
+  <td class="cel-valor-fatura" data-total-valor>—</td>
+  <td colspan="{{ 2 + dimensoes|length }}"></td>
+</tr></tfoot></table></div>
 <div class="rodape-fatura">
   <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
   {% if pode_editar and not fatura.em_andamento %}<div class="revisao-parcelas">
@@ -277,4 +283,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260904-1"></script><script src="/static/lancamentos_fatura.js?v=20260907-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-1"></script><script src="/static/lancamentos_fatura.js?v=20260907-2"></script>{% endblock %}

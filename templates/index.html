@@ -199,7 +199,7 @@
   </tr></thead>
   <tbody>
     {% for r in linhas %}
-      <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}"
+      <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}" data-valor="{{ r.valor_sort }}"
           data-exige-dimensoes="{{ '0' if r.get('exige_dimensoes', True) == False else '1' }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
         {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
@@ -269,6 +269,16 @@
       <tr><td colspan="{{ 8 + dimensoes|length + (1 if pode_regras else 0) + (1 if pode_editar else 0) }}" style="padding:20px;text-align:center;color:var(--ink-faint)">Nenhum lançamento neste filtro.</td></tr>
     {% endfor %}
   </tbody>
+  {# Rodape com o que esta A VISTA: quantidade e soma. Os numeros sao
+     preenchidos pelo tabelas.js a partir das linhas visiveis, entao a
+     pesquisa local e a ocultacao de coluna mudam o total junto. #}
+  <tfoot data-total-rodape>
+    <tr>
+      <td class="total-rodape-rotulo" colspan="{{ 6 + dimensoes|length + (1 if pode_editar else 0) }}"><span data-total-qtd>—</span> à vista</td>
+      <td class="valor cel-valor" data-col="valor" data-total-valor>—</td>
+      <td colspan="{{ 2 + (1 if pode_regras else 0) }}"></td>
+    </tr>
+  </tfoot>
 </table>
 {% endblock %}
 
@@ -337,6 +347,6 @@
 {# lancamentos.js le estes dois blocos em vez de receber o dado interpolado #}
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
-<script src="/static/lote.js?v=20260904-1"></script>
-<script src="/static/lancamentos.js?v=20260907-3"></script>
+<script src="/static/lote.js?v=20260907-1"></script>
+<script src="/static/lancamentos.js?v=20260907-4"></script>
 {% endblock %}
