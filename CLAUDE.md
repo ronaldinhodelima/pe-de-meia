@@ -851,7 +851,8 @@ coluna, e nomes diferentes exigiam duas regras de CSS para o mesmo papel.
 Categoria, Responsável, Projeto e Portfólio são **colunas próprias e largas**, editáveis sem abrir
 nada. A largura veio de encolher Data e Valor e de **fundir titular e parcela na descrição** — o
 titular virou o avatar, com o nome no tooltip. O `+` deixou de ser formulário e virou **detalhe**:
-registros agregados, observação, natureza e criação de regra.
+só registros agregados e informação técnica de cada um (ver acima — observação, natureza e regra
+saíram dele em 08/09/2026).
 
 **Os campos não são duplicados nos dois lugares.** Dois campos para o mesmo dado divergem na
 primeira edição. E não há segundo caminho de gravação: a `<tr>` carrega o próprio `data-editor`,
@@ -1051,8 +1052,9 @@ porque ela é a lista de quem precisa de nova tentativa.
 O núcleo aplica **4 em paralelo** — uma de cada vez fica lento com o ano inteiro selecionado, e
 muitas de uma vez só enfileiram no processo único do Gunicorn (§2.2). Na Detalhada, depois de
 aplicar a tela **recarrega o estado real do servidor** em vez de inferir: é o servidor que decide
-"Faltam:", natureza e OK. O checkbox mora na primeira célula, junto do `+`, porque aquela tabela
-não é `ajustavel` e o JS ordena por índice de célula — coluna nova deslocaria tudo em silêncio.
+"Faltam:", natureza e OK. O checkbox mora na primeira célula, junto do `+`. **A Detalhada passou a
+ser `ajustavel` em 07/09/2026** e a ordenação lê por `data-col`, não por índice — mas o lugar do
+checkbox continua sendo esse por desenho, não por limitação.
 
 ## 7.3 Observação pessoal × informação interna
 
@@ -1386,10 +1388,13 @@ colunas de dimensão são dinâmicas (Responsável, Projeto, Portfólio vêm do 
 no template criaria uma segunda verdade. **As larguras do utilitário de colunas são inline**, então
 o modo cartão precisa de `!important` — sem isso a célula continuaria com os 116px do desktop.
 
-Vale para `table.compacta`, que é a Resumida. **A Detalhada e a conciliação continuam rolando de
-lado, de propósito:** elas existem para comparar colunas lado a lado, e esconder coluna ali não
-deixa a tela pior — deixa a tela **mentirosa**. Falta dar a elas um aviso honesto de "melhor no
-computador".
+Vale para `table.compacta`, que são **as duas telas de lançamentos** — a Detalhada entrou junto em
+07/09/2026, com os mesmos `data-col` (§7.1), então uma regra de cartão serve às duas. **A conciliação
+continua rolando de lado, de propósito:** ela existe para comparar colunas lado a lado, e esconder
+coluna ali não deixa a tela pior — deixa a tela **mentirosa**.
+
+**Não há aviso de "melhor no computador"** — decisão do usuário (08/09/2026), quando a proposta foi
+oferecida e recusada. Não reintroduzir sem ele pedir.
 
 ## 7.9 Identidade visual
 
@@ -1703,6 +1708,19 @@ pytest tests/ -v
 
 Teste de integração não substitui validação logada em produção: configuração, dados reais, rede do
 Coolify e comportamento do Pluggy são diferentes.
+
+**Não existe como rodar a aplicação na máquina do usuário, e a tentativa já foi feita (08/09/2026).**
+Dois bloqueios independentes: o processo que o preview inicia **não tem permissão de ler dentro de
+`~/Documents`** (proteção de privacidade do macOS — o mesmo `python3` sobe sem erro a partir de
+`/private/tmp`, e foi assim que a causa ficou provada), e o app exige `SECRET_KEY`, `PGHOST` e
+`PGPASSWORD` já no import, contra um Postgres que **vive dentro da rede Docker do Coolify** (§2.1).
+Existe um `.claude/launch.json` com as duas configurações detectadas (`pedemeia` na 8000,
+`bussola-sync` na 8001), que serve de registro caso um dia haja ambiente local — hoje ele não sobe.
+`.claude/` **não é versionado**.
+
+**O que substitui o preview local:** bancada estática com o `app.css` real, para CSS puro, e medição
+em produção pelo navegador — largura, altura, `display` computado, texto do toast. Foi assim que
+todos os ajustes visuais desta semana foram conferidos.
 
 ## 10.2 Ciclo de trabalho que deu certo
 
