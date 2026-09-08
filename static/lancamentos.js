@@ -398,7 +398,16 @@ function recarregarListaNoLugar() {
   if (barra && !barra.hidden) return;
   clearTimeout(temporizadorLista);
   // espera curta: marcar varios OK seguidos faz UMA atualizacao, nao uma por linha
-  temporizadorLista = setTimeout(function () {
+  temporizadorLista = setTimeout(function tentar() {
+    // Trocar a tabela recria todos os campos: com o foco dentro dela, ou com um
+    // combobox aberto, isso apaga o que o usuario esta preenchendo e joga o
+    // foco no vazio. Espera ele sair - a atualizacao nao tem pressa.
+    const tabela = document.getElementById('tabela-lancamentos');
+    if (tabela && (tabela.contains(document.activeElement)
+                   || tabela.querySelector('.pdm-combobox.aberto'))) {
+      temporizadorLista = setTimeout(tentar, 800);
+      return;
+    }
     const y = window.scrollY;
     const p = aplicarFiltros();
     if (p && p.then) p.then(function () { window.scrollTo(0, y); });
@@ -1096,15 +1105,18 @@ function salvar(id, el, opcoes) {
       // dimensao e observacao. A tela nunca infere nem altera o OK por acidente.
       if ('conferida' in d) {
         const confFinal = !!d.conferida;
+        const detalhe = window.detalhes[id];
+        const mudouOk = detalhe ? !!detalhe._conferida !== confFinal : true;
         tr.querySelector('.conf-check').checked = confFinal;
         tr.classList.toggle('conferida', confFinal);
-        const detalhe = window.detalhes[id];
         if (detalhe) {
           detalhe._conferida = confFinal;
           detalhe.conferida = confFinal ? 'Sim' : 'Não';
           detalhe.conferida_por = d.conferida_por || '-';
         }
-        recarregarListaNoLugar();
+        // so o OK muda a lista (a linha sai do filtro "Pendentes", os cards
+        // mudam). Salvar categoria ou dimensao nao move nada disso.
+        if (mudouOk) recarregarListaNoLugar();
       }
       if ('observacao' in payload && window.detalhes[id]) {
         window.detalhes[id].observacao = payload.observacao || '-';

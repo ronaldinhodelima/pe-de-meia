@@ -1809,6 +1809,21 @@ def test_resumo_nunca_sobrescreve_o_campo_que_o_usuario_esta_usando():
     assert "clearTimeout(temporizadorResumo)" in js
 
 
+def test_resumida_nao_troca_a_tabela_debaixo_de_quem_preenche():
+    """Trocar a tabela recria TODOS os campos - e apaga o que esta sendo escrito.
+
+    `'conferida' in d` e verdade em toda resposta de `/api/transacao` (o servidor
+    devolve o estado real sempre), entao a lista era recarregada a cada campo
+    salvo, 450ms depois - bem no meio da tabulacao. Duas correcoes: so recarrega
+    quando o OK realmente MUDOU, e nunca com o usuario dentro da tabela.
+    """
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    assert "const mudouOk = detalhe ?" in js
+    assert "if (mudouOk) recarregarListaNoLugar();" in js
+    assert "tabela.contains(document.activeElement)" in js
+    assert "tabela.querySelector('.pdm-combobox.aberto')" in js
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
