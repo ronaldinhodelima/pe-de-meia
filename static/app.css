@@ -1010,44 +1010,84 @@ tr.compra-feita { opacity: .6; }
   }
   table.compacta thead { display: none; }
   table.compacta tbody { display: block; }
+  /* O cartao tem HIERARQUIA, nao uma lista de 13 campos iguais: descricao e
+     valor no topo (e o que identifica o lancamento), contexto discreto na
+     linha seguinte, classificacao em duas colunas e o OK por ultimo, que e a
+     acao. Antes cada celula virava uma linha rotulada e o cartao passava de
+     400px - um lancamento por tela, com o valor perdido no meio. */
   table.compacta > tbody > tr {
-    display: block; width: auto !important;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;
+    width: auto !important;
     background: var(--surface); border: 1px solid var(--line);
-    border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 8px;
+    border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
   }
   table.compacta > tbody > tr > td {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    display: flex; flex-direction: column; align-items: stretch; gap: 2px;
     width: auto !important; max-width: none !important;
-    border: 0; padding: 4px 0; white-space: normal !important; overflow: visible;
-    /* colunas de numero e de OK sao centradas/direita no desktop; no cartao o
-       rotulo e o valor ja se separam pelo flex, e a heranca so desalinhava */
+    border: 0; padding: 0; white-space: normal !important; overflow: visible;
     text-align: left !important;
   }
   table.compacta > tbody > tr > td::before {
-    content: attr(data-rotulo); flex: 0 0 38%;
+    content: attr(data-rotulo); flex: none;
     color: var(--ink-faint); font-size: var(--fonte-xxs);
     text-transform: uppercase; letter-spacing: .04em;
   }
-  /* descricao, selecao e o ponto de situacao ocupam a linha inteira: o rotulo
-     ali nao acrescenta nada e rouba metade da largura */
+
+  /* topo: selecao, valor e descricao */
+  table.compacta > tbody > tr > td[data-col="sel"] { order: -3; grid-column: 1; }
+  table.compacta > tbody > tr > td[data-col="valor"] {
+    order: -2; grid-column: 2; align-items: flex-end;
+    font-size: var(--titulo-sm); font-weight: var(--peso-medio);
+    font-variant-numeric: tabular-nums;
+  }
+  table.compacta > tbody > tr > td[data-col="desc"] {
+    order: -1; grid-column: 1 / -1;
+    font-size: var(--fonte-md); font-weight: var(--peso-medio);
+    padding-bottom: 6px; border-bottom: 1px solid var(--line);
+  }
+  /* contexto: data e origem lado a lado, discretos */
+  table.compacta > tbody > tr > td[data-col="data"] { order: 0; }
+  table.compacta > tbody > tr > td[data-col="origem"] { order: 0; }
+  table.compacta > tbody > tr > td[data-col="data"],
+  table.compacta > tbody > tr > td[data-col="origem"] {
+    flex-direction: row; align-items: center; gap: 6px;
+    font-size: var(--fonte-xs); color: var(--ink-soft);
+  }
+  /* classificacao em duas colunas; observacao e OK ocupam a linha inteira */
+  table.compacta > tbody > tr > td[data-col="categoria"],
+  table.compacta > tbody > tr > td[data-col^="dim_"] { order: 1; }
+  table.compacta > tbody > tr > td[data-col="obs"] { order: 2; grid-column: 1 / -1; }
+  table.compacta > tbody > tr > td[data-col="check"] {
+    order: 3; grid-column: 1 / -1; flex-direction: row; align-items: center;
+    justify-content: space-between; gap: 10px;
+    padding-top: 8px; border-top: 1px solid var(--line);
+  }
+  table.compacta > tbody > tr > td[data-col="check"]::before { content: 'Conferido'; }
+
+  /* rotulo que nao acrescenta nada no cartao */
   table.compacta > tbody > tr > td[data-col="desc"]::before,
   table.compacta > tbody > tr > td[data-col="sel"]::before,
+  table.compacta > tbody > tr > td[data-col="valor"]::before,
+  table.compacta > tbody > tr > td[data-col="data"]::before,
+  table.compacta > tbody > tr > td[data-col="origem"]::before,
   table.compacta > tbody > tr > td[data-col="status"]::before { content: none; }
-  table.compacta > tbody > tr > td[data-col="desc"] {
-    font-size: var(--fonte-md); font-weight: var(--peso-medio);
-    padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
-  }
-  table.compacta > tbody > tr > td[data-col="valor"] { justify-content: space-between; text-align: left; }
-  /* so o filho DIRETO da celula: o combobox e um wrapper com um input dentro,
-     e a regra generica encolhia o input a 62% do proprio wrapper - campo de
-     120px dentro de uma caixa de 194px */
+  /* colunas que so fazem sentido no desktop */
+  table.compacta > tbody > tr > td[data-col="regra"],
+  table.compacta > tbody > tr > td[data-col="status"] { display: none; }
+
+  /* campo ocupa a celula inteira: 62% era heranca do desenho em duas colunas */
   table.compacta > tbody > tr > td > select,
   table.compacta > tbody > tr > td > input[type=text],
-  table.compacta > tbody > tr > td > .pdm-combobox { flex: 1 1 auto; max-width: 62%; }
+  table.compacta > tbody > tr > td > .pdm-combobox { width: 100%; max-width: none; }
   table.compacta > tbody > tr > td .pdm-combobox-input { max-width: none; }
-  /* celula vazia nao vira linha com rotulo solto */
   table.compacta > tbody > tr > td:empty { display: none; }
-  table.compacta > tbody > tr.rateio-row { margin-left: 14px; background: var(--bg); }
+  table.compacta > tbody > tr.rateio-row,
+  table.compacta > tbody > tr.tecnico-row { margin-left: 14px; background: var(--bg); }
+  /* o rodape de totais nao e cartao: fecha a lista, em uma linha so */
+  table.compacta > tfoot { display: block; }
+  table.compacta > tfoot tr { display: flex; justify-content: space-between; gap: 10px; }
+  table.compacta > tfoot td { border: 0; padding: 6px 12px; }
+  table.compacta > tfoot td:empty { display: none; }
   .tabela-scroll { overflow-x: visible; }
 
   /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao

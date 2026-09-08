@@ -1587,6 +1587,24 @@ def test_confirmacao_de_gravacao_usa_um_unico_toast():
     assert "s.textContent = 'ok'" not in (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
 
 
+def test_lancamento_rateado_nao_cobra_classificacao_no_pai():
+    """Num rateado a classificacao mora nas PARTES (secao 4.4).
+
+    A trava do servidor ja validava so as partes; a tela e que pintava de
+    vermelho a categoria e as dimensoes do pai - cobrando um preenchimento que
+    ninguem exige e que, se atendido, faria o mesmo dinheiro aparecer duas
+    vezes na visao por dimensao. Mesma classe dos 57 falsos pendentes: quem
+    PINTA tem que ler a mesma regra de quem CALCULA (secao 7.2).
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert '"exige_classificacao": not bool(rateios_ui)' in view
+
+    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    assert "r.get('exige_classificacao', True) and not r.categoria" in html
+    assert "r.get('exige_classificacao', True) and r.get('exige_dimensoes', True)" in html
+    assert 'data-exige-classificacao=' in html
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 

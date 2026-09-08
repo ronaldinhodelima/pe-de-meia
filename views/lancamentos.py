@@ -639,6 +639,11 @@ def index():
             # um preenchimento que o servidor nao exige e que, se atendido,
             # faria o mesmo dinheiro aparecer de novo na visao por dimensao.
             "exige_dimensoes": exige_dimensoes(r["natureza_efetiva"]),
+            # Num RATEADO a classificacao mora nas partes (secao 4.4), e e la
+            # que o servidor valida. Cobrar categoria e dimensao tambem no pai
+            # pintava de vermelho um campo que a trava nao exige - e preencher
+            # faria o mesmo dinheiro aparecer duas vezes na visao por dimensao.
+            "exige_classificacao": not bool(rateios_ui),
             "dims_rotulos": {
                 d["id"]: nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
                 for d in dimensoes

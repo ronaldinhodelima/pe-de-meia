@@ -191,6 +191,7 @@
     {% for r in linhas %}
       <tr class="{{ r.classes }}{% if r.suspeita_duplicidade %} suspeita-dup{% endif %}" data-id="{{ r.id }}" data-valor="{{ r.valor_sort }}"
           data-exige-dimensoes="{{ '0' if r.get('exige_dimensoes', True) == False else '1' }}"
+          data-exige-classificacao="{{ '0' if r.get('exige_classificacao', True) == False else '1' }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
         {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
         <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
@@ -204,13 +205,13 @@
            pelo usuario, entao vai escapado #}
         <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}{% if r.autor %} · lançado por {{ r.autor }}{% endif %}">{{ r.origem_selo|safe }}{% if r.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ r.autor }}">{{ r.autor[:2]|upper }}</span>{% endif %}<span>{{ r.origem_texto }}</span></td>
         <td class="cel-dim" data-col="categoria">
-          <select data-pdm-combobox aria-label="Categoria" class="cat-select {{ 'classificacao-faltando' if not r.categoria }}" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
+          <select data-pdm-combobox aria-label="Categoria" class="cat-select {{ 'classificacao-faltando' if r.get('exige_classificacao', True) and not r.categoria }}" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
             <option value="{{ r.categoria or '' }}" selected>{{ r.categoria_nome }}</option>
           </select>
         </td>
         {% for d in dimensoes %}
           <td class="cel-dim" data-col="dim_{{ d.id }}">
-            <select data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select {{ 'classificacao-faltando' if d.obrigatoria and r.get('exige_dimensoes', True) and not r.dims.get(d.id) }}" data-dim="{{ d.id }}" data-lazy-options="dimensao"
+            <select data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select {{ 'classificacao-faltando' if d.obrigatoria and r.get('exige_classificacao', True) and r.get('exige_dimensoes', True) and not r.dims.get(d.id) }}" data-dim="{{ d.id }}" data-lazy-options="dimensao"
                     {{ 'disabled' if not pode_editar or r.rateios }}>
               <option value="{{ r.dims.get(d.id) or '' }}" selected>{{ r.dims_rotulos.get(d.id) }}</option>
             </select>
@@ -352,5 +353,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260907-2"></script>
-<script src="/static/lancamentos.js?v=20260907-7"></script>
+<script src="/static/lancamentos.js?v=20260907-8"></script>
 {% endblock %}
