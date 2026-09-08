@@ -1495,6 +1495,34 @@ def test_totais_da_tela_saem_de_um_calculo_so():
         assert "pdmLote.resumoSelecao(" in texto, js
 
 
+def test_as_duas_telas_de_lancamentos_usam_a_mesma_barra_de_tabela():
+    """Filtrar · Colunas · Redefinir sai do MESMO utilitario (secao 7.1).
+
+    A Detalhada tinha uma busca propria e nenhuma coluna ajustavel; agora entra
+    no `tabelas.js`, com duas travas: `data-sem-ordenar`, porque ela ja ordena
+    pelos proprios `data-ordenar` (que sabem manter a linha de detalhe junto do
+    grupo), e `data-busca-externa`, porque a pesquisa dela esconde o grupo
+    inteiro - coisa que o filtro generico nao faz.
+    """
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert 'data-tabela="fatura"' in html and "ajustavel" in html
+    assert "data-sem-ordenar" in html and 'data-busca-externa=".busca-fatura"' in html
+    # toda coluna precisa de data-col, senao o utilitario ordena/esconde a errada
+    for col in ("abre", "data", "desc", "valor", "cat", "ok"):
+        assert f'data-col="{col}"' in html, col
+
+    tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "data-oculta-padrao" not in tabelas or "th[data-oculta-padrao]" in tabelas
+    assert "'↺ Redefinir'" in tabelas, "o botao encurtou"
+    assert "table.dataset.buscaExterna" in tabelas
+
+    # a coluna Regra existe nas duas e nasce escondida nas duas
+    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+        texto = (RAIZ / alvo).read_text(encoding="utf-8")
+        assert 'data-col="regra" data-oculta-padrao' in texto, alvo
+        assert "regra-btn" in texto, alvo
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 

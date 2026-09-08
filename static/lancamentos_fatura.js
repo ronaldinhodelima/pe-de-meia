@@ -142,6 +142,15 @@
     aplicarBuscaFatura();
   }
 
+  // "+" da coluna Regra: mesmo destino da Resumida (a tela de regras ja
+  // preenchida a partir do lancamento), sem reimplementar nada aqui.
+  document.addEventListener('click', function (e) {
+    const botao = e.target.closest && e.target.closest('.regra-btn');
+    if (!botao || !botao.dataset.transacao) return;
+    e.stopPropagation();
+    window.location.assign('/regras?transacao=' + encodeURIComponent(botao.dataset.transacao));
+  });
+
   // primeira carga: o rodape nasce preenchido, sem esperar uma pesquisa
   if (window.atualizarTotaisVisiveis) window.atualizarTotaisVisiveis(tabelaFatura);
 

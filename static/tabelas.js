@@ -60,6 +60,14 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
 
   let estado;
   try { estado = JSON.parse(localStorage.getItem(CHAVE) || '{}'); } catch (e) { estado = {}; }
+  // Coluna que nasce escondida (`data-oculta-padrao` no <th>): vale so na
+  // PRIMEIRA vez. Depois manda o que o usuario escolheu - reaplicar o padrao a
+  // cada carga desfaria a escolha dele em silencio.
+  if (!estado.ocultas) {
+    estado.ocultas = [...thead.querySelectorAll('th[data-oculta-padrao]')]
+      .map(function (th) { return th.dataset.col; })
+      .filter(Boolean);
+  }
   function salvarEstado() { localStorage.setItem(CHAVE, JSON.stringify(estado)); }
   function colunasNaOrdemAtual() {
     return [...thead.querySelectorAll('th[data-col]')].map(th => th.dataset.col);
@@ -112,9 +120,14 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   // (as colunas ja escondidas continuavam certas, porque a ativacao nova
   // reaplica o estado salvo, mas clicar no menu nao fazia mais nada).
   // Por isso a barra guarda a tabela que serve, e e refeita quando muda.
-  const barraAtual = table.previousElementSibling &&
-    table.previousElementSibling.classList.contains('barra-colunas')
-      ? table.previousElementSibling : null;
+  // Quando a tabela mora numa caixa que rola de lado, a barra vai ANTES da
+  // caixa: dentro dela, "Filtrar" e "Colunas" sairiam da tela junto com as
+  // colunas da direita.
+  const caixa = table.parentNode && table.parentNode.classList.contains('tabela-scroll')
+    ? table.parentNode : table;
+  const barraAtual = caixa.previousElementSibling &&
+    caixa.previousElementSibling.classList.contains('barra-colunas')
+      ? caixa.previousElementSibling : null;
   let filtroAnterior = '';
   if (barraAtual && barraAtual.__tabela !== table) {
     const campoAntigo = barraAtual.querySelector('.filtro-tabela');
@@ -122,27 +135,41 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     barraAtual.remove();
   }
 
-  if (!table.previousElementSibling || !table.previousElementSibling.classList.contains('barra-colunas')) {
+  if (!caixa.previousElementSibling || !caixa.previousElementSibling.classList.contains('barra-colunas')) {
     const barra = document.createElement('div');
     barra.className = 'barra-colunas';
 
     const esq = document.createElement('div');
     esq.className = 'barra-colunas-esq';
-    const busca = document.createElement('input');
-    busca.type = 'search';
-    busca.className = 'filtro-tabela campo-caixa';
-    busca.placeholder = 'Filtrar';
-    busca.setAttribute('aria-label', 'Filtrar');
-    const contador = document.createElement('span');
-    contador.className = 'barra-colunas-contador';
-    esq.appendChild(busca);
-    esq.appendChild(contador);
+    const externa = table.dataset.buscaExterna
+      ? document.querySelector(table.dataset.buscaExterna) : null;
+    let busca = null, contador = null;
+    if (externa) {
+      externa.querySelectorAll('input, span').forEach(function (el) { esq.appendChild(el); });
+      const campo = esq.querySelector('input');
+      if (campo) {
+        campo.classList.add('filtro-tabela', 'campo-caixa');
+        campo.placeholder = 'Filtrar';
+        campo.setAttribute('aria-label', 'Filtrar');
+      }
+      externa.remove();
+    } else {
+      busca = document.createElement('input');
+      busca.type = 'search';
+      busca.className = 'filtro-tabela campo-caixa';
+      busca.placeholder = 'Filtrar';
+      busca.setAttribute('aria-label', 'Filtrar');
+      contador = document.createElement('span');
+      contador.className = 'barra-colunas-contador';
+      esq.appendChild(busca);
+      esq.appendChild(contador);
+    }
 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'ver-btn';
     btn.title = 'Volta a ordem, largura, ordenação e visibilidade das colunas ao padrão';
-    btn.textContent = '↺ Redefinir colunas';
+    btn.textContent = '↺ Redefinir';
     btn.addEventListener('click', function () { redefinirColunas(chave); });
 
     const dir = document.createElement('div');
@@ -154,11 +181,13 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     barra.appendChild(esq);
     barra.appendChild(dir);
     barra.__tabela = table;
-    table.parentNode.insertBefore(barra, table);
-    ativarFiltroTabela(table, busca, contador);
-    if (filtroAnterior) {
-      busca.value = filtroAnterior;
-      busca.dispatchEvent(new Event('input'));
+    caixa.parentNode.insertBefore(barra, caixa);
+    if (busca) {
+      ativarFiltroTabela(table, busca, contador);
+      if (filtroAnterior) {
+        busca.value = filtroAnterior;
+        busca.dispatchEvent(new Event('input'));
+      }
     }
   }
   atualizarTotaisVisiveis(table);

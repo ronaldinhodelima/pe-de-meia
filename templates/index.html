@@ -195,7 +195,7 @@
 
 <table class="compacta ajustavel" id="tabela-lancamentos" data-tabela="lancamentos">
   <thead><tr>
-    {% if pode_editar %}<th class="cel-sel" data-col="sel" data-sem-arrastar><input type="checkbox" id="loteTodos" aria-label="Selecionar todos os lançamentos visíveis" data-tip="Seleciona todas as linhas visíveis no filtro atual"></th>{% endif %}<th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra">Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
+    {% if pode_editar %}<th class="cel-sel" data-col="sel" data-sem-arrastar><input type="checkbox" id="loteTodos" aria-label="Selecionar todos os lançamentos visíveis" data-tip="Seleciona todas as linhas visíveis no filtro atual"></th>{% endif %}<th class="cel-data" data-col="data">Data</th><th class="cel-desc" data-col="desc">Descricao</th><th class="cel-origem" data-col="origem">Origem</th><th class="cel-dim" data-col="categoria">Categoria</th>{% for d in dimensoes %}<th class="cel-dim" data-col="dim_{{ d.id }}">{{ d.nome }}</th>{% endfor %}<th class="cel-valor" data-col="valor" style="text-align:right">Valor</th><th class="cel-obs" data-col="obs">Obs</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="cel-check" data-col="check">OK</th><th class="cel-status" data-col="status"></th>
   </tr></thead>
   <tbody>
     {% for r in linhas %}
@@ -274,9 +274,11 @@
      pesquisa local e a ocultacao de coluna mudam o total junto. #}
   <tfoot data-total-rodape>
     <tr>
-      <td class="total-rodape-rotulo" colspan="{{ 6 + dimensoes|length + (1 if pode_editar else 0) }}"><span data-total-qtd>—</span> à vista</td>
+      {# o total fica EMBAIXO da coluna Valor: antes dela vem sel?, data,
+         descricao, origem, categoria e as dimensoes #}
+      <td class="total-rodape-rotulo" colspan="{{ 4 + dimensoes|length + (1 if pode_editar else 0) }}"><span data-total-qtd>—</span> à vista</td>
       <td class="valor cel-valor" data-col="valor" data-total-valor>—</td>
-      <td colspan="{{ 2 + (1 if pode_regras else 0) }}"></td>
+      <td colspan="{{ 3 + (1 if pode_regras else 0) }}"></td>
     </tr>
   </tfoot>
 </table>
@@ -348,5 +350,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260907-1"></script>
-<script src="/static/lancamentos.js?v=20260907-4"></script>
+<script src="/static/lancamentos.js?v=20260907-5"></script>
 {% endblock %}

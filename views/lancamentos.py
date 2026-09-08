@@ -1147,6 +1147,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
         url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
+        pode_regras=pode("cadastros"),
     )
 
 
@@ -1588,6 +1589,7 @@ def lancamentos_por_fatura():
         projeto_portfolio_map=projeto_portfolio_map,
         url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
+        pode_regras=pode("cadastros"),
     )
 
 

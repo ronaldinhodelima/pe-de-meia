@@ -185,7 +185,12 @@
 </div>
 {% endif %}
 
-<table class="compacta fatura-tabela"><thead><tr><th class="col-abre"></th><th class="col-data" data-ordenar="data" tabindex="0">Data</th><th data-ordenar="desc" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição na fatura' }}</th><th class="col-valor" data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor da fatura' }}</th><th class="col-classif" data-ordenar="cat" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-ok" data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
+{# `data-sem-ordenar`: esta tela ja ordena pelos proprios `data-ordenar`, que
+   sabem manter a linha de detalhe junto do grupo. Duas ordenacoes brigariam.
+   `data-busca-externa`: a pesquisa daqui esconde o grupo inteiro, coisa que o
+   filtro generico nao faz - o campo e movido para a barra, que fica igual a da
+   Resumida. #}
+<table class="compacta fatura-tabela ajustavel" data-tabela="fatura" data-sem-ordenar data-busca-externa=".busca-fatura"><thead><tr><th class="col-abre" data-col="abre" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição na fatura' }}</th><th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor da fatura' }}</th><th class="col-classif" data-col="cat" data-ordenar="cat" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="ok" data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}"
       data-valor="{{ linha.valor }}"
@@ -216,9 +221,10 @@
          e edita-la aqui quebraria a soma do rateio #}
       <td class="cel-classif vazia" data-col="cat" colspan="{{ 1 + dimensoes|length }}">{% if linha.principal and linha.principal.rateado %}Rateado — ajuste as partes no detalhe{% else %}—{% endif %}</td>
     {% endif %}
+    {% if pode_regras %}<td class="cel-regra" data-col="regra">{% if linha.principal %}<button type="button" class="regra-btn ver-btn" data-transacao="{{ linha.principal.transacao_id }}" title="Criar regra automática a partir deste lançamento" aria-label="Criar regra automática">+</button>{% endif %}</td>{% endif %}
     <td class="cel-ok-fatura" data-col="ok">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir or fatura.em_andamento }} title="{{ 'OK liberado somente após a fatura ser conciliada' if fatura.em_andamento else 'OK do lançamento' }}{% if not fatura.em_andamento and linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}"><span class="status-inline" data-status="{{ linha.principal.transacao_id }}" aria-live="polite"></span>{% endif %}</td>
   </tr>
-  <tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="{{ 6 + dimensoes|length }}">
+  <tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="{{ 6 + dimensoes|length + (1 if pode_regras else 0) }}">
     {% for v in linha.vinculos %}
       <div class="vinculo-bloco">
       <div class="vinculo-grid {{ 'principal' if v.principal else 'tecnico' }}">
@@ -256,12 +262,12 @@
       </div>
     {% endif %}
   </td></tr>
-{% else %}<tr><td colspan="{{ 6 + dimensoes|length }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
+{% else %}<tr><td colspan="{{ 6 + dimensoes|length + (1 if pode_regras else 0) }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
 </tbody>
 <tfoot data-total-rodape><tr>
   <td class="total-rodape-rotulo" colspan="3"><span data-total-qtd>—</span> à vista</td>
   <td class="cel-valor-fatura" data-total-valor>—</td>
-  <td colspan="{{ 2 + dimensoes|length }}"></td>
+  <td colspan="{{ 2 + dimensoes|length + (1 if pode_regras else 0) }}"></td>
 </tr></tfoot></table></div>
 <div class="rodape-fatura">
   <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
@@ -283,4 +289,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-1"></script><script src="/static/lancamentos_fatura.js?v=20260907-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-1"></script><script src="/static/lancamentos_fatura.js?v=20260907-3"></script>{% endblock %}
