@@ -298,7 +298,7 @@ def index():
         "t.conferida, t.observacao, t.observacao_sistema, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
         "t.substituido_por, COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
         "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, "
-        "t.primeiro_sincronizado_em, t.atualizado_em, "
+        "t.primeiro_sincronizado_em, t.atualizado_em, t.criado_por, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) + " ORDER BY t.data_transacao DESC;",
         params,
@@ -625,6 +625,10 @@ def index():
             "descricao": desc,
             "origem_selo": selo,
             "origem_texto": origem_texto,
+            # So o lancamento MANUAL tem autor: o que veio do banco nao foi
+            # digitado por ninguem, e inventar uma inicial ali diria que
+            # alguem lancou o que o Pluggy mandou.
+            "autor": r["criado_por"] if str(r["account_id"]) == CONTA_MANUAL_ID else None,
             "origem_completa": origem_full,
             "categoria": r["categoria"],
             "categoria_nome": cat_pt_puro(r["categoria"]) if r["categoria"] else "(sem categoria)",
@@ -1147,7 +1151,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
         url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
-        pode_regras=pode("cadastros"),
+        pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
 
 
@@ -1589,7 +1593,7 @@ def lancamentos_por_fatura():
         projeto_portfolio_map=projeto_portfolio_map,
         url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
-        pode_regras=pode("cadastros"),
+        pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
 
 
@@ -1657,13 +1661,13 @@ def lancamento_manual():
             "transacao_id, account_id, descricao, descricao_bruta, valor_original, moeda_original, "
             "valor_brl, data_transacao, categoria, categoria_manual, observacao, "
             "conferida, conferida_por, conferida_em, status, tipo, "
-            "criado_em, atualizado_em, sincronizado_em"
-            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,%s,%s,%s,%s,'POSTED',%s, now(), now(), now());",
+            "criado_em, atualizado_em, sincronizado_em, criado_por"
+            ") VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,%s,%s,%s,%s,'POSTED',%s, now(), now(), now(), %s);",
             (
                 transacao_id, CONTA_MANUAL_ID, descricao, descricao,
                 valor, valor, data_transacao, categoria, bool(categoria), observacao,
-                conferida, session.get("usuario") if conferida else None,
-                datetime.now() if conferida else None, tipo,
+                conferida, session.get("user") if conferida else None,
+                datetime.now() if conferida else None, tipo, session.get("user"),
             ),
         )
         for dim_id, valor_id in dimensoes.items():
@@ -1927,10 +1931,33 @@ def rateios_transacao(transacao_id):
                         "(rateio_id,dimensao_id,valor_id) VALUES (%s,%s,%s);",
                         (rateio_id, dim_id, valor_id),
                     )
+        # OK do PAI a partir das partes (decisao do usuario, 07/09/2026).
+        # Num rateado a classificacao mora nas partes: exigir um clique a mais
+        # no pai nao acrescenta conferencia nenhuma - quem conferiu as partes
+        # conferiu o lancamento. Tres condicoes, como o OK da fatura (secao
+        # 1.2): acao humana explicita (o pedido traz `conferir`), rateio
+        # completo e valido, e permissao de conferir. Nunca DESMARCA e nunca
+        # sobrescreve assinatura que ja existe.
+        conferiu_pai = False
+        if data.get("conferir") and not transacao[1] and pode("lancamentos_conferir"):
+            cur.execute("SELECT id FROM cartao.dimensao WHERE obrigatoria=true;")
+            obrigatorias = [row[0] for row in cur.fetchall()]
+            completo = all(
+                parte["categoria"]
+                and all(parte["dimensoes"].get(dim_id) is not None for dim_id in obrigatorias)
+                for parte in partes
+            )
+            if completo and len(partes) >= 2:
+                cur.execute(
+                    "UPDATE cartao.transacao SET conferida=true, conferida_por=%s, "
+                    "conferida_em=now() WHERE transacao_id=%s AND conferida=false;",
+                    (session.get("user"), transacao_id),
+                )
+                conferiu_pai = cur.rowcount > 0
         conn.commit()
         depois = _estado_rateios(cur, transacao_id)
         registrar_mudanca_auditoria("Rateio", antes or None, depois)
-        return jsonify({"ok": True, "rateios": depois})
+        return jsonify({"ok": True, "rateios": depois, "conferida": conferiu_pai or bool(transacao[1])})
     except Exception as exc:
         conn.rollback()
         print("Aviso: falha ao salvar rateio:", exc)

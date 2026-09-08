@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 59 · **Testes:** 363 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 60 · **Testes:** 367 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -39,7 +39,7 @@ Na prática:
 **O Claude nunca marca nem desmarca o "conferido".** Ele pode ajustar categoria, dimensão,
 natureza e observação; o check não é dele. Lançamento manual criado pelo Claude nasce desmarcado.
 
-**Duas fontes podem assinar: o usuário e a fatura.** A segunda foi decidida em 05/09/2026, quando
+**Três fontes podem assinar: o usuário, a fatura e as partes de um rateio.** A segunda foi decidida em 05/09/2026, quando
 a base já estava consistente e com centenas de OK conferidos — a fatura é a autoridade sobre o que
 foi cobrado (§5), e quando ela confirma a cobrança e a classificação já está completa, pedir um
 clique humano não acrescenta conferência nenhuma. Antes desta data a regra era "só o usuário".
@@ -63,6 +63,15 @@ conferido e sobrescrever `conferida_por`. Quem já tem assinatura humana continu
 carimbo `fatura MM/AAAA` em `conferida_por` é o que permite separar depois o que a fatura assinou
 do que uma pessoa assinou — sem ele, a informação de "o que eu olhei com os próprios olhos" se
 perderia para sempre.
+
+**O OK vindo das PARTES de um rateio** (decisão do usuário, 07/09/2026) segue a mesma forma: num
+rateado a classificação mora nas partes (§4.4), e quem conferiu as partes conferiu o lançamento —
+pedir um clique a mais no pai não acrescenta conferência nenhuma. Exige as três condições: **ação
+humana explícita** (o `✓` das partes envia `conferir`; nunca acontece ao abrir a tela nem na
+sincronização), **rateio completo e válido** (duas partes ou mais, soma exata, categoria e dimensões
+obrigatórias em todas) e **permissão de conferir**. Nunca desmarca e **nunca sobrescreve assinatura
+que já existe** (`WHERE conferida=false`). Quem assina é o usuário logado, e é o nome dele que fica
+em `conferida_por`.
 
 Sincronização, regra automática, migração e edição de qualquer campo **continuam sem poder**
 alterar `conferida`. Retirar um OK exige confirmação explícita na tela.
@@ -372,6 +381,9 @@ registro bancário e as partes aparecem recolhidas abaixo dele com `+`/`−`, de
 - Pode-se editar rateio com o pai em OK sem apagar a assinatura, desde que o conjunto continue
   completo e válido; **desfazer o rateio inteiro exige retirar o OK antes**.
 - Primeiro caso validado: DEB MONGERAL R$ 705,28 → R$ 505,46 Ronaldo + R$ 199,82 Andrea.
+- **O `✓` das partes assina o OK do pai** quando o conjunto está completo e válido (§1.2). Antes o
+  usuário preenchia tudo, salvava, e ainda tinha de marcar o pai à mão — sendo que a classificação
+  do rateado mora justamente nas partes.
 
 **DEB MONGERAL — a PROPORÇÃO é fixa, não os valores** (decisão do usuário, 07/09/2026). O
 seguro de vida é dividido em **71,6680% Ronaldo / 28,3320% Andrea** (505,46 ÷ 705,28), e o
@@ -794,6 +806,16 @@ duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tab
   rótulo é **nada**: repetir "1/6" ao lado de "1/6" é ruído. O parser é o mesmo do casamento de
   fatura (§11.3-A), que já sabia ler as três grafias; ele subiu de `views/relatorios.py` para o
   `core` porque `views/` não importa de `views/` (§2.1).
+- **Avatar do autor só em lançamento manual** (decisão do usuário, 07/09/2026). Na Resumida, a
+  coluna Origem mostra as iniciais de quem digitou. O que veio do banco **não tem autor** e não
+  ganha avatar: inventar uma inicial ali diria que alguém lançou o que o Pluggy mandou.
+  `transacao.criado_por` (migração 60) guarda isso; o histórico foi preenchido pelo audit log, que
+  já registrava o usuário e o `transacao_id` de cada lançamento manual. No caminho, a gravação da
+  assinatura do OK do manual estava usando `session.get("usuario")` — a chave é **`user`**, então
+  todo manual criado já conferido ficava com `conferida_por` **nulo**.
+- **`+ manual` existe nas duas telas**, com o mesmo nome. O formulário continua morando só na
+  Resumida; na Detalhada o botão leva para `/?manual=1`, que abre o formulário já rolado até ele —
+  duas cópias do formulário divergiriam na primeira regra nova.
 - **O avatar antes da descrição existe também na fatura em andamento**, e pinta a cor da marca do
   banco (Unicred verde, Nubank roxo) — a mesma tabela `BANCOS_ESTILO` do selo, via `cor_banco()`.
   Duas tabelas de cor divergiriam no primeiro banco novo. Ali o nome impresso do portador **ainda
@@ -1530,7 +1552,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**363 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**367 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2003,3 +2025,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 57 | `compra_futura` + `compra_futura_dimensao`: a lista de compras futuras (§7.10) |
 | 58 | `compra_futura.valor_real`: o valor que a compra teve de fato |
 | 59 | `fatura_importada.tipo_documento` e `extrato_compromisso`: extrato de conta corrente (§6.8) |
+| 60 | `transacao.criado_por`: quem digitou o lançamento manual; preenche o histórico pelo audit log |

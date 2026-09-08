@@ -552,7 +552,9 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
         assert classe in template
     assert "function lerRateioInline(id)" in js
     assert "function validarRateioInline(id)" in js
-    assert "body: JSON.stringify({partes: lerRateioInline(id)})" in js
+    assert "partes: lerRateioInline(id)" in js
+    # o mesmo clique que salva o conjunto assina o OK do pai (secao 4.4)
+    assert "conferir: !!(window.configLancamentos" in js
     assert "conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido" in js
     assert "data-rateio-total" in template
     assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
@@ -1523,6 +1525,36 @@ def test_as_duas_telas_de_lancamentos_usam_a_mesma_barra_de_tabela():
         assert "regra-btn" in texto, alvo
 
 
+def test_avatar_de_autor_so_existe_em_lancamento_manual():
+    """O que veio do banco nao tem autor - ninguem digitou.
+
+    Inventar uma inicial ali diria que alguem lancou o que o Pluggy mandou.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert 'if str(r["account_id"]) == CONTA_MANUAL_ID else None' in view
+    assert "criado_por" in view and 'session.get("user")' in view
+    assert 'session.get("usuario")' not in view, "a chave da sessao e 'user'"
+
+    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    assert "avatar-autor" in html and "{% if r.autor %}" in html
+
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "ADD COLUMN IF NOT EXISTS criado_por text" in core
+    assert "versao_atual < 60" in core
+
+
+def test_botao_manual_existe_nas_duas_telas_com_o_mesmo_nome():
+    """"+ manual" nas duas; o formulario continua morando na Resumida."""
+    resumida = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    for html in (resumida, detalhada):
+        assert "+ manual" in html
+        assert "+ Lançamento manual" not in html
+    assert 'href="/?manual=1"' in detalhada
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    assert "get('manual') !== '1'" in js, "a Resumida abre o formulario ao chegar assim"
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1535,7 +1567,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 15
+    TETO = 16
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

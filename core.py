@@ -5072,6 +5072,31 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (59);")
             conn.commit()
 
+        if versao_atual < 60:
+            # Quem criou o lancamento MANUAL. So faz sentido para o que nasce
+            # aqui dentro: o que vem do Pluggy nao tem autor, e inventar um
+            # seria dizer que alguem digitou o que o banco mandou.
+            cur.execute("ALTER TABLE cartao.transacao ADD COLUMN IF NOT EXISTS criado_por text;")
+            # Backfill do que da para saber com CERTEZA: o log de auditoria
+            # guarda o usuario e o transacao_id de cada lancamento manual.
+            cur.execute(
+                "UPDATE cartao.transacao t SET criado_por = a.usuario "
+                "FROM cartao.audit_log a "
+                "WHERE a.recurso = 'Lançamento manual criado' "
+                "  AND a.detalhes->>'transacao_id' = t.transacao_id::text "
+                "  AND t.criado_por IS NULL;"
+            )
+            preenchidos = cur.rowcount
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Autor do lancamento manual',"
+                "jsonb_build_object('versao',60,'coluna','transacao.criado_por',"
+                "'preenchidos_pelo_log',%s));",
+                (preenchidos,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (60);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

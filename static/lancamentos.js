@@ -905,7 +905,13 @@ function salvarRateioInline(id) {
   fetch('/api/transacao/' + encodeURIComponent(id) + '/rateios', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({partes: lerRateioInline(id)}),
+    // o clique no ✓ e a acao humana: com o rateio completo, ele assina o OK do
+    // lancamento pai (secao 4.4). O servidor confere as condicoes e nunca
+    // sobrescreve assinatura existente.
+    body: JSON.stringify({
+      partes: lerRateioInline(id),
+      conferir: !!(window.configLancamentos && window.configLancamentos.pode_conferir),
+    }),
   }).then(r => r.json()).then(res => {
     if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar o rateio.');
     guardarPosicaoAtual();
@@ -1113,6 +1119,16 @@ function salvar(id, el, opcoes) {
   filaSalvar[id] = atual;
   return atual;
 }
+// A Detalhada tem o botao, mas o formulario vive aqui: chegar com ?manual=1 e
+// o mesmo que ter clicado no "+ manual" desta tela.
+document.addEventListener('DOMContentLoaded', function () {
+  if (new URLSearchParams(window.location.search).get('manual') !== '1') return;
+  const f = document.getElementById('formManual');
+  if (!f) return;
+  f.style.display = 'block';
+  f.scrollIntoView({block: 'center'});
+});
+
 function toggleFormManual() {
   const f = document.getElementById('formManual');
   f.style.display = f.style.display === 'none' ? 'block' : 'none';

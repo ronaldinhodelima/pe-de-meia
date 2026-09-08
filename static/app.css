@@ -788,6 +788,15 @@ input[type=checkbox]:disabled {
 /* O anel de foco e sombra: celula com overflow:hidden o cortaria. */
 td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !important; }
 
+/* Avatar de quem lancou a mao. So aparece no lancamento manual - o que veio do
+   banco nao tem autor. Cor neutra de proposito: nao e banco. */
+.avatar-autor {
+  display: inline-grid; place-items: center; flex: none;
+  width: 18px; height: 18px; margin-right: 5px; border-radius: 50%;
+  background: var(--selo-neutro); color: var(--sobre-cor);
+  font-size: var(--icone-xxs); font-weight: var(--peso-forte); letter-spacing: .02em;
+}
+
 /* Rodape de totais: le como um fecho da tabela, nao como mais uma linha de
    lancamento - fundo proprio, sem hover, sem borda de linha. */
 tfoot[data-total-rodape] td {

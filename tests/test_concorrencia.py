@@ -43,7 +43,17 @@ def test_rateio_conferido_pode_ser_editado_sem_perder_ok_mas_nao_desfeito():
 
     assert 'if transacao[1] and request.method == "DELETE":' in trecho
     assert 'SELECT id FROM cartao.dimensao WHERE obrigatoria=true' in trecho
-    assert "UPDATE cartao.transacao SET conferida" not in trecho
+
+    # O pai PODE receber OK a partir das partes (decisao do usuario,
+    # 07/09/2026): num rateado a classificacao mora nelas, e quem conferiu as
+    # partes conferiu o lancamento. Mas so em uma direcao e sob tres condicoes.
+    assert 'data.get("conferir")' in trecho, "exige acao humana explicita"
+    assert 'pode("lancamentos_conferir")' in trecho, "exige permissao"
+    assert "conferida=true" in trecho and "AND conferida=false" in trecho, (
+        "nunca sobrescreve assinatura que ja existe"
+    )
+    assert "conferida=false," not in trecho, "a rota NUNCA desmarca (secao 1.2)"
+    assert "SET conferida=false" not in trecho
 
 
 def test_auditoria_de_lancamento_guarda_valores_anteriores_e_novos():

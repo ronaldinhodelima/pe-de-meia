@@ -120,6 +120,7 @@
     <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
     <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>{% endif %}
   </select>
+  {% if pode_manual %}<a class="btn-manual ver-btn" href="/?manual=1" data-tip="Cria um lançamento que não veio do banco. O formulário abre na Resumida, que é onde ele vive.">+ manual</a>{% endif %}
   <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
     <a href="{{ url_resumida }}">Resumida</a>
     <a href="/lancamentos/fatura?{% if fatura.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura.id }}{% endif %}" class="ativo" aria-current="page">Detalhada</a>

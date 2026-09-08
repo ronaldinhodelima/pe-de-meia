@@ -49,7 +49,7 @@
   {{ origem_filtro_html|safe }}
   <div class="chips-sel" id="chipsSel"></div>
   {% if pode_manual %}
-    <div style="margin-left:auto"><button type="button" onclick="toggleFormManual()">+ Lançamento manual</button></div>
+    <div style="margin-left:auto"><button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button></div>
   {% endif %}
 </div>
 
@@ -212,7 +212,7 @@
         </td>
         {# o selo e HTML gerado pelo app; o texto vem do apelido do cartao, digitado
            pelo usuario, entao vai escapado #}
-        <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}">{{ r.origem_selo|safe }}<span>{{ r.origem_texto }}</span></td>
+        <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}{% if r.autor %} · lançado por {{ r.autor }}{% endif %}">{{ r.origem_selo|safe }}{% if r.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ r.autor }}">{{ r.autor[:2]|upper }}</span>{% endif %}<span>{{ r.origem_texto }}</span></td>
         <td class="cel-dim" data-col="categoria">
           <select data-pdm-combobox aria-label="Categoria" class="cat-select {{ 'classificacao-faltando' if not r.categoria }}" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
             <option value="{{ r.categoria or '' }}" selected>{{ r.categoria_nome }}</option>
@@ -350,5 +350,5 @@
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260907-1"></script>
-<script src="/static/lancamentos.js?v=20260907-5"></script>
+<script src="/static/lancamentos.js?v=20260907-6"></script>
 {% endblock %}
