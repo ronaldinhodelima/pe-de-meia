@@ -763,7 +763,15 @@ específico da Unicred continuam como estão: renomeá-los seria churn de schema
 
 ## 7.1 Lançamentos: Resumida e Detalhada
 
-São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usuário. A Resumida
+São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usuário.
+
+> **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
+> novo em uma das telas é candidato à outra por padrão; o commit precisa dizer se foi aplicado nas
+> duas ou por que não. Quando o comportamento é o mesmo, o **código também é o mesmo** (`lote.js`,
+> `combobox.js`, `tabelas.js`) — duas implementações do mesmo comportamento divergem na primeira
+> regra nova, que é literalmente como nasceram os 57 falsos pendentes da §6.5 nº 10. Diferença
+> legítima existe (a Detalhada é por fatura, a Resumida é por período), mas ela é **decisão
+> registrada**, não esquecimento. A Resumida
 privilegia classificação rápida; a Detalhada (`/lancamentos/fatura`) privilegia fatura,
 procedência, registros agregados e auditoria. **Ambas leem e gravam os mesmos campos** — não
 duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tabela própria.
@@ -826,6 +834,12 @@ recarrega e não desmonta o grupo.
   juntos. `Esc` limpa.
 - No filtro **Pendentes de OK**, ao marcar, a linha sai da fila **somente depois da confirmação do
   servidor**, preservando filtros e rolagem. Nos demais filtros, marcar OK mantém a linha visível.
+  **Nas duas telas**: na Resumida isso chegou em 07/09/2026 — o OK atualizava só a própria linha, e
+  os cards e o filtro só mudavam recarregando a página, o que jogava o usuário para o topo no meio
+  da conferência. Agora a atualização é a **mesma do filtro** (AJAX, sem recarregar) e a rolagem
+  volta para onde estava; ela espera ~450 ms, então marcar vários OK seguidos faz **uma**
+  atualização, não uma por linha. **Com seleção ativa ela não roda** — a tabela nova apagaria as
+  marcas do usuário; ali quem manda atualizar é o Salvar do lote, depois de limpar a seleção.
 - Navegação de mês, filtros e troca de tela criam **histórico real** — o botão Voltar do navegador
   retorna ao estado anterior, com a rolagem preservada.
 

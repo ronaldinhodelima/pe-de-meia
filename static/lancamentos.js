@@ -344,7 +344,7 @@ function aplicarFiltros(recarregarPagina) {
   if (novaUrl !== window.location.pathname + window.location.search) {
     history.pushState({pedemeia: true}, '', novaUrl);
   }
-  fetch(novaUrl, { headers: { 'X-Parcial': '1' } })
+  return fetch(novaUrl, { headers: { 'X-Parcial': '1' } })
     .then(r => r.text())
     .then(html => {
       const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -374,6 +374,26 @@ function aplicarFiltros(recarregarPagina) {
         try { window.configLancamentos = JSON.parse(configNova.textContent); } catch (e) {}
       }
     });
+}
+
+// Depois de marcar OK, a lista precisa refletir o filtro atual - no filtro
+// "Pendentes de conferencia" a linha sai da fila, e os cards mudam. Recarregar
+// a pagina jogaria o usuario para o topo no meio da conferencia, entao a
+// atualizacao e a MESMA do filtro (AJAX, sem recarregar) e a rolagem volta
+// para onde estava.
+let temporizadorLista = null;
+function recarregarListaNoLugar() {
+  const barra = document.getElementById('barraLote');
+  // com selecao ativa a tabela nova apagaria as marcas do usuario: quem manda
+  // atualizar ali e o proprio Salvar do lote, depois de limpar a selecao
+  if (barra && !barra.hidden) return;
+  clearTimeout(temporizadorLista);
+  // espera curta: marcar varios OK seguidos faz UMA atualizacao, nao uma por linha
+  temporizadorLista = setTimeout(function () {
+    const y = window.scrollY;
+    const p = aplicarFiltros();
+    if (p && p.then) p.then(function () { window.scrollTo(0, y); });
+  }, 450);
 }
 
 // Cada filtro/mes vira uma etapa real do navegador. Ao voltar ou avancar,
@@ -1046,6 +1066,7 @@ function salvar(id, el, opcoes) {
           detalhe.conferida = confFinal ? 'Sim' : 'Não';
           detalhe.conferida_por = d.conferida_por || '-';
         }
+        recarregarListaNoLugar();
       }
       if ('observacao' in payload && window.detalhes[id]) {
         window.detalhes[id].observacao = payload.observacao || '-';
@@ -1299,6 +1320,11 @@ marcarCardAtivo();
       barra.dataset.resultado = '1';
       desmarcarTudo();
       atualizarBarra();
+      // agora sim: sem selecao para preservar, a lista pode refletir o filtro
+      // (linha conferida sai de "Pendentes", cards mudam) sem ir para o topo
+      const y = window.scrollY;
+      const p = aplicarFiltros();
+      if (p && p.then) p.then(function () { window.scrollTo(0, y); });
     }
     saida.hidden = false;
     saida.textContent = r.texto;
