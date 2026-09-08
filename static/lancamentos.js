@@ -70,6 +70,7 @@ function cadastrarNovoValorDimensao(sel) {
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({nome: nome.trim()})
   }).then(r => r.json()).then(d => {
     if (!d.ok) throw new Error(d.erro || 'Não foi possível cadastrar.');
+    if (window.pdmToast) window.pdmToast(d.nome + ' cadastrado');
     const lista = (window.configLancamentos.dimensoes || {})[sel.dataset.dim] || [];
     if (!lista.some(v => String(v.id) === String(d.id))) {
       lista.push({id: d.id, rotulo: d.nome});
@@ -657,6 +658,7 @@ function salvarRateioModal() {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({partes:lerRateioModal()})
   }).then(r => r.json()).then(res => {
     if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar.');
+    if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio salvo');
     guardarPosicaoAtual(); window.location.reload();
   }).catch(e => { status.textContent = e.message || 'Não foi possível salvar.'; });
 }
@@ -666,6 +668,7 @@ function excluirRateioModal() {
   fetch('/api/transacao/' + encodeURIComponent(idAtualModal) + '/rateios', {method:'DELETE'})
     .then(r => r.json()).then(res => {
       if (!res.ok) throw new Error(res.erro || 'Não foi possível desfazer.');
+      if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio desfeito');
       guardarPosicaoAtual(); window.location.reload();
     }).catch(e => alert(e.message || 'Não foi possível desfazer.'));
 }
@@ -728,8 +731,9 @@ function salvarCategoriaModal() {
   const selLinha = tr.querySelector('.cat-select');
   hidratarSelect(selLinha);
   selLinha.value = document.getElementById('modalCategoria').value;
-  salvar(idAtualModal, selLinha);
+  salvar(idAtualModal, selLinha, {semToast: true});
   // a categoria carrega a natureza contabil, entao os totais do mes mudam
+  if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Lançamento salvo');
   guardarPosicaoAtual();
   setTimeout(() => window.location.reload(), 600);
 }
@@ -787,6 +791,7 @@ function salvarDescricaoModal(campo) {
     body: JSON.stringify({descricao: nova})
   }).then(r => r.json()).then(d => {
     if (!d.ok) { alert(d.erro || 'Falha ao salvar a descrição.'); return; }
+    if (window.pdmToast) window.pdmToast('Descrição salva');
     const tr = document.querySelector('tr[data-id="' + id + '"]');
     const cel = tr && tr.querySelector('.cel-desc');
     if (cel) {
@@ -827,7 +832,10 @@ function excluirManual() {
   fetch('/api/lancamento-manual/' + idAtualModal, { method: 'DELETE' })
     .then(r => r.json())
     .then(res => {
-      if (res.ok) { fecharModal(); guardarPosicaoAtual(); window.location.reload(); }
+      if (res.ok) {
+        if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Lançamento excluído');
+        fecharModal(); guardarPosicaoAtual(); window.location.reload();
+      }
       else alert(res.erro || 'Não foi possível excluir.');
     });
 }
@@ -1119,7 +1127,7 @@ function salvar(id, el, opcoes) {
           ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura importada. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
-      if (window.pdmToast) window.pdmToast('Lançamento salvo');
+      if (!opcoes.semToast && window.pdmToast) window.pdmToast('Lançamento salvo');
       return true;
     }
   }).catch(() => {
@@ -1174,7 +1182,10 @@ function salvarManual(e) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   }).then(r => r.json()).then(d => {
-    if (d.ok) { guardarPosicaoAtual(); window.location.reload(); return; }
+    if (d.ok) {
+      if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Lançamento criado');
+      guardarPosicaoAtual(); window.location.reload(); return;
+    }
     statusEl.className = 'erro';
     statusEl.textContent = d.erro || 'Falha ao salvar';
     // o servidor diz o que falta; a tela marca os campos em vez de so avisar

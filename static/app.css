@@ -303,8 +303,6 @@
 
   .obs-input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--fonte-sm); background: var(--surface); color: var(--ink); font-family: inherit; }
   .cat-select { padding: 6px 7px; border-radius: var(--radius-sm); border: 1px solid var(--line); font-size: var(--fonte-sm); max-width: 180px; color: var(--ink); }
-  .status { font-size: var(--fonte-xs); color: var(--good); margin-left: 6px; opacity: 0; transition: opacity .3s; font-weight: var(--peso-medio); }
-  .status.show { opacity: 1; }
 
   /* ---------- tabela compacta de lancamentos ---------- */
   .tabela-scroll { overflow-x: auto; max-width: 100%; }
@@ -331,7 +329,6 @@
   table.compacta .cel-valor { width: 96px; }
   table.compacta .cel-check { width: 42px; text-align: center; }
   table.compacta .cel-obs { width: 130px; }
-  table.compacta .cel-status { width: 44px; }
   table.compacta .cel-dim { width: 116px; }
   table.compacta select { width: 100%; max-width: 100%; padding: 4px 5px; font-size: var(--fonte-xs); border-radius: var(--radius-xxs); box-sizing: border-box; }
   table.compacta .obs-input { padding: 4px 6px; font-size: var(--fonte-xs); }
@@ -1090,11 +1087,9 @@ tr.compra-feita { opacity: .6; }
   table.compacta > tbody > tr > td[data-col="sel"]::before,
   table.compacta > tbody > tr > td[data-col="valor"]::before,
   table.compacta > tbody > tr > td[data-col="data"]::before,
-  table.compacta > tbody > tr > td[data-col="origem"]::before,
-  table.compacta > tbody > tr > td[data-col="status"]::before { content: none; }
+  table.compacta > tbody > tr > td[data-col="origem"]::before { content: none; }
   /* colunas que so fazem sentido no desktop */
-  table.compacta > tbody > tr > td[data-col="regra"],
-  table.compacta > tbody > tr > td[data-col="status"] { display: none; }
+  table.compacta > tbody > tr > td[data-col="regra"] { display: none; }
   /* o painel de vinculos ocupa a largura inteira quando o usuario abre */
   table.compacta > tbody > tr.vinculos-detalhe { display: block; }
   table.compacta > tbody > tr.vinculos-detalhe > td { padding: 10px 12px !important; }
@@ -1113,6 +1108,16 @@ tr.compra-feita { opacity: .6; }
   table.compacta > tfoot td { border: 0; padding: 6px 12px; }
   table.compacta > tfoot td:empty { display: none; }
   .tabela-scroll { overflow-x: visible; }
+
+  /* Selecao e edicao em lote ficam SO no navegador (decisao do usuario,
+     08/09/2026). No cartao, a caixa de marcacao some no meio de um bloco alto,
+     a barra empurra a lista inteira para baixo e "Selecionar tudo do filtro"
+     alcanca o que nao cabe na tela: escolher em massa exige ver o conjunto, e
+     no telefone nao se ve. O dado continua todo editavel, um a um. */
+  .barra-lote { display: none !important; }
+  table.compacta > tbody > tr > td[data-col="sel"],
+  table.compacta > thead th[data-col="sel"],
+  .sel-check, .sel-fatura { display: none !important; }
 
   /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao
      cabem sem cortar o rotulo */

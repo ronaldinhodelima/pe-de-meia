@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 61 · **Testes:** 370 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 372 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -901,16 +901,18 @@ recriada — recriar pisca. Ela sai com transição, não com corte seco.
 
 `static/toast.js` — `pdmToast(mensagem, tipo)` — desenha a confirmação **no canto superior direito**,
 com entrada e saída suaves: sucesso some em ~2,6 s, erro dura 6 s e fecha no clique, porque ali a
-mensagem é a única pista do que houve. **Toda ação que grava no banco confirma por ele**: edição de
-linha, lote, rateio, e o que vier. Duas implementações divergiriam na primeira regra nova.
+mensagem é a única pista do que houve. **Toda ação que grava no banco confirma por ele** (08/09/2026): edição de linha e de modal,
+categoria, dimensão, observação, descrição, OK da Detalhada, rateio salvo e desfeito, lançamento
+manual criado e excluído, cadastro rápido de Projeto/Portfólio — e o que vier. Duas implementações divergiriam na primeira regra nova.
 
 Existe porque a confirmação estava **presa ao lugar da ação** — um "ok" minúsculo no fim da linha,
 invisível quando a linha saía da tela, e um texto que mexia no layout ao aparecer. O toast é
 `position: fixed` e `pointer-events` só no próprio balão: nunca bloqueia clique embaixo dele.
 
-**Ação que termina recarregando a página** (o rateio, os formulários de cadastro) perderia a
-mensagem no meio do caminho — para essas existe `pdmToastAposRecarregar()`, que guarda em
-`sessionStorage` e mostra do outro lado. `sessionStorage`, não `localStorage`: é a confirmação
+**Ação que termina recarregando a página** (o rateio, o lançamento manual, a categoria pelo modal)
+perderia a mensagem no meio do caminho — para essas existe `pdmToastAposRecarregar()`, que guarda em
+`sessionStorage` e mostra do outro lado. **Quem usa essa versão passa `semToast: true` ao `salvar()`**:
+sem isso o toast imediato aparece, some com o reload e reaparece do outro lado — uma piscada. `sessionStorage`, não `localStorage`: é a confirmação
 daquela aba, não um estado do usuário.
 
 **O nome disso é toast** (às vezes *snackbar*): notificação efêmera, não bloqueante, que não pede
@@ -977,6 +979,18 @@ dentro de uma tela só, ele não existia na outra, e copiá-lo criaria a segunda
 **Aritmética de template é armadilha:** `{{ a - b }}` sobre variável ausente levanta
 `UndefinedError` e derruba a **tela inteira**, enquanto imprimir a variável apenas sai vazio.
 Número derivado se calcula na rota; o template só imprime.
+
+### A seleção em lote é só de navegador (08/09/2026)
+
+**Decisão do usuário.** No cartão do celular a caixa de marcação some no meio de um bloco alto, a
+barra empurra a lista inteira para baixo e *"Selecionar tudo do filtro"* alcança o que não cabe na
+tela — **escolher em massa exige ver o conjunto, e no telefone não se vê**. Abaixo de 760px somem a
+barra e as caixas das duas telas (`.sel-check`, `.sel-fatura`); o dado continua inteiro e editável
+**um a um**. É o mesmo critério da tabela densa da §7.8-B: a tela não fica pior por esconder — ficaria
+mentirosa por mostrar.
+
+**A coluna vazia de status saiu da Resumida** no mesmo dia: ela existia só para o "ok" minúsculo do
+fim da linha, que virou toast.
 
 ## 7.2-A Edição em lote
 
@@ -1612,7 +1626,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**370 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**372 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

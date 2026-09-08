@@ -282,6 +282,9 @@
       if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível salvar.');
       campo.checked = Boolean(json.conferida);
       campo.disabled = !config.pode_conferir;
+      if (!json.bloqueada && window.pdmToast) {
+        window.pdmToast(campo.checked ? 'Lançamento conferido' : 'OK retirado');
+      }
       if (json.bloqueada) {
         const nomes = (json.faltando || []).map(String).join(', ');
         let motivo = 'O OK só é liberado quando a classificação estiver completa' + (nomes ? ': ' + nomes + '.' : '.');
@@ -525,6 +528,7 @@
       });
       const json = await resp.json();
       if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível cadastrar.');
+      if (window.pdmToast) window.pdmToast(json.nome + ' cadastrado');
       document.querySelectorAll('[data-dimensao="' + CSS.escape(select.dataset.dimensao) + '"]').forEach(outro => {
         if (!Array.from(outro.options).some(o => o.value === String(json.id))) {
           const opcao = new Option(json.nome, String(json.id));

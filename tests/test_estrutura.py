@@ -1616,6 +1616,37 @@ def test_modo_cartao_respeita_linha_escondida():
     assert 'td[data-col="abre"]' in css and 'td[data-col="ok"]' in css
 
 
+def test_selecao_em_lote_nao_existe_no_celular():
+    """Decisao do usuario (08/09/2026): escolher em massa exige ver o conjunto.
+
+    No cartao a caixa some no meio de um bloco alto, a barra empurra a lista
+    inteira e "Selecionar tudo do filtro" alcanca o que nao cabe na tela. O dado
+    continua editavel um a um - o que sai e so a acao em lote.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    celular = css.split("@media (max-width: 760px)", 1)[1]
+    assert ".barra-lote { display: none !important; }" in celular
+    assert ".sel-check, .sel-fatura { display: none !important; }" in celular
+
+
+def test_toda_gravacao_confirma_com_toast():
+    """"Salvou" tem que aparecer em QUALQUER gravacao, nao so na edicao de linha.
+
+    Quem recarrega a pagina em seguida usa a versao que atravessa o reload -
+    o toast imediato piscaria e sumiria junto com a pagina.
+    """
+    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    for gravacao in ("Lançamento salvo", "Lançamento criado", "Lançamento excluído",
+                     "Rateio salvo", "Rateio desfeito", "Descrição salva", "cadastrado"):
+        assert gravacao in js, gravacao
+    # o fluxo que recarrega nao mostra os dois
+    assert "salvar(idAtualModal, selLinha, {semToast: true})" in js
+    assert "!opcoes.semToast && window.pdmToast" in js
+
+    fatura = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "Lançamento conferido" in fatura and "OK retirado" in fatura
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
