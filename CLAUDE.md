@@ -1739,10 +1739,27 @@ usuário, como a marcação de duplicidade (§1.3).
 
 ## 11.3 A validar com o usuário (dado que falta)
 
-**Andar de cima da residência alugado para a BRDrive.** A casa tem dois andares: a família mora no
-porão e a parte de cima é alugada para a BRDrive por R$ 1.500–1.700/mês. Isso significa que (a) há
-receita de aluguel a identificar nos recebimentos da BRDrive, hoje possivelmente confundida com
-pró-labore, e (b) parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
+**Andar de cima da residência alugado para a BRDrive — identificado em 07/09/2026.** A casa tem
+dois andares: a família mora no porão e a parte de cima é alugada para a BRDrive. São **13
+recebimentos mensais** `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX` na conta corrente: **R$ 1.600,00**
+de ago a dez/2025 e **R$ 1.680,00** a partir de jan/2026 (+5,0% de reajuste na virada do ano).
+
+Classificação: **Aluguel Recebido / Família / Casa / Imóveis**, observação
+`Aluguel escritório BRDrive Videira`. O padrão veio do único aluguel que o usuário já havia
+conferido — o do Apto Fiorentina, em `Família / Apto Fiorentina / Imóveis`: **o projeto identifica
+o imóvel que gera a renda, não o inquilino.** Por isso `Casa`, e não `BRDrive`.
+
+**A confusão com pró-labore era real e está registrada:** o recebimento de **06/07/2026** está em
+`Pró-labore / Ronaldo / BRDrive / Empresas`, **com OK e observação do usuário**. Mesma descrição,
+mesmo valor e mesmo dia dos outros doze — quase certamente é o aluguel de julho rotulado errado,
+mas tem assinatura humana e observação pessoal (§7.3), então **não foi tocado**. Pendente de
+decisão dele.
+
+Não muda o total de receita: `Transfer - PIX` é natureza `fluxo` e, sendo crédito, já contava como
+receita. O que muda é a composição — R$ 11.760,00 saíram de `Transfer - PIX` para `Aluguel
+Recebido` em 2026.
+
+**Ainda em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
 
 **Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
 de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Estão em natureza
