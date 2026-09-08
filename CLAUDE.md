@@ -1446,6 +1446,22 @@ Três armadilhas desse caso, todas gerais:
 galão — GuilhermeDaSilva e Visa à vista), a segunda é o boleto da concessionária na conta
 corrente. Não unificar.
 
+**`Manutenção Veículo` é a categoria de mecânica** (decisão do usuário, 07/09/2026). `Mecânica`
+existia com **zero lançamentos** e foi removida. Ela não estava solta: era um dos vínculos do
+centro de custo `Transporte › Manutenção`, ao lado da própria `Manutenção Veículo` (chave interna
+`Vehicle maintenance`, 53 lançamentos, R$ 41.577,30) — o subgrupo continua coberto. Excluir
+categoria apaga a renomeação, a natureza e o vínculo de centro de custo, e insere em
+`categoria_oculta`; o vínculo teria que ser refeito à mão se a decisão mudar.
+
+**As travas de exclusão contam pela view financeira, não por `cartao.transacao`.** `/categorias` e
+`/dimensoes` perguntam "quantos lançamentos usam isto?" a `lancamento_financeiro` e
+`lancamento_financeiro_dimensao`, que **excluem** `substituido_por`, `somente_conciliacao` e
+`duplicada`. Uma categoria usada só por lançamentos fora do resultado apareceria como "sem uso" e
+poderia ser removida — deixando esses lançamentos com categoria oculta e sem natureza, que o app
+trata como `despesa` em silêncio (§4.1). **Varredura de 07/09/2026: ninguém está nessa situação**
+(4.082 linhas de 2024 a 2027, incluindo partes de rateio) — o defeito é latente, não ativo. A
+varredura também confirmou **zero órfãos** entre os 38 valores de dimensão.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
