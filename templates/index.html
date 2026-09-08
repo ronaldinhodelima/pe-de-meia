@@ -203,7 +203,7 @@
         </td>
         {# o selo e HTML gerado pelo app; o texto vem do apelido do cartao, digitado
            pelo usuario, entao vai escapado #}
-        <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}{% if r.autor %} · lançado por {{ r.autor }}{% endif %}">{{ r.origem_selo|safe }}{% if r.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ r.autor }}">{{ r.autor[:2]|upper }}</span>{% endif %}<span>{{ r.origem_texto }}</span></td>
+        <td class="cel-origem" data-col="origem" data-tip="{{ r.origem_completa }}{% if r.autor %} · lançado por {{ r.autor }}{% endif %}"><span class="origem-conteudo">{{ r.origem_selo|safe }}{% if r.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ r.autor }}">{{ r.autor[:2]|upper }}</span>{% endif %}<span class="origem-texto">{{ r.origem_texto }}</span></span></td>
         <td class="cel-dim" data-col="categoria">
           <select data-pdm-combobox aria-label="Categoria" class="cat-select {{ 'classificacao-faltando' if r.get('exige_classificacao', True) and not r.categoria }}" data-lazy-options="categoria" {{ 'disabled' if not pode_editar or r.rateios }}>
             <option value="{{ r.categoria or '' }}" selected>{{ r.categoria_nome }}</option>
@@ -244,7 +244,7 @@
         {% if pode_editar %}<td class="cel-sel" data-col="sel"></td>{% endif %}
         <td class="cel-data" data-col="data" data-tip="{{ tecnico.data_full }}" data-sort="{{ tecnico.data_sort }}">{{ tecnico.data_dia }}<br>{{ tecnico.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ tecnico.descricao }}"><span class="rateio-seta">↳</span> {{ tecnico.descricao }} <span class="selo-fora" title="{{ tecnico.fora_do_resultado }}">registro técnico</span></td>
-        <td class="cel-origem" data-col="origem" data-tip="{{ tecnico.origem_completa }}">{{ tecnico.origem_selo|safe }}<span>{{ tecnico.origem_texto }}</span></td>
+        <td class="cel-origem" data-col="origem" data-tip="{{ tecnico.origem_completa }}"><span class="origem-conteudo">{{ tecnico.origem_selo|safe }}<span class="origem-texto">{{ tecnico.origem_texto }}</span></span></td>
         <td class="cel-dim" data-col="categoria">{{ tecnico.categoria_nome }}</td>
         {% for d in dimensoes %}<td class="cel-dim" data-col="dim_{{ d.id }}">{{ tecnico.dims_rotulos.get(d.id) }}</td>{% endfor %}
         <td class="valor cel-valor" data-col="valor" style="{{ tecnico.cor_valor }}" data-sort="{{ tecnico.valor_sort }}">{{ tecnico.valor_fmt }}</td>

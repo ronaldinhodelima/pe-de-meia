@@ -371,9 +371,9 @@
      da coluna vizinha, como planilha - nunca estoura a largura da tela. */
   table.ajustavel { width: 100% !important; min-width: 0 !important; table-layout: fixed; }
   table.ajustavel th[data-col] {
-    display: table-cell !important; /* classes como .cel-origem mudam o display so pra celula
-      de dado (flex, pra caber selo+texto) - sem isso o cabecalho herdava o mesmo display e
-      saia do grid da tabela, sobrepondo a coluna vizinha */
+    display: table-cell !important; /* defensivo: uma classe de celula que mude o display
+      alcancaria o cabecalho e o tiraria do grid da tabela, sobrepondo a coluna vizinha.
+      Aconteceu com .cel-origem, que era flex ate 08/09/2026 */
     position: relative; cursor: grab; user-select: none;
     font-size: var(--fonte-xxs)!important; font-weight: var(--peso-medio); line-height: 1.3; box-sizing: border-box;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -433,8 +433,12 @@
     font-size: var(--fonte-xxs); font-weight: var(--peso-destaque); letter-spacing: .02em;
     margin-right: 6px; vertical-align: middle; flex: none;
   }
-  td.cel-origem { display: flex; align-items: center; }
-  td.cel-origem > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A celula continua sendo celula: `display:flex` num <td> o tira do
+     alinhamento vertical da tabela e cola o conteudo no topo - o selo da
+     Origem ficava acima do resto da linha. Quem faz o arranjo e o wrapper. */
+  td.cel-origem { vertical-align: middle; }
+  .origem-conteudo { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .origem-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ---------- usuarios e permissoes ---------- */
   .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }

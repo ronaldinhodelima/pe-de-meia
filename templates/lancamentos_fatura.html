@@ -16,7 +16,7 @@
      .card-progresso): as duas telas usam os mesmos, e uma segunda definicao
      aqui divergiria da outra tela em silencio (secao 7.8-A) */
 
-  .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px}
+  .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px;max-width:420px}
   .fatura-tabela thead th{position:sticky;top:0;background:var(--surface);z-index:1;box-shadow:0 1px 0 var(--line)}
   .fatura-tabela tr.fatura-ok{background:var(--raise)}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 var(--warn)}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
   .fatura-tabela tr[data-toggle-linha]{cursor:pointer;transition:background-color .1s}
@@ -66,7 +66,10 @@
   .fatura-tabela td.cel-classif.vazia{color:var(--ink-faint);font-size:var(--fonte-xs)}
   .fatura-tabela th.col-ok,.fatura-tabela td.cel-ok-fatura{width:70px;text-align:center;white-space:nowrap}
   .desc-texto{display:flex;flex-direction:column;gap:1px;min-width:0}
-  .desc-loja{display:block;overflow:hidden;text-overflow:ellipsis}
+  /* uma linha so: a descricao do cartao vem com prefixo longo ("A vista sem
+     juros - Visa - ...") e quebrava em duas, dobrando a altura de quase toda
+     linha. O texto inteiro fica no tooltip. */
+  .desc-loja{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .desc-parcela{font-size:var(--fonte-xxs);color:var(--ink-faint)}
   /* A pilula de pendencia ocupa uma linha FIXA, mesmo vazia: sem isso a linha
      encolhe quando o ultimo campo e preenchido e a tabela inteira pula sob o
@@ -203,7 +206,7 @@
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          <span class="desc-loja">{{ linha.descricao }}</span>
+          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {% if parcela %}<span class="desc-parcela">{{ parcela }}</span>{% endif %}
           <span data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado invalido" data-tip="Validar: {{ linha.validacao_motivos|join(', ') }}">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado pendente" data-tip="Faltam: {{ linha.faltando|join(', ') }}">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</span>

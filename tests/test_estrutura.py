@@ -1647,6 +1647,23 @@ def test_toda_gravacao_confirma_com_toast():
     assert "Lançamento conferido" in fatura and "OK retirado" in fatura
 
 
+def test_celula_de_tabela_nao_vira_flex():
+    """`display:flex` num <td> o tira do alinhamento vertical da tabela.
+
+    A coluna Origem ficava com o selo colado no topo, mais alto que o resto da
+    linha - e o cabecalho precisava de um `display:table-cell !important`
+    defensivo para nao herdar o mesmo display e sobrepor a coluna vizinha. Quem
+    faz o arranjo interno e um wrapper dentro da celula.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "td.cel-origem { vertical-align: middle; }" in css
+    assert "td.cel-origem { display: flex" not in css
+    assert ".origem-conteudo { display: flex" in css
+
+    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    assert html.count('class="origem-conteudo"') == 2, "linha e registro tecnico"
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
