@@ -69,6 +69,15 @@
     if (falhas.length) {
       texto += ' Não foi possível em ' + falhas.length + ': ' + falhas.join(' · ');
     }
+    if (window.pdmToast) {
+      // o detalhe das recusas fica na barra, que nao some; o toast diz o
+      // resultado em uma linha
+      window.pdmToast(
+        falhas.length
+          ? aplicados + ' de ' + alvos.length + ' atualizados · ' + falhas.length + ' recusado(s)'
+          : aplicados + (aplicados === 1 ? ' lançamento atualizado' : ' lançamentos atualizados'),
+        falhas.length ? 'aviso' : 'sucesso');
+    }
     return {aplicados: aplicados, falhas: falhas, texto: texto};
   }
 
@@ -99,7 +108,11 @@
       if (e.defaultPrevented) return;
       if (document.querySelector('.modal-bg.show')) return;
       const alvo = e.target;
-      if (alvo && alvo.closest && alvo.closest('input, select, textarea, .pdm-combobox')) return;
+      // caixa de marcacao NAO conta: e o alvo mais provavel do foco quando a
+      // barra esta aberta (o usuario acabou de selecionar), e Esc nao tem
+      // significado nenhum dentro dela - era por isso que a tecla nao fechava
+      if (alvo && alvo.closest && alvo.closest(
+        'input:not([type=checkbox]):not([type=radio]), select, textarea, .pdm-combobox')) return;
       fechar();
     });
   }

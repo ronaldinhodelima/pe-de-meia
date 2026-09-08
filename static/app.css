@@ -251,10 +251,13 @@
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
   th { text-align: left; background: var(--bg); padding: 11px 12px; font-size: var(--fonte-xs); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); font-weight: var(--peso-medio); border-bottom: 1px solid var(--line); }
   td { padding: 10px 12px; border-top: 1px solid var(--line-soft); font-size: var(--fonte-md); vertical-align: middle; }
-  tr.conferida { background: var(--raise); }
+  /* Conferido some da vista; o que FALTA conferir e que fica cinza. A tela
+     existe para achar o que falta - destacar o que ja acabou e o contrario. */
+  tr.conferida { background: transparent; }
+  #tabela-lancamentos tbody tr[data-id]:not(.conferida):not(.rateio-row):not(.tecnico-row) { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
   tbody tr:hover { background: var(--accent-soft); }
-  tr.conferida:hover { background: var(--line); }
+  tr.conferida:hover { background: var(--selecao-suave); }
   tr.duplicada td { text-decoration: line-through; color: var(--ink-faint); }
   tr.duplicada { background: var(--warn-soft); }
   tr.duplicada:hover { background: var(--warn-soft); }
@@ -787,6 +790,41 @@ input[type=checkbox]:disabled {
 }
 /* O anel de foco e sombra: celula com overflow:hidden o cortaria. */
 td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !important; }
+
+/* Toast: confirmacao efemera no topo direito. `position: fixed` para nao
+   depender de onde a acao aconteceu, e `pointer-events` so no proprio balao -
+   ele nunca bloqueia clique na tela por baixo. */
+.toast-pilha {
+  position: fixed; top: 14px; right: 14px; z-index: 2000;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  pointer-events: none; max-width: min(380px, calc(100vw - 28px));
+}
+.toast {
+  display: flex; align-items: center; gap: 9px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--good-soft); color: var(--ink); border: 1px solid var(--good-line);
+  box-shadow: var(--shadow-2); font-size: var(--fonte-md);
+  pointer-events: auto; cursor: default;
+  opacity: 0; transform: translateY(-10px);
+  transition: opacity .22s ease, transform .22s ease;
+}
+.toast.aberto { opacity: 1; transform: translateY(0); }
+.toast-icone {
+  flex: none; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--good); color: var(--sobre-cor);
+  font-size: var(--icone-xxs); font-weight: var(--peso-destaque);
+}
+.toast-erro { background: var(--bad-soft); border-color: var(--bad-line); }
+.toast-erro .toast-icone { background: var(--bad); }
+.toast-aviso { background: var(--warn-soft); border-color: var(--warn); }
+.toast-aviso .toast-icone { background: var(--warn); }
+@media (max-width: 760px) {
+  .toast-pilha { top: 8px; right: 8px; left: 8px; align-items: stretch; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: opacity .22s ease; transform: none; }
+}
 
 /* Avatar de quem lancou a mao. So aparece no lancamento manual - o que veio do
    banco nao tem autor. Cor neutra de proposito: nao e banco. */

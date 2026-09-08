@@ -461,18 +461,12 @@
   // deixado na tela vira ruido em toda linha aberta. Some sozinho, com
   // transicao; erro NAO some - ali a mensagem e a unica pista do que houve.
   function mostrarSalvo(aviso) {
-    aviso.textContent = 'Salvo';
-    aviso.classList.remove('erro', 'sumindo');
+    // a confirmacao virou toast (canto superior direito): presa na linha, ela
+    // sumia da vista quando a linha saia da tela e mexia no layout ao aparecer
+    if (window.pdmToast) window.pdmToast('Lançamento salvo');
     clearTimeout(aviso._sumir);
-    aviso._sumir = setTimeout(function () {
-      aviso.classList.add('sumindo');
-      aviso._sumir = setTimeout(function () {
-        if (aviso.classList.contains('sumindo')) {
-          aviso.textContent = '';
-          aviso.classList.remove('sumindo');
-        }
-      }, 320);
-    }, 2200);
+    aviso.textContent = '';
+    aviso.classList.remove('erro', 'sumindo');
   }
 
   function salvarEditor(editor, alterado) {
@@ -511,6 +505,7 @@
       } catch (e) {
         clearTimeout(aviso._sumir);
         aviso.textContent = e.message; aviso.classList.add('erro'); aviso.classList.remove('sumindo');
+        if (window.pdmToast) window.pdmToast(e.message, 'erro');
       } finally {
         if (editor.dataset.versaoSalva === versao) delete editor.dataset.salvando;
       }

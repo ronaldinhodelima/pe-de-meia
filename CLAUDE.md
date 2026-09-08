@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 60 · **Testes:** 367 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 60 · **Testes:** 368 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -897,6 +897,26 @@ clicava no campo seguinte. Agora a linha é **reservada** (`min-height`, mesmo v
 recriada — recriar pisca. Ela sai com transição, não com corte seco.
 `test_pendencia_da_linha_nao_muda_a_altura_da_tabela` trava isso.
 
+### Confirmação de gravação é um toast, e é um só (07/09/2026)
+
+`static/toast.js` — `pdmToast(mensagem, tipo)` — desenha a confirmação **no canto superior direito**,
+com entrada e saída suaves: sucesso some em ~2,6 s, erro dura 6 s e fecha no clique, porque ali a
+mensagem é a única pista do que houve. **Toda ação que grava no banco confirma por ele**: edição de
+linha, lote, rateio, e o que vier. Duas implementações divergiriam na primeira regra nova.
+
+Existe porque a confirmação estava **presa ao lugar da ação** — um "ok" minúsculo no fim da linha,
+invisível quando a linha saía da tela, e um texto que mexia no layout ao aparecer. O toast é
+`position: fixed` e `pointer-events` só no próprio balão: nunca bloqueia clique embaixo dele.
+
+**Ação que termina recarregando a página** (o rateio, os formulários de cadastro) perderia a
+mensagem no meio do caminho — para essas existe `pdmToastAposRecarregar()`, que guarda em
+`sessionStorage` e mostra do outro lado. `sessionStorage`, não `localStorage`: é a confirmação
+daquela aba, não um estado do usuário.
+
+**O nome disso é toast** (às vezes *snackbar*): notificação efêmera, não bloqueante, que não pede
+resposta — o oposto do `alert()`, que interrompe e exige clique. `alert()` continua valendo para o
+que **impede** a ação (OK recusado, rateio que não fecha).
+
 **"Salvo automaticamente" virou "Salvo" e some depois de ~2 s.** Confirmação não é estado: depois de
 lida não acrescenta nada, e deixada na tela vira ruído em toda linha aberta. **Erro não some** — ali
 a mensagem é a única pista do que aconteceu. O contêiner mantém a altura reservada, senão sumir a
@@ -1067,8 +1087,15 @@ de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde
   totais informativos. Despesa normal não deve parecer erro só por ser despesa.
 - **Cor nunca é a única explicação de estado:** pontos no início da linha, tooltip com todas as
   situações, legenda e filtros equivalentes.
-- Linha com OK usa cinza-claro. Pendente no banco **não** colore o fundo (bloqueia o OK e aparece
+- **O que FALTA conferir é que fica cinza; linha com OK é transparente** (decisão do usuário,
+  07/09/2026). A tela existe para achar o que falta — destacar o que já acabou é o contrário disso,
+  e no fim do mês deixava a tela inteira cinza. Verde continua proibido aqui: despesa normal não
+  pode parecer erro nem sucesso. Pendente no banco **não** colore o fundo (bloqueia o OK e aparece
   na legenda/dica).
+- **Os botões `+`/`−` de rateio e de registros técnicos ficam DEPOIS da descrição.** Antes dela,
+  empurravam o texto e as linhas com e sem botão começavam em colunas diferentes.
+- **A legenda das linhas fica no fim da tela**, abaixo da tabela: é referência, não filtro
+  principal, e no topo empurrava os lançamentos para baixo em toda visita.
 - Diferença de até **R$ 1,00** pode ser arredondamento; acima é divergência vermelha. Mesmo abaixo
   do limite, preservar os valores originais e nunca esconder diferença de vínculo ou quantidade.
 - Compra parcelada agregada **não é divergência**: quando o total equivale a
@@ -1552,7 +1579,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**367 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**368 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

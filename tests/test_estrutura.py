@@ -36,10 +36,17 @@ def test_containers_rodam_sem_usuario_root_e_dependencias_estao_fixadas():
         assert all("==" in linha for linha in requisitos if linha.strip() and not linha.startswith("#"))
 
 
-def test_lancamento_conferido_usa_destaque_cinza_claro():
+def test_o_que_falta_conferir_e_que_fica_cinza():
+    """Decisao do usuario (07/09/2026): conferido some, pendente aparece.
+
+    A tela existe para achar o que FALTA. Destacar o que ja acabou era o
+    contrario disso - e ainda deixava a tela inteira cinza no fim do mes.
+    Verde continua proibido: despesa normal nao pode parecer erro nem sucesso
+    (secao 7.6).
+    """
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
-    assert "tr.conferida { background: var(--raise); }" in css
-    assert "tr.conferida:hover { background: var(--line); }" in css
+    assert "tr.conferida { background: transparent; }" in css
+    assert ":not(.conferida)" in css and "background: var(--raise)" in css
     assert "tr.conferida { background: var(--good-soft); }" not in css
 
 
@@ -266,7 +273,8 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert "Salvar</button>" not in template
     # a confirmacao e "Salvo" e some sozinha; o que importa e que exista uma,
     # e que ela nao dependa de botao
-    assert "mostrarSalvo" in js and "'Salvo'" in js
+    # a confirmacao virou toast, mas continua existindo e sem botao
+    assert "mostrarSalvo" in js and "pdmToast" in js
     assert "setTimeout(() => salvarEditor(editor, campo), 650)" in js
     assert "config.projeto_portfolio_map" in js
     assert "/regras?transacao=" in template
@@ -1555,6 +1563,30 @@ def test_botao_manual_existe_nas_duas_telas_com_o_mesmo_nome():
     assert "get('manual') !== '1'" in js, "a Resumida abre o formulario ao chegar assim"
 
 
+def test_confirmacao_de_gravacao_usa_um_unico_toast():
+    """Toda acao que grava confirma pelo MESMO componente (secao 7.2).
+
+    A confirmacao estava presa ao lugar da acao - um "ok" no fim da linha,
+    invisivel se a linha estava fora da tela, e que mexia no layout ao aparecer.
+    """
+    toast = (RAIZ / "static" / "toast.js").read_text(encoding="utf-8")
+    assert "window.pdmToast" in toast
+    assert "window.pdmToastAposRecarregar" in toast, "acao que recarrega a pagina"
+    # sessionStorage: e a confirmacao daquela aba, nao um estado do usuario
+    assert "sessionStorage.setItem('pdm_toast'" in toast
+    assert "localStorage.setItem" not in toast
+    assert "aria-live" in toast, "leitor de tela anuncia sem interromper"
+
+    base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
+    assert "/static/toast.js" in base, "vale para todas as telas"
+
+    for js in ("lancamentos.js", "lancamentos_fatura.js", "lote.js"):
+        texto = (RAIZ / "static" / js).read_text(encoding="utf-8")
+        assert "pdmToast" in texto, js
+    # o status preso na linha saiu de cena
+    assert "s.textContent = 'ok'" not in (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
@@ -1567,7 +1599,7 @@ def test_valores_visuais_fora_do_sistema_nao_aumentam():
     import subprocess
     import sys
 
-    TETO = 16
+    TETO = 17
 
     saida = subprocess.run(
         [sys.executable, str(RAIZ / "ferramentas" / "inventario_estilo.py")],

@@ -914,6 +914,11 @@ function salvarRateioInline(id) {
     }),
   }).then(r => r.json()).then(res => {
     if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar o rateio.');
+    if (window.pdmToastAposRecarregar) {
+      // esta acao recarrega a pagina: a confirmacao precisa sobreviver a ela
+      window.pdmToastAposRecarregar(
+        res.conferida ? 'Rateio salvo e lançamento conferido' : 'Rateio salvo');
+    }
     guardarPosicaoAtual();
     window.location.reload();
   }).catch(e => {
@@ -1095,12 +1100,7 @@ function salvar(id, el, opcoes) {
           ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura importada. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
-      const s = document.getElementById('status-' + id);
-      if (s) {
-        s.textContent = 'ok';
-        s.classList.add('show');
-        setTimeout(() => s.classList.remove('show'), 1500);
-      }
+      if (window.pdmToast) window.pdmToast('Lançamento salvo');
       return true;
     }
   }).catch(() => {
@@ -1108,12 +1108,7 @@ function salvar(id, el, opcoes) {
     const conf = tr.querySelector('.conf-check');
     if (conf) conf.checked = !!detalhe._conferida;
     tr.classList.toggle('conferida', !!detalhe._conferida);
-    const s = document.getElementById('status-' + id);
-    if (s) {
-      s.textContent = 'erro ao salvar';
-      s.classList.add('show');
-      setTimeout(() => { s.classList.remove('show'); s.textContent = 'ok'; }, 3500);
-    }
+    if (window.pdmToast) window.pdmToast('Não foi possível salvar o lançamento', 'erro');
     return false;
   });
   filaSalvar[id] = atual;

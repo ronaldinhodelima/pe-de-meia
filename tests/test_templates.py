@@ -468,6 +468,9 @@ class TestEdicaoEmLote:
         nucleo = self.nucleo()
         assert "ligarFechar" in nucleo
         assert "e.key !== 'Escape'" in nucleo
+        # caixa de marcacao nao bloqueia o Esc: e onde o foco esta quando a
+        # barra acabou de abrir, e Esc nao significa nada dentro dela
+        assert "input:not([type=checkbox])" in nucleo
         for tela in ("index.html", "lancamentos_fatura.html"):
             html = (raiz / "templates" / tela).read_text(encoding="utf-8")
             assert 'class="barra-lote-fechar"' in html, tela

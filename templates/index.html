@@ -142,17 +142,7 @@
   </div>
 </details>
 
-<details class="legenda-lancamentos">
-  <summary>Legenda das linhas</summary>
-  <div class="legenda-itens">
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')"><i class="linha-ponto conferida"></i>Conferido</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')"><i class="linha-ponto pendente-banco"></i>Pendente no banco</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')"><i class="linha-ponto suspeita"></i>Possível duplicidade</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')"><i class="linha-ponto fora"></i>Fora do resultado</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')"><i class="linha-ponto rateio"></i>Rateio incompleto</button>
-  </div>
-  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
-</details>
+
 
 {% if pode_editar %}
 <div id="barraLote" class="barra-lote" hidden aria-live="polite">
@@ -205,10 +195,10 @@
         {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
         <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
-          {% if r.rateios %}<button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
-          {% if r.registros_tecnicos %}<button type="button" class="tecnico-toggle" data-tecnico-id="{{ r.id }}" aria-label="Exibir {{ r.registros_tecnicos|length }} registro técnico vinculado" aria-expanded="false">+</button>{% endif %}
           {{ r.descricao }}
           {%- if r.fora_do_resultado %} <span class="selo-fora" title="{{ r.fora_do_resultado }}">fora do resultado</span>{% endif %}
+          {%- if r.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ r.id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          {%- if r.registros_tecnicos %} <button type="button" class="tecnico-toggle" data-tecnico-id="{{ r.id }}" aria-label="Exibir {{ r.registros_tecnicos|length }} registro técnico vinculado" aria-expanded="false">+</button>{% endif %}
         </td>
         {# o selo e HTML gerado pelo app; o texto vem do apelido do cartao, digitado
            pelo usuario, entao vai escapado #}
@@ -282,6 +272,18 @@
     </tr>
   </tfoot>
 </table>
+
+<details class="legenda-lancamentos">
+  <summary>Legenda das linhas</summary>
+  <div class="legenda-itens">
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')"><i class="linha-ponto conferida"></i>Conferido</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')"><i class="linha-ponto pendente-banco"></i>Pendente no banco</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')"><i class="linha-ponto suspeita"></i>Possível duplicidade</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')"><i class="linha-ponto fora"></i>Fora do resultado</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')"><i class="linha-ponto rateio"></i>Rateio incompleto</button>
+  </div>
+  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
+</details>
 {% endblock %}
 
 {% block corpo_extra %}
@@ -349,6 +351,6 @@
 {# lancamentos.js le estes dois blocos em vez de receber o dado interpolado #}
 <script type="application/json" data-detalhes>{{ detalhes_json|safe }}</script>
 <script type="application/json" data-config>{{ config_json|safe }}</script>
-<script src="/static/lote.js?v=20260907-1"></script>
-<script src="/static/lancamentos.js?v=20260907-6"></script>
+<script src="/static/lote.js?v=20260907-2"></script>
+<script src="/static/lancamentos.js?v=20260907-7"></script>
 {% endblock %}
