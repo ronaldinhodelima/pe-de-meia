@@ -1749,11 +1749,16 @@ Classificação: **Aluguel Recebido / Família / Casa / Imóveis**, observação
 conferido — o do Apto Fiorentina, em `Família / Apto Fiorentina / Imóveis`: **o projeto identifica
 o imóvel que gera a renda, não o inquilino.** Por isso `Casa`, e não `BRDrive`.
 
-**A confusão com pró-labore era real e está registrada:** o recebimento de **06/07/2026** está em
-`Pró-labore / Ronaldo / BRDrive / Empresas`, **com OK e observação do usuário**. Mesma descrição,
-mesmo valor e mesmo dia dos outros doze — quase certamente é o aluguel de julho rotulado errado,
-mas tem assinatura humana e observação pessoal (§7.3), então **não foi tocado**. Pendente de
-decisão dele.
+**A confusão com pró-labore era real e foi corrigida.** O recebimento de **06/07/2026** estava em
+`Pró-labore / Ronaldo / BRDrive / Empresas`, **com OK e observação do próprio usuário** — mesma
+descrição, mesmo valor e mesmo dia dos outros doze. Ele confirmou o engano em 07/09/2026 e o
+lançamento foi alinhado aos demais, **mantendo a assinatura dele intacta** (§1.2: o Claude ajusta
+categoria, dimensão e observação; o check não é dele). Em 2026: `Aluguel Recebido` passou a
+R$ 14.640,00 em 9 lançamentos e `Pró-labore` caiu para R$ 33.161,30 em 5.
+
+**A lição para casos parecidos:** um lançamento conferido não é necessariamente um lançamento
+certo — a assinatura diz que alguém olhou, não que acertou. Quando o conjunto contradiz o item
+isolado (doze meses idênticos contra um), vale evidenciar e perguntar, nunca sobrescrever sozinho.
 
 Não muda o total de receita: `Transfer - PIX` é natureza `fluxo` e, sendo crédito, já contava como
 receita. O que muda é a composição — R$ 11.760,00 saíram de `Transfer - PIX` para `Aluguel
