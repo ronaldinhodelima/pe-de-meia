@@ -277,7 +277,9 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert "mostrarSalvo" in js and "pdmToast" in js
     assert "setTimeout(() => salvarEditor(editor, campo), 650)" in js
     assert "config.projeto_portfolio_map" in js
-    assert "/regras?transacao=" in template
+    # criar regra saiu do painel e virou COLUNA, oculta por padrao
+    assert 'data-col="regra" data-oculta-padrao' in template
+    assert "regra-btn" in template
     assert "+ Cadastrar novo..." in template
     assert "window.location.reload()" not in js
 
@@ -297,7 +299,9 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert 'lancamentos_fatura.js?v=' in template
     trecho_detalhe = template.split('<div class="vinculo-bloco">', 1)[1].split('</td></tr>', 1)[0]
     assert trecho_detalhe.index('class="transacao-info"') < trecho_detalhe.index('{% endfor %}')
-    assert trecho_detalhe.index('{% endfor %}') < trecho_detalhe.index('class="editor-financeiro"')
+    # o quadro de edicao dentro do lancamento acabou em 08/09/2026: tudo o que
+    # se edita mora na linha, e o painel ficou so com auditoria
+    assert "editor-financeiro" not in template
     assert "detalhe-id" in template and "overflow-wrap:anywhere" in template
     assert "fonte-badge:hover::after" not in template
     assert 'data-tip="{{ v.fonte_nome }}"' in template
@@ -318,9 +322,10 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert 'data-ordenar="data"' in template
     assert 'data-ordenar="desc"' in template
     assert 'data-ordenar="valor"' in template
-    assert 'data-ordenar="cat"' in template
+    # a chave de ordenacao e o proprio data-col, e ele e igual nas duas telas
+    assert 'data-ordenar="categoria"' in template
     assert 'data-ordenar="dim_{{ d.id }}"' in template
-    assert 'data-ordenar="ok"' in template
+    assert 'data-ordenar="check"' in template
     # e a ordenacao le por data-col, nunca por indice de celula
     assert "linha.querySelector('[data-col=\"' + chave + '\"]')" in js
     assert "celulas[1]" not in js
@@ -1297,7 +1302,7 @@ def test_campo_em_caixa_tem_uma_definicao_so():
     bloco = css.split(".campo-caixa,", 1)
     assert len(bloco) == 2, "a caixa unica sumiu do app.css"
     corpo = bloco[1].split("}", 1)[0]
-    for hook in (".filtro-tabela", ".busca-fatura input", ".editor-financeiro input[type=text]",
+    for hook in (".filtro-tabela", ".busca-fatura input",
                  ".editor-manual input[type=text]", ".barra-lote-campos input[type=text]"):
         assert hook in corpo, hook
 
@@ -1523,7 +1528,8 @@ def test_as_duas_telas_de_lancamentos_usam_a_mesma_barra_de_tabela():
     assert 'data-tabela="fatura"' in html and "ajustavel" in html
     assert "data-sem-ordenar" in html and 'data-busca-externa=".busca-fatura"' in html
     # toda coluna precisa de data-col, senao o utilitario ordena/esconde a errada
-    for col in ("abre", "data", "desc", "valor", "cat", "ok"):
+    # os nomes de coluna sao os MESMOS da Resumida (secao 7.1)
+    for col in ("sel", "data", "desc", "valor", "categoria", "obs", "check"):
         assert f'data-col="{col}"' in html, col
 
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
@@ -1618,7 +1624,9 @@ def test_modo_cartao_respeita_linha_escondida():
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
     assert "table.compacta > tbody > tr[hidden] { display: none !important; }" in css
     # as duas telas usam nomes de coluna diferentes para a mesma coisa
-    assert 'td[data-col="abre"]' in css and 'td[data-col="ok"]' in css
+    # um conjunto de nomes so: as duas telas usam sel/categoria/check
+    assert 'td[data-col="sel"]' in css and 'td[data-col="check"]' in css
+    assert 'data-col="abre"' not in css and 'data-col="cat"]' not in css
 
 
 def test_selecao_em_lote_nao_existe_no_celular():
@@ -1720,6 +1728,36 @@ def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
     fatura = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "table-layout:auto!important" not in fatura
     assert "min-width:132px" not in fatura, "os minimos estouravam o container"
+
+
+def test_as_duas_telas_nomeiam_e_ordenam_as_colunas_igual():
+    """Mesmos titulos e mesma ordem (decisao do usuario, 08/09/2026).
+
+    Duas visoes do mesmo dado que chamam a mesma coluna de nomes diferentes -
+    "Obs" x "Observacao", "Descricao" x "Descricao na fatura" - e as colocam em
+    ordens diferentes obrigam a reaprender a tela a cada troca de visao. Os
+    `data-col` tambem sao os mesmos: e por eles que o modo cartao e a ordenacao
+    encontram cada coluna.
+    """
+    import re
+
+    def colunas(arquivo):
+        html = (RAIZ / "templates" / arquivo).read_text(encoding="utf-8")
+        cabecalho = html.split("<thead>", 1)[1].split("</thead>", 1)[0]
+        return re.findall(r'data-col="([a-z_0-9{}\. ]+)"', cabecalho)
+
+    resumida = colunas("index.html")
+    detalhada = colunas("lancamentos_fatura.html")
+    # a Resumida tem Origem porque mistura contas; a Detalhada e de uma fatura so
+    assert [c for c in resumida if c != "origem"] == detalhada, (resumida, detalhada)
+
+    for arquivo in ("index.html", "lancamentos_fatura.html"):
+        html = (RAIZ / "templates" / arquivo).read_text(encoding="utf-8")
+        cabecalho = html.split("<thead>", 1)[1].split("</thead>", 1)[0]
+        assert ">Descrição<" in cabecalho, arquivo
+        assert ">Observação<" in cabecalho, arquivo
+        assert ">Valor<" in cabecalho, arquivo
+        assert ">Descricao<" not in cabecalho and ">Obs<" not in cabecalho, arquivo
 
 
 def test_valores_visuais_fora_do_sistema_nao_aumentam():

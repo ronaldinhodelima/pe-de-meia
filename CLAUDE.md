@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 374 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 375 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -827,6 +827,24 @@ duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tab
   entra ali**: essa explicação, com o motivo, mora no painel de detalhes.
 - **Titular/cartão** identifica quem realizou a compra e é separado da dimensão financeira
   **Responsável**.
+
+### Tudo o que se edita mora na linha; o painel é auditoria (08/09/2026)
+
+**O quadro de edição dentro do lançamento acabou.** A classificação subiu para a linha em 05/09; a
+**observação** subiu em 08/09, ao lado do OK; **criar regra** virou coluna, oculta por padrão; e a
+**natureza no DRE saiu** — ela é consequência da categoria, que está na mesma linha, e repetida ali
+só ocupava espaço. O `+` volta a ser o que se espera dele: **procedência e auditoria**.
+
+O `data-campo="observacao"` é o mesmo de antes, então vale o mesmo salvamento e a mesma fila — não
+há segundo caminho de gravação.
+
+**As duas telas nomeiam e ordenam as colunas igual** (decisão do usuário): `sel · data · desc ·
+[origem, só na Resumida] · categoria · dimensões · valor · obs · regra · check`, com os títulos
+`Descrição`, `Observação`, `Valor`, `OK`. Duas visões do mesmo dado que chamam a mesma coluna de
+`Obs` e de `Observação`, em ordens diferentes, obrigam a reaprender a tela a cada troca. **Os
+`data-col` também são os mesmos** — é por eles que o modo cartão e a ordenação encontram cada
+coluna, e nomes diferentes exigiam duas regras de CSS para o mesmo papel.
+`test_as_duas_telas_nomeiam_e_ordenam_as_colunas_igual` compara as duas listas.
 
 ### A classificação mora na linha (layout escolhido em 05/09/2026)
 
@@ -1658,7 +1676,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**374 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**375 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

@@ -290,7 +290,6 @@
   .campo-caixa,
   .filtro-tabela,
   .busca-fatura input,
-  .editor-financeiro input[type=text],
   .editor-manual input[type=text],
   .editor-manual input[type=date],
   .editor-manual input[type=number],
@@ -1051,9 +1050,9 @@ tr.compra-feita { opacity: .6; }
   }
 
   /* topo: selecao, valor e descricao */
-  table.compacta > tbody > tr > td[data-col="sel"],
-  table.compacta > tbody > tr > td[data-col="abre"] { order: -3; grid-column: 1; }
-  table.compacta > tbody > tr > td[data-col="abre"] { flex-direction: row; align-items: center; gap: 8px; }
+  table.compacta > tbody > tr > td[data-col="sel"] {
+    order: -3; grid-column: 1; flex-direction: row; align-items: center; gap: 8px;
+  }
   table.compacta > tbody > tr > td[data-col="valor"] {
     order: -2; grid-column: 2; align-items: flex-end;
     font-size: var(--titulo-sm); font-weight: var(--peso-medio);
@@ -1074,17 +1073,14 @@ tr.compra-feita { opacity: .6; }
   }
   /* classificacao em duas colunas; observacao e OK ocupam a linha inteira */
   table.compacta > tbody > tr > td[data-col="categoria"],
-  table.compacta > tbody > tr > td[data-col="cat"],
   table.compacta > tbody > tr > td[data-col^="dim_"] { order: 1; }
   table.compacta > tbody > tr > td[data-col="obs"] { order: 2; grid-column: 1 / -1; }
-  table.compacta > tbody > tr > td[data-col="check"],
-  table.compacta > tbody > tr > td[data-col="ok"] {
+  table.compacta > tbody > tr > td[data-col="check"] {
     order: 3; grid-column: 1 / -1; flex-direction: row; align-items: center;
     justify-content: space-between; gap: 10px;
     padding-top: 8px; border-top: 1px solid var(--line);
   }
-  table.compacta > tbody > tr > td[data-col="check"]::before,
-  table.compacta > tbody > tr > td[data-col="ok"]::before { content: 'Conferido'; }
+  table.compacta > tbody > tr > td[data-col="check"]::before { content: 'Conferido'; }
 
   /* rotulo que nao acrescenta nada no cartao */
   table.compacta > tbody > tr > td[data-col="desc"]::before,
@@ -1125,7 +1121,7 @@ tr.compra-feita { opacity: .6; }
 
   /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao
      cabem sem cortar o rotulo */
-  .barra-lote-campos, .editor-manual, .editor-financeiro, .rel-filtros { grid-template-columns: 1fr; }
+  .barra-lote-campos, .editor-manual, .rel-filtros { grid-template-columns: 1fr; }
   .barra-lote-campos { display: grid; }
   .barra-lote-campos > label, .barra-lote-obs input, .barra-lote-campos select,
   .barra-lote-campos input[type=text], .filtro-tabela { width: 100%; min-width: 0; }
@@ -1140,7 +1136,7 @@ tr.compra-feita { opacity: .6; }
   .barra-lote-fechar, .modal .close, .info-toggle { width: 40px; height: 40px; }
   .expande { width: 36px; height: 36px; }
   .campo-caixa, .filtro-tabela, .busca-fatura input,
-  .editor-financeiro input[type=text], .editor-manual input[type=text],
+  .editor-manual input[type=text],
   .editor-manual input[type=date], .editor-manual input[type=number] { padding: 10px 12px; }
   .pdm-combobox-input { height: 36px; }
   .pdm-combobox-opcao, .pdm-combobox-vazio { padding: 11px 8px; }

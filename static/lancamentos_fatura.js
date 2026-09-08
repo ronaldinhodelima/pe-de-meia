@@ -107,7 +107,7 @@
       const texto = (celula?.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
       return Number(texto) || 0;
     }
-    if (chave === 'ok') return linha.querySelector('[data-ok-lancamento]')?.checked ? 1 : 0;
+    if (chave === 'check') return linha.querySelector('[data-ok-lancamento]')?.checked ? 1 : 0;
     if (!celula) return '';
     // Coluna de classificacao: ordena pelo rotulo escolhido, nao pelo id.
     const escolha = celula.querySelector('select');
