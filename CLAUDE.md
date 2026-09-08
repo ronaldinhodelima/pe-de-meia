@@ -1531,6 +1531,33 @@ trata como `despesa` em silêncio (§4.1). **Varredura de 07/09/2026: ninguém e
 (4.082 linhas de 2024 a 2027, incluindo partes de rateio) — o defeito é latente, não ativo. A
 varredura também confirmou **zero órfãos** entre os 38 valores de dimensão.
 
+**Pró-labore da BRsim — regra criada em 07/09/2026.** `BRSIM LTDA TRANSF TEF PIX` de
+**R$ 2.314,00**, um por mês (dias 8 a 13), 13 lançamentos de ago/2025 a ago/2026 na conta corrente
+Unicred: **Pró-labore / Ronaldo / BRDrive / Empresas**, observação `Pró-labore Ronaldo — BRsim`.
+Valor constante desde o começo — não houve reajuste.
+
+**O filtro de valor é o que torna a regra segura, e a prévia provou isso.** A mesma descrição
+`BRSIM LTDA TRANSF TEF PIX` cobre coisas completamente diferentes na mesma conta:
+
+| Valor | O que é |
+|---|---|
+| R$ 2.314,00 | pró-labore mensal |
+| R$ 92.000,00 (13/08/2026) | Distribuição de Lucros (já conferido) |
+| R$ 60.038,73 (30/12/2025) | não classificado |
+| R$ 150,00 (05/02/2026) | não classificado |
+
+Sem `= 2.314,00` a regra alcançaria os R$ 150,00 e os R$ 60.038,73. É o oposto da água da Visan,
+onde o valor varia todo mês e o filtro seria um jeito de perder lançamento — **o que decide não é
+o gosto, é se o valor identifica ou não a operação.**
+
+**Não confundir com o que chega na conta Nubank da Andrea:** 31 créditos `Transferência
+Recebida|BRSIM`, de R$ 563,13 a R$ 2.845,18, em datas irregulares. Outra conta, outra pessoa,
+valores variáveis — não é o mesmo evento e ficou fora. Ainda sem classificação.
+
+**Ponto em aberto:** o Projeto é `BRDrive` mas quem paga é a **BRsim**. Os dois lançamentos que o
+usuário já havia conferido (o pró-labore e a distribuição de lucros) usam `BRDrive`, então o padrão
+foi mantido — mas se as duas empresas precisarem ser separadas nos relatórios, é aqui que se mexe.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
