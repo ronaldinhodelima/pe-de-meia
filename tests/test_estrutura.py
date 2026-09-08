@@ -1328,8 +1328,11 @@ def test_glifos_saem_da_escala_de_icone():
     for token in ("--icone-xxs: 8px", "--icone-sm: 11px", "--icone-md: 14px", "--icone-lg: 17px"):
         assert token in css, token
 
-    # os dois "fechar" do sistema leem o mesmo degrau
-    assert css.count("font-size: var(--icone-md)") == 2, "modal e barra de lote"
+    # os dois "fechar" do sistema leem o mesmo degrau. Conferido regra a regra:
+    # contar ocorrencias quebrava a cada novo glifo do mesmo tamanho.
+    for regra in (".modal .close {", ".barra-lote-fechar {"):
+        corpo = css.split(regra, 1)[1].split("}", 1)[0]
+        assert "font-size: var(--icone-md)" in corpo, regra
 
     fatura = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "font-size:var(--icone-lg)" in fatura, "expandir e detalhe"

@@ -808,15 +808,16 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 .toast-pilha {
   position: fixed; top: 14px; right: 14px; z-index: 2000;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
-  pointer-events: none; max-width: min(380px, calc(100vw - 28px));
+  pointer-events: none; max-width: min(460px, calc(100vw - 28px));
 }
 .toast {
-  display: flex; align-items: center; gap: 8px;
-  /* compacto de proposito: ele fica sobre a tabela, e cada pixel a mais e
-     linha escondida enquanto o usuario preenche */
-  padding: 7px 12px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 12px;
+  /* dobrado a pedido do usuario (08/09/2026): ele fica sobre a tabela, entao o
+     tamanho e uma troca consciente entre ser visto e esconder linha. O clique
+     atravessa (pointer-events abaixo), que e o que torna a troca aceitavel. */
+  padding: 17px 26px; border-radius: var(--radius);
   background: var(--good-soft); color: var(--ink); border: 1px solid var(--good-line);
-  box-shadow: var(--shadow-2); font-size: var(--fonte-md);
+  box-shadow: var(--shadow-2); font-size: var(--titulo-md);
   /* transparente ao ponteiro por padrao: no canto superior direito o balao
      cobre Valor, Observacao e OK das primeiras linhas, e engolia o clique
      delas. So erro e aviso voltam a interceptar, porque precisam ser fechados. */
@@ -826,10 +827,10 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
 }
 .toast.aberto { opacity: 1; transform: translateY(0); }
 .toast-icone {
-  flex: none; width: 18px; height: 18px; border-radius: 50%;
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
   display: grid; place-items: center;
   background: var(--good); color: var(--sobre-cor);
-  font-size: var(--icone-xxs); font-weight: var(--peso-destaque);
+  font-size: var(--icone-md); font-weight: var(--peso-destaque);
 }
 .toast-erro, .toast-aviso { pointer-events: auto; cursor: pointer; }
 .toast-erro { background: var(--bad-soft); border-color: var(--bad-line); }
