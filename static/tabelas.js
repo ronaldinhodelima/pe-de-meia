@@ -82,7 +82,11 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
       if (th.classList.contains('coluna-oculta')) return;
       soma += parseFloat(th.style.width) || th.getBoundingClientRect().width;
     });
-    table.style.width = soma ? Math.round(soma) + 'px' : '';
+    // `!important` porque a regra do CSS tambem e `!important`, e regra com
+    // `!important` vence estilo inline SEM ele - a largura era escrita e
+    // simplesmente ignorada
+    if (soma) table.style.setProperty('width', Math.round(soma) + 'px', 'important');
+    else table.style.removeProperty('width');
   }
 
   function aplicarLargura(col, px) {
