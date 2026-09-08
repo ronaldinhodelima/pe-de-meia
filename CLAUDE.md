@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 07/09/2026 · **Schema:** migração 60 · **Testes:** 368 aprovados, 6 ignorados
+**Última revisão:** 07/09/2026 · **Schema:** migração 61 · **Testes:** 370 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1310,6 +1310,12 @@ cinco cards em 390px viravam fatias de 60px, cada uma cortando o próprio númer
 empilhados, cards em duas colunas, `pointer: coarse` reconhecido (checkbox medindo 20px) e **o
 corpo da página sem rolagem lateral** — a tabela rola dentro do próprio contêiner, com 1.093px.
 
+**`[hidden]` perde para a regra de display do cartão.** A linha de rateio, o registro técnico e o
+painel de vínculos nascem `hidden` e só o clique abre — mas `table.compacta > tbody > tr { display:
+grid }` vence o `[hidden]`, e no celular **todos apareciam abertos dentro de cada cartão**. A trava é
+uma linha: `tr[hidden] { display: none !important; }`. Ao dar display novo a uma linha de tabela,
+lembrar de quem estava escondido.
+
 **Abaixo de 760px, `table.compacta` vira lista de cartões** — cada linha é um cartão e cada célula
 diz o que é. O rótulo vem do próprio `<th>`, copiado pelo `rotularCelulas()` do `tabelas.js`: as
 colunas de dimensão são dinâmicas (Responsável, Projeto, Portfólio vêm do banco), então escrevê-los
@@ -1579,7 +1585,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**368 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**370 aprovados e 6 ignorados** (07/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2053,3 +2059,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 58 | `compra_futura.valor_real`: o valor que a compra teve de fato |
 | 59 | `fatura_importada.tipo_documento` e `extrato_compromisso`: extrato de conta corrente (§6.8) |
 | 60 | `transacao.criado_por`: quem digitou o lançamento manual; preenche o histórico pelo audit log |
+| 61 | autor dos 3 manuais antigos = `ronaldo`, informado pelo usuário; `autor_backup_v61` |

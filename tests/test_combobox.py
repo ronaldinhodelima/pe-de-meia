@@ -93,7 +93,12 @@ def test_fatura_em_andamento_bloqueia_ok_e_preserva_edicao():
     assert "def _render_fatura_em_andamento" in view
     assert 'sem_pdf_conciliado = not bool(cur.fetchone()[0])' in view
     assert "faltando or rateio_invalido or pendente_banco or sem_pdf_conciliado" in view
-    assert "OK será liberado somente depois da importação e conciliação da fatura" in tela
+    # A faixa explicativa saiu da tela por decisao do usuario (07/09/2026): o
+    # card "Fatura oficial · Aguardando" e o proprio OK desabilitado ja dizem
+    # isso, e o texto ocupava a largura inteira em toda visita. A TRAVA
+    # continua - ela nunca dependeu do aviso.
+    assert "Esta fatura ainda não foi importada" not in tela
+    assert "OK liberado somente após a fatura ser conciliada" in tela
     assert "not pode_conferir or fatura.em_andamento" in tela
     assert "fatura.value === 'andamento'" in js
     assert "andamento=1&amp;account_id={{ account_id }}" in tela

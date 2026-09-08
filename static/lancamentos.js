@@ -112,6 +112,14 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
   }
 });
+document.addEventListener('change', function (e) {
+  const painel = e.target.closest && e.target.closest('.chip-panel');
+  if (!painel || e.target.type !== 'checkbox') return;
+  // fecha DEPOIS de aplicar, e so quando a escolha ja foi registrada: fechar
+  // antes tiraria da tela a lista que o usuario esta conferindo
+  setTimeout(function () { painel.classList.remove('show'); }, 120);
+});
+
 function cfClear(e, btn) {
   e.stopPropagation();
   const panel = btn.closest('.chipfilter').querySelector('.chip-panel');
@@ -395,6 +403,17 @@ function recarregarListaNoLugar() {
     if (p && p.then) p.then(function () { window.scrollTo(0, y); });
   }, 450);
 }
+
+// Clicar em qualquer parte do campo de mes ou de data abre o calendario. Sem
+// isto so o iconezinho na ponta abria - alvo minusculo, e invisivel para quem
+// nao sabe que ele existe. `showPicker` nao existe em todo navegador; quando
+// falta, o campo continua funcionando por digitacao, como antes.
+document.addEventListener('click', function (e) {
+  const campo = e.target;
+  if (!campo.matches || !campo.matches('input[type=month], input[type=date]')) return;
+  if (campo.disabled || campo.readOnly || typeof campo.showPicker !== 'function') return;
+  try { campo.showPicker(); } catch (erro) { /* gesto nao aceito: digitar segue valendo */ }
+});
 
 // Cada filtro/mes vira uma etapa real do navegador. Ao voltar ou avancar,
 // recarrega o estado correspondente sem criar uma nova entrada no historico.

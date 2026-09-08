@@ -5097,6 +5097,32 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (60);")
             conn.commit()
 
+        if versao_atual < 61:
+            # O log nao sabia dizer quem criou os manuais antigos (a migracao 60
+            # preencheu ZERO). Quem sabe e o usuario: ele informou que foi o
+            # Ronaldo. Backup antes, como toda alteracao de dado em lote.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.autor_backup_v61 AS "
+                "SELECT transacao_id, criado_por FROM cartao.transacao "
+                "WHERE account_id = %s AND criado_por IS NULL;",
+                (CONTA_MANUAL_ID,),
+            )
+            cur.execute(
+                "UPDATE cartao.transacao SET criado_por = 'ronaldo' "
+                "WHERE account_id = %s AND criado_por IS NULL;",
+                (CONTA_MANUAL_ID,),
+            )
+            informados = cur.rowcount
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Autor dos lancamentos manuais antigos',"
+                "jsonb_build_object('versao',61,'autor','ronaldo','fonte','informado pelo usuario',"
+                "'lancamentos',%s,'backup','cartao.autor_backup_v61'));",
+                (informados,),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (61);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

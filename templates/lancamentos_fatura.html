@@ -10,7 +10,7 @@
   .fatura-conciliacao{margin-left:auto}
   .fatura-conciliacao.ver-btn{transition:transform .12s}.fatura-conciliacao.ver-btn:hover{transform:translateX(1px)}
   .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}.fatura-filtros .visao-lancamentos{margin-left:auto;margin-bottom:0}
-  .fatura-filtros label{font-size:var(--fonte-sm);color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;font-weight:var(--peso-normal)}
+  .fatura-filtros label{font-size:var(--fonte-sm);color:var(--ink-faint);text-transform:capitalize;letter-spacing:.03em;font-weight:var(--peso-normal)}
 
   /* o desenho dos cards de status mora no app.css (.card-filtra, .card-ok,
      .card-progresso): as duas telas usam os mesmos, e uma segunda definicao
@@ -49,7 +49,7 @@
   .status-salvamento{align-self:end;min-height:20px;font-size:var(--fonte-sm);color:var(--ink-faint);transition:opacity .3s ease}.status-salvamento.erro{color:var(--bad)}
   .status-salvamento.sumindo{opacity:0}
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:var(--icone-lg);line-height:1;cursor:pointer;border-radius:var(--radius-xxs);transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:var(--raise);color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
-  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform:uppercase}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
+  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform:capitalize}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}.editor-financeiro label.obrigatorio{color:var(--ink-faint);font-weight:var(--peso-normal)}
   .ajuda-fatura{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
@@ -127,7 +127,6 @@
   </div>
 </div>
 
-{% if fatura.previsto %}{% elif fatura.em_andamento %}<div class="aviso" style="margin-bottom:10px">Esta fatura ainda não foi importada. Você pode classificar e preencher observações, mas o OK será liberado somente depois da importação e conciliação da fatura.</div>{% endif %}
 <div class="cards fatura-cards">
   <div class="card" data-filtro="todas"><div class="label">{{ 'Total provisório' if fatura.em_andamento else 'Total oficial' }}</div><div class="val">{{ totais.pdf|moeda }}</div><div class="card-explicacao">{{ contagens.linhas }} {{ 'lançamentos recebidos do Pluggy' if fatura.em_andamento else 'linhas cobradas na fatura' }}</div></div>
   {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">Fatura oficial</div><div class="val">Aguardando</div><div class="card-explicacao">OK bloqueado até a conciliação</div></div>{% else %}<div class="card {{ 'card-ok' if totais.sem_vinculo==0 else 'card-erro' }}" data-filtro="sem_vinculo"><div class="label">Conciliação</div><div class="val">{{ contagens.vinculadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Falta vincular: {{ totais.sem_vinculo|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.vinculadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>{% endif %}

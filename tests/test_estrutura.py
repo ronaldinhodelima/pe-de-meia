@@ -1605,6 +1605,17 @@ def test_lancamento_rateado_nao_cobra_classificacao_no_pai():
     assert 'data-exige-classificacao=' in html
 
 
+def test_modo_cartao_respeita_linha_escondida():
+    """`[hidden]` perde para a regra de display do cartao - e sem esta trava a
+    linha de rateio, o registro tecnico e o painel de detalhes apareciam TODOS
+    abertos em cada cartao do celular. Eles nascem hidden: quem abre e o clique.
+    """
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "table.compacta > tbody > tr[hidden] { display: none !important; }" in css
+    # as duas telas usam nomes de coluna diferentes para a mesma coisa
+    assert 'td[data-col="abre"]' in css and 'td[data-col="ok"]' in css
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 
