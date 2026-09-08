@@ -1760,6 +1760,29 @@ def test_as_duas_telas_nomeiam_e_ordenam_as_colunas_igual():
         assert ">Descricao<" not in cabecalho and ">Obs<" not in cabecalho, arquivo
 
 
+def test_toast_nao_atrapalha_quem_esta_preenchendo():
+    """O balao fica SOBRE a tela: ele nao pode roubar clique nem empilhar.
+
+    Tabular por Categoria, Responsavel, Projeto e Portfolio gerava quatro
+    baloes, e a pilha descia sobre as primeiras linhas justamente enquanto o
+    usuario preenchia. Agora o sucesso ocupa UM balao que se atualiza, e ele e
+    transparente ao ponteiro - no canto superior direito ele cobre Valor,
+    Observacao e OK das primeiras linhas, e engolia o clique delas.
+
+    Erro e aviso continuam empilhando e clicaveis: sao raros, precisam ser
+    fechados, e perder um deles esconde a unica pista do que aconteceu.
+    """
+    js = (RAIZ / "static" / "toast.js").read_text(encoding="utf-8")
+    assert "let sucessoAtual" in js
+    assert "if (tipo === 'sucesso' && sucessoAtual" in js
+    assert "if (tipo !== 'sucesso') el.addEventListener('click'" in js
+
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    corpo = css.split("\n.toast {", 1)[1].split("}", 1)[0]
+    assert "pointer-events: none" in corpo
+    assert ".toast-erro, .toast-aviso { pointer-events: auto;" in css
+
+
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
     """Catraca do sistema de design: o numero so pode cair.
 

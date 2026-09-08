@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 375 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 376 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -936,8 +936,20 @@ categoria, dimensão, observação, descrição, OK da Detalhada, rateio salvo e
 manual criado e excluído, cadastro rápido de Projeto/Portfólio — e o que vier. Duas implementações divergiriam na primeira regra nova.
 
 Existe porque a confirmação estava **presa ao lugar da ação** — um "ok" minúsculo no fim da linha,
-invisível quando a linha saía da tela, e um texto que mexia no layout ao aparecer. O toast é
-`position: fixed` e `pointer-events` só no próprio balão: nunca bloqueia clique embaixo dele.
+invisível quando a linha saía da tela, e um texto que mexia no layout ao aparecer.
+
+**O balão fica SOBRE a tela, e por isso não pode custar nada a quem está trabalhando** (08/09/2026).
+Duas travas, as duas aprendidas com o uso real:
+
+- **um balão de sucesso, que se atualiza.** Tabular por Categoria, Responsável, Projeto e Portfólio
+  gerava **quatro** balões, e a pilha descia sobre as primeiras linhas justamente enquanto o usuário
+  preenchia. Mensagem nova troca o texto e reinicia o tempo;
+- **sucesso é transparente ao ponteiro** (`pointer-events: none`). No canto superior direito ele
+  cobre Valor, Observação e OK das primeiras linhas — e **engolia o clique delas**.
+
+**Erro e aviso continuam empilhando e clicáveis**: são raros, precisam ser fechados, e perder um
+deles esconde a única pista do que aconteceu. O balão também é compacto de propósito: cada pixel a
+mais é linha escondida. `test_toast_nao_atrapalha_quem_esta_preenchendo` trava isso.
 
 **Ação que termina recarregando a página** (o rateio, o lançamento manual, a categoria pelo modal)
 perderia a mensagem no meio do caminho — para essas existe `pdmToastAposRecarregar()`, que guarda em
@@ -1681,7 +1693,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**375 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**376 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

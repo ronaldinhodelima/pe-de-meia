@@ -9,6 +9,12 @@
 (function () {
   const DURACAO = {sucesso: 2600, erro: 6000, aviso: 4200};
   let caixa = null;
+  // O sucesso ocupa UM balao, que se atualiza. Tabular por Categoria,
+  // Responsavel, Projeto e Portfolio gerava quatro baloes empilhados, e a
+  // pilha descia sobre as primeiras linhas justamente enquanto o usuario
+  // preenchia. Erro e aviso continuam podendo empilhar: sao raros, e perder um
+  // deles esconde a unica pista do que aconteceu.
+  let sucessoAtual = null;
 
   function container() {
     if (caixa && document.body.contains(caixa)) return caixa;
@@ -27,6 +33,13 @@
   function toast(mensagem, tipo) {
     if (!mensagem) return;
     tipo = tipo || 'sucesso';
+    if (tipo === 'sucesso' && sucessoAtual && document.body.contains(sucessoAtual)) {
+      // mesmo balao, texto novo, tempo reiniciado
+      sucessoAtual._texto.textContent = mensagem;
+      clearTimeout(sucessoAtual._sumir);
+      sucessoAtual._sumir = setTimeout(function () { sair(sucessoAtual); }, DURACAO.sucesso);
+      return sucessoAtual;
+    }
     const el = document.createElement('div');
     el.className = 'toast toast-' + tipo;
     const icone = document.createElement('span');
@@ -34,9 +47,14 @@
     icone.textContent = tipo === 'erro' ? '!' : tipo === 'aviso' ? '!' : '✓';
     const texto = document.createElement('span');
     texto.textContent = mensagem;
+    el._texto = texto;
     el.appendChild(icone);
     el.appendChild(texto);
-    el.addEventListener('click', function () { sair(el); });
+    // so erro e aviso interceptam o clique (para poder fechar). O balao de
+    // sucesso e transparente ao ponteiro: no canto superior direito ele cobre
+    // Valor, Observacao e OK das primeiras linhas, e engolia o clique delas.
+    if (tipo !== 'sucesso') el.addEventListener('click', function () { sair(el); });
+    else sucessoAtual = el;
     container().appendChild(el);
     // deixa o navegador pintar o estado inicial antes de animar a entrada
     requestAnimationFrame(function () { el.classList.add('aberto'); });
@@ -46,6 +64,7 @@
   }
 
   function sair(el) {
+    if (el === sucessoAtual) sucessoAtual = null;
     clearTimeout(el._sumir);
     el.classList.remove('aberto');
     setTimeout(function () { el.remove(); }, 260);

@@ -811,11 +811,16 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
   pointer-events: none; max-width: min(380px, calc(100vw - 28px));
 }
 .toast {
-  display: flex; align-items: center; gap: 9px;
-  padding: 10px 14px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 8px;
+  /* compacto de proposito: ele fica sobre a tabela, e cada pixel a mais e
+     linha escondida enquanto o usuario preenche */
+  padding: 7px 12px; border-radius: var(--radius-sm);
   background: var(--good-soft); color: var(--ink); border: 1px solid var(--good-line);
   box-shadow: var(--shadow-2); font-size: var(--fonte-md);
-  pointer-events: auto; cursor: default;
+  /* transparente ao ponteiro por padrao: no canto superior direito o balao
+     cobre Valor, Observacao e OK das primeiras linhas, e engolia o clique
+     delas. So erro e aviso voltam a interceptar, porque precisam ser fechados. */
+  pointer-events: none; cursor: default;
   opacity: 0; transform: translateY(-10px);
   transition: opacity .22s ease, transform .22s ease;
 }
@@ -826,6 +831,7 @@ td.cel-check, td.cel-sel, th.cel-sel, td.cel-sel-fatura { overflow: visible !imp
   background: var(--good); color: var(--sobre-cor);
   font-size: var(--icone-xxs); font-weight: var(--peso-destaque);
 }
+.toast-erro, .toast-aviso { pointer-events: auto; cursor: pointer; }
 .toast-erro { background: var(--bad-soft); border-color: var(--bad-line); }
 .toast-erro .toast-icone { background: var(--bad); }
 .toast-aviso { background: var(--warn-soft); border-color: var(--warn); }
