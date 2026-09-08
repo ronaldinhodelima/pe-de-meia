@@ -1127,7 +1127,14 @@ function salvar(id, el, opcoes) {
           ? 'Não foi possível confirmar: este lançamento de cartão ainda não está vinculado a nenhuma linha da fatura importada. Importe a fatura que cobra este período, ou faça o vínculo em Conciliar fatura.'
           : 'Não foi possível confirmar: preencha os campos obrigatórios.');
       }
-      if (!opcoes.semToast && window.pdmToast) window.pdmToast('Lançamento salvo');
+      if (!opcoes.semToast && window.pdmToast) {
+        // o OK nao e "mais um campo": a mensagem diz o que a assinatura fez
+        if (el.matches('.conf-check')) {
+          window.pdmToast(el.checked ? 'Lançamento conferido' : 'OK retirado');
+        } else {
+          window.pdmToastSalvo(el);
+        }
+      }
       return true;
     }
   }).catch(() => {

@@ -253,15 +253,21 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
   // 4) larguras normalizadas para caber exatamente no container (sem rolagem).
   // Medir a propria tabela nao serve: com table-layout:fixed ela ja estoura pra
   // caber a soma das colunas, entao o alvo sairia errado. O pai nao estoura.
-  const larguraBase = {};
-  thead.querySelectorAll('th[data-col]').forEach(th => {
-    larguraBase[th.dataset.col] = (estado.larguras && estado.larguras[th.dataset.col]) || th.getBoundingClientRect().width;
-  });
-  const soma = Object.values(larguraBase).reduce((a, b) => a + b, 0);
-  const alvo = table.parentElement.clientWidth;
-  if (soma > 0 && alvo > 0) {
-    const fator = alvo / soma;
-    Object.keys(larguraBase).forEach(col => aplicarLargura(col, Math.max(40, larguraBase[col] * fator)));
+  const temLarguraSalva = !!(estado.larguras && Object.keys(estado.larguras).length);
+  if (temLarguraSalva) {
+    // o que o usuario escolheu vale como escolhido, sem reescala
+    Object.keys(estado.larguras).forEach(col => aplicarLargura(col, estado.larguras[col]));
+  } else {
+    const larguraBase = {};
+    thead.querySelectorAll('th[data-col]').forEach(th => {
+      larguraBase[th.dataset.col] = th.getBoundingClientRect().width;
+    });
+    const soma = Object.values(larguraBase).reduce((a, b) => a + b, 0);
+    const alvo = table.parentElement.clientWidth;
+    if (soma > 0 && alvo > 0) {
+      const fator = alvo / soma;
+      Object.keys(larguraBase).forEach(col => aplicarLargura(col, Math.max(40, larguraBase[col] * fator)));
+    }
   }
 
   // 5) redimensionar: arrastar tira/da espaco da coluna vizinha (soma constante)
@@ -276,26 +282,29 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     alca.addEventListener('mousedown', function (e) {
       e.preventDefault();
       e.stopPropagation();
-      const thVizinho = th.nextElementSibling;
-      if (!thVizinho || !thVizinho.dataset.col) return;
       redimensionandoAgora = true;
       const startX = e.clientX;
       const larguraInicial = th.getBoundingClientRect().width;
-      const larguraInicialVizinho = thVizinho.getBoundingClientRect().width;
+      // fixa a largura ATUAL de todas as colunas antes de mexer: sem isso, com
+      // table-layout:fixed, as que nao tinham largura propria se redistribuem
+      // sozinhas e a tabela inteira "anda" ao arrastar uma so
+      thead.querySelectorAll('th[data-col]').forEach(function (outro) {
+        if (!outro.style.width) aplicarLargura(outro.dataset.col, outro.getBoundingClientRect().width);
+      });
       function mover(e2) {
-        const delta = e2.clientX - startX;
-        const nova = larguraInicial + delta;
-        const novaVizinho = larguraInicialVizinho - delta;
-        if (nova < 40 || novaVizinho < 40) return;
+        const nova = larguraInicial + (e2.clientX - startX);
+        if (nova < 40) return;
         aplicarLargura(th.dataset.col, nova);
-        aplicarLargura(thVizinho.dataset.col, novaVizinho);
       }
       function soltar() {
         document.removeEventListener('mousemove', mover);
         document.removeEventListener('mouseup', soltar);
         estado.larguras = estado.larguras || {};
-        estado.larguras[th.dataset.col] = th.getBoundingClientRect().width;
-        estado.larguras[thVizinho.dataset.col] = thVizinho.getBoundingClientRect().width;
+        // grava TODAS: as outras foram fixadas no inicio do arrasto, e sem
+        // gravar elas a proxima carga recalcularia larguras diferentes
+        thead.querySelectorAll('th[data-col]').forEach(function (outro) {
+          estado.larguras[outro.dataset.col] = outro.getBoundingClientRect().width;
+        });
         salvarEstado();
         // a coluna mudou de largura: o que cabia pode ter passado a nao caber
         atualizarDicasDeTruncamento(table);

@@ -1340,9 +1340,14 @@ def test_pendencia_da_linha_nao_muda_a_altura_da_tabela():
     texto redesenhava a largura de todas as colunas.
     """
     html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    regra = [l for l in html.splitlines() if "[data-classificacao]{" in l]
-    assert regra, "a linha reservada da pendencia sumiu"
-    assert "min-height" in regra[0]
+    # A altura passou a ser estavel por OUTRO caminho (08/09/2026): em vez de
+    # reservar uma linha embaixo - em branco em todo lancamento sem pendencia,
+    # que e a maioria - a pendencia divide a MESMA linha da parcela. Aparecer ou
+    # sumir nao muda mais a altura porque ela nunca teve linha propria.
+    regra = [l for l in html.splitlines() if ".desc-meta{" in l]
+    assert regra, "a linha unica de parcela + pendencia sumiu"
+    assert "align-items:baseline" in regra[0]
+    assert "min-height" not in html.split(".desc-meta{", 1)[1].split("}", 1)[0]
     assert "text-overflow:ellipsis" in html and "white-space:nowrap" in html
 
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
@@ -1646,6 +1651,18 @@ def test_toda_gravacao_confirma_com_toast():
     fatura = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     assert "Lançamento conferido" in fatura and "OK retirado" in fatura
 
+    # a mensagem diz QUAL campo foi gravado, e o rotulo sai do aria-label - que
+    # ja existe por acessibilidade e, nas dimensoes, vem do banco. Uma segunda
+    # lista de nomes aqui divergiria na primeira dimensao nova.
+    toast = (RAIZ / "static" / "toast.js").read_text(encoding="utf-8")
+    assert "window.pdmToastSalvo" in toast
+    assert "'Salvo · ' + rotulo" in toast
+    assert "getAttribute('aria-label')" in toast
+    assert "window.pdmToastSalvo(el)" in js, "Resumida"
+    assert "window.pdmToastSalvo(campo)" in fatura, "Detalhada"
+    # o OK nao e "mais um campo": a mensagem diz o que a assinatura fez
+    assert "el.checked ? 'Lançamento conferido' : 'OK retirado'" in js
+
 
 def test_celula_de_tabela_nao_vira_flex():
     """`display:flex` num <td> o tira do alinhamento vertical da tabela.
@@ -1662,6 +1679,39 @@ def test_celula_de_tabela_nao_vira_flex():
 
     html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     assert html.count('class="origem-conteudo"') == 2, "linha e registro tecnico"
+
+
+def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
+    """Decisao do usuario (08/09/2026): arrastar EMPURRA as colunas a direita.
+
+    Antes a vizinha compensava e a soma nao mudava - com a vizinha no minimo,
+    arrastar parecia nao fazer nada, e alargar uma coluna custava outra. Agora a
+    tabela cresce e o container rola.
+
+    E a largura escolhida nao pode ser reescalada na proxima carga: a
+    normalizacao "cabe tudo" so vale na PRIMEIRA visita, senao ela desfazia o
+    arrasto a cada recarga, em silencio.
+    """
+    js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "const temLarguraSalva" in js
+    assert "aplicarLargura(thVizinho.dataset.col" not in js, "a vizinha nao compensa mais"
+    # todas as colunas sao fixadas antes do arrasto, senao a tabela inteira anda
+    assert "if (!outro.style.width) aplicarLargura(outro.dataset.col" in js
+
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "table.ajustavel { width: auto !important; min-width: 100% !important;" in css
+
+    # as duas telas precisam do container que rola
+    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+        html = (RAIZ / alvo).read_text(encoding="utf-8")
+        assert 'class="tabela-scroll"' in html, alvo
+
+    # a Detalhada tinha table-layout:auto !important, que vencia o `fixed` do
+    # utilitario - com layout automatico o width do <th> e so uma sugestao, e
+    # arrastar nao mexia em nada
+    fatura = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "table-layout:auto!important" not in fatura
+    assert "min-width:132px" not in fatura, "os minimos estouravam o container"
 
 
 def test_valores_visuais_fora_do_sistema_nao_aumentam():

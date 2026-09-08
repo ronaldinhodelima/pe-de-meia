@@ -369,7 +369,7 @@
   /* ---------- colunas ajustaveis: redimensionar, reordenar, ordenar ---------- */
   /* sem rolagem: a tabela ocupa 100% e redimensionar uma coluna tira/da espaco
      da coluna vizinha, como planilha - nunca estoura a largura da tela. */
-  table.ajustavel { width: 100% !important; min-width: 0 !important; table-layout: fixed; }
+  table.ajustavel { width: auto !important; min-width: 100% !important; table-layout: fixed; }
   table.ajustavel th[data-col] {
     display: table-cell !important; /* defensivo: uma classe de celula que mude o display
       alcancaria o cabecalho e o tiraria do grid da tabela, sobrepondo a coluna vizinha.

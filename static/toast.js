@@ -73,6 +73,29 @@
     } catch (e) { /* conteudo estranho: ignora em silencio */ }
   });
 
+  // O rotulo do campo sai do proprio `aria-label` (Categoria, Responsavel,
+  // Projeto, Portfolio...). Ele ja existe em todos os campos por acessibilidade
+  // e vem do BANCO no caso das dimensoes - uma segunda lista de nomes aqui
+  // divergiria na primeira dimensao nova.
+  function rotuloDoCampo(el) {
+    if (!el) return '';
+    const aria = el.getAttribute && el.getAttribute('aria-label');
+    if (aria) return aria.replace(/^Valor da parte.*$/, 'Valor');
+    const campo = el.dataset && el.dataset.campo;
+    if (campo === 'observacao') return 'Observação';
+    if (campo === 'descricao') return 'Descrição';
+    if (el.classList && el.classList.contains('obs-input')) return 'Observação';
+    return '';
+  }
+
+  // "Salvo · Categoria" diz O QUE foi gravado. So "salvo" obriga o usuario a
+  // lembrar em que campo estava - e ele acabou de mexer em quatro.
+  function toastSalvo(el, alternativa) {
+    const rotulo = rotuloDoCampo(el);
+    return toast(rotulo ? 'Salvo · ' + rotulo : (alternativa || 'Lançamento salvo'));
+  }
+
   window.pdmToast = toast;
+  window.pdmToastSalvo = toastSalvo;
   window.pdmToastAposRecarregar = toastAposRecarregar;
 })();

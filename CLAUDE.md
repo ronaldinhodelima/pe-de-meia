@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 372 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 374 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -889,19 +889,30 @@ sobrescrever campo já preenchido.
 Duas correções de 05/09/2026, ambas na Detalhada, ambas da mesma família: **informação temporária
 não pode empurrar o que está fixo.**
 
-A pilula **"Faltam: ..."** mora dentro da descrição, numa tabela com `table-layout:auto`. A cada
-campo preenchido ela encolhia uma palavra e, no último, desaparecia — a linha perdia altura, a
-coluna mudava de largura e **a tabela inteira pulava sob o cursor**, justamente enquanto o usuário
-clicava no campo seguinte. Agora a linha é **reservada** (`min-height`, mesmo vazia), o texto é
-`nowrap` com reticências e o texto inteiro fica no tooltip, e a pilula **é reaproveitada** em vez de
-recriada — recriar pisca. Ela sai com transição, não com corte seco.
+A pilula **"Faltam: ..."** mora dentro da descrição. A cada campo preenchido ela encolhia uma
+palavra e, no último, desaparecia — a linha perdia altura e **a tabela inteira pulava sob o cursor**,
+justamente enquanto o usuário clicava no campo seguinte. O texto é `nowrap` com reticências, o texto
+inteiro fica no tooltip, e a pilula **é reaproveitada** em vez de recriada — recriar pisca.
+
+**A estabilidade vem de dividir a linha, não de reservar uma** (08/09/2026). A primeira solução foi
+reservar uma linha embaixo (`min-height`, mesmo vazia) — e ela ficava **em branco em todo lançamento
+sem pendência, que é a maioria**, engordando a tabela inteira para um caso minoritário. Hoje parcela
+e pendência dividem a **mesma** linha (`.desc-meta`, `align-items: baseline`): aparecer ou sumir não
+muda a altura porque a pendência nunca teve linha própria.
 `test_pendencia_da_linha_nao_muda_a_altura_da_tabela` trava isso.
 
 ### Confirmação de gravação é um toast, e é um só (07/09/2026)
 
 `static/toast.js` — `pdmToast(mensagem, tipo)` — desenha a confirmação **no canto superior direito**,
 com entrada e saída suaves: sucesso some em ~2,6 s, erro dura 6 s e fecha no clique, porque ali a
-mensagem é a única pista do que houve. **Toda ação que grava no banco confirma por ele** (08/09/2026): edição de linha e de modal,
+mensagem é a única pista do que houve. **A mensagem diz QUAL campo foi gravado** — `Salvo · Categoria`, `Salvo · Responsável`,
+`Salvo · Observação`. Só "salvo" obriga o usuário a lembrar em que campo estava, e ele acabou de
+mexer em quatro. O rótulo sai do **`aria-label` do próprio campo**, que já existe por acessibilidade
+e, nas dimensões, **vem do banco** — uma segunda lista de nomes no JS divergiria na primeira
+dimensão nova. O OK não é "mais um campo": ali a mensagem é `Lançamento conferido` ou `OK retirado`,
+porque o que importa é o que a assinatura fez.
+
+**Toda ação que grava no banco confirma por ele** (08/09/2026): edição de linha e de modal,
 categoria, dimensão, observação, descrição, OK da Detalhada, rateio salvo e desfeito, lançamento
 manual criado e excluído, cadastro rápido de Projeto/Portfólio — e o que vier. Duas implementações divergiriam na primeira regra nova.
 
@@ -1160,9 +1171,28 @@ seguir o valor de fundo. `test_tab_nao_apaga_valor_que_o_usuario_nao_escolheu` t
 ## 7.8 Colunas ajustáveis
 
 Utilitário compartilhado, ligado com
-`<table class="compacta ajustavel" data-tabela="chave-unica">`. Redimensionar é **estilo
-planilha**: a vizinha compensa, a soma nunca muda e a tabela não estoura a tela. Preferências no
+`<table class="compacta ajustavel" data-tabela="chave-unica">`. Preferências no
 `localStorage` (`pedemeia_tabela_<chave>`).
+
+**Arrastar EMPURRA as colunas à direita** (decisão do usuário, 08/09/2026). Era estilo planilha — a
+vizinha compensava e a soma nunca mudava — mas com a vizinha no mínimo **arrastar parecia não fazer
+nada**, e alargar uma coluna custava outra. Agora a tabela cresce (`width: auto`, `min-width: 100%`)
+e quem rola é o `.tabela-scroll`, que as duas telas passaram a ter.
+
+Três detalhes que a mudança exigiu, todos com teste:
+
+- **fixar a largura atual de todas as colunas antes do arrasto.** Com `table-layout: fixed`, coluna
+  sem largura própria se redistribui sozinha e a tabela inteira "anda" ao mexer numa só;
+- **gravar todas as larguras ao soltar**, pelo mesmo motivo: sem isso a carga seguinte recalcularia
+  outras;
+- **a normalização "cabe tudo" só vale na PRIMEIRA visita.** Ela reescalava tudo para o container a
+  cada carga — o que desfazia o arrasto do usuário em silêncio.
+
+**Na Detalhada nada disso funcionava, por dois motivos somados:** `table-layout: auto !important` no
+template vencia o `fixed` do utilitário, e **com layout automático o `width` do `<th>` é só uma
+sugestão** — o navegador recalcula pelo conteúdo; e as quatro colunas de classificação tinham
+`min-width: 132px`, que somavam 528px fixos e **estouravam o container**, criando a barra de rolagem
+horizontal. Os dois saíram.
 
 - `data-sem-ordenar` / `data-sem-reordenar` desligam recursos. Usados no **Centro de Custos**, que
   é hierárquico: ordenar embaralharia a hierarquia.
@@ -1171,8 +1201,10 @@ planilha**: a vizinha compensa, a soma nunca muda e a tabela não estoura a tela
 - **Quando um filtro recarrega a tabela por AJAX, chamar `ativarTabelaAjustavel()` de novo** — o
   elemento antigo vai embora levando os listeners.
 - CSS de célula não pode vazar para o `<th>`: `.cel-origem { display:flex }` tirava o cabeçalho do
-  grid e a coluna seguinte desenhava por cima. Por isso a regra é `td.cel-origem`, com
-  `display:table-cell !important` defensivo nos `th[data-col]`.
+  grid e a coluna seguinte desenhava por cima. Hoje **nenhuma célula é `flex`** — `display` próprio
+  num `<td>` também o tira do alinhamento vertical da tabela, e era por isso que o selo da Origem
+  ficava colado no topo. Quem arranja o conteúdo é um wrapper dentro da célula
+  (`.origem-conteudo`); o `display:table-cell !important` nos `th[data-col]` fica como defensivo.
 
 ## 7.8-A Sistema de design — norma
 
@@ -1626,7 +1658,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**372 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**374 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

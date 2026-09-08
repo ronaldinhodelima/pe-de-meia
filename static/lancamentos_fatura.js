@@ -463,10 +463,10 @@
   // "Salvo" e confirmacao, nao estado: depois de lido nao acrescenta nada, e
   // deixado na tela vira ruido em toda linha aberta. Some sozinho, com
   // transicao; erro NAO some - ali a mensagem e a unica pista do que houve.
-  function mostrarSalvo(aviso) {
+  function mostrarSalvo(aviso, campo) {
     // a confirmacao virou toast (canto superior direito): presa na linha, ela
     // sumia da vista quando a linha saia da tela e mexia no layout ao aparecer
-    if (window.pdmToast) window.pdmToast('Lançamento salvo');
+    if (window.pdmToastSalvo) window.pdmToastSalvo(campo);
     clearTimeout(aviso._sumir);
     aviso.textContent = '';
     aviso.classList.remove('erro', 'sumindo');
@@ -491,7 +491,7 @@
         });
         const json = await resp.json();
         if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível salvar.');
-        if (editor.dataset.versaoSalva === versao) mostrarSalvo(aviso);
+        if (editor.dataset.versaoSalva === versao) mostrarSalvo(aviso, alterado);
         // Trocar a categoria pode trocar a NATUREZA, e com ela a
         // obrigatoriedade das dimensoes. So o servidor sabe: releia a flag da
         // resposta em vez de deduzir no cliente.

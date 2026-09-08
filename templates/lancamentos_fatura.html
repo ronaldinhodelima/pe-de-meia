@@ -16,7 +16,7 @@
      .card-progresso): as duas telas usam os mesmos, e uma segunda definicao
      aqui divergiria da outra tela em silencio (secao 7.8-A) */
 
-  .fatura-tabela{table-layout:auto!important;width:100%!important}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal;min-width:260px;max-width:420px}
+  .fatura-tabela{width:100%}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal}
   .fatura-tabela thead th{position:sticky;top:0;background:var(--surface);z-index:1;box-shadow:0 1px 0 var(--line)}
   .fatura-tabela tr.fatura-ok{background:var(--raise)}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 var(--warn)}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
   .fatura-tabela tr[data-toggle-linha]{cursor:pointer;transition:background-color .1s}
@@ -61,11 +61,12 @@
   .fatura-tabela th.col-abre,.fatura-tabela td.cel-sel-fatura{width:56px}
   .fatura-tabela th.col-data,.fatura-tabela td.cel-data-fatura{width:82px;white-space:nowrap;color:var(--ink-soft);font-variant-numeric:tabular-nums}
   .fatura-tabela th.col-valor,.fatura-tabela td.cel-valor-fatura{width:104px;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .fatura-tabela th.col-classif{min-width:132px}
-  .fatura-tabela td.cel-classif{min-width:132px;padding-top:5px;padding-bottom:5px}
+
+  .fatura-tabela td.cel-classif{padding-top:5px;padding-bottom:5px}
   .fatura-tabela td.cel-classif.vazia{color:var(--ink-faint);font-size:var(--fonte-xs)}
   .fatura-tabela th.col-ok,.fatura-tabela td.cel-ok-fatura{width:70px;text-align:center;white-space:nowrap}
-  .desc-texto{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .desc-texto{display:flex;flex-direction:column;gap:1px;min-width:0;justify-content:center}
+  .desc-meta{display:flex;align-items:baseline;gap:7px;min-width:0}
   /* uma linha so: a descricao do cartao vem com prefixo longo ("A vista sem
      juros - Visa - ...") e quebrava em duas, dobrando a altura de quase toda
      linha. O texto inteiro fica no tooltip. */
@@ -75,9 +76,9 @@
      encolhe quando o ultimo campo e preenchido e a tabela inteira pula sob o
      cursor. E nao pode alargar a coluna - com table-layout:auto, cada palavra
      que sai da pilula redesenha a largura de todas as colunas. */
-  .desc-texto [data-classificacao]{display:block;min-height:19px}
-  .desc-texto [data-classificacao] .estado{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:top;transition:opacity .18s ease}
-  .desc-texto [data-classificacao].sumindo .estado{opacity:0}
+  .desc-meta [data-classificacao]{display:inline-flex;min-width:0}
+  .desc-meta [data-classificacao] .estado{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:top;transition:opacity .18s ease}
+  .desc-meta [data-classificacao].sumindo .estado{opacity:0}
   .expande sup{font-size:var(--icone-xxs);margin-left:1px;color:var(--ink-faint);font-weight:var(--peso-medio)}
   .status-inline{display:block;font-size:var(--fonte-xxs);color:var(--ink-faint);line-height:1.2}
   .status-inline.erro{color:var(--bad)}
@@ -193,7 +194,7 @@
    `data-busca-externa`: a pesquisa daqui esconde o grupo inteiro, coisa que o
    filtro generico nao faz - o campo e movido para a barra, que fica igual a da
    Resumida. #}
-<table class="compacta fatura-tabela ajustavel" data-tabela="fatura" data-sem-ordenar data-busca-externa=".busca-fatura"><thead><tr><th class="col-abre" data-col="abre" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição na fatura' }}</th><th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0">{{ 'Valor Pluggy' if fatura.em_andamento else 'Valor da fatura' }}</th><th class="col-classif" data-col="cat" data-ordenar="cat" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="ok" data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
+<table class="compacta fatura-tabela ajustavel" data-tabela="fatura" data-sem-ordenar data-busca-externa=".busca-fatura"><thead><tr><th class="col-abre" data-col="abre" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0">{{ 'Descrição' if fatura.em_andamento else 'Descrição na fatura' }}</th><th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{{ 'Valor provisório, como o Pluggy entregou' if fatura.em_andamento else 'Valor cobrado na fatura' }}">Valor</th><th class="col-classif" data-col="cat" data-ordenar="cat" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="ok" data-ordenar="ok" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}"
       data-valor="{{ linha.valor }}"
@@ -208,9 +209,14 @@
         <div class="desc-texto">
           <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
-          {% if parcela %}<span class="desc-parcela">{{ parcela }}</span>{% endif %}
+          {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
+             pendencia deixava uma linha em branco em todo lancamento que nao
+             tem nada a dizer - a maioria. Lado a lado, a altura nao muda
+             quando ela aparece ou some. #}
+          <span class="desc-meta">
+          {%- if parcela %}<span class="desc-parcela">{{ parcela }}</span>{% endif %}
           <span data-classificacao>{% if linha.pagamento %}<span class="estado">informativo</span>{% elif linha.requer_validacao %}<span class="estado invalido" data-tip="Validar: {{ linha.validacao_motivos|join(', ') }}">Validar: {{ linha.validacao_motivos|join(', ') }}</span>{% elif linha.faltando %}<span class="estado pendente" data-tip="Faltam: {{ linha.faltando|join(', ') }}">Faltam: {{ linha.faltando|join(', ') }}</span>{% elif linha.natureza_estado=='fora' %}<span class="estado fora">{{ linha.natureza_rotulo }} — fora do DRE</span>{% elif linha.natureza_estado=='misto' %}<span class="estado">Rateio misto: DRE e fora do DRE</span>{% endif %}</span>
-
+          </span>
         </div>
       </div>
     </td>
@@ -292,4 +298,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-2"></script>{% endblock %}
