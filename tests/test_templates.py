@@ -287,9 +287,11 @@ class TestIndex:
         html = self.render([
             self.linha(situacoes=situacoes, situacoes_texto="Conferido · Fora do resultado")
         ])
-        assert "Legenda das linhas" in html
-        assert 'class="linha-ponto conferida"' in html
-        assert 'class="linha-ponto fora"' in html
+        # Os pontos no inicio da linha sairam a pedido do usuario (09/09/2026).
+        # A situacao continua nao dependendo so da cor: ela esta por extenso no
+        # tooltip da data e nos atalhos de filtro do rodape (secao 7.6).
+        assert "linha-ponto" not in html
+        assert "Filtrar por situação" in html
         assert 'data-tip="Conferido · Fora do resultado"' in html
 
     def test_oferece_filtro_de_possiveis_duplicidades(self, ctx):
@@ -812,17 +814,23 @@ class TestSemanticaDeLinha:
         # os quatro construtores de linha do sistema
         assert view.count("situacoes_da_linha(") == 5
 
-    def test_a_detalhada_mostra_os_pontos_e_o_selo_de_fora_do_resultado(self, ctx):
+    def test_a_situacao_da_linha_aparece_por_extenso_e_no_selo(self, ctx):
+        """Os pontos no inicio da linha sairam a pedido do usuario
+        (09/09/2026). A explicacao de estado nao pode ficar so na cor
+        (secao 7.6): ela continua no tooltip da data, no selo de fora do
+        resultado e nos atalhos de filtro do rodape."""
         from tests.test_templates import TestDetalhadaPorPeriodo
         base = TestDetalhadaPorPeriodo().contexto()
         base["linhas"][0]["fora_do_resultado"] = "Mesmo evento que outro lançamento."
         base = self.linha_com(base, substituido=True, suspeita=True)
         html = render_template("lancamentos_fatura.html", **base)
-        assert 'class="linha-ponto fora"' in html
-        assert 'class="linha-ponto suspeita"' in html
+        assert "linha-ponto" not in html
         assert 'class="selo-fora"' in html
         assert "Possível duplicidade — revisar" in html
         assert 'class="legenda-lancamentos"' in html
+        # o tooltip fica na propria celula de data (a do corpo, nao o cabecalho)
+        celula = html.split('class="cel-data-fatura"', 1)[1].split(">", 1)[0]
+        assert "Fora do resultado" in celula and "Possível duplicidade" in celula
 
     def test_linha_sem_situacao_nao_fica_com_tooltip_vazio(self, ctx):
         from tests.test_templates import TestDetalhadaPorPeriodo
@@ -830,13 +838,15 @@ class TestSemanticaDeLinha:
         html = render_template("lancamentos_fatura.html", **base)
         assert "Lançamento contabilizado" in html
 
-    def test_o_resumo_parcial_atualiza_os_pontos_junto_com_o_ok(self):
-        """Sem isso o ponto "Conferido" so apareceria no proximo carregamento:
-        a linha diria uma coisa e a cor, outra."""
+    def test_o_resumo_parcial_atualiza_a_situacao_junto_com_o_ok(self):
+        """Sem isso o tooltip continuaria dizendo "pendente" numa linha que
+        acabou de ser conferida: a linha diria uma coisa e a cor, outra."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
         js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-        assert "linha-indicadores" in js and "linha.className = nova.className" in js
+        assert "linha.className = nova.className" in js
+        assert "data.dataset.tip = dataNova.dataset.tip" in js
+        assert "linha-indicadores" not in js
 
 
 class TestRateioNasDuasTelas:

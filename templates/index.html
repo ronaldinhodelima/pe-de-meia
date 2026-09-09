@@ -151,7 +151,7 @@
           data-exige-classificacao="{{ '0' if r.get('exige_classificacao', True) == False else '1' }}"
           {% if r.rateios %}data-rateio-total="{{ r.valor_rateio }}" data-rateio-valido="{{ '1' if r.rateio_valido else '0' }}"{% endif %}>
         {% if pode_editar %}<td class="cel-sel" data-col="sel"><input type="checkbox" class="sel-check" aria-label="Selecionar lançamento"{% if r.rateios %} disabled data-tip="Lançamento rateado: edite as partes pelo detalhe"{% endif %}></td>{% endif %}
-        <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}"><span class="linha-indicadores" data-tip="{{ r.situacoes_texto }}">{% for s in r.situacoes %}<i class="linha-ponto {{ s.classe }}"></i>{% endfor %}</span>{{ r.data_dia }}<br>{{ r.data_hora }}</td>
+        <td class="cel-data" data-col="data" data-sort="{{ r.data_sort }}" data-tip="{{ r.situacoes_texto }}">{{ r.data_dia }}<br>{{ r.data_hora }}</td>
         <td class="cel-desc" data-col="desc" data-tip="{{ r.descricao }}">
           {{ r.descricao }}
           {%- if r.fora_do_resultado %} <span class="selo-fora" title="{{ r.fora_do_resultado }}">fora do resultado</span>{% endif %}
@@ -230,15 +230,15 @@
 </div>
 
 <details class="legenda-lancamentos">
-  <summary>Legenda das linhas</summary>
+  <summary>Filtrar por situação</summary>
   <div class="legenda-itens">
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')"><i class="linha-ponto conferida"></i>Conferido</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')"><i class="linha-ponto pendente-banco"></i>Pendente no banco</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')"><i class="linha-ponto suspeita"></i>Possível duplicidade</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')"><i class="linha-ponto fora"></i>Fora do resultado</button>
-    <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')"><i class="linha-ponto rateio"></i>Rateio incompleto</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('conferida')">Conferido</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('pendente_banco')">Pendente no banco</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('duplicidade')">Possível duplicidade</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('fora_resultado')">Fora do resultado</button>
+    <button type="button" class="legenda-item" onclick="filtrarSituacao('rateio_incompleto')">Rateio incompleto</button>
   </div>
-  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
+  <div class="legenda-ajuda">Passe o mouse sobre a data para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
 </details>
 {% endblock %}
 

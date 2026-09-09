@@ -295,7 +295,7 @@
       {% if linha.rateios %}data-id="{{ linha.principal.transacao_id }}" data-rateio-total="{{ linha.valor_rateio }}" data-rateio-valido="{{ '1' if linha.rateio_valido else '0' }}"{% endif %}
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
     <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir detalhes{% else %}Abrir detalhes do lançamento{% endif %}">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button></td>
-    <td class="cel-data-fatura" data-col="data"><span class="linha-indicadores" data-tip="{{ linha.situacoes_texto }}">{% for si in linha.situacoes %}<i class="linha-ponto {{ si.classe }}"></i>{% endfor %}</span>{{ linha.data.strftime('%d/%m/%Y') }}</td>
+    <td class="cel-data-fatura" data-col="data" data-tip="{{ linha.situacoes_texto }}">{{ linha.data.strftime('%d/%m/%Y') }}</td>
     <td class="desc" data-col="desc">
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
@@ -397,15 +397,15 @@
 </tr></tfoot></table></div>
 {% if modo_periodo %}
 <details class="legenda-lancamentos">
-  <summary>Legenda das linhas</summary>
+  <summary>Filtrar por situação</summary>
   <div class="legenda-itens">
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=conferida"><i class="linha-ponto conferida"></i>Conferido</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=pendente_banco"><i class="linha-ponto pendente-banco"></i>Pendente no banco</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=duplicidade"><i class="linha-ponto suspeita"></i>Possível duplicidade</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=fora_resultado"><i class="linha-ponto fora"></i>Fora do resultado</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=rateio_incompleto"><i class="linha-ponto rateio"></i>Rateio incompleto</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=conferida">Conferido</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=pendente_banco">Pendente no banco</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=duplicidade">Possível duplicidade</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=fora_resultado">Fora do resultado</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=rateio_incompleto">Rateio incompleto</a>
   </div>
-  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
+  <div class="legenda-ajuda">Passe o mouse sobre a data para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
 </details>
 {% endif %}
 <div class="rodape-fatura">
@@ -428,4 +428,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-3"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-4"></script>{% endblock %}

@@ -321,14 +321,6 @@
   table.compacta td { padding: 5px 8px; font-size: var(--fonte-sm); }
   table.compacta .pdm-combobox-input { font-size: var(--fonte-xs); }
   table.compacta .cel-data { width: 78px; color: var(--ink-soft); font-size: var(--fonte-xs); line-height: 1.25; }
-  table.compacta .cel-data, .fatura-tabela .cel-data-fatura { position:relative;padding-left:14px; }
-  .linha-indicadores { position:absolute;left:3px;top:5px;bottom:5px;width:7px;display:flex;flex-direction:column;justify-content:center;gap:2px; }
-  .linha-ponto { display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 7px;background:var(--ink-faint); }
-  .linha-ponto.conferida { background:var(--ink-faint); }
-  .linha-ponto.pendente-banco { background:var(--warn); }
-  .linha-ponto.suspeita,.linha-ponto.rateio { background:var(--bad); }
-  .linha-ponto.duplicada { background:var(--warn); }
-  .linha-ponto.fora { background:var(--neutro); }
   .legenda-lancamentos { background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;margin:0 0 10px; }
   .legenda-lancamentos summary { cursor:pointer;color:var(--ink-soft);font-size:var(--fonte-sm);font-weight:var(--peso-medio); }
   .legenda-itens { display:flex;gap:7px;flex-wrap:wrap;margin-top:9px; }

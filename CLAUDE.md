@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 406 aprovados, 6 ignorados
+**Última revisão:** 09/09/2026 · **Schema:** migração 61 · **Testes:** 406 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -806,8 +806,7 @@ depois de o uso real confirmar que nada ficou para trás.
 Filtrar na Detalhada não recarrega mais: uma marca posta em `window` sobrevive à troca, o histórico
 cresce em um, a tabela nova volta com as 12 alças e os 9 cabeçalhos ordenáveis, e o Voltar do
 navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de classificação" trouxe
-**24** linhas — exatamente o "Faltam 24" do card, como a §7.2-B exige. · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
-OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
+**24** linhas — exatamente o "Faltam 24" do card, como a §7.2-B exige.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
 > novo em uma das telas é candidato à outra por padrão; o commit precisa dizer se foi aplicado nas
@@ -979,11 +978,13 @@ tem: *cobrança sem lançamento vinculado* e o `Validar: …`. Duas listas diver
 ficaria com um estado a menos, em silêncio. **`fatura-erro` continua** — divergência é situação do
 **documento**, não do lançamento.
 
-**O resumo parcial troca também os pontos.** Sem isso o ponto "Conferido" só apareceria no
-carregamento seguinte, e a linha diria uma coisa enquanto a cor dizia outra.
+**O resumo parcial troca também o tooltip da data.** Sem isso ele continuaria dizendo "pendente"
+numa linha que acabou de ser conferida — a linha diria uma coisa enquanto a cor dizia outra.
 
 Medido em produção (agosto/2026, recorte por período): 108 linhas conferidas com fundo transparente,
-82 pendentes em `--raise`, 209 pontos, *fora do resultado* com opacidade .62 e selo. A fatura
+82 pendentes em `--raise`, *fora do resultado* com opacidade .62 e selo. **Os pontos de situação que
+esta etapa trouxe saíram no dia seguinte, a pedido do usuário** (§7.6) — `situacoes_da_linha()`
+continua, porque é dela que saem o tooltip e as classes da linha. A fatura
 oficial de agosto e a fatura em andamento seguem com os cards e o cabeçalho próprios, sem coluna
 Origem e sem legenda.
 
@@ -1355,8 +1356,14 @@ de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde
 - **Verde** apenas para fechado/completo; **amarelo** para revisão humana pendente; **vermelho**
   para divergência real; **roxo** para investimento ou natureza fora do DRE; **neutro** para
   totais informativos. Despesa normal não deve parecer erro só por ser despesa.
-- **Cor nunca é a única explicação de estado:** pontos no início da linha, tooltip com todas as
-  situações, legenda e filtros equivalentes.
+- **Cor nunca é a única explicação de estado:** tooltip com todas as situações na célula de data,
+  selo de *fora do resultado* na descrição, e os atalhos de filtro por situação no rodapé.
+- **Não existem pontos coloridos no início da linha** (decisão do usuário, 09/09/2026, depois de os
+  ver em produção). Eles existiram entre 08 e 09/09; o usuário pediu para tirar. **O que eles
+  carregavam não se perdeu:** o `data-tip` com todas as situações passou para a própria célula de
+  data, e o rodapé — que era "Legenda das linhas" e mostrava as bolinhas — virou **"Filtrar por
+  situação"**, que é o que ele de fato faz. Exibir ali um símbolo que não existe mais na tabela
+  seria referência a coisa nenhuma. Não reintroduzir sem ele pedir.
 - **O que FALTA conferir é que fica cinza; linha com OK é transparente** (decisão do usuário,
   07/09/2026). A tela existe para achar o que falta — destacar o que já acabou é o contrário disso,
   e no fim do mês deixava a tela inteira cinza. Verde continua proibido aqui: despesa normal não
@@ -1559,9 +1566,9 @@ chegaram a **fixar o formato errado** como esperado — teste que copia o compor
 cobrar a regra apenas congela o defeito.
 
 **Medição e catraca.** `python3 ferramentas/inventario_estilo.py [--lista]` conta todo valor visual
-fora do sistema. Eram 522 em 01/09/2026; hoje são **17**, e **nenhum é tamanho de fonte** — cor,
-tamanho, peso e sombra estão inteiramente dentro do sistema. Os 17 são 15 raios que a regra abaixo
-mantém separados (círculos `50%`, fio de `1px`, 12/16/18px) e as duas cores do painel navy do
+fora do sistema. Eram 522 em 01/09/2026; hoje são **16**, e **nenhum é tamanho de fonte** — cor,
+tamanho, peso e sombra estão inteiramente dentro do sistema. Os 16 são 14 raios que a regra abaixo
+mantém separados (círculo `50%`, fio de `1px`, 12/16/18px) e as duas cores do painel navy do
 login.
 `test_valores_visuais_fora_do_sistema_nao_aumentam` trava o teto e **avisa quando ele fica
 folgado**, pedindo para abaixá-lo — o número só pode cair.
@@ -1906,7 +1913,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**406 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**406 aprovados e 6 ignorados** (09/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

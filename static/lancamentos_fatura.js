@@ -673,12 +673,9 @@
         if (classificacao.querySelector('.estado.pendente')) classificacao.dataset.pendencia = '1';
         else delete classificacao.dataset.pendencia;
       }
-      const pontos = linha.querySelector('.linha-indicadores');
-      const pontosNovos = nova.querySelector('.linha-indicadores');
-      if (pontos && pontosNovos) {
-        pontos.innerHTML = pontosNovos.innerHTML;
-        pontos.dataset.tip = pontosNovos.dataset.tip || '';
-      }
+      const data = linha.querySelector('[data-col="data"]');
+      const dataNova = nova.querySelector('[data-col="data"]');
+      if (data && dataNova) data.dataset.tip = dataNova.dataset.tip || '';
       const ok = linha.querySelector('[data-ok-lancamento]');
       const okNovo = nova.querySelector('[data-ok-lancamento]');
       if (ok && okNovo) {
