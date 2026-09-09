@@ -2707,3 +2707,28 @@ def test_rotulo_tem_maiuscula_so_na_primeira_letra():
         assert "text-transform:capitalize" not in texto, arquivo
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
     assert "::first-letter" in css and "text-transform: uppercase" in css
+
+
+def test_quem_desenha_o_quadro_de_rateio_entrega_as_listas_no_config():
+    """O quadro monta os campos POR JS, a partir do config da tela.
+
+    Sem `categorias` e `dimensoes` ali, ele nasce com "(sem categoria)" como
+    unica opcao e sem dimensao nenhuma - e um rateio novo fica impossivel de
+    preencher. Nao aparece em teste de template (que renderiza com config
+    vazio) nem em py_compile: so abrindo a tela. As chaves sao lidas do proprio
+    rateio.js, entao uma chave nova passa a ser cobrada sozinha.
+    """
+    import re
+
+    nucleo = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
+    quadro = nucleo.split("function montarQuadro(", 1)[1]
+    lidas = set(re.findall(r"cfg\.([a-z_]+)", quadro))
+    lidas |= set(re.findall(r"cfg\.([a-z_]+)", nucleo.split("function opcoes(", 1)[0]))
+    assert {"categorias", "dimensoes"} <= lidas, lidas
+
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    # o config do recorte por periodo, que e onde o quadro aparece
+    trecho = view.split("def _render_periodo", 1)[1].split("return render_template", 1)[0]
+    config = trecho.split("config = {", 1)[1]
+    for chave in sorted(lidas):
+        assert f'"{chave}"' in config, f"config do recorte por periodo sem {chave}"

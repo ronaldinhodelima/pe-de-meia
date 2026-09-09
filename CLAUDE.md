@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 399 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 400 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1027,6 +1027,15 @@ retirar assinatura exige confirmação um a um (§1.2).
 mesma lição do `valor_pt()` no Python (§7.8-A), que já custou `- R$ 200.00` no modal. Nasceu
 `window.pdmMoedaBr()`, no `tabelas.js`, ao lado do `pdmNumeroDeTexto()` que faz o caminho inverso.
 
+**Config incompleto desliga a interface sem erro nenhum.** O quadro de rateio monta os campos
+**por JS**, a partir do `config` da tela — e o config da Detalhada não trazia `categorias` nem
+`dimensoes`. Resultado: o quadro nascia com "(sem categoria)" como única opção e **sem dimensão
+nenhuma**, com um rateio novo impossível de preencher. Não aparece em teste de template (que
+renderiza com config vazio) nem no `py_compile`: só abrindo a tela. É a mesma classe da coluna
+ausente num `.get()` (§11.3-A). `test_quem_desenha_o_quadro_de_rateio_entrega_as_listas_no_config`
+lê do próprio `rateio.js` quais chaves ele consome, então **uma chave nova passa a ser cobrada
+sozinha**.
+
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
 pelo `py_compile` e pela suíte estrutural e derruba a tela inteira (§10.3 nº 3) — sem preview local
@@ -1846,7 +1855,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**399 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**400 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

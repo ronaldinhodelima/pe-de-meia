@@ -1568,6 +1568,18 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         "projeto_portfolio_map": projeto_portfolio_map,
         "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
         "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
+        # O quadro de rateio monta os campos POR JS, entao precisa das listas
+        # aqui - sem elas ele nascia com "(sem categoria)" como unica opcao e
+        # sem dimensao nenhuma, e o rateio novo era impossivel de preencher.
+        "categorias": [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
+        "dimensoes": {
+            str(d["id"]): [
+                {"id": v["id"], "rotulo": rotulo_valor_dimensao(v)}
+                for v in valores_por_dim.get(d["id"], [])
+            ]
+            for d in dimensoes
+        },
+        "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
     }
     return render_template(
         "lancamentos_fatura.html", titulo="Lançamentos",
