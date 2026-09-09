@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 402 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 406 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -791,8 +791,9 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 
 **Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
 3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio · 7 ✓ ações do lançamento
-(rateio, exclusão, confirmação ao retirar o OK) · 8 ✓ lançamento manual · 9 filtros por AJAX com
-histórico · 10 gasto por categoria · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+(rateio, exclusão, confirmação ao retirar o OK) · 8 ✓ lançamento manual · 9 ✓ filtros por AJAX
+com histórico · 10 ✓ gasto por categoria. **As dez etapas estão em produção** — a Resumida só sai
+depois de o uso real confirmar que nada ficou para trás. · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
 OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
@@ -1052,6 +1053,26 @@ nenhuma, e criá-lo ali sem vê-lo aparecer confundiria. Ali o botão leva ao re
 nasceria em branco — em silêncio. É a mesma família do config incompleto acima e da coluna ausente
 num `.get()` (§11.3-A). Por isso o teste renderiza o formulário **com o contexto real de cada tela**
 e confere o valor, não só a presença do campo.
+
+### Filtrar troca a lista no lugar (etapas 9 e 10, 09/09/2026)
+
+`window.pdmTrocarPorAjax(url, partes, aposTrocar)`, no `tabelas.js`, é a troca de blocos que as duas
+telas usam ao filtrar: recarregar joga quem está no meio da conferência de volta ao topo, e a URL
+precisa acompanhar para o **Voltar do navegador** funcionar. O `pushState` mora nele; cada tela trata
+o próprio `popstate`.
+
+**`replaceWith` descarta o elemento antigo com TUDO que estava anexado nele** — os listeners e as
+alças de redimensionar são criados por JS e somem. Por isso a tabela nova é reativada
+(`ativarTabelaAjustavel`) e a ordenação, religada. **A chave sai do próprio `data-tabela`**: escrita
+à mão no JS, ela divergiria do template no dia em que ele mudasse, e as larguras salvas se perderiam
+em silêncio.
+
+**O resumo parcial da Detalhada continua com o `DOMParser` dele, e isso é certo:** ele faz outra
+coisa — atualiza linha a linha sem destruir o que o usuário está preenchendo (§7.2). O teste que
+proíbe uma segunda cópia da troca olha só o corpo da função de filtro.
+
+**"Gasto por categoria" é do PERÍODO, não da fatura.** Numa fatura o total já é a soma das compras
+daquele cartão, e a quebra por categoria vive na conciliação.
 
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
@@ -1872,7 +1893,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**402 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**406 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

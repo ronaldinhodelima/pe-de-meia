@@ -168,10 +168,43 @@
       .forEach(cb => params.append(cb.name, cb.value));
     return params;
   }
+  // Filtrar troca a lista NO LUGAR, sem recarregar: recarregar joga quem esta
+  // no meio da conferencia de volta ao topo. A URL acompanha, entao o Voltar
+  // do navegador retorna ao filtro anterior.
   window.aplicarFiltrosPeriodo = function () {
     if (!mesInput) return;
-    window.location.assign('/lancamentos/fatura?' + queryDoPeriodo().toString());
+    const url = '/lancamentos/fatura?' + queryDoPeriodo().toString();
+    return window.pdmTrocarPorAjax(url, [
+      {seletor: 'table.compacta', aoTrocar: function (tabela) {
+        // a tabela nova veio do servidor sem os listeners nem as alcas de
+        // redimensionar, que sao criados por JS
+        if (window.ativarTabelaAjustavel) window.ativarTabelaAjustavel(tabela, tabela.dataset.tabela);
+        tabelaFatura = tabela;
+        ligarOrdenacao();
+        if (window.atualizarTotaisVisiveis) window.atualizarTotaisVisiveis(tabela);
+      }},
+      {seletor: '.cards'},
+      {seletor: '.chipfilter'},
+      {seletor: 'details.cat-breakdown', preservarAberto: true},
+      {seletor: 'details.legenda-lancamentos', preservarAberto: true},
+    ], function (doc) {
+      const configNovo = doc.querySelector('script[data-config-fatura]');
+      if (configNovo) {
+        try { config = JSON.parse(configNovo.textContent); } catch (e) {}
+      }
+      const status = doc.getElementById('periodoStatus');
+      const atual = document.getElementById('periodoStatus');
+      if (status && atual) atual.value = status.value;
+      aplicarBuscaFatura();
+    });
   };
+
+  // Cada filtro vira uma etapa real do navegador. Voltar recarrega o estado
+  // correspondente sem criar uma entrada nova no historico.
+  window.addEventListener('popstate', function () {
+    if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+    window.location.reload();
+  });
   window.mudarMesPeriodo = function (passo) {
     if (!mesInput) return;
     const ano = document.getElementById('periodoAno');
@@ -271,7 +304,7 @@
     });
   }
 
-  const tabelaFatura = document.querySelector('.fatura-tabela');
+  let tabelaFatura = document.querySelector('.fatura-tabela');
   function valorOrdenacao(linha, chave) {
     // Le por data-col, nunca por indice de celula: a ordem das colunas mudou
     // quando a classificacao veio para a linha, e indice fixo quebraria em
@@ -334,6 +367,7 @@
   // primeira carga: o rodape nasce preenchido, sem esperar uma pesquisa
   if (window.atualizarTotaisVisiveis) window.atualizarTotaisVisiveis(tabelaFatura);
 
+  function ligarOrdenacao() {
   if (tabelaFatura) tabelaFatura.querySelectorAll('th[data-ordenar]').forEach(cabecalho => {
     cabecalho.setAttribute('role', 'button');
     cabecalho.addEventListener('click', () => ordenarFatura(cabecalho));
@@ -343,6 +377,8 @@
       ordenarFatura(cabecalho);
     });
   });
+  }
+  ligarOrdenacao();
 
   const revisarParcelamentos = document.getElementById('revisarParcelamentos');
   const revisarStatus = document.getElementById('revisarParcelamentosStatus');

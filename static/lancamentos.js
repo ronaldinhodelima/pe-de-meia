@@ -285,39 +285,20 @@ function aplicarFiltros(recarregarPagina) {
     window.location.assign(novaUrl);
     return;
   }
-  if (novaUrl !== window.location.pathname + window.location.search) {
-    history.pushState({pedemeia: true}, '', novaUrl);
-  }
-  return fetch(novaUrl, { headers: { 'X-Parcial': '1' } })
-    .then(r => r.text())
-    .then(html => {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const novaTabela = doc.querySelector('table.compacta');
-      const novosCards = doc.querySelector('.cards');
-      const novaCat = doc.querySelector('details.cat-breakdown');
-      if (novaTabela) {
-        document.querySelector('table.compacta').replaceWith(novaTabela);
-        // a tabela nova veio do servidor sem os listeners nem as alcas de
-        // redimensionar (sao criados por JS) - replaceWith descarta o elemento
-        // antigo junto com tudo que estava anexado nele, entao precisa reativar
-        ativarTabelaAjustavel(novaTabela, 'lancamentos');
-      }
-      if (novosCards) { document.querySelector('.cards').replaceWith(novosCards); marcarCardAtivo(); }
-      const catAtual = document.querySelector('details.cat-breakdown');
-      if (novaCat && catAtual) {
-        // preserva o estado aberto/fechado escolhido pelo usuario
-        novaCat.open = catAtual.open;
-        catAtual.replaceWith(novaCat);
-      }
-      const scriptNovo = doc.querySelector('script[data-detalhes]');
-      if (scriptNovo) {
-        try { window.detalhes = JSON.parse(scriptNovo.textContent); } catch (e) {}
-      }
-      const configNova = doc.querySelector('script[data-config]');
-      if (configNova) {
-        try { window.configLancamentos = JSON.parse(configNova.textContent); } catch (e) {}
-      }
-    });
+  return window.pdmTrocarPorAjax(novaUrl, [
+    {seletor: 'table.compacta', aoTrocar: t => ativarTabelaAjustavel(t, t.dataset.tabela)},
+    {seletor: '.cards', aoTrocar: marcarCardAtivo},
+    {seletor: 'details.cat-breakdown', preservarAberto: true},
+  ], doc => {
+    const detalhesNovos = doc.querySelector('script[data-detalhes]');
+    if (detalhesNovos) {
+      try { window.detalhes = JSON.parse(detalhesNovos.textContent); } catch (e) {}
+    }
+    const configNova = doc.querySelector('script[data-config]');
+    if (configNova) {
+      try { window.configLancamentos = JSON.parse(configNova.textContent); } catch (e) {}
+    }
+  });
 }
 
 // Depois de marcar OK, a lista precisa refletir o filtro atual - no filtro

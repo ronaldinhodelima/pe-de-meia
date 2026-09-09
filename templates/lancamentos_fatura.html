@@ -184,6 +184,17 @@
 {% if modo_periodo %}
 {% include "_form_manual.html" %}
 
+<details class="cat-breakdown">
+  <summary>Gasto por categoria ({{ 'ano' if periodo == 'ano' else ('período' if periodo == 'intervalo' else 'mês') }})</summary>
+  <div class="det-body">
+    {% for c in por_categoria %}
+      <div class="cat-row"><span>{{ c.nome }}</span><span>{{ c.total|moeda }}</span></div>
+    {% else %}
+      <div class="cat-row"><span>Sem dados</span></div>
+    {% endfor %}
+  </div>
+</details>
+
 <div class="cards fatura-cards">
   <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
   <div class="card" data-filtro="despesa" title="Ver só as despesas deste período; investimentos continuam fora"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
@@ -417,4 +428,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-3"></script>{% endblock %}

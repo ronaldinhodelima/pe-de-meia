@@ -7,6 +7,40 @@
 // JS escreve 699.82, que e ingles, e a interface e em portugues - a mesma
 // licao do valor_pt() no Python (secao 7.8-A), que ja custou "- R$ 200.00" na
 // tela de detalhes.
+// Troca pedacos da pagina pelo que o servidor devolveu para outra URL, sem
+// recarregar. Existe porque as duas telas de Lancamentos filtram do mesmo
+// jeito: recarregar joga quem esta no meio da lista de volta ao topo e perde a
+// rolagem, e a URL precisa acompanhar para o Voltar do navegador funcionar.
+//
+// `partes` e uma lista de {seletor, aoTrocar, preservarAberto}. O que nao
+// existir no documento novo simplesmente nao e trocado.
+window.pdmTrocarPorAjax = function (url, partes, aposTrocar) {
+  if (url !== window.location.pathname + window.location.search) {
+    history.pushState({pedemeia: true}, '', url);
+  }
+  return fetch(url, {headers: {'X-Parcial': '1'}})
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      (partes || []).forEach(function (parte) {
+        const novos = doc.querySelectorAll(parte.seletor);
+        const atuais = document.querySelectorAll(parte.seletor);
+        novos.forEach(function (novo, i) {
+          const atual = atuais[i];
+          if (!atual) return;
+          // preserva o aberto/fechado que o usuario escolheu
+          if (parte.preservarAberto && 'open' in atual) novo.open = atual.open;
+          // replaceWith descarta o elemento antigo junto com TUDO que estava
+          // anexado nele: listeners e alcas criados por JS somem, e quem
+          // depende deles precisa reativar no aoTrocar
+          atual.replaceWith(novo);
+          if (parte.aoTrocar) parte.aoTrocar(novo);
+        });
+      });
+      if (aposTrocar) aposTrocar(doc);
+    });
+};
+
 window.pdmMoedaBr = function (numero) {
   return 'R$ ' + Number(numero || 0).toLocaleString('pt-BR', {
     minimumFractionDigits: 2, maximumFractionDigits: 2,

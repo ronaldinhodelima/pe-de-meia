@@ -707,6 +707,13 @@ class TestDetalhadaPorPeriodo:
         assert "Falta vincular" not in html
         assert "Ver conciliação da fatura" not in html
 
+    def test_o_gasto_por_categoria_acompanha_o_recorte(self, ctx):
+        """Ele e do PERIODO: numa fatura o total ja e a soma das compras
+        daquele cartao, e a quebra por categoria vive na conciliacao."""
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        assert "Gasto por categoria (mês)" in html
+        assert "Água" in html.split("cat-breakdown", 1)[1]
+
     def test_os_cards_sao_os_do_dre_e_nao_os_da_conciliacao(self, ctx):
         """Card de conciliacao num recorte por periodo nao significa nada: com
         varias origens misturadas nao existe "a fatura" a conciliar."""
@@ -1003,3 +1010,44 @@ class TestFormularioManualCompartilhado:
         view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
         trecho = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
         assert "hoje_iso=" in trecho
+
+
+class TestFiltrarSemRecarregar:
+    """Filtrar troca a lista NO LUGAR: recarregar joga quem esta no meio da
+    conferencia de volta ao topo. A URL acompanha, entao o Voltar do navegador
+    retorna ao filtro anterior."""
+
+    def js(self, nome):
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        return (raiz / "static" / nome).read_text(encoding="utf-8")
+
+    def test_a_troca_por_ajax_tem_uma_implementacao_so(self):
+        tabelas = self.js("tabelas.js")
+        assert "window.pdmTrocarPorAjax = function" in tabelas
+        assert "history.pushState" in tabelas
+        for tela, funcao in (("lancamentos.js", "function aplicarFiltros("),
+                             ("lancamentos_fatura.js", "window.aplicarFiltrosPeriodo = function")):
+            texto = self.js(tela)
+            assert "pdmTrocarPorAjax(" in texto, tela
+            # o filtro nao monta o proprio DOMParser: a troca de blocos e uma so.
+            # (o resumo parcial da Detalhada tem um, e faz outra coisa: atualiza
+            # linha a linha sem destruir o que o usuario esta preenchendo)
+            trecho = texto.split(funcao, 1)[1].split("\n  };", 1)[0]
+            assert "DOMParser" not in trecho, tela + ": segunda copia da troca"
+
+    def test_a_detalhada_nao_recarrega_ao_filtrar(self):
+        js = self.js("lancamentos_fatura.js")
+        trecho = js.split("window.aplicarFiltrosPeriodo = function", 1)[1].split("};", 1)[0]
+        assert "location.assign" not in trecho
+        assert "pdmTrocarPorAjax" in trecho
+
+    def test_a_tabela_trocada_volta_a_ter_alcas_e_ordenacao(self):
+        """replaceWith descarta o elemento antigo com TUDO que estava anexado
+        nele: os listeners e as alcas de redimensionar somem."""
+        js = self.js("lancamentos_fatura.js")
+        assert "window.ativarTabelaAjustavel(tabela, tabela.dataset.tabela)" in js
+        assert "ligarOrdenacao();" in js
+        # a chave sai do data-tabela: escrita a mao divergiria do template, e as
+        # larguras salvas se perderiam em silencio
+        assert "'fatura')" not in js.split("aoTrocar", 1)[1][:400]

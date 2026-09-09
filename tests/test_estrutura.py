@@ -505,11 +505,19 @@ def test_posicao_da_pagina_e_mantida_em_todas_as_telas():
 
 
 def test_filtros_criam_historico_e_botao_voltar_restaura_estado():
-    for arquivo in ("lancamentos.js", "relatorios.js"):
+    """Filtrar cria historico real: o Voltar do navegador retorna ao estado
+    anterior. O pushState mora no nucleo da troca por AJAX (tabelas.js), que as
+    telas de Lancamentos compartilham; cada tela trata o proprio popstate.
+    """
+    tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
+    assert "history.pushState" in tabelas
+    assert "history.replaceState" not in tabelas
+    for arquivo in ("lancamentos.js", "relatorios.js", "lancamentos_fatura.js"):
         js = (RAIZ / "static" / arquivo).read_text(encoding="utf-8")
-        assert "history.pushState" in js
-        assert "history.replaceState" not in js
-        assert "addEventListener('popstate'" in js
+        assert "addEventListener('popstate'" in js, arquivo
+        assert "history.replaceState" not in js, arquivo
+    # relatorios.js nao usa o nucleo: ele troca outras coisas (graficos)
+    assert "history.pushState" in (RAIZ / "static" / "relatorios.js").read_text(encoding="utf-8")
 
 
 def test_todo_reload_por_js_guarda_a_posicao_antes():
