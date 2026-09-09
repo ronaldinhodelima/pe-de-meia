@@ -47,10 +47,10 @@
         }
         const pendencia = pai.querySelector('[data-classificacao]');
         if (pendencia) {
-          const soma = (estado.somaCentavos / 100).toFixed(2);
-          const total = (estado.totalCentavos / 100).toFixed(2);
           pendencia.innerHTML = estado.valido ? ''
-            : '<span class="estado invalido">Rateado R$ ' + soma + ' de R$ ' + total + '</span>';
+            : '<span class="estado invalido">Rateado '
+              + window.pdmMoedaBr(estado.somaCentavos / 100) + ' de '
+              + window.pdmMoedaBr(estado.totalCentavos / 100) + '</span>';
         }
       },
       aposSalvar: function () {
@@ -88,6 +88,61 @@
       if (parte) window.pdmRateio.atualizar(parte.dataset.rateioParent, true);
     });
   }
+
+  // ---- acoes do lancamento, no rodape do painel ---------------------------
+  // Rateio e exclusao nao sao campos: sao acoes sobre o lancamento, raras, e
+  // sem lugar numa linha que ja tem dez colunas. O painel continua sendo
+  // auditoria; elas ficam num rodape separado (decisao do usuario).
+  function montarQuadroDeRateio(quadro) {
+    if (!window.pdmRateio || quadro.dataset.montado === '1') return;
+    quadro.dataset.montado = '1';
+    const id = quadro.dataset.rateioQuadro;
+    const linha = document.querySelector('tr[data-editor="' + id + '"], tr[data-linha][data-id="' + id + '"]');
+    const dims = {};
+    if (linha) linha.querySelectorAll('[data-dimensao]').forEach(function (sel) {
+      dims[sel.dataset.dimensao] = sel.value || '';
+    });
+    const categoria = linha && linha.querySelector('[data-campo="categoria"]');
+    window.pdmRateio.montarQuadro(quadro, {
+      id: id,
+      total: Number(quadro.dataset.rateioTotal || 0),
+      existentes: window.pdmRateio.linhas(id).map(function (parte) {
+        const d = {};
+        parte.querySelectorAll('.rateio-dim-select').forEach(function (sel) {
+          d[sel.dataset.dim] = sel.value || '';
+        });
+        return {
+          valor: Number(parte.querySelector('.rateio-valor-inline').value || 0),
+          categoria: parte.querySelector('.rateio-cat-select').value,
+          observacao: parte.querySelector('.rateio-obs-inline').value,
+          dims: d,
+        };
+      }),
+      categoria: categoria ? categoria.value : '',
+      dims: dims,
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    const excluir = e.target.closest && e.target.closest('[data-excluir-lancamento]');
+    if (!excluir) return;
+    e.stopPropagation();
+    if (!confirm('Excluir este lançamento? Não dá para desfazer.')) return;
+    excluir.disabled = true;
+    fetch('/api/lancamento-manual/' + encodeURIComponent(excluir.dataset.excluirLancamento),
+          {method: 'DELETE'})
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.erro || 'Não foi possível excluir.');
+        if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Lançamento excluído');
+        if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+        window.location.reload();
+      })
+      .catch(function (erro) {
+        excluir.disabled = false;
+        alert(erro.message || 'Não foi possível excluir.');
+      });
+  });
 
   // ---- recorte por periodo -------------------------------------------------
   // A tela nasceu presa a uma fatura de cartao. Recortando por periodo ela
@@ -363,6 +418,9 @@
     const detalhe = document.getElementById('vinculos-' + id);
     if (!detalhe) return;
     detalhe.hidden = !detalhe.hidden;
+    if (!detalhe.hidden) {
+      detalhe.querySelectorAll('[data-rateio-quadro]').forEach(montarQuadroDeRateio);
+    }
     if (botao) {
       botao.textContent = detalhe.hidden ? '+' : '−';
       botao.setAttribute('aria-expanded', detalhe.hidden ? 'false' : 'true');

@@ -3,6 +3,16 @@
 // funciona tanto no formato ingles (1,234.56) quanto no brasileiro (1.234,56),
 // sem depender de qual esta em uso. Publico porque a ordenacao das duas telas
 // de lancamentos le o mesmo texto: duas contas divergiriam.
+// O par do pdmNumeroDeTexto: numero -> texto em portugues. O `toFixed(2)` do
+// JS escreve 699.82, que e ingles, e a interface e em portugues - a mesma
+// licao do valor_pt() no Python (secao 7.8-A), que ja custou "- R$ 200.00" na
+// tela de detalhes.
+window.pdmMoedaBr = function (numero) {
+  return 'R$ ' + Number(numero || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+};
+
 window.pdmNumeroDeTexto = function (texto) {
   const limpo = String(texto == null ? '' : texto).trim().replace(/[R$\s%]/g, '');
   const ultVirgula = limpo.lastIndexOf(',');

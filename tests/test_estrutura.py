@@ -596,8 +596,8 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
     assert template.index('id="modalConferida"') < template.index('id="modalRateioBox"')
     assert 'class="rateio-salvar-inline"' in template and '>✓</button>' in template
-    assert "rateio-parte-titulo" in js
-    assert "el.textContent = fecha ? ''" in js
+    assert "rateio-parte-titulo" in nucleo
+    assert "aviso.textContent = fecha ? ''" in nucleo
     assert "linha.classList.toggle('rateio-invalido', !estado.valido)" in nucleo
 
 
@@ -1685,9 +1685,12 @@ def test_toda_gravacao_confirma_com_toast():
     o toast imediato piscaria e sumiria junto com a pagina.
     """
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    nucleo_rateio = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
     for gravacao in ("Lançamento salvo", "Lançamento criado", "Lançamento excluído",
-                     "Rateio salvo", "Rateio desfeito", "Descrição salva", "cadastrado"):
+                     "Descrição salva", "cadastrado"):
         assert gravacao in js, gravacao
+    for gravacao in ("Rateio salvo", "Rateio desfeito"):
+        assert gravacao in nucleo_rateio, gravacao
     # o fluxo que recarrega nao mostra os dois
     assert "salvar(idAtualModal, selLinha, {semToast: true})" in js
     assert "!opcoes.semToast && window.pdmToast" in js

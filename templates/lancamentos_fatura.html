@@ -53,6 +53,11 @@
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform: none}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}
   .ajuda-fatura{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.45;margin:8px 0}
+  .acoes-lancamento{margin:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}
+  .acoes-lancamento-titulo{font-size:var(--fonte-xxs);color:var(--ink-faint);letter-spacing:.03em;margin-bottom:4px}
+  .acoes-lancamento .modal-rateio{border-top:0;padding-top:0}
+  .acoes-lancamento-perigo{display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+  .acoes-lancamento-perigo .ajuda-fatura{margin:0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
   .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:var(--icone-sm)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
@@ -348,11 +353,27 @@
       </div></div>
       </div>
     {% endfor %}
-    {# O quadro de edicao dentro do lancamento acabou (08/09/2026): a
-       classificacao ja subiu para a linha em 05/09, a observacao subiu agora, a
-       regra virou coluna (oculta por padrao) e a natureza no DRE saiu - ela e
-       consequencia da categoria, que esta ali do lado, e repetida aqui so
-       ocupava espaco. O painel volta a ser o que se espera dele: AUDITORIA. #}
+    {# O quadro de edicao de CAMPO dentro do lancamento acabou (08/09/2026): a
+       classificacao subiu para a linha em 05/09, a observacao tambem, a regra
+       virou coluna (oculta por padrao) e a natureza no DRE saiu - ela e
+       consequencia da categoria, que esta ali do lado. O painel e AUDITORIA.
+
+       O rodape abaixo nao contradiz isso: rateio e exclusao nao sao campos, sao
+       ACOES sobre o lancamento - raras, e sem lugar numa linha que ja tem dez
+       colunas (decisao do usuario, 09/09/2026). #}
+    {% if modo_periodo and pode_editar and linha.principal and not linha.pagamento %}
+    <div class="acoes-lancamento">
+      <div class="acoes-lancamento-titulo">Ações do lançamento</div>
+      <div class="modal-rateio" data-rateio-quadro="{{ linha.principal.transacao_id }}"
+           data-rateio-total="{{ linha.valor_rateio }}"></div>
+      {% if pode_manual and linha.principal.pode_excluir %}
+      <div class="acoes-lancamento-perigo">
+        <button type="button" class="btn-perigo leve" data-excluir-lancamento="{{ linha.principal.transacao_id }}">Excluir lançamento</button>
+        <span class="ajuda-fatura">Só lançamentos manuais ou importados de arquivo podem ser excluídos.</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
   </td></tr>
 {% else %}<tr><td colspan="{{ 7 + colunas_extra + dimensoes|length + (1 if pode_regras else 0) }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
 </tbody>
@@ -394,4 +415,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260908-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-7"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-1"></script>{% endblock %}

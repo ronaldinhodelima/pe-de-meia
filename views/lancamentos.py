@@ -1420,6 +1420,8 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["rateado"] = bool(rateio)
         row["exige_dimensoes"] = exige_dimensoes(row["natureza_efetiva"])
         row["principal"], row["tecnico"] = True, False
+        conta_row = contas_by_id.get(str(row["account_id"])) or {}
+        row["pode_excluir"] = bool(conta_row.get("tipo") == "MANUAL" or row["importado"])
         selo, origem_texto, origem_full = origem_da_linha(row)
         valor = Decimal(str(row["valor"] or 0))
         conta = contas_by_id.get(str(row["account_id"])) or {}

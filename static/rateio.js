@@ -135,9 +135,176 @@
     });
   }
 
+  // ---- quadro de criacao / alteracao do conjunto --------------------------
+  // Mudar QUANTAS partes existem nao cabe nas linhas: e uma acao sobre o
+  // lancamento, nao a edicao de um campo. O quadro nasceu dentro do modal da
+  // Resumida; aqui ele fica independente de onde e desenhado, para servir
+  // tambem ao painel da Detalhada.
+  const rascunhos = {};
+
+  function opcoes(lista, atual, vazio) {
+    const esc = window.escHtml || function (t) { return String(t == null ? '' : t); };
+    let html = vazio ? '<option value="">' + esc(vazio) + '</option>' : '';
+    (lista || []).forEach(function (item) {
+      const valor = String(item.valor !== undefined ? item.valor : item.id);
+      const rotulo = item.rotulo !== undefined ? item.rotulo : item.nome;
+      html += '<option value="' + esc(valor) + '"'
+        + (String(atual || '') === valor ? ' selected' : '') + '>' + esc(rotulo) + '</option>';
+    });
+    return html;
+  }
+
+  function lerQuadro(box) {
+    return Array.from(box.querySelectorAll('.modal-rateio-parte')).map(function (parte) {
+      const dimensoes = {};
+      parte.querySelectorAll('.rateio-dim').forEach(function (s) {
+        dimensoes[s.dataset.dim] = s.value || null;
+      });
+      return {
+        valor: parte.querySelector('.rateio-valor').value,
+        categoria: parte.querySelector('.rateio-categoria').value,
+        observacao: parte.querySelector('.rateio-observacao').value,
+        dimensoes: dimensoes,
+      };
+    });
+  }
+
+  // A soma tem que fechar EXATAMENTE o valor do lancamento (secao 4.4); em
+  // centavos, nunca em ponto flutuante.
+  function conferirQuadro(box, total) {
+    const soma = Array.from(box.querySelectorAll('.rateio-valor'))
+      .reduce(function (n, i) { return n + Number(i.value || 0); }, 0);
+    const fecha = Math.round(soma * 100) === Math.round(total * 100);
+    const aviso = box.querySelector('.rateio-fechamento');
+    if (aviso) {
+      aviso.textContent = fecha ? ''
+        : 'Rateado ' + window.pdmMoedaBr(soma) + ' de ' + window.pdmMoedaBr(total);
+      aviso.classList.toggle('invalido', !fecha);
+    }
+    box.classList.toggle('rateio-invalido', !fecha);
+    box.querySelectorAll('.rateio-valor').forEach(function (input) {
+      input.classList.toggle('invalido', !fecha);
+    });
+    const salvar = box.querySelector('[data-rateio-salvar]');
+    if (salvar) salvar.disabled = !fecha;
+    return fecha;
+  }
+
+  function montarQuadro(box, opcoesQuadro) {
+    const cfg = ctx.config();
+    const id = opcoesQuadro.id;
+    const total = Number(opcoesQuadro.total || 0);
+    const existentes = opcoesQuadro.existentes || [];
+    const esc = window.escHtml || function (t) { return String(t == null ? '' : t); };
+    box.classList.remove('rateio-invalido');
+    if (rascunhos[id] === undefined && existentes.length) {
+      rascunhos[id] = existentes.map(function (p) {
+        return {valor: p.valor, categoria: p.categoria,
+                observacao: p.observacao || '', dims: Object.assign({}, p.dims || {})};
+      });
+    }
+    if (rascunhos[id] === undefined) {
+      box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong>'
+        + '<button type="button" class="ver-btn" data-rateio-iniciar>Dividir em 2 partes</button></div>';
+      box.querySelector('[data-rateio-iniciar]').addEventListener('click', function () {
+        // parte de uma divisao pela metade, herdando a classificacao que o
+        // lancamento ja tem: e o ponto de partida, e continua editavel
+        const centavos = Math.round(total * 100);
+        const primeira = Math.floor(centavos / 2);
+        const base = {categoria: opcoesQuadro.categoria || '',
+                      dims: Object.assign({}, opcoesQuadro.dims || {})};
+        rascunhos[id] = [
+          {valor: primeira / 100, observacao: '', categoria: base.categoria, dims: Object.assign({}, base.dims)},
+          {valor: (centavos - primeira) / 100, observacao: '', categoria: base.categoria, dims: Object.assign({}, base.dims)},
+        ];
+        montarQuadro(box, opcoesQuadro);
+      });
+      return;
+    }
+    const categorias = (cfg.categorias || []).map(function (c) {
+      return {valor: c.chave, rotulo: c.nome};
+    });
+    let partesHtml = '';
+    rascunhos[id].forEach(function (p, indice) {
+      let dimsHtml = '';
+      Object.entries(cfg.dimensoes || {}).forEach(function (par) {
+        const dimId = par[0], valores = par[1];
+        const nome = (cfg.dimensoes_nomes || {})[dimId] || 'Dimensão';
+        dimsHtml += '<div class="row"><span>' + esc(nome) + '</span><span>'
+          + '<select data-pdm-combobox class="rateio-dim" aria-label="' + esc(nome) + '" data-dim="' + esc(dimId) + '">'
+          + opcoes(valores, (p.dims || {})[dimId], '(não definido)') + '</select></span></div>';
+      });
+      partesHtml += '<div class="modal-rateio-parte" data-indice="' + indice + '">'
+        + '<div class="rateio-parte-titulo"><span>Parte ' + (indice + 1) + '</span><strong>'
+        + (rascunhos[id].length > 2 ? '<button type="button" class="ver-btn" data-rateio-remover="' + indice + '">Remover</button>' : '')
+        + '</strong></div>'
+        + '<div class="row"><span>Valor (R$)</span><span><input class="rateio-valor" type="number" min="0.01" step="0.01" aria-label="Valor da parte ' + (indice + 1) + '" value="' + Number(p.valor || 0).toFixed(2) + '"></span></div>'
+        + '<div class="row"><span>Categoria</span><span><select data-pdm-combobox aria-label="Categoria" class="rateio-categoria">' + opcoes(categorias, p.categoria, '(sem categoria)') + '</select></span></div>'
+        + dimsHtml
+        + '<div class="row"><span>Observação</span><span><input class="rateio-observacao" aria-label="Observação" maxlength="500" value="' + esc(p.observacao || '') + '"></span></div>'
+        + '</div>';
+    });
+    box.innerHTML = '<div class="modal-rateio-topo"><strong>Rateio do lançamento</strong>'
+      + '<span class="rateio-fechamento"></span></div>'
+      + '<div class="modal-rateio-partes">' + partesHtml + '</div>'
+      + '<div class="rateio-status rateio-fechamento"></div>'
+      + '<div class="modal-rateio-acoes"><button type="button" class="ver-btn" data-rateio-adicionar>+ Parte</button>'
+      + (existentes.length ? '<button type="button" class="ver-btn" data-rateio-desfazer>Desfazer rateio</button>' : '')
+      + '<button type="button" class="ver-btn" data-rateio-salvar>Salvar rateio</button></div>';
+
+    box.querySelectorAll('.rateio-valor').forEach(function (campo) {
+      campo.addEventListener('input', function () { conferirQuadro(box, total); });
+    });
+    box.querySelector('[data-rateio-adicionar]').addEventListener('click', function () {
+      rascunhos[id] = lerQuadro(box).map(function (p) {
+        return {valor: p.valor, categoria: p.categoria, observacao: p.observacao, dims: p.dimensoes};
+      });
+      rascunhos[id].push({valor: 0, categoria: '', observacao: '', dims: {}});
+      montarQuadro(box, opcoesQuadro);
+    });
+    box.querySelectorAll('[data-rateio-remover]').forEach(function (botao) {
+      botao.addEventListener('click', function () {
+        if (rascunhos[id].length <= 2) return;
+        rascunhos[id] = lerQuadro(box).map(function (p) {
+          return {valor: p.valor, categoria: p.categoria, observacao: p.observacao, dims: p.dimensoes};
+        });
+        rascunhos[id].splice(Number(botao.dataset.rateioRemover), 1);
+        montarQuadro(box, opcoesQuadro);
+      });
+    });
+    const status = box.querySelector('.rateio-status');
+    box.querySelector('[data-rateio-salvar]').addEventListener('click', function () {
+      if (!conferirQuadro(box, total)) return;
+      status.textContent = 'Salvando...';
+      salvarPartes(id, lerQuadro(box)).then(function () {
+        if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio salvo');
+        delete rascunhos[id];
+        ctx.aposSalvar(id, {});
+      }).catch(function (e) { status.textContent = e.message || 'Não foi possível salvar.'; });
+    });
+    const desfazer = box.querySelector('[data-rateio-desfazer]');
+    if (desfazer) desfazer.addEventListener('click', function () {
+      if (!confirm('Desfazer o rateio e voltar ao lançamento simples?')) return;
+      remover(id).then(function () {
+        if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio desfeito');
+        delete rascunhos[id];
+        ctx.aposSalvar(id, {});
+      }).catch(function (e) { alert(e.message || 'Não foi possível desfazer.'); });
+    });
+    if (window.pdmCombobox && window.pdmCombobox.iniciar) window.pdmCombobox.iniciar(box);
+    conferirQuadro(box, total);
+  }
+
   window.pdmRateio = {
     configurar: configurar, linhas: linhasDe, ler: ler,
     validar: validar, atualizar: atualizar, salvar: salvar,
     salvarPartes: salvarPartes, remover: remover,
+    montarQuadro: montarQuadro, lerQuadro: lerQuadro,
+    // o esboco de um rateio ainda nao salvo morre quando se sai do lancamento:
+    // reabrir tem que partir do que esta no banco, nao do que ficou pela metade
+    limparRascunho: function (id) {
+      if (id === undefined) { Object.keys(rascunhos).forEach(function (k) { delete rascunhos[k]; }); }
+      else delete rascunhos[id];
+    },
   };
 })();

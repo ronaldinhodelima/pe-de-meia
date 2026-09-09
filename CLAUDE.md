@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 394 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 399 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -790,8 +790,8 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 > extratos de ago/2025 a jul/2026 e ainda deixaria o dinheiro em espécie sem casa.
 
 **Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
-3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio (editar
-as partes; **criar** ainda depende do modal, que é a etapa 7) · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio · 7 ✓ ações do lançamento
+(rateio, exclusão, confirmação ao retirar o OK) · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
 OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
@@ -1001,6 +1001,31 @@ seria guardada. Cada tela chama `guardarPosicaoAtual()` antes, e
 **Gravar um CAMPO não recarrega; gravar o RATEIO recarrega, de propósito** — ali o conjunto inteiro
 muda (as partes, o OK do pai, o DRE). O teste que proibia `reload` na Detalhada passou a olhar só o
 corpo de `salvarEditor`, em vez de o arquivo inteiro: a regra é sobre a edição de campo.
+
+### Ações do lançamento moram no rodapé do painel (etapa 7, 09/09/2026)
+
+**Decisão do usuário.** Criar ou desfazer um rateio e excluir um lançamento **não são campos** — são
+ações sobre o lançamento, raras, e sem lugar numa linha que já tem dez colunas. Ficam num rodapé
+**separado** dentro do painel do `+`, abaixo dos vínculos. Isso não contradiz a regra de que o painel
+é auditoria (§7.1): o que continua fora dele é a edição de **campo**, que mora na linha.
+
+O quadro que cria e altera o conjunto subiu do modal para `rateio.js` (`montarQuadro`). Enquanto ele
+morava só lá, **a Detalhada não tinha como criar rateio nenhum** — e era a última coisa que só a
+Resumida sabia fazer. O quadro é montado **ao abrir o painel**, não no carregamento: montá-lo para
+toda linha custaria um select de categoria e um por dimensão em cada lançamento da tela.
+
+O rascunho de um rateio ainda não salvo vive no núcleo e é descartado ao sair do lançamento
+(`limparRascunho`) — reabrir tem de partir do que está no banco, não do que ficou pela metade.
+
+**Só manual e importado oferecem Excluir** — lançamento do Pluggy nunca se apaga (§9.3). **O rodapé
+não aparece no recorte por fatura:** ali a linha é do documento, e o lançamento pode nem existir.
+
+**A confirmação ao retirar o OK já existia na Detalhada** (`confirmar_desmarcacao`), e continua:
+retirar assinatura exige confirmação um a um (§1.2).
+
+**`toFixed(2)` escreve em inglês.** "Rateado R$ 699.82" saía com ponto decimal nas duas telas — a
+mesma lição do `valor_pt()` no Python (§7.8-A), que já custou `- R$ 200.00` no modal. Nasceu
+`window.pdmMoedaBr()`, no `tabelas.js`, ao lado do `pdmNumeroDeTexto()` que faz o caminho inverso.
 
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
@@ -1821,7 +1846,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**394 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**399 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

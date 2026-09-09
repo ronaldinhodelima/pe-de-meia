@@ -889,3 +889,86 @@ class TestRateioNasDuasTelas:
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             assert "window.pdmRateio.configurar" in texto, js
             assert "/rateios'" not in texto, js + ": segundo caminho de gravacao"
+
+
+class TestAcoesDoLancamento:
+    """Rateio e exclusao nao sao campos: sao acoes sobre o lancamento, e moram
+    num rodape do painel (decisao do usuario, 09/09/2026). A linha ja tem dez
+    colunas, e o painel e onde se abre um lancamento especifico."""
+
+    def contexto(self, **extra):
+        from tests.test_templates import TestDetalhadaPorPeriodo
+        base = TestDetalhadaPorPeriodo().contexto()
+        base["linhas"][0]["situacoes"] = []
+        base["linhas"][0]["situacoes_texto"] = "Lançamento contabilizado"
+        base["linhas"][0]["rateios"] = []
+        base["linhas"][0]["rateio_valido"] = True
+        base["linhas"][0]["valor_rateio"] = 212.35
+        base["linhas"][0]["principal"]["pode_excluir"] = False
+        for chave, valor in extra.items():
+            base["linhas"][0]["principal"][chave] = valor
+        return base
+
+    def test_o_quadro_de_rateio_fica_no_rodape_do_painel(self, ctx):
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        assert 'class="acoes-lancamento"' in html
+        assert 'data-rateio-quadro="11111111-1111-1111-1111-111111111111"' in html
+        assert 'data-rateio-total="212.35"' in html
+        # o painel continua sendo auditoria: os campos nao voltaram para dentro
+        painel = html.split('class="vinculos-detalhe"', 1)[1]
+        assert 'data-campo="categoria"' not in painel
+        assert 'data-campo="observacao"' not in painel
+
+    def test_so_manual_e_importado_oferecem_excluir(self, ctx):
+        """Lancamento do Pluggy nunca se apaga: a origem fica para auditoria
+        (secao 9.3)."""
+        assert "data-excluir-lancamento" not in render_template(
+            "lancamentos_fatura.html", **self.contexto())
+        assert "data-excluir-lancamento" in render_template(
+            "lancamentos_fatura.html", **self.contexto(pode_excluir=True))
+
+    def test_a_fatura_nao_ganha_o_rodape_de_acoes(self, ctx):
+        """Rateio e exclusao pertencem ao recorte por periodo; na fatura a linha
+        e do documento, e o lancamento pode nem existir."""
+        base = self.contexto(pode_excluir=True)
+        base["modo_periodo"] = False
+        from datetime import date
+        base["fatura"] = {"id": 3, "mes_referencia": 8, "ano_referencia": 2026,
+                          "periodo_inicio": date(2026, 7, 13), "periodo_fim": date(2026, 8, 12),
+                          "vencimento": None, "em_andamento": False, "previsto": False}
+        base["faturas"] = [dict(base["fatura"])]
+        base["contas_credito"] = [("abc", "U", "Unicred", "U", "")]
+        base["totais"] = {"pdf": 0, "dre": 0, "fora": 0, "pendente": 0,
+                          "pendente_ok": 0, "sem_vinculo": 0, "divergencia": 0}
+        base["contagens"] = {"linhas": 1, "vinculadas": 1, "classificadas": 1,
+                             "conferidas": 0, "multiplos": 0, "pendente_classificacao": 0,
+                             "pendente_ok": 1, "divergencias": 0}
+        base["linhas"][0]["data"] = date(2026, 8, 10)
+        html = render_template("lancamentos_fatura.html", **base)
+        assert 'class="acoes-lancamento"' not in html
+
+    def test_o_quadro_do_rateio_tem_uma_implementacao_so(self):
+        """Criar, mudar a quantidade de partes e desfazer sao a mesma acao nas
+        duas telas. Enquanto isso morava so no modal, a Detalhada nao tinha
+        como criar rateio nenhum."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        nucleo = (raiz / "static" / "rateio.js").read_text(encoding="utf-8")
+        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+        assert "function montarQuadro(box" in nucleo
+        assert "rateio-parte-titulo" in nucleo
+        assert "rateio-parte-titulo" not in js, "segunda copia do quadro"
+        assert "window.pdmRateio.montarQuadro" in js
+        assert "window.pdmRateio.montarQuadro" in (
+            raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+
+    def test_o_valor_da_pendencia_sai_em_portugues(self):
+        """toFixed(2) escreve 699.82, que e ingles - a mesma licao do valor_pt()
+        no Python (secao 7.8-A)."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        tabelas = (raiz / "static" / "tabelas.js").read_text(encoding="utf-8")
+        assert "window.pdmMoedaBr = function" in tabelas and "'pt-BR'" in tabelas
+        for arquivo in ("rateio.js", "lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / arquivo).read_text(encoding="utf-8")
+            assert "'Rateado R$ '" not in texto, arquivo
