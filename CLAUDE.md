@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 376 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 384 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -777,6 +777,23 @@ específico da Unicred continuam como estão: renomeá-los seria churn de schema
 
 São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usuário.
 
+> **A Resumida vai sair; a Detalhada fica** (decisão do usuário, 08/09/2026). A unificação corre por
+> etapas: cada recurso que só existe na Resumida é levado para a Detalhada, publicado e validado
+> antes do seguinte. **Nada é removido da Resumida enquanto a Detalhada não tiver o equivalente
+> funcionando em produção** — a Resumida é a rede de segurança de cada etapa.
+>
+> **O bloqueio que definiu o desenho:** a Detalhada nasceu presa a uma fatura de cartão
+> (`contas_credito`, tipo `CREDIT`), e por isso **conta corrente, dinheiro e lançamento manual nunca
+> tiveram lugar nela** — não pertencem a fatura nenhuma. Removendo a Resumida sem resolver isso,
+> esses lançamentos sumiriam do sistema. Por isso a Detalhada ganhou um **segundo recorte**
+> (§7.1-A), em vez de a conta corrente virar "documento": esse outro caminho exigiria importar os
+> extratos de ago/2025 a jul/2026 e ainda deixaria o dinheiro em espécie sem casa.
+
+**Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
+3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 semântica de linha (pontos, fora do resultado,
+duplicidade, legenda) · 6 rateio · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
+
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
 > novo em uma das telas é candidato à outra por padrão; o commit precisa dizer se foi aplicado nas
 > duas ou por que não. Quando o comportamento é o mesmo, o **código também é o mesmo** (`lote.js`,
@@ -883,6 +900,65 @@ recarrega e não desmonta o grupo.
   marcas do usuário; ali quem manda atualizar é o Salvar do lote, depois de limpar a seleção.
 - Navegação de mês, filtros e troca de tela criam **histórico real** — o botão Voltar do navegador
   retorna ao estado anterior, com a rolagem preservada.
+
+## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
+
+`/lancamentos/fatura?recorte=periodo` mostra as mesmas linhas, com os mesmos campos e o mesmo
+salvamento, recortando por **mês, ano ou intervalo** e por **várias origens**. É o único recorte que
+alcança conta corrente, dinheiro e lançamento manual. Medido em produção em agosto/2026: **190
+lançamentos de 11 origens**, os mesmos 190 da Resumida, com os **mesmos 31 registros técnicos** e os
+cards batendo **centavo a centavo** — porque as duas telas passaram a chamar o mesmo
+`resumo_do_periodo()`.
+
+**Três consultas viraram ponto único das duas telas:** `where_status_lancamento()` (o WHERE de cada
+status), `resumo_do_periodo()` (recebidos, reais, DRE, classificação e o gasto por categoria) e
+`janela_do_periodo()` (mês/ano/intervalo → janela local). Filtro reescrito na segunda tela diverge na
+primeira regra nova — foi como nasceram os 57 falsos pendentes da §6.5 nº 10.
+
+**O que veio junto, porque sem eles a tela mentiria no novo recorte:**
+
+- a **coluna Origem**, com o selo do banco e o avatar de quem digitou o manual. Com onze origens
+  misturadas, sem ela a tela não diz de onde veio cada lançamento. As duas telas passam a ter
+  **exatamente as mesmas colunas, na mesma ordem** — a exceção "a Detalhada é de uma fatura só"
+  deixou de existir;
+- **valor com sinal e cor** na conta corrente (entrada/saída) e sem sinal no cartão, como na
+  Resumida;
+- os **cards do DRE** no lugar dos de conciliação. Card de "falta vincular" **não significa nada**
+  num período com três cartões e a conta corrente misturados — seria dado mascarado (§1.1);
+- o que está **fora do resultado** recolhido como vínculo técnico sob o lançamento que conta, pelo
+  vínculo do banco (`substituido_por`, vínculo de fatura), **nunca** por data ou valor parecidos.
+
+**F/P continua sendo `fatura_linha.transacao_id_criado`, não `transacao.importado`** — são coisas
+diferentes (§11.3), e é o primeiro que diz se a linha nasceu da fatura.
+
+**No recorte por período não existe titular.** O nome do portador só vem impresso no documento;
+quem identifica a procedência ali é a origem. Escrever "Titular não informado" sugeriria um dado
+faltando que nem se aplica.
+
+### Dois defeitos que a etapa 1 revelou, ambos corrigidos na raiz
+
+**O filtro em chip não tinha dono.** `cfToggle`/`cfClear`/`cfFiltrar`/`cfKeydown` estavam **copiados**
+em `lancamentos.js` e `relatorios.js`, e nenhum dos dois é carregado pela Detalhada: o chip de Origem
+simplesmente não abriria. As cópias **já tinham divergido** — só a da Resumida fechava o painel depois
+de aplicar e ignorava o clique no `.chip-tag`. Agora moram no `tabelas.js`, que todas as telas
+carregam. E o clear **dispara o `change` do próprio checkbox** em vez de chamar `aplicarFiltros()`
+pelo nome: chamar por nome só funciona em quem tem uma função com aquele nome, e era isso que
+prendia o chip a duas telas. `test_o_filtro_em_chip_tem_uma_implementacao_so` trava isso.
+
+**Ordenar por Valor lia o número errado na Detalhada.** `replace(/,/g,'')` apagava a **vírgula
+decimal**, e R$ 212,35 era ordenado como 21.235. A conta certa já existia no `tabelas.js` — o
+separador decimal é o último `.` ou `,` — mas estava presa numa closure; virou
+`window.pdmNumeroDeTexto()` e as duas telas passam a ler o mesmo texto pela mesma conta.
+
+**Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
+formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
+pelo `py_compile` e pela suíte estrutural e derruba a tela inteira (§10.3 nº 3) — sem preview local
+(§10.1), é a única forma de pegá-lo antes do deploy.
+
+**Teste que congela a POSIÇÃO de um bloco no arquivo quebra à toa.** Três testes achavam o cabeçalho
+e os filtros por `split(...)[1]`, isto é, "o primeiro"; com dois cabeçalhos na tela passaram a ler o
+errado. O helper `_bloco_com(template, abertura, marca)` procura **o bloco que contém a marca** —
+cobra a regra, não a ordem.
 
 ## 7.2 Classificação obrigatória e famílias de parcelas
 
@@ -1693,7 +1769,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**376 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**384 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
