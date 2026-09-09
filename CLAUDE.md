@@ -917,8 +917,15 @@ recarrega e não desmonta o grupo.
 
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 
-`/lancamentos/fatura?recorte=periodo` mostra as mesmas linhas, com os mesmos campos e o mesmo
-salvamento, recortando por **mês, ano ou intervalo** e por **várias origens**. É o único recorte que
+**O recorte por período é o PADRÃO da tela** (decisão do usuário, 09/09/2026, ao perguntar como
+via as outras origens). Abrindo por fatura, o seletor lista **só cartões de crédito** — conta
+corrente, dinheiro e lançamento manual não aparecem ali, e quem não conhecesse o alternador
+concluiria que a tela não chega neles. Cai no recorte por fatura quem **pede** uma: `recorte=fatura`,
+um `fatura_id`, `andamento=1` ou um `account_id`. Todo link que já existia faz esse pedido, então
+nenhum deles mudou de destino.
+
+`/lancamentos/fatura` (ou `?recorte=periodo`) mostra as mesmas linhas, com os mesmos campos e o
+mesmo salvamento, recortando por **mês, ano ou intervalo** e por **várias origens**. É o único recorte que
 alcança conta corrente, dinheiro e lançamento manual. Medido em produção em agosto/2026: **190
 lançamentos de 11 origens**, os mesmos 190 da Resumida, com os **mesmos 31 registros técnicos** e os
 cards batendo **centavo a centavo** — porque as duas telas passaram a chamar o mesmo

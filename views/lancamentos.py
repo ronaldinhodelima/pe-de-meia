@@ -1664,11 +1664,23 @@ def lancamentos_por_fatura():
         )
     contas_by_id, origem_opcoes = carregar_origens(cur)
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
-    # recorte=periodo: a mesma tela, recortando por mes/ano/intervalo e por
-    # varias origens, em vez de por uma fatura. E o unico recorte que alcanca
-    # conta corrente, dinheiro e lancamento manual - nenhum deles pertence a
-    # fatura nenhuma.
-    if request.args.get("recorte") == "periodo":
+    # O recorte por PERIODO e o padrao (decisao do usuario, 09/09/2026): e o
+    # unico que alcanca conta corrente, dinheiro e lancamento manual - nenhum
+    # deles pertence a fatura nenhuma. Abrindo por fatura, o seletor lista so
+    # cartoes de credito, e quem nao conhecesse o alternador concluiria que a
+    # tela nao chega nessas origens.
+    #
+    # Cai no recorte por fatura quando alguem PEDE uma: `recorte=fatura`, um
+    # `fatura_id`, o ciclo em andamento ou um cartao especifico. Assim todo
+    # link que ja existia continua chegando onde chegava.
+    recorte = request.args.get("recorte")
+    pediu_fatura = bool(
+        recorte == "fatura"
+        or request.args.get("fatura_id")
+        or request.args.get("andamento")
+        or request.args.get("account_id")
+    )
+    if recorte == "periodo" or not pediu_fatura:
         resposta = _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito)
         cur.close()
         conn.close()

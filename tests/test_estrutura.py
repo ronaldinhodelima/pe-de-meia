@@ -2753,3 +2753,31 @@ def test_quem_desenha_o_quadro_de_rateio_entrega_as_listas_no_config():
     config = trecho.split("config = {", 1)[1]
     for chave in sorted(lidas):
         assert f'"{chave}"' in config, f"config do recorte por periodo sem {chave}"
+
+
+def test_a_detalhada_abre_por_periodo_e_so_vai_para_a_fatura_quando_pedem():
+    """Decisao do usuario (09/09/2026).
+
+    Abrindo por fatura, o seletor lista SO cartoes de credito: conta corrente,
+    dinheiro e lancamento manual nao aparecem, e quem nao conhecesse o
+    alternador concluiria que a tela nao chega neles. O recorte por periodo e o
+    unico que alcanca todas as origens, entao e ele o padrao.
+
+    Cair na fatura exige um pedido explicito - e todo link que ja existia faz
+    esse pedido, entao nenhum deles muda de destino.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = view.split("def lancamentos_por_fatura", 1)[1].split("account_id = request.args.get", 1)[0]
+    assert 'recorte == "periodo" or not pediu_fatura' in trecho
+    for pedido in ('recorte == "fatura"', '"fatura_id"', '"andamento"', '"account_id"'):
+        assert pedido in trecho, pedido
+
+    # os links que existem hoje continuam pedindo fatura
+    for arquivo, marca in (
+        ("static/lancamentos.js", "/lancamentos/fatura?account_id="),
+        ("templates/conciliar_fatura.html", "/lancamentos/fatura?fatura_id="),
+    ):
+        assert marca in (RAIZ / arquivo).read_text(encoding="utf-8"), arquivo
+    # e o alternador pede a fatura por nome, senao apontaria para o periodo
+    detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert '/lancamentos/fatura?recorte=fatura' in detalhada
