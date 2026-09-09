@@ -627,3 +627,146 @@ def test_setas_da_detalhada_seguem_a_mesma_ordem_do_seletor():
 
     # e as duas telas calculam vizinhas pela posicao na lista do seletor
     assert view.count("_vizinhas_no_seletor(") == 3
+
+
+class TestDetalhadaPorPeriodo:
+    """A Detalhada recortando por PERIODO, e nao por fatura.
+
+    Existe porque a tela nasceu presa a uma fatura de cartao: conta corrente,
+    dinheiro e lancamento manual nao pertencem a fatura nenhuma e por isso
+    nunca tiveram lugar nela. Renderiza com o formato REAL que
+    `_render_periodo` entrega - erro de template nao aparece em py_compile nem
+    na suite estrutural, e derruba a tela inteira (secao 10.3 n.3).
+    """
+
+    def contexto(self, **extra):
+        from datetime import datetime
+        from decimal import Decimal
+        principal = {
+            "transacao_id": "11111111-1111-1111-1111-111111111111",
+            "descricao": "Agua Visan", "categoria": "Water",
+            "dims": {1: 7}, "observacao": "boleto", "rateado": False,
+            "exige_dimensoes": True, "conferida": False, "conferida_por": None,
+            "conferida_local": None, "sincronizado_local": None,
+            "primeiro_sincronizado_local": None,
+            "data_local": datetime(2026, 8, 10, 9, 0),
+            "valor": Decimal("212.35"), "valor_original": None, "moeda_original": None,
+            "status": "POSTED", "tipo": "DEBIT", "parcela_atual": None, "parcela_total": None,
+            "observacao_sistema": "", "principal": True, "tecnico": False,
+            "fonte": "P", "fonte_nome": "Pluggy", "numero_cartao_final": None,
+        }
+        base = {
+            "titulo": "Lançamentos", "topbar": "", "modo_periodo": True,
+            "fatura": {"id": "periodo", "periodo": True, "em_andamento": False, "previsto": False},
+            "fatura_nova": None, "fatura_antiga": None, "faturas": [],
+            "conta": None, "avatar_banco": None, "contas_credito": [],
+            "account_id": "", "status": "todas",
+            "categorias": [{"chave": "Water", "nome": "Água"}],
+            "dimensoes": [{"id": 1, "nome": "Responsável", "obrigatoria": True}],
+            "valores_por_dim": {1: [{"id": 7, "nome": "Família", "icone": None}]},
+            "mes": "2026-08", "periodo": "mes", "data_inicio": "", "data_fim": "",
+            "origem_filtro_html": '<div class="chipfilter"></div>',
+            "por_categoria": [{"nome": "Água", "total": 212.35}],
+            "receita_mes": 0, "gasto_real": 212.35, "resultado_mes": -212.35,
+            "total_reais": 1, "total_recebidos": 1, "total_fora": 0, "conf_reais": 0,
+            "pendente_classificacao": 0, "classificados_reais": 1, "pendentes_ok": 1,
+            "pct_classificados": 100, "pct_conferidos": 0,
+            "totais": {}, "contagens": {}, "config_json": "{}",
+            "projeto_portfolio_map": {}, "url_resumida": "/",
+            "pode_editar": True, "pode_conferir": True, "pode_regras": True,
+            "pode_manual": True,
+            "linhas": [{
+                "id": "t-11111111-1111-1111-1111-111111111111",
+                "data": datetime(2026, 8, 10, 9, 0), "descricao": "Agua Visan",
+                "origem_selo": '<span class="selo">UN</span>',
+                "origem_texto": "Unicred C/C", "origem_completa": "Unicred conta corrente",
+                "autor": None, "titular": None, "titular_fonte": None,
+                "cartao_aguardando": False, "cartao_nome": None, "cartao_final": None,
+                "parcela_atual": None, "parcela_total": None,
+                "valor": Decimal("212.35"), "valor_fmt": "- R$ 212,35",
+                "cor_valor": "color:var(--bad)", "pagamento": False,
+                "vinculos": [principal], "principal": principal, "multiplos": False,
+                "requer_validacao": False, "validacao_motivos": [], "faltando": [],
+                "classificada": True, "conferida": False, "fora_do_resultado": "",
+                "suspeita_duplicidade": False, "pendente_banco": False,
+                "pendente_bloqueia_ok": False, "natureza_estado": "dre",
+                "natureza_rotulo": "Despesa", "estado": "periodo",
+            }],
+        }
+        base.update(extra)
+        return base
+
+    def test_a_tela_abre_com_conta_corrente(self, ctx):
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        assert "Agua Visan" in html
+        # a origem precisa aparecer: num recorte com varias contas, sem ela a
+        # tela nao diz de onde veio cada lancamento
+        assert "Unicred C/C" in html
+        assert "- R$ 212,35" in html
+        # o recorte por periodo nao fala em fatura nem em conciliacao
+        assert "Falta vincular" not in html
+        assert "Ver conciliação da fatura" not in html
+
+    def test_os_cards_sao_os_do_dre_e_nao_os_da_conciliacao(self, ctx):
+        """Card de conciliacao num recorte por periodo nao significa nada: com
+        varias origens misturadas nao existe "a fatura" a conciliar."""
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        assert "Resultado no DRE" in html and "Receitas no DRE" in html
+        assert "Divergências" not in html and "Com agregados" not in html
+
+    def test_lancamento_manual_mostra_quem_digitou(self, ctx):
+        ctxt = self.contexto()
+        ctxt["linhas"][0]["autor"] = "ronaldo"
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert 'class="avatar-autor"' in html and ">RO<" in html
+
+    def test_fora_do_resultado_nao_vira_pendencia(self, ctx):
+        """Registro fora do resultado nunca tem classificacao completa e nao e
+        trabalho pendente (secao 10.4 n.13)."""
+        ctxt = self.contexto()
+        ctxt["linhas"][0]["fora_do_resultado"] = "Mesmo evento que outro lançamento."
+        ctxt["linhas"][0]["faltando"] = []
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert "Faltam:" not in html
+
+    def test_a_tela_por_fatura_continua_de_pe(self, ctx):
+        """A mesma template serve os dois recortes: o de fatura nao pode ter
+        sido quebrado pelo novo."""
+        from datetime import date
+        ctxt = self.contexto(
+            modo_periodo=False,
+            fatura={"id": 3, "mes_referencia": 8, "ano_referencia": 2026,
+                    "periodo_inicio": date(2026, 7, 13), "periodo_fim": date(2026, 8, 12),
+                    "vencimento": date(2026, 8, 20), "em_andamento": False, "previsto": False},
+            faturas=[{"id": 3, "mes_referencia": 8, "ano_referencia": 2026,
+                      "em_andamento": False, "previsto": False}],
+            contas_credito=[("abc", "Unicred", "Unicred Conjunta", "Unicred", "")],
+            account_id="abc",
+            totais={"pdf": 100, "dre": 100, "fora": 0, "pendente": 0,
+                    "pendente_ok": 0, "sem_vinculo": 0, "divergencia": 0},
+            contagens={"linhas": 1, "vinculadas": 1, "classificadas": 1, "conferidas": 1,
+                       "multiplos": 0, "pendente_classificacao": 0, "pendente_ok": 0,
+                       "divergencias": 0},
+        )
+        ctxt["linhas"][0]["data"] = date(2026, 8, 10)
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert "Fatura Agosto de 2026" in html
+        assert "Ver conciliação da fatura" in html
+        # sem o recorte por periodo, a coluna Origem nao existe
+        assert 'data-col="origem"' not in html
+
+
+def test_as_duas_telas_leem_valor_pela_mesma_conta():
+    """Ordenar por Valor tem uma conta so, e ela mora no tabelas.js.
+
+    Lida de novo na Detalhada, a conversao apagava a virgula decimal
+    (`replace(/,/g,'')`) e ordenava R$ 212,35 como 21.235 - o mesmo texto,
+    duas leituras, resultados diferentes.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    tabelas = (raiz / "static" / "tabelas.js").read_text(encoding="utf-8")
+    detalhada = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "window.pdmNumeroDeTexto = function" in tabelas
+    assert "window.pdmNumeroDeTexto(" in detalhada
+    assert "replace(/,/g, '')" not in detalhada

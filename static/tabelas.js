@@ -1,3 +1,19 @@
+// Numero escrito como valor monetario ou percentual, ou null quando o texto
+// nao e numero. O separador decimal e o ULTIMO '.' ou ',' que aparecer - assim
+// funciona tanto no formato ingles (1,234.56) quanto no brasileiro (1.234,56),
+// sem depender de qual esta em uso. Publico porque a ordenacao das duas telas
+// de lancamentos le o mesmo texto: duas contas divergiriam.
+window.pdmNumeroDeTexto = function (texto) {
+  const limpo = String(texto == null ? '' : texto).trim().replace(/[R$\s%]/g, '');
+  const ultVirgula = limpo.lastIndexOf(',');
+  const ultPonto = limpo.lastIndexOf('.');
+  const numerico = ultVirgula > ultPonto
+    ? limpo.replace(/\./g, '').replace(',', '.')   // decimal e virgula
+    : limpo.replace(/,/g, '');                     // decimal e ponto (ou sem decimal)
+  if (numerico === '' || numerico === '-' || isNaN(Number(numerico))) return null;
+  return Number(numerico);
+};
+
 // Escapa texto antes de jogar em innerHTML. Fica aqui por ser compartilhado:
 // varias telas montam HTML no cliente a partir de dado vindo do banco.
 function escHtml(s) {
@@ -377,17 +393,8 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
       const inp = td.querySelector('input[type=text]');
       if (inp) return inp.value.toLowerCase();
       const txt = td.textContent.trim();
-      // valor monetario/percentual ordena como numero. O separador decimal e o
-      // ULTIMO '.' ou ',' que aparecer - assim funciona tanto no formato que o
-      // app usa hoje (R$ 1,234.56, do :,.2f do Python) quanto no brasileiro
-      // (R$ 1.234,56), sem depender de qual esta em uso.
-      const limpo = txt.replace(/[R$\s%]/g, '');
-      const ultVirgula = limpo.lastIndexOf(',');
-      const ultPonto = limpo.lastIndexOf('.');
-      const numerico = ultVirgula > ultPonto
-        ? limpo.replace(/\./g, '').replace(',', '.')   // decimal e virgula
-        : limpo.replace(/,/g, '');                     // decimal e ponto (ou sem decimal)
-      if (numerico !== '' && numerico !== '-' && !isNaN(Number(numerico))) return Number(numerico);
+      const numero = window.pdmNumeroDeTexto(txt);
+      if (numero !== null) return numero;
       return txt.toLowerCase();
     }
     function ordenarLinhas(col, dir) {
@@ -704,4 +711,76 @@ function ativarFiltroTabela(table, campo, contador) {
   campo.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { campo.value = ''; aplicar(); e.stopPropagation(); }
   });
+}
+
+// Filtro em chip (o dropdown de Origem, de Categoria...). Mora aqui porque
+// TODAS as telas que usam chip_filter_html precisam dele - estava copiado em
+// lancamentos.js e relatorios.js, e as duas copias ja tinham divergido: so uma
+// fechava o painel depois de aplicar. O que aplica o filtro e o `onchange` que
+// cada tela declara no proprio checkbox; aqui a gente so dispara o evento.
+function cfToggle(btn) {
+  const panel = btn.nextElementSibling;
+  const abrir = !panel.classList.contains('show');
+  document.querySelectorAll('.chip-panel.show').forEach(p => { if (p !== panel) p.classList.remove('show'); });
+  if (abrir) {
+    panel.classList.add('show');
+    const search = panel.querySelector('.chip-search');
+    if (search) { search.value = ''; cfFiltrar(search); search.focus(); }
+  } else {
+    panel.classList.remove('show');
+  }
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.chipfilter') && !e.target.closest('.chip-tag') && !e.target.closest('.menu-colunas')) {
+    document.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
+  }
+});
+document.addEventListener('change', function (e) {
+  const painel = e.target.closest && e.target.closest('.chip-panel');
+  if (!painel || e.target.type !== 'checkbox') return;
+  // fecha DEPOIS de aplicar, e so quando a escolha ja foi registrada: fechar
+  // antes tiraria da tela a lista que o usuario esta conferindo
+  setTimeout(function () { painel.classList.remove('show'); }, 120);
+});
+
+function cfClear(e, btn) {
+  e.stopPropagation();
+  const panel = btn.closest('.chipfilter').querySelector('.chip-panel');
+  const marcados = panel.querySelectorAll('input[type=checkbox]');
+  marcados.forEach(cb => cb.checked = false);
+  if (marcados[0]) marcados[0].dispatchEvent(new Event('change', {bubbles: true}));
+}
+function cfFiltrar(input) {
+  const panel = input.closest('.chip-panel');
+  const q = input.value.toLowerCase();
+  panel.querySelectorAll('.chip-opt').forEach(opt => {
+    // sem o contador: buscar "13" nao pode casar com a conta que tem 13 lancamentos
+    opt.style.display = textoDaOpcao(opt).toLowerCase().includes(q) ? 'flex' : 'none';
+  });
+  panel.querySelectorAll('.chip-hover').forEach(o => o.classList.remove('chip-hover'));
+}
+function cfKeydown(e, input) {
+  const panel = input.closest('.chip-panel');
+  const visiveis = Array.from(panel.querySelectorAll('.chip-opt')).filter(o => o.style.display !== 'none');
+  let idx = visiveis.findIndex(o => o.classList.contains('chip-hover'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (idx >= 0) visiveis[idx].classList.remove('chip-hover');
+    idx = Math.min(idx + 1, visiveis.length - 1);
+    if (visiveis[idx]) visiveis[idx].classList.add('chip-hover');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (idx >= 0) visiveis[idx].classList.remove('chip-hover');
+    idx = Math.max(idx - 1, 0);
+    if (visiveis[idx]) visiveis[idx].classList.add('chip-hover');
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (idx >= 0) {
+      const cb = visiveis[idx].querySelector('input[type=checkbox]');
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+  } else if (e.key === 'Escape') {
+    panel.classList.remove('show');
+  }
 }

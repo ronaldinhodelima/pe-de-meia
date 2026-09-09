@@ -29,6 +29,69 @@
     if (card) ir({status: card.dataset.filtro});
   });
 
+  // ---- recorte por periodo -------------------------------------------------
+  // A tela nasceu presa a uma fatura de cartao. Recortando por periodo ela
+  // alcanca conta corrente, dinheiro e lancamento manual, que nao pertencem a
+  // fatura nenhuma. Os campos sao os mesmos da Resumida, de proposito.
+  const mesInput = document.getElementById('mesInput');
+  function queryDoPeriodo() {
+    const params = new URLSearchParams();
+    params.set('recorte', 'periodo');
+    params.set('mes', mesInput.value);
+    const intervalo = document.getElementById('periodoIntervalo');
+    if (intervalo && intervalo.checked) {
+      params.set('periodo', 'intervalo');
+      params.set('data_inicio', document.getElementById('dataInicioInput').value);
+      params.set('data_fim', document.getElementById('dataFimInput').value);
+    } else {
+      params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
+    }
+    const status = document.getElementById('periodoStatus');
+    if (status) params.set('status', status.value);
+    // [name] exigido: checkbox sem nome (o do menu de colunas) nao e filtro
+    document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked')
+      .forEach(cb => params.append(cb.name, cb.value));
+    return params;
+  }
+  window.aplicarFiltrosPeriodo = function () {
+    if (!mesInput) return;
+    window.location.assign('/lancamentos/fatura?' + queryDoPeriodo().toString());
+  };
+  window.mudarMesPeriodo = function (passo) {
+    if (!mesInput) return;
+    const ano = document.getElementById('periodoAno');
+    if (ano && ano.checked) {
+      mesInput.value = (parseInt(mesInput.value.slice(0, 4), 10) + passo) + mesInput.value.slice(4);
+    } else {
+      const [a, m] = mesInput.value.split('-').map(Number);
+      const d = new Date(a, m - 1 + passo, 1);
+      mesInput.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    window.aplicarFiltrosPeriodo();
+  };
+  window.alternarPeriodoAno = function () {
+    const intervalo = document.getElementById('periodoIntervalo');
+    if (document.getElementById('periodoAno').checked && intervalo) intervalo.checked = false;
+    window.aplicarFiltrosPeriodo();
+  };
+  window.alternarPeriodoIntervalo = function () {
+    const ano = document.getElementById('periodoAno');
+    const intervalo = document.getElementById('periodoIntervalo');
+    if (intervalo.checked && ano) ano.checked = false;
+    const wrap = document.getElementById('intervaloWrap');
+    if (wrap) wrap.style.display = intervalo.checked ? 'flex' : 'none';
+    // sem as duas datas ainda nao ha intervalo para aplicar
+    if (!intervalo.checked || (document.getElementById('dataInicioInput').value
+        && document.getElementById('dataFimInput').value)) {
+      window.aplicarFiltrosPeriodo();
+    }
+  };
+  // O campo de mes e de data abre o calendario ao clicar em qualquer ponto,
+  // nao so no icone - o mesmo comportamento da Resumida.
+  document.querySelectorAll('#mesInput, #dataInicioInput, #dataFimInput').forEach(campo => {
+    campo.addEventListener('click', () => { if (campo.showPicker) { try { campo.showPicker(); } catch (e) {} } });
+  });
+
   function normalizarBusca(texto) {
     return String(texto == null ? '' : texto)
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -104,8 +167,10 @@
       return partes.length === 3 ? new Date(partes[2], partes[1] - 1, partes[0]).getTime() : 0;
     }
     if (chave === 'valor') {
-      const texto = (celula?.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
-      return Number(texto) || 0;
+      // mesma conta do tabelas.js: lida aqui de novo, ela apagava a virgula
+      // decimal e ordenava R$ 212,35 como 21.235
+      const numero = window.pdmNumeroDeTexto(celula?.textContent || '');
+      return numero === null ? 0 : numero;
     }
     if (chave === 'check') return linha.querySelector('[data-ok-lancamento]')?.checked ? 1 : 0;
     if (!celula) return '';

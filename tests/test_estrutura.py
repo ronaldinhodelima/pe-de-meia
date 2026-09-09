@@ -284,11 +284,25 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert "window.location.reload()" not in js
 
 
+def _bloco_com(template, abertura, marca):
+    """O trecho iniciado por `abertura` que contem `marca`.
+
+    A Detalhada tem dois cabecalhos e dois blocos de filtros - por periodo e
+    por fatura. Achar "o primeiro" congelava a ORDEM dos blocos no arquivo, que
+    nao e a regra que estes testes existem para cobrar.
+    """
+    for trecho in template.split(abertura)[1:]:
+        bloco = trecho.split("\n</div>", 1)[0]
+        if marca in bloco:
+            return bloco
+    raise AssertionError("nenhum bloco " + abertura + " contem " + marca)
+
+
 def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-    cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
+    cabecalho = _bloco_com(template, '<div class="fatura-cabecalho">', "fatura_antiga")
     assert "Fatura {{ meses[fatura.mes_referencia-1] }} de {{ fatura.ano_referencia }}" in cabecalho
     assert "Ciclo {{ fatura.periodo_inicio.strftime" in cabecalho
     assert "vence {{ fatura.vencimento.strftime" in cabecalho
@@ -392,9 +406,9 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "Revisar parcelamentos" in template
     assert template.index('class="tabela-scroll"') < template.index('class="rodape-fatura"')
-    filtros = template.split('<div class="fatura-filtros">', 1)[1].split('</div>\n\n<div class="cards', 1)[0]
+    filtros = _bloco_com(template, '<div class="fatura-filtros">', "faturaSelecionada")
     assert 'class="visao-lancamentos"' in filtros
-    cabecalho = template.split('<div class="fatura-cabecalho">', 1)[1].split('</div>', 1)[0]
+    cabecalho = _bloco_com(template, '<div class="fatura-cabecalho">', "fatura_antiga")
     assert "Ciclo" in cabecalho
     assert "PDF oficial</span>" not in cabecalho
     assert 'id="buscaFatura"' in template
@@ -707,16 +721,26 @@ def test_consenso_dos_ok_fica_restrito_a_unicred_e_preserva_dados_humanos():
     assert "INSERT INTO cartao.schema_version (versao) VALUES (42)" in trecho
 
 
-def test_menu_de_colunas_nao_depende_de_funcao_de_outra_tela():
-    """O menu "Colunas" aparece em todas as telas, mas cfToggle() so existe em
-    lancamentos.js e relatorios.js - usar ela aqui quebraria /categorias,
-    /grupos e as demais com ReferenceError."""
+def test_o_filtro_em_chip_tem_uma_implementacao_so():
+    """chip_filter_html() serve varias telas, entao o comportamento do chip
+    mora no tabelas.js, que todas carregam.
+
+    Estava copiado em lancamentos.js e relatorios.js, e as duas copias ja
+    tinham divergido - so uma fechava o painel depois de aplicar. Foi essa
+    duplicacao que deixou o chip de Origem sem funcao nenhuma quando a
+    Detalhada passou a usa-lo.
+    """
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
-    codigo = "\n".join(
-        "" if l.lstrip().startswith("//") else l for l in tabelas.splitlines()
-    )
-    assert "cfToggle(" not in codigo, "tabelas.js nao pode chamar cfToggle"
+    assert "function cfToggle" in tabelas and "function cfKeydown" in tabelas
     assert "function menuColunas" in tabelas
+    for arquivo in ("lancamentos.js", "relatorios.js"):
+        texto = (RAIZ / "static" / arquivo).read_text(encoding="utf-8")
+        assert "function cfToggle" not in texto, arquivo + ": segunda copia do chip"
+    # aplicar o filtro e do `onchange` que cada tela declara: chamar
+    # aplicarFiltros() pelo nome so funcionaria em quem tem uma com esse nome
+    nucleo = tabelas.split("function cfToggle", 1)[1]
+    assert "aplicarFiltros()" not in nucleo
+    assert "dispatchEvent(new Event('change'" in nucleo
     assert "aplicarOcultas();" in tabelas, "a preferencia salva precisa valer no carregamento"
 
 
@@ -1751,8 +1775,10 @@ def test_as_duas_telas_nomeiam_e_ordenam_as_colunas_igual():
 
     resumida = colunas("index.html")
     detalhada = colunas("lancamentos_fatura.html")
-    # a Resumida tem Origem porque mistura contas; a Detalhada e de uma fatura so
-    assert [c for c in resumida if c != "origem"] == detalhada, (resumida, detalhada)
+    # Desde que a Detalhada recorta tambem por periodo, ela mistura contas e
+    # tem Origem como a Resumida: as duas telas passam a ter exatamente as
+    # mesmas colunas, na mesma ordem.
+    assert resumida == detalhada, (resumida, detalhada)
 
     for arquivo in ("index.html", "lancamentos_fatura.html"):
         html = (RAIZ / "templates" / arquivo).read_text(encoding="utf-8")

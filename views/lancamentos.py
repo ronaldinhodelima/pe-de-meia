@@ -154,36 +154,9 @@ def _estado_rateios(cur, transacao_id):
 @bp.route("/")
 @requer("lancamentos_ver")
 def index():
-    mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
-    periodo = request.args.get("periodo") or "mes"
-    if periodo not in ("mes", "ano", "intervalo"):
-        periodo = "mes"
-    data_inicio_str = request.args.get("data_inicio") or ""
-    data_fim_str = request.args.get("data_fim") or ""
-    try:
-        if periodo == "intervalo" and data_inicio_str and data_fim_str:
-            # Fatura de cartao nao fecha no mes civil (ex: 13/jul a 12/ago) -
-            # esse periodo existe pra revisar exatamente a janela de uma
-            # fatura, sem forcar um recorte por mes que ela nunca respeitou.
-            inicio_mes = datetime.strptime(data_inicio_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL)
-            fim_mes = datetime.strptime(data_fim_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL) + timedelta(days=1)
-            if fim_mes <= inicio_mes:
-                raise ValueError("intervalo invalido")
-        elif periodo == "ano":
-            inicio_mes, fim_mes = intervalo_ano_local(mes[:4])
-        else:
-            periodo = "mes"
-            inicio_mes, fim_mes = intervalo_mes_local(mes)
-    except ValueError:
-        mes = datetime.now().strftime("%Y-%m")
-        periodo = "mes"
-        inicio_mes, fim_mes = intervalo_mes_local(mes)
+    mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes = janela_do_periodo()
     status = request.args.get("status", "todas")
-    if status not in (
-        "todas", "pendente", "conferida", "pendente_banco", "duplicidade",
-        "fora_resultado", "somente_conciliacao", "substituido",
-        "rateio_incompleto", "pendente_classificacao", "receita", "despesa",
-    ):
+    if status not in STATUS_LANCAMENTO:
         status = "todas"
     origem_sel = request.args.getlist("origem")
 
@@ -244,52 +217,9 @@ def index():
     if origem_sel:
         where.append("t.account_id IN %s")
         params.append(tuple(origem_sel))
-    if status == "conferida":
-        where.append("t.conferida = true")
-    elif status == "pendente":
-        where.append("t.conferida = false")
-    elif status == "duplicidade":
-        if ids_suspeitos:
-            where.append("t.transacao_id IN %s")
-            params.append(tuple(ids_suspeitos))
-        else:
-            where.append("false")
-    elif status == "pendente_banco":
-        where.append("upper(COALESCE(t.status,'')) = 'PENDING'")
-    elif status == "pendente_classificacao":
-        # Falta categoria, ou falta uma dimensao obrigatoria QUE ESTE
-        # lancamento exige. Registro que ja esta fora do resultado nunca vai
-        # ter classificacao completa e nao e trabalho pendente (secao 10.4 n.11).
-        where.append(PENDENTE_CLASSIFICACAO_SQL)
-    elif status in ("receita", "despesa"):
-        # Os cards de Receitas/Despesas somam sobre a view financeira, que exclui
-        # substituido/somente_conciliacao/duplicada. O filtro le cartao.transacao
-        # direto, entao precisa repetir a exclusao - senao o card promete um
-        # total e a lista entrega outro, com registro que nao conta no resultado.
-        where.append(
-            "t.substituido_por IS NULL AND NOT COALESCE(t.somente_conciliacao, false) "
-            "AND COALESCE(t.duplicada, false) = false "
-            f"AND {NATUREZA_SQL} = %s"
-        )
-        params.append(status)
-    elif status == "fora_resultado":
-        where.append("(t.substituido_por IS NOT NULL OR COALESCE(t.somente_conciliacao,false))")
-    elif status == "somente_conciliacao":
-        where.append("COALESCE(t.somente_conciliacao,false)")
-    elif status == "substituido":
-        where.append("t.substituido_por IS NOT NULL")
-    elif status == "rateio_incompleto":
-        where.append(
-            "EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) "
-            "AND ((SELECT COUNT(*) FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) < 2 "
-            "OR (SELECT COALESCE(SUM(rx.valor_brl),0) FROM cartao.transacao_rateio rx "
-            "WHERE rx.transacao_id=t.transacao_id) <> COALESCE(t.valor_brl,t.valor_original) "
-            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id "
-            "AND (rx.categoria IS NULL OR rx.categoria='')) "
-            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx CROSS JOIN cartao.dimensao dx "
-            "LEFT JOIN cartao.transacao_rateio_dimensao rdx ON rdx.rateio_id=rx.id AND rdx.dimensao_id=dx.id "
-            "WHERE rx.transacao_id=t.transacao_id AND dx.obrigatoria=true AND rdx.valor_id IS NULL))"
-        )
+    clausulas_status, params_status = where_status_lancamento(status, ids_suspeitos)
+    where.extend(clausulas_status)
+    params.extend(params_status)
 
     cur.execute(
         "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
@@ -308,72 +238,7 @@ def index():
     # Resumo do periodo, independente do filtro de Status. "Recebidos" conta
     # tudo que chegou ao banco; "reais" conta cada transacao financeira uma
     # vez, mesmo quando o rateio cria varias linhas no DRE.
-    where_recebidos = ["t.data_transacao >= %s", "t.data_transacao < %s"]
-    params_recebidos = [inicio_mes, fim_mes]
-    if origem_sel:
-        where_recebidos.append("t.account_id IN %s")
-        params_recebidos.append(tuple(origem_sel))
-    cur.execute(
-        "SELECT COUNT(*) AS total_recebidos FROM cartao.transacao t WHERE "
-        + " AND ".join(where_recebidos) + ";",
-        params_recebidos,
-    )
-    resumo = dict(cur.fetchone())
-
-    where_resumo = ["t.data_transacao >= %s", "t.data_transacao < %s", "COALESCE(t.duplicada, false) = false"]
-    params_resumo = [inicio_mes, fim_mes]
-    if origem_sel:
-        where_resumo.append("t.account_id IN %s")
-        params_resumo.append(tuple(origem_sel))
-    # gasto real = so o que tem natureza de despesa (fatura, transferencia,
-    # investimento e compra de bem nao sao gasto - ver NATUREZAS)
-    cur.execute(
-        f"SELECT COUNT(DISTINCT t.transacao_id) AS total_reais, "
-        f"COUNT(DISTINCT t.transacao_id) FILTER (WHERE t.conferida) AS conferidos_reais, "
-        f"SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
-        f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
-        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
-        params_resumo,
-    )
-    resumo.update(dict(cur.fetchone()))
-
-    # Contado a parte, sobre cartao.transacao e com a MESMA condicao do filtro
-    # "Pendentes de classificacao": o card e o filtro tem que mostrar o mesmo
-    # conjunto, senao o numero promete N linhas e a tela entrega outra coisa.
-    cur.execute(
-        f"SELECT COUNT(*) AS pendente_classificacao FROM cartao.transacao t {JOIN_NATUREZA} "
-        "WHERE " + " AND ".join(where_resumo) + " AND " + PENDENTE_CLASSIFICACAO_SQL + ";",
-        params_resumo,
-    )
-    resumo.update(dict(cur.fetchone()))
-
-    # Ao abrir exatamente o ciclo de uma fatura de uma unica origem, o PDF e'
-    # a autoridade do periodo. Data da compra nao serve para decidir em qual
-    # fatura uma parcela caiu; recalcula a despesa sobre as linhas conciliadas.
-    if periodo == "intervalo" and len(origem_sel) == 1:
-        cur.execute(
-            "SELECT id FROM cartao.fatura_importada WHERE account_id=%s "
-            "AND periodo_inicio=%s AND periodo_fim=%s ORDER BY id DESC LIMIT 1;",
-            (origem_sel[0], inicio_mes.date(), (fim_mes - timedelta(days=1)).date()),
-        )
-        fatura_do_periodo = cur.fetchone()
-        if fatura_do_periodo:
-            total_fatura_dre = calcular_totais_dre_fatura(cur, fatura_do_periodo["id"])
-            resumo["gasto_real"] = total_fatura_dre["despesas_dre"]
-
-    where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
-                 "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
-    params_cat = [inicio_mes, fim_mes]
-    if origem_sel:
-        where_cat.append("t.account_id IN %s")
-        params_cat.append(tuple(origem_sel))
-    cur.execute(
-        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
-        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_cat) +
-        " GROUP BY t.categoria ORDER BY total DESC LIMIT 8;",
-        params_cat,
-    )
-    por_categoria = cur.fetchall()
+    resumo, por_categoria = resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo)
 
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
     nomes_cartao = {r["final4"]: esc(r["prefixo"]) for r in cur.fetchall()}
@@ -861,6 +726,179 @@ PENDENTE_CLASSIFICACAO_SQL = (
 )
 
 
+# Os status que a lista de lancamentos aceita, e o WHERE de cada um. Ponto
+# unico de proposito: as duas telas filtram a MESMA coisa, e um filtro
+# reescrito na segunda tela divergiria na primeira regra nova - foi assim que
+# nasceram os 57 falsos pendentes da secao 6.5 n.10.
+STATUS_LANCAMENTO = (
+    "todas", "pendente", "conferida", "pendente_banco", "duplicidade",
+    "fora_resultado", "somente_conciliacao", "substituido",
+    "rateio_incompleto", "pendente_classificacao", "receita", "despesa",
+)
+
+
+def where_status_lancamento(status, ids_suspeitos=()):
+    """(clausulas, params) do filtro de Status, sobre `cartao.transacao t`."""
+    where, params = [], []
+    if status == "conferida":
+        where.append("t.conferida = true")
+    elif status == "pendente":
+        where.append("t.conferida = false")
+    elif status == "duplicidade":
+        if ids_suspeitos:
+            where.append("t.transacao_id IN %s")
+            params.append(tuple(ids_suspeitos))
+        else:
+            where.append("false")
+    elif status == "pendente_banco":
+        where.append("upper(COALESCE(t.status,'')) = 'PENDING'")
+    elif status == "pendente_classificacao":
+        # Falta categoria, ou falta uma dimensao obrigatoria QUE ESTE
+        # lancamento exige. Registro que ja esta fora do resultado nunca vai
+        # ter classificacao completa e nao e trabalho pendente (secao 10.4 n.11).
+        where.append(PENDENTE_CLASSIFICACAO_SQL)
+    elif status in ("receita", "despesa"):
+        # Os cards de Receitas/Despesas somam sobre a view financeira, que exclui
+        # substituido/somente_conciliacao/duplicada. O filtro le cartao.transacao
+        # direto, entao precisa repetir a exclusao - senao o card promete um
+        # total e a lista entrega outro, com registro que nao conta no resultado.
+        where.append(
+            "t.substituido_por IS NULL AND NOT COALESCE(t.somente_conciliacao, false) "
+            "AND COALESCE(t.duplicada, false) = false "
+            f"AND {NATUREZA_SQL} = %s"
+        )
+        params.append(status)
+    elif status == "fora_resultado":
+        where.append("(t.substituido_por IS NOT NULL OR COALESCE(t.somente_conciliacao,false))")
+    elif status == "somente_conciliacao":
+        where.append("COALESCE(t.somente_conciliacao,false)")
+    elif status == "substituido":
+        where.append("t.substituido_por IS NOT NULL")
+    elif status == "rateio_incompleto":
+        where.append(
+            "EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) "
+            "AND ((SELECT COUNT(*) FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id) < 2 "
+            "OR (SELECT COALESCE(SUM(rx.valor_brl),0) FROM cartao.transacao_rateio rx "
+            "WHERE rx.transacao_id=t.transacao_id) <> COALESCE(t.valor_brl,t.valor_original) "
+            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx WHERE rx.transacao_id=t.transacao_id "
+            "AND (rx.categoria IS NULL OR rx.categoria='')) "
+            "OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx CROSS JOIN cartao.dimensao dx "
+            "LEFT JOIN cartao.transacao_rateio_dimensao rdx ON rdx.rateio_id=rx.id AND rdx.dimensao_id=dx.id "
+            "WHERE rx.transacao_id=t.transacao_id AND dx.obrigatoria=true AND rdx.valor_id IS NULL))"
+        )
+    return where, params
+
+
+def resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo):
+    """Numeros do periodo (recebidos, reais, DRE, classificacao) e o gasto por
+    categoria. Ponto unico das duas telas: card e filtro tem que contar a mesma
+    coisa, e um segundo calculo divergiria na primeira regra nova.
+
+    Independe do filtro de Status: "recebidos" conta tudo o que chegou ao
+    banco; "reais" conta cada transacao financeira uma vez, mesmo quando o
+    rateio cria varias linhas no DRE.
+    """
+    where_recebidos = ["t.data_transacao >= %s", "t.data_transacao < %s"]
+    params_recebidos = [inicio_mes, fim_mes]
+    if origem_sel:
+        where_recebidos.append("t.account_id IN %s")
+        params_recebidos.append(tuple(origem_sel))
+    cur.execute(
+        "SELECT COUNT(*) AS total_recebidos FROM cartao.transacao t WHERE "
+        + " AND ".join(where_recebidos) + ";",
+        params_recebidos,
+    )
+    resumo = dict(cur.fetchone())
+
+    where_resumo = ["t.data_transacao >= %s", "t.data_transacao < %s", "COALESCE(t.duplicada, false) = false"]
+    params_resumo = [inicio_mes, fim_mes]
+    if origem_sel:
+        where_resumo.append("t.account_id IN %s")
+        params_resumo.append(tuple(origem_sel))
+    # gasto real = so o que tem natureza de despesa (fatura, transferencia,
+    # investimento e compra de bem nao sao gasto - ver NATUREZAS)
+    cur.execute(
+        f"SELECT COUNT(DISTINCT t.transacao_id) AS total_reais, "
+        f"COUNT(DISTINCT t.transacao_id) FILTER (WHERE t.conferida) AS conferidos_reais, "
+        f"SUM(CASE WHEN {NATUREZA_SQL} = 'despesa' THEN {VAL_DESPESA} ELSE 0 END) AS gasto_real, "
+        f"SUM(CASE WHEN {NATUREZA_SQL} = 'receita' THEN -{VAL_DESPESA} ELSE 0 END) AS receita_mes "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_resumo) + ";",
+        params_resumo,
+    )
+    resumo.update(dict(cur.fetchone()))
+
+    # Contado a parte, sobre cartao.transacao e com a MESMA condicao do filtro
+    # "Pendentes de classificacao": o card e o filtro tem que mostrar o mesmo
+    # conjunto, senao o numero promete N linhas e a tela entrega outra coisa.
+    cur.execute(
+        f"SELECT COUNT(*) AS pendente_classificacao FROM cartao.transacao t {JOIN_NATUREZA} "
+        "WHERE " + " AND ".join(where_resumo) + " AND " + PENDENTE_CLASSIFICACAO_SQL + ";",
+        params_resumo,
+    )
+    resumo.update(dict(cur.fetchone()))
+
+    # Ao abrir exatamente o ciclo de uma fatura de uma unica origem, o PDF e'
+    # a autoridade do periodo. Data da compra nao serve para decidir em qual
+    # fatura uma parcela caiu; recalcula a despesa sobre as linhas conciliadas.
+    if periodo == "intervalo" and len(origem_sel) == 1:
+        cur.execute(
+            "SELECT id FROM cartao.fatura_importada WHERE account_id=%s "
+            "AND periodo_inicio=%s AND periodo_fim=%s ORDER BY id DESC LIMIT 1;",
+            (origem_sel[0], inicio_mes.date(), (fim_mes - timedelta(days=1)).date()),
+        )
+        fatura_do_periodo = cur.fetchone()
+        if fatura_do_periodo:
+            total_fatura_dre = calcular_totais_dre_fatura(cur, fatura_do_periodo["id"])
+            resumo["gasto_real"] = total_fatura_dre["despesas_dre"]
+
+    where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
+                 "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
+    params_cat = [inicio_mes, fim_mes]
+    if origem_sel:
+        where_cat.append("t.account_id IN %s")
+        params_cat.append(tuple(origem_sel))
+    cur.execute(
+        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_cat) +
+        " GROUP BY t.categoria ORDER BY total DESC LIMIT 8;",
+        params_cat,
+    )
+    return resumo, cur.fetchall()
+
+
+def janela_do_periodo():
+    """Le mes/periodo/intervalo da URL e devolve a janela local ja validada.
+
+    Ponto unico das duas telas: a Resumida e a Detalhada tem que recortar
+    exatamente o mesmo intervalo a partir dos mesmos parametros.
+    """
+    mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
+    periodo = request.args.get("periodo") or "mes"
+    if periodo not in ("mes", "ano", "intervalo"):
+        periodo = "mes"
+    data_inicio_str = request.args.get("data_inicio") or ""
+    data_fim_str = request.args.get("data_fim") or ""
+    try:
+        if periodo == "intervalo" and data_inicio_str and data_fim_str:
+            # Fatura de cartao nao fecha no mes civil (ex: 13/jul a 12/ago) -
+            # esse periodo existe pra revisar exatamente a janela de uma
+            # fatura, sem forcar um recorte por mes que ela nunca respeitou.
+            inicio_mes = datetime.strptime(data_inicio_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL)
+            fim_mes = datetime.strptime(data_fim_str, "%Y-%m-%d").replace(tzinfo=FUSO_LOCAL) + timedelta(days=1)
+            if fim_mes <= inicio_mes:
+                raise ValueError("intervalo invalido")
+        elif periodo == "ano":
+            inicio_mes, fim_mes = intervalo_ano_local(mes[:4])
+        else:
+            periodo = "mes"
+            inicio_mes, fim_mes = intervalo_mes_local(mes)
+    except ValueError:
+        mes = datetime.now().strftime("%Y-%m")
+        periodo = "mes"
+        inicio_mes, fim_mes = intervalo_mes_local(mes)
+    return mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes
+
+
 def _eh_pagamento_fatura(descricao):
     texto = (descricao or "").strip().upper()
     return texto.startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
@@ -1160,6 +1198,308 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     )
 
 
+def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
+    """A Detalhada recortando por PERIODO em vez de por fatura.
+
+    A tela nasceu presa a uma fatura de cartao, e por isso conta corrente,
+    dinheiro e lancamento manual nunca tiveram lugar nela: nao pertencem a
+    fatura nenhuma. Aqui as mesmas linhas sao montadas a partir de
+    `cartao.transacao`, com os mesmos campos e o mesmo salvamento - o que muda
+    e o recorte, nao o dado.
+
+    Os registros que ficam FORA do resultado (substituido por outro, somente
+    conciliacao) nao viram linha propria: eles se recolhem como vinculo tecnico
+    sob o lancamento que conta, do mesmo jeito que a fatura agrega os seus.
+    """
+    mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes = janela_do_periodo()
+    status = request.args.get("status", "todas")
+    if status not in STATUS_LANCAMENTO:
+        status = "todas"
+    origem_sel = request.args.getlist("origem")
+
+    # Contagem por origem para o chip: sem o filtro de origem de proposito -
+    # com ele, marcar uma origem zeraria a contagem das outras.
+    cur.execute(
+        "SELECT account_id, COUNT(*) AS n FROM cartao.transacao t "
+        "WHERE t.data_transacao >= %s AND t.data_transacao < %s GROUP BY account_id;",
+        (inicio_mes, fim_mes),
+    )
+    qtd_por_origem = {str(r["account_id"]): r["n"] for r in cur.fetchall()}
+
+    cur.execute(
+        "SELECT array_agg(t.transacao_id::text) AS ids FROM cartao.transacao t "
+        "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
+        "AND COALESCE(t.duplicada, false) = false "
+        f"GROUP BY t.account_id, ({DATA_LOCAL_SQL})::date, "
+        "COALESCE(t.valor_brl, t.valor_original), t.descricao "
+        "HAVING COUNT(*) > 1;",
+        (inicio_mes, fim_mes),
+    )
+    ids_suspeitos = set()
+    for r in cur.fetchall():
+        ids_suspeitos.update(r["ids"] or [])
+
+    where = ["t.data_transacao >= %s", "t.data_transacao < %s"]
+    params = [inicio_mes, fim_mes]
+    if origem_sel:
+        where.append("t.account_id IN %s")
+        params.append(tuple(origem_sel))
+    clausulas_status, params_status = where_status_lancamento(status, ids_suspeitos)
+    where.extend(clausulas_status)
+    params.extend(params_status)
+    cur.execute(
+        "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+        "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
+        "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
+        "t.conferida, t.conferida_por, t.conferida_em, t.observacao, t.observacao_sistema, "
+        "COALESCE(t.duplicada, false) AS duplicada, t.substituido_por, "
+        "COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
+        "COALESCE(t.importado, false) AS importado, t.sincronizado_em, "
+        "t.primeiro_sincronizado_em, t.criado_por, "
+        f"{NATUREZA_SQL} AS natureza_efetiva "
+        f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) +
+        " ORDER BY t.data_transacao DESC, t.transacao_id;",
+        params,
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    ids = [r["transacao_id"] for r in rows]
+
+    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
+    dimensoes = cur.fetchall()
+    obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
+    nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
+    ids_dimensoes = {chave_alfa(d["nome"]): d["id"] for d in dimensoes}
+    cur.execute(
+        "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
+        "FROM cartao.dimensao_valor ORDER BY nome;"
+    )
+    valores_por_dim, projeto_portfolio_map = {}, {}
+    for valor in cur.fetchall():
+        valores_por_dim.setdefault(valor["dimensao_id"], []).append(valor)
+        if valor["portfolio_valor_id"]:
+            projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
+
+    dims_por_tx = {}
+    rateio_por_tx = {}
+    criados_pela_fatura = set()
+    principal_por_tecnico = {}
+    if ids:
+        cur.execute(
+            "SELECT transacao_id, dimensao_id, valor_id FROM cartao.transacao_dimensao "
+            "WHERE transacao_id IN %s;", (tuple(ids),),
+        )
+        for row in cur.fetchall():
+            dims_por_tx.setdefault(str(row["transacao_id"]), {})[row["dimensao_id"]] = row["valor_id"]
+        cur.execute(
+            "SELECT r.transacao_id, COUNT(*) AS partes, "
+            "COALESCE(SUM(r.valor_brl), 0) AS soma, "
+            "BOOL_OR(r.categoria IS NULL OR r.categoria = '') AS sem_categoria "
+            "FROM cartao.transacao_rateio r WHERE r.transacao_id IN %s "
+            "GROUP BY r.transacao_id;", (tuple(ids),),
+        )
+        for row in cur.fetchall():
+            rateio_por_tx[str(row["transacao_id"])] = dict(row)
+        # F/P: "criado pela fatura" e ser o `transacao_id_criado` de uma linha,
+        # NAO o `transacao.importado`, que e outra coisa (secao 11.3).
+        cur.execute(
+            "SELECT DISTINCT transacao_id_criado FROM cartao.fatura_linha "
+            "WHERE transacao_id_criado IN %s;", (tuple(ids),),
+        )
+        criados_pela_fatura = {str(r["transacao_id_criado"]) for r in cur.fetchall()}
+        # Registro de conciliacao recolhido sob a parcela que o substitui -
+        # so quando ha UM destino visivel e inequivoco.
+        ids_conc = [r["transacao_id"] for r in rows if r["somente_conciliacao"]]
+        if ids_conc:
+            cur.execute(
+                "SELECT DISTINCT fv.transacao_id, fl.transacao_id_criado "
+                "FROM cartao.fatura_vinculo fv "
+                "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
+                "WHERE fv.transacao_id IN %s AND fl.transacao_id_criado IN %s "
+                "AND fl.transacao_id_criado<>fv.transacao_id;",
+                (tuple(ids_conc), tuple(ids)),
+            )
+            destinos = {}
+            for v in cur.fetchall():
+                destinos.setdefault(str(v["transacao_id"]), set()).add(str(v["transacao_id_criado"]))
+            principal_por_tecnico = {
+                tec: next(iter(alvos)) for tec, alvos in destinos.items() if len(alvos) == 1
+            }
+
+    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
+    categorias_db = {r["categoria"] for r in cur.fetchall()}
+    categorias = sorted(
+        (categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS,
+        key=lambda c: chave_alfa(cat_pt_puro(c)),
+    )
+    cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
+    nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
+
+    def origem_da_linha(row):
+        conta = contas_by_id.get(str(row["account_id"])) or {}
+        final4 = row["numero_cartao_final"]
+        if conta.get("tipo") == "CREDIT" and final4 and nomes_cartao.get(final4):
+            texto = nomes_cartao[final4]
+        else:
+            texto = conta.get("label_curto") or "-"
+        if conta.get("tipo") == "CREDIT" and final4:
+            completa = f'{conta.get("label", "-")} - ' + (
+                nomes_cartao.get(final4) or f"final {final4}")
+        else:
+            completa = conta.get("label", "-")
+        return conta.get("selo", ""), texto, completa
+
+    linhas, por_id = [], {}
+    for row in rows:
+        tid = str(row["transacao_id"])
+        row["transacao_id"] = tid
+        row["data_local"] = data_hora_local(row["data_transacao"])
+        row["conferida_local"] = data_hora_local(row.pop("conferida_em"))
+        row["sincronizado_local"] = data_hora_local(row.pop("sincronizado_em"))
+        row["primeiro_sincronizado_local"] = data_hora_local(row.pop("primeiro_sincronizado_em"))
+        row["fonte"] = "F" if tid in criados_pela_fatura else "P"
+        row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
+        row["dims"] = dims_por_tx.get(tid, {})
+        rateio = rateio_por_tx.get(tid)
+        row["rateado"] = bool(rateio)
+        row["exige_dimensoes"] = exige_dimensoes(row["natureza_efetiva"])
+        row["principal"], row["tecnico"] = True, False
+        selo, origem_texto, origem_full = origem_da_linha(row)
+        valor = Decimal(str(row["valor"] or 0))
+        conta = contas_by_id.get(str(row["account_id"])) or {}
+        # Fora do resultado: existe, e consultavel, e nao entra no DRE. Sem
+        # marcar, dois lancamentos de mesmo valor aparecem lado a lado sem
+        # pista de que so um conta (secao 7.4).
+        fora = (
+            "Mesmo evento que outro lançamento — só o outro conta no resultado."
+            if row["substituido_por"] else
+            ("Registro de conciliação (compra parcelada inteira) — as parcelas é que contam."
+             if row["somente_conciliacao"] else "")
+        )
+        if rateio:
+            valido = (
+                rateio["partes"] >= 2
+                and Decimal(str(rateio["soma"])).quantize(Decimal("0.01")) == valor.quantize(Decimal("0.01"))
+                and not rateio["sem_categoria"]
+            )
+            faltando = [] if valido else ["Rateio"]
+        else:
+            faltando = ([] if row["categoria"] else ["Categoria"]) + [
+                nomes_dimensoes[d] for d in obrigatorias
+                if row["exige_dimensoes"] and not row["dims"].get(d)
+            ]
+        # Registro fora do resultado nunca vai ter classificacao completa e
+        # nao e trabalho pendente (secao 10.4 n.13).
+        if fora:
+            faltando = []
+        natureza = row["natureza_efetiva"]
+        linha = {
+            "id": "t-" + tid,
+            "data": row["data_local"],
+            "descricao": row["descricao"] or "",
+            "origem_selo": selo, "origem_texto": origem_texto, "origem_completa": origem_full,
+            # So o MANUAL tem autor: o que veio do banco nao foi digitado por
+            # ninguem, e inventar uma inicial diria que alguem lancou o que o
+            # Pluggy mandou (secao 7.1).
+            "autor": row["criado_por"] if str(row["account_id"]) == CONTA_MANUAL_ID else None,
+            "titular": None, "titular_fonte": None,
+            "cartao_aguardando": False,
+            "cartao_nome": nomes_cartao.get(row["numero_cartao_final"]),
+            "cartao_final": row["numero_cartao_final"],
+            "parcela_atual": row["parcela_atual"], "parcela_total": row["parcela_total"],
+            "valor": valor,
+            "valor_fmt": (
+                ("- " if row["tipo"] == "DEBIT" else "+ ") + "R$ " + valor_pt(abs(valor))
+                if conta.get("tipo") and conta["tipo"] != "CREDIT"
+                else "R$ " + valor_pt(valor)
+            ),
+            "cor_valor": (
+                ("color:var(--bad)" if row["tipo"] == "DEBIT" else "color:var(--good)")
+                if conta.get("tipo") and conta["tipo"] != "CREDIT" else ""
+            ),
+            "pagamento": False,
+            "vinculos": [row], "principal": row, "multiplos": False,
+            "requer_validacao": False, "validacao_motivos": [],
+            "faltando": faltando, "classificada": not faltando,
+            "conferida": bool(row["conferida"]),
+            "fora_do_resultado": fora,
+            "suspeita_duplicidade": tid in ids_suspeitos,
+            "pendente_banco": (row["status"] or "").upper() == "PENDING",
+            "pendente_bloqueia_ok": _pendente_bloqueia(row["status"], row["data_local"]),
+            "natureza_estado": "dre" if natureza in ("despesa", "receita") else "fora",
+            "natureza_rotulo": NATUREZAS.get(natureza, natureza),
+            "estado": "periodo",
+            "_substituido_por": str(row["substituido_por"]) if row["substituido_por"] else None,
+            "_tecnico_de": principal_por_tecnico.get(tid),
+        }
+        linhas.append(linha)
+        por_id[linha["id"]] = linha
+
+    # Recolhe o que esta fora do resultado sob o lancamento que conta. O
+    # vinculo vem do BANCO (`substituido_por` / vinculo de fatura): nunca
+    # agrupamos so porque data, descricao ou valor parecem iguais.
+    principais = []
+    for linha in linhas:
+        alvo_id = linha["_substituido_por"] or linha["_tecnico_de"]
+        alvo = por_id.get("t-" + alvo_id) if alvo_id else None
+        if alvo is not None and alvo is not linha:
+            tecnico = linha["principal"]
+            tecnico["principal"], tecnico["tecnico"] = False, True
+            alvo["vinculos"].append(tecnico)
+            alvo["multiplos"] = True
+        else:
+            principais.append(linha)
+    linhas = principais
+
+    resumo, por_categoria = resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo)
+    receita = resumo["receita_mes"] or 0
+    gasto = resumo["gasto_real"] or 0
+    total_reais = resumo["total_reais"] or 0
+    config = {
+        "pode_editar": pode("lancamentos_editar"),
+        "pode_conferir": pode("lancamentos_conferir"),
+        "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
+        "projeto_portfolio_map": projeto_portfolio_map,
+        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
+        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
+    }
+    return render_template(
+        "lancamentos_fatura.html", titulo="Lançamentos",
+        topbar=topbar_html("Lançamentos", "inicio"),
+        modo_periodo=True,
+        fatura={"id": "periodo", "periodo": True, "em_andamento": False, "previsto": False},
+        fatura_nova=None, fatura_antiga=None, faturas=[],
+        conta=None, avatar_banco=None, contas_credito=contas_credito,
+        account_id="", linhas=linhas,
+        categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
+        dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
+        mes=mes, periodo=periodo, data_inicio=data_inicio_str, data_fim=data_fim_str,
+        origem_filtro_html=chip_filter_html(
+            "origem", "Origem", origem_opcoes, origem_sel,
+            onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,
+        ),
+        por_categoria=[
+            {"nome": cat_pt_puro(c["categoria"]), "total": float(c["total"])} for c in por_categoria
+        ],
+        receita_mes=receita, gasto_real=gasto, resultado_mes=receita - gasto,
+        total_reais=total_reais,
+        total_recebidos=resumo["total_recebidos"] or 0,
+        total_fora=max((resumo["total_recebidos"] or 0) - total_reais, 0),
+        conf_reais=resumo["conferidos_reais"] or 0,
+        pendente_classificacao=resumo["pendente_classificacao"] or 0,
+        # Numero derivado se calcula AQUI: aritmetica em Jinja sobre variavel
+        # ausente levanta UndefinedError e derruba a tela inteira.
+        classificados_reais=max(total_reais - (resumo["pendente_classificacao"] or 0), 0),
+        pendentes_ok=max(total_reais - (resumo["conferidos_reais"] or 0), 0),
+        pct_classificados=_pct(total_reais - (resumo["pendente_classificacao"] or 0), total_reais),
+        pct_conferidos=_pct(resumo["conferidos_reais"] or 0, total_reais),
+        totais={}, contagens={},
+        config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
+        url_resumida="/?mes=" + mes + "&periodo=" + periodo + "&status=" + status,
+        pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
+        pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
+    )
+
+
 def _conta_credito_padrao(cur, contas_credito):
     """Cartao aberto quando a URL nao diz qual.
 
@@ -1203,6 +1543,15 @@ def lancamentos_por_fatura():
         )
     contas_by_id, origem_opcoes = carregar_origens(cur)
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]
+    # recorte=periodo: a mesma tela, recortando por mes/ano/intervalo e por
+    # varias origens, em vez de por uma fatura. E o unico recorte que alcanca
+    # conta corrente, dinheiro e lancamento manual - nenhum deles pertence a
+    # fatura nenhuma.
+    if request.args.get("recorte") == "periodo":
+        resposta = _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito)
+        cur.close()
+        conn.close()
+        return resposta
     account_id = request.args.get("account_id") or ""
     fatura_id = request.args.get("fatura_id", type=int)
     em_andamento = request.args.get("andamento") == "1"

@@ -2,63 +2,6 @@
 // Todo o conteúdo vem por AJAX de /relatorios/dados e /relatorios/lancamentos,
 // então este arquivo nao depende de nada interpolado pelo Python.
 // ---- chip filters: dropdown com busca, checkbox toggle e navegacao por teclado ----
-function cfToggle(btn) {
-  const panel = btn.nextElementSibling;
-  const abrir = !panel.classList.contains('show');
-  document.querySelectorAll('.chip-panel.show').forEach(p => { if (p !== panel) p.classList.remove('show'); });
-  if (abrir) {
-    panel.classList.add('show');
-    const search = panel.querySelector('.chip-search');
-    if (search) { search.value = ''; cfFiltrar(search); search.focus(); }
-  } else {
-    panel.classList.remove('show');
-  }
-}
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.chipfilter') && !e.target.closest('.menu-colunas')) {
-    document.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
-  }
-});
-function cfClear(e, btn) {
-  e.stopPropagation();
-  const panel = btn.closest('.chipfilter').querySelector('.chip-panel');
-  panel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-  aplicarFiltros();
-}
-function cfFiltrar(input) {
-  const panel = input.closest('.chip-panel');
-  const q = input.value.toLowerCase();
-  panel.querySelectorAll('.chip-opt').forEach(opt => {
-    // sem o contador: buscar "13" nao pode casar com a conta que tem 13 lancamentos
-    opt.style.display = textoDaOpcao(opt).toLowerCase().includes(q) ? 'flex' : 'none';
-  });
-  panel.querySelectorAll('.chip-hover').forEach(o => o.classList.remove('chip-hover'));
-}
-function cfKeydown(e, input) {
-  const panel = input.closest('.chip-panel');
-  const visiveis = Array.from(panel.querySelectorAll('.chip-opt')).filter(o => o.style.display !== 'none');
-  let idx = visiveis.findIndex(o => o.classList.contains('chip-hover'));
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    if (idx >= 0) visiveis[idx].classList.remove('chip-hover');
-    idx = Math.min(idx + 1, visiveis.length - 1);
-    if (visiveis[idx]) visiveis[idx].classList.add('chip-hover');
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    if (idx >= 0) visiveis[idx].classList.remove('chip-hover');
-    idx = Math.max(idx - 1, 0);
-    if (visiveis[idx]) visiveis[idx].classList.add('chip-hover');
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (idx >= 0) {
-      const cb = visiveis[idx].querySelector('input[type=checkbox]');
-      cb.checked = !cb.checked;
-      aplicarFiltros();
-    }
-  } else if (e.key === 'Escape') {
-    panel.classList.remove('show');
-  }
-}
 
 // ---- filtros aplicados em tempo real via AJAX (o dropdown nao fecha) ----
 function fmtMoeda(v) {
