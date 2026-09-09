@@ -793,7 +793,20 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio · 7 ✓ ações do lançamento
 (rateio, exclusão, confirmação ao retirar o OK) · 8 ✓ lançamento manual · 9 ✓ filtros por AJAX
 com histórico · 10 ✓ gasto por categoria. **As dez etapas estão em produção** — a Resumida só sai
-depois de o uso real confirmar que nada ficou para trás. · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+depois de o uso real confirmar que nada ficou para trás.
+
+**Medido em produção em 09/09/2026, comparando as duas telas no mesmo recorte:**
+
+| Recorte | Linhas | Registros técnicos | Cards |
+|---|---|---|---|
+| ago/2026, todas | 190 = 190 | 31 = 31 | idênticos |
+| jul/2026, todas | 321 = 321 | 14 = 14 | idênticos |
+| ago/2026, pendentes de conferência | 112 = 112 | 2 = 2 | idênticos |
+
+Filtrar na Detalhada não recarrega mais: uma marca posta em `window` sobrevive à troca, o histórico
+cresce em um, a tabela nova volta com as 12 alças e os 9 cabeçalhos ordenáveis, e o Voltar do
+navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de classificação" trouxe
+**24** linhas — exatamente o "Faltam 24" do card, como a §7.2-B exige. · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
 OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
