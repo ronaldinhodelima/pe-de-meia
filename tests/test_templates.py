@@ -830,3 +830,62 @@ class TestSemanticaDeLinha:
         raiz = pathlib.Path(__file__).resolve().parent.parent
         js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
         assert "linha-indicadores" in js and "linha.className = nova.className" in js
+
+
+class TestRateioNasDuasTelas:
+    """As partes de um rateio sao editadas nas linhas abaixo do pai, pelo mesmo
+    codigo nas duas telas (secao 4.4 e 7.1)."""
+
+    def contexto_rateado(self):
+        from tests.test_templates import TestDetalhadaPorPeriodo
+        base = TestDetalhadaPorPeriodo().contexto()
+        linha = base["linhas"][0]
+        linha["principal"]["rateado"] = True
+        linha["rateios"] = [
+            {"id": 1, "valor": 150.00, "cor_valor": "", "categoria": "Water",
+             "categoria_nome": "Água", "observacao": "parte do Ronaldo",
+             "dims": {1: 7}, "dims_rotulos": {1: "Família"}},
+            {"id": 2, "valor": 62.35, "cor_valor": "", "categoria": "Water",
+             "categoria_nome": "Água", "observacao": "", "dims": {1: 7},
+             "dims_rotulos": {1: "Família"}},
+        ]
+        linha["rateio_valido"] = True
+        linha["valor_rateio"] = 212.35
+        linha["situacoes"] = []
+        linha["situacoes_texto"] = "Lançamento contabilizado"
+        return base
+
+    def test_as_partes_aparecem_como_linhas_abaixo_do_pai(self, ctx):
+        html = render_template("lancamentos_fatura.html", **self.contexto_rateado())
+        assert html.count('class="rateio-row') == 2
+        assert "rateio-valor-inline" in html and "rateio-cat-select" in html
+        assert "rateio-obs-inline" in html and "rateio-salvar-inline" in html
+        # o nucleo le o total do pai para conferir a soma em centavos
+        assert 'data-rateio-total="212.35"' in html
+        assert "— Parte 1" in html and "— Parte 2" in html
+
+    def test_o_botao_das_partes_fica_depois_da_descricao(self, ctx):
+        """Antes dela, empurrava o texto e as linhas com e sem botao comecavam
+        em colunas diferentes (secao 7.6)."""
+        html = render_template("lancamentos_fatura.html", **self.contexto_rateado())
+        desc = html.index("desc-loja")
+        botao = html.index('class="rateio-toggle"')
+        assert desc < botao
+
+    def test_as_partes_nascem_recolhidas(self, ctx):
+        html = render_template("lancamentos_fatura.html", **self.contexto_rateado())
+        trecho = html.split('class="rateio-row', 1)[1].split(">", 1)[0]
+        assert "hidden" in html.split('class="rateio-row', 1)[1].split("<td", 1)[0]
+
+    def test_o_nucleo_do_rateio_e_o_mesmo_nas_duas_telas(self):
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        nucleo = (raiz / "static" / "rateio.js").read_text(encoding="utf-8")
+        assert nucleo.count("fetch(") == 1, "um unico ponto de gravacao"
+        for tela in ("index.html", "lancamentos_fatura.html"):
+            html = (raiz / "templates" / tela).read_text(encoding="utf-8")
+            assert "/static/rateio.js" in html, tela
+        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+            texto = (raiz / "static" / js).read_text(encoding="utf-8")
+            assert "window.pdmRateio.configurar" in texto, js
+            assert "/rateios'" not in texto, js + ": segundo caminho de gravacao"

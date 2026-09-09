@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 384 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 394 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -790,8 +790,8 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 > extratos de ago/2025 a jul/2026 e ainda deixaria o dinheiro em espécie sem casa.
 
 **Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
-3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 semântica de linha (pontos, fora do resultado,
-duplicidade, legenda) · 6 rateio · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio (editar
+as partes; **criar** ainda depende do modal, que é a etapa 7) · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
 OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
@@ -949,6 +949,58 @@ prendia o chip a duas telas. `test_o_filtro_em_chip_tem_uma_implementacao_so` tr
 decimal**, e R$ 212,35 era ordenado como 21.235. A conta certa já existia no `tabelas.js` — o
 separador decimal é o último `.` ou `,` — mas estava presa numa closure; virou
 `window.pdmNumeroDeTexto()` e as duas telas passam a ler o mesmo texto pela mesma conta.
+
+### A semântica de linha é uma só (etapa 5, 08/09/2026)
+
+A Detalhada não tinha os pontos de situação, o selo de *fora do resultado* nem a legenda — e
+**pintava o CONFERIDO de cinza**, o oposto do que a §7.6 decidiu: o que falta conferir é que fica
+cinza, porque a tela existe para achar o que falta. No fim do mês ela ficava cinza justamente ao
+contrário. **A regra do fundo estava presa ao id da Resumida** (`#tabela-lancamentos`), e foi isso
+que escondeu a divergência por tanto tempo; hoje ela vale pela classe `conferida`, nas duas.
+
+`situacoes_da_linha()` é o ponto único dos **quatro** construtores de linha do sistema (Resumida,
+recorte por período, fatura oficial e fatura em andamento), com dois estados que só a conciliação
+tem: *cobrança sem lançamento vinculado* e o `Validar: …`. Duas listas divergiriam e a Detalhada
+ficaria com um estado a menos, em silêncio. **`fatura-erro` continua** — divergência é situação do
+**documento**, não do lançamento.
+
+**O resumo parcial troca também os pontos.** Sem isso o ponto "Conferido" só apareceria no
+carregamento seguinte, e a linha diria uma coisa enquanto a cor dizia outra.
+
+Medido em produção (agosto/2026, recorte por período): 108 linhas conferidas com fundo transparente,
+82 pendentes em `--raise`, 209 pontos, *fora do resultado* com opacidade .62 e selo. A fatura
+oficial de agosto e a fatura em andamento seguem com os cards e o cabeçalho próprios, sem coluna
+Origem e sem legenda.
+
+**Rótulo tem maiúscula só na primeira letra** (decisão do usuário, 08/09/2026). `capitalize`
+maiusculava **cada** palavra e escrevia "Receitas No DRE"; `uppercase`, que veio antes dele,
+gritava. A base é `text-transform: none` — o texto como está escrito — e `::first-letter` garante a
+inicial quando o rótulo vem do banco em caixa baixa. **`lowercase` como base não serve:** destruiria
+DRE, IOF, IPVA e PIX. `test_rotulo_tem_maiuscula_so_na_primeira_letra` trava isso.
+
+### O rateio tem um núcleo só (etapa 6, 08/09/2026)
+
+`static/rateio.js` — `window.pdmRateio` — é o dono do
+`POST/DELETE /api/transacao/<id>/rateios`, e **todo** caminho da interface passa por ele: a edição
+das partes nas linhas, a criação pelo quadro do modal e o desfazer. Antes havia três `fetch` para o
+mesmo endpoint, dois deles no modal. É a mesma regra do `lote.js` (§7.2-A): um segundo caminho de
+gravação começa igual e diverge na primeira regra nova.
+
+O que muda entre as telas entra por **configuração**, não por cópia: `paiDe` (a Resumida acha o pai
+por `tr[data-id]`, a Detalhada por `tr[data-linha][data-id]`), `aoValidar` (o OK e o resumo
+"Rateado R$ X de R$ Y" ficam em lugares diferentes) e `aposSalvar`.
+
+**A soma é conferida em centavos**, nunca em ponto flutuante — a §4.4 exige fechamento exato, e
+somar em `float` deixaria passar diferença de arredondamento.
+
+**`aposSalvar` não tem padrão que recarregue.** Um default com `window.location.reload()` jogaria
+quem está no meio da lista de volta ao topo, porque `reload()` não dispara `submit` e a posição não
+seria guardada. Cada tela chama `guardarPosicaoAtual()` antes, e
+`test_todo_reload_por_js_guarda_a_posicao_antes` varre isso em todo `static/*.js`.
+
+**Gravar um CAMPO não recarrega; gravar o RATEIO recarrega, de propósito** — ali o conjunto inteiro
+muda (as partes, o OK do pai, o DRE). O teste que proibia `reload` na Detalhada passou a olhar só o
+corpo de `salvarEditor`, em vez de o arquivo inteiro: a regra é sobre a edição de campo.
 
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
@@ -1769,7 +1821,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**384 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**394 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

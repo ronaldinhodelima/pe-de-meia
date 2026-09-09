@@ -274,6 +274,7 @@
       data-valor="{{ linha.valor }}"
       data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}"
       data-exige-dimensoes="{{ '0' if (linha.principal and not linha.principal.get('exige_dimensoes', True)) else '1' }}"
+      {% if linha.rateios %}data-id="{{ linha.principal.transacao_id }}" data-rateio-total="{{ linha.valor_rateio }}" data-rateio-valido="{{ '1' if linha.rateio_valido else '0' }}"{% endif %}
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
     <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir detalhes{% else %}Abrir detalhes do lançamento{% endif %}">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button></td>
     <td class="cel-data-fatura" data-col="data"><span class="linha-indicadores" data-tip="{{ linha.situacoes_texto }}">{% for si in linha.situacoes %}<i class="linha-ponto {{ si.classe }}"></i>{% endfor %}</span>{{ linha.data.strftime('%d/%m/%Y') }}</td>
@@ -281,7 +282,7 @@
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}
+          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
              pendencia deixava uma linha em branco em todo lancamento que nao
@@ -312,6 +313,20 @@
     {% if pode_regras %}<td class="cel-regra" data-col="regra">{% if linha.principal %}<button type="button" class="regra-btn ver-btn" data-transacao="{{ linha.principal.transacao_id }}" title="Criar regra automática a partir deste lançamento" aria-label="Criar regra automática">+</button>{% endif %}</td>{% endif %}
     <td class="cel-ok-fatura" data-col="check">{% if linha.principal %}<input class="ok-lancamento" type="checkbox" data-ok-lancamento="{{ linha.principal.transacao_id }}" {{ 'checked' if linha.conferida }} {{ 'disabled' if not pode_conferir or fatura.em_andamento or (modo_periodo and linha.pendente_bloqueia_ok and not linha.conferida) }} title="{% if fatura.em_andamento %}OK liberado somente após a fatura ser conciliada{% elif modo_periodo and linha.pendente_bloqueia_ok and not linha.conferida %}Pendente no banco — aguarde confirmar para marcar OK{% else %}OK do lançamento{% endif %}{% if not fatura.em_andamento and linha.principal.conferida_por %}, por {{ linha.principal.conferida_por }}{% endif %}"><span class="status-inline" data-status="{{ linha.principal.transacao_id }}" aria-live="polite"></span>{% endif %}</td>
   </tr>
+  {% for parte in linha.rateios %}
+  <tr class="rateio-row{{ '' if linha.rateio_valido else ' rateio-invalido' }}" data-rateio-parent="{{ linha.principal.transacao_id }}" data-rateio-id="{{ parte.id }}" hidden>
+    <td class="cel-sel-fatura" data-col="sel"></td>
+    <td class="cel-data-fatura" data-col="data"></td>
+    <td class="desc" data-col="desc" data-tip="{{ linha.descricao }} — Parte {{ loop.index }}"><span class="rateio-seta">↳</span> {{ linha.descricao }} — Parte {{ loop.index }}</td>
+    {% if modo_periodo %}<td class="cel-origem" data-col="origem">Rateio interno</td>{% endif %}
+    <td class="cel-classif" data-col="categoria"><select data-pdm-combobox class="rateio-cat-select" aria-label="Categoria" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==parte.categoria }}>{{ c.nome }}</option>{% endfor %}</select></td>
+    {% for d in dimensoes %}<td class="cel-classif" data-col="dim_{{ d.id }}"><select data-pdm-combobox class="rateio-dim-select" data-dim="{{ d.id }}" aria-label="{{ d.nome }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}" {{ 'selected' if parte.dims.get(d.id)==val.id }}>{{ rotulo_dim(val) }}</option>{% endfor %}</select></td>{% endfor %}
+    <td class="valor cel-valor-fatura" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline{{ '' if linha.rateio_valido else ' invalido' }}" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar }}></td>
+    <td class="cel-obs" data-col="obs"><input class="rateio-obs-inline" type="text" maxlength="500" value="{{ parte.observacao }}" placeholder="obs..." aria-label="Observação" {{ 'disabled' if not pode_editar }}></td>
+    {% if pode_regras %}<td class="cel-regra" data-col="regra"></td>{% endif %}
+    <td class="cel-ok-fatura" data-col="check"><button type="button" class="rateio-salvar-inline" title="Salvar rateio" aria-label="Salvar rateio" {{ 'disabled' if not pode_editar or not linha.rateio_valido }}>✓</button></td>
+  </tr>
+  {% endfor %}
   <tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="{{ 7 + colunas_extra + dimensoes|length + (1 if pode_regras else 0) }}">
     {% for v in linha.vinculos %}
       <div class="vinculo-bloco">
@@ -379,4 +394,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-6"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260908-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-7"></script>{% endblock %}

@@ -598,10 +598,7 @@ function salvarRateioModal() {
   if (!idAtualModal) return;
   const status = document.getElementById('rateioStatus');
   status.textContent = 'Salvando...';
-  fetch('/api/transacao/' + encodeURIComponent(idAtualModal) + '/rateios', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({partes:lerRateioModal()})
-  }).then(r => r.json()).then(res => {
-    if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar.');
+  window.pdmRateio.salvarPartes(idAtualModal, lerRateioModal()).then(() => {
     if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio salvo');
     guardarPosicaoAtual(); window.location.reload();
   }).catch(e => { status.textContent = e.message || 'Não foi possível salvar.'; });
@@ -609,12 +606,10 @@ function salvarRateioModal() {
 
 function excluirRateioModal() {
   if (!idAtualModal || !confirm('Desfazer o rateio e voltar ao lançamento simples?')) return;
-  fetch('/api/transacao/' + encodeURIComponent(idAtualModal) + '/rateios', {method:'DELETE'})
-    .then(r => r.json()).then(res => {
-      if (!res.ok) throw new Error(res.erro || 'Não foi possível desfazer.');
-      if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio desfeito');
-      guardarPosicaoAtual(); window.location.reload();
-    }).catch(e => alert(e.message || 'Não foi possível desfazer.'));
+  window.pdmRateio.remover(idAtualModal).then(() => {
+    if (window.pdmToastAposRecarregar) window.pdmToastAposRecarregar('Rateio desfeito');
+    guardarPosicaoAtual(); window.location.reload();
+  }).catch(e => alert(e.message || 'Não foi possível desfazer.'));
 }
 
 function abrirConfirmacaoModal(acao) {
@@ -793,113 +788,33 @@ function portfolioDoProjeto(valorId) {
   return (window.configLancamentos.projeto_portfolio_map || {})[valorId] || null;
 }
 
-function linhasRateioInline(id) {
-  return Array.from(document.querySelectorAll('tr.rateio-row[data-rateio-parent="' + id + '"]'));
-}
-
-function lerRateioInline(id) {
-  return linhasRateioInline(id).map(linha => {
-    const dimensoes = {};
-    linha.querySelectorAll('.rateio-dim-select').forEach(sel => {
-      dimensoes[sel.dataset.dim] = sel.value || null;
-    });
-    return {
-      valor: linha.querySelector('.rateio-valor-inline').value,
-      categoria: linha.querySelector('.rateio-cat-select').value,
-      observacao: linha.querySelector('.rateio-obs-inline').value,
-      dimensoes: dimensoes,
-    };
-  });
-}
-
-function validarRateioInline(id) {
-  const pai = document.querySelector('tr[data-id="' + id + '"]');
-  const partes = lerRateioInline(id);
-  const totalCentavos = Math.round(Number(pai && pai.dataset.rateioTotal || 0) * 100);
-  const obrigatorias = window.configLancamentos.dimensoes_obrigatorias || [];
-  let somaCentavos = 0;
-  let camposValidos = partes.length >= 2;
-  partes.forEach(parte => {
-    const valor = Number(String(parte.valor || '').replace(',', '.'));
-    if (!Number.isFinite(valor) || valor <= 0 || !parte.categoria) camposValidos = false;
-    else somaCentavos += Math.round(valor * 100);
-    obrigatorias.forEach(dimId => {
-      if (!(parte.dimensoes || {})[dimId]) camposValidos = false;
-    });
-  });
-  return {
-    valido: camposValidos && somaCentavos === totalCentavos,
-    somaCentavos: somaCentavos,
-    totalCentavos: totalCentavos,
-  };
-}
-
-function atualizarValidacaoRateioInline(id, alterado) {
-  const pai = document.querySelector('tr[data-id="' + id + '"]');
-  if (!pai) return false;
-  const estado = validarRateioInline(id);
-  const conf = pai.querySelector('.conf-check');
-  if (conf) {
-    conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido;
-    conf.title = estado.valido ? '' : 'Ajuste as partes até o rateio fechar o valor do lançamento';
-  }
-  const resumo = pai.querySelector('.rateio-resumo');
-  if (resumo) {
-    const soma = estado.somaCentavos / 100;
-    const total = estado.totalCentavos / 100;
-    resumo.textContent = estado.valido ? '' : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
-    resumo.classList.toggle('invalido', !estado.valido);
-  }
-  linhasRateioInline(id).forEach(linha => {
-    if (alterado) linha.classList.add('rateio-alterado');
-    linha.classList.toggle('rateio-invalido', !estado.valido);
-    const valor = linha.querySelector('.rateio-valor-inline');
-    if (valor) valor.classList.toggle('invalido', !estado.valido);
-    const botao = linha.querySelector('.rateio-salvar-inline');
-    if (botao) botao.disabled = !window.configLancamentos.pode_editar || !estado.valido;
-  });
-  pai.dataset.rateioValido = estado.valido ? '1' : '0';
-  if (window.detalhes[id]) window.detalhes[id]._rateio_valido = estado.valido;
-  return estado.valido;
-}
-
-function salvarRateioInline(id) {
-  if (!atualizarValidacaoRateioInline(id, false)) {
-    alert('Ajuste as partes até a soma fechar exatamente o valor do lançamento e preencha os campos obrigatórios.');
-    return;
-  }
-  const linhas = linhasRateioInline(id);
-  linhas.forEach(linha => {
-    const botao = linha.querySelector('.rateio-salvar-inline');
-    if (botao) { botao.disabled = true; botao.textContent = '…'; }
-  });
-  fetch('/api/transacao/' + encodeURIComponent(id) + '/rateios', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    // o clique no ✓ e a acao humana: com o rateio completo, ele assina o OK do
-    // lancamento pai (secao 4.4). O servidor confere as condicoes e nunca
-    // sobrescreve assinatura existente.
-    body: JSON.stringify({
-      partes: lerRateioInline(id),
-      conferir: !!(window.configLancamentos && window.configLancamentos.pode_conferir),
-    }),
-  }).then(r => r.json()).then(res => {
-    if (!res.ok) throw new Error(res.erro || 'Não foi possível salvar o rateio.');
-    if (window.pdmToastAposRecarregar) {
-      // esta acao recarrega a pagina: a confirmacao precisa sobreviver a ela
-      window.pdmToastAposRecarregar(
-        res.conferida ? 'Rateio salvo e lançamento conferido' : 'Rateio salvo');
+// A edicao das partes mora no nucleo compartilhado (rateio.js): a Detalhada faz
+// exatamente o mesmo, e duas implementacoes divergiriam na primeira regra nova.
+// O que e proprio DESTA tela entra por configuracao - o OK do pai e o resumo
+// "Rateado R$ X de R$ Y" ficam na linha, que a outra tela desenha diferente.
+window.pdmRateio.configurar({
+  paiDe: function (id) { return document.querySelector('tr[data-id="' + id + '"]'); },
+  config: function () { return window.configLancamentos || {}; },
+  aoValidar: function (id, estado, pai) {
+    const conf = pai.querySelector('.conf-check');
+    if (conf) {
+      conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido;
+      conf.title = estado.valido ? '' : 'Ajuste as partes até o rateio fechar o valor do lançamento';
     }
-    guardarPosicaoAtual();
-    window.location.reload();
-  }).catch(e => {
-    linhas.forEach(linha => {
-      const botao = linha.querySelector('.rateio-salvar-inline');
-      if (botao) { botao.disabled = false; botao.textContent = '✓'; }
-    });
-    alert(e.message || 'Não foi possível salvar o rateio.');
-  });
-}
+    const resumo = pai.querySelector('.rateio-resumo');
+    if (resumo) {
+      const soma = estado.somaCentavos / 100;
+      const total = estado.totalCentavos / 100;
+      resumo.textContent = estado.valido ? '' : 'Rateado R$ ' + soma.toFixed(2) + ' de R$ ' + total.toFixed(2);
+      resumo.classList.toggle('invalido', !estado.valido);
+    }
+    if (window.detalhes[id]) window.detalhes[id]._rateio_valido = estado.valido;
+  },
+  aposSalvar: function () { guardarPosicaoAtual(); window.location.reload(); },
+});
+
+function atualizarValidacaoRateioInline(id, alterado) { return window.pdmRateio.atualizar(id, alterado); }
+function salvarRateioInline(id) { return window.pdmRateio.salvar(id); }
 
 // ---- delegacao dos eventos da tabela ----
 // Os handlers eram inline (onclick/onchange no HTML) com o id interpolado pelo

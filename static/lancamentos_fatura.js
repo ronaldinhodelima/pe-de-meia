@@ -29,6 +29,66 @@
     if (card) ir({status: card.dataset.filtro});
   });
 
+  // ---- rateio: as partes moram no nucleo compartilhado (rateio.js) ---------
+  // Mesmo comportamento da Resumida, mesmo codigo. O que muda aqui e so como se
+  // acha a linha pai e o que se repinta nela.
+  if (window.pdmRateio) {
+    window.pdmRateio.configurar({
+      paiDe: function (id) {
+        return document.querySelector('tr[data-linha][data-id="' + id + '"]');
+      },
+      config: function () { return config; },
+      aoValidar: function (id, estado, pai) {
+        const ok = pai.querySelector('[data-ok-lancamento]');
+        if (ok) {
+          ok.disabled = !config.pode_conferir || !estado.valido;
+          ok.title = estado.valido ? 'OK do lançamento'
+            : 'Ajuste as partes até o rateio fechar o valor do lançamento';
+        }
+        const pendencia = pai.querySelector('[data-classificacao]');
+        if (pendencia) {
+          const soma = (estado.somaCentavos / 100).toFixed(2);
+          const total = (estado.totalCentavos / 100).toFixed(2);
+          pendencia.innerHTML = estado.valido ? ''
+            : '<span class="estado invalido">Rateado R$ ' + soma + ' de R$ ' + total + '</span>';
+        }
+      },
+      aposSalvar: function () {
+        if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+        window.location.reload();
+      },
+    });
+    document.addEventListener('click', function (e) {
+      const salvar = e.target.closest && e.target.closest('.rateio-salvar-inline');
+      if (salvar) {
+        const parte = salvar.closest('tr[data-rateio-parent]');
+        e.stopPropagation();
+        if (parte) window.pdmRateio.salvar(parte.dataset.rateioParent);
+        return;
+      }
+      const toggle = e.target.closest && e.target.closest('.rateio-toggle');
+      if (!toggle) return;
+      e.stopPropagation();
+      const abrir = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      toggle.textContent = abrir ? '−' : '+';
+      window.pdmRateio.linhas(toggle.dataset.rateioId).forEach(function (linha) {
+        linha.hidden = !abrir;
+      });
+      if (abrir) window.pdmRateio.atualizar(toggle.dataset.rateioId, false);
+    });
+    document.addEventListener('change', function (e) {
+      if (!e.target.closest || !e.target.closest('tr[data-rateio-parent]')) return;
+      const parte = e.target.closest('tr[data-rateio-parent]');
+      window.pdmRateio.atualizar(parte.dataset.rateioParent, true);
+    });
+    document.addEventListener('input', function (e) {
+      if (!e.target.matches('.rateio-valor-inline, .rateio-obs-inline')) return;
+      const parte = e.target.closest('tr[data-rateio-parent]');
+      if (parte) window.pdmRateio.atualizar(parte.dataset.rateioParent, true);
+    });
+  }
+
   // ---- recorte por periodo -------------------------------------------------
   // A tela nasceu presa a uma fatura de cartao. Recortando por periodo ela
   // alcanca conta corrente, dinheiro e lancamento manual, que nao pertencem a

@@ -281,7 +281,11 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     assert 'data-col="regra" data-oculta-padrao' in template
     assert "regra-btn" in template
     assert "+ Cadastrar novo..." in template
-    assert "window.location.reload()" not in js
+    corpo_salvar = js.split("function salvarEditor(", 1)[1].split("\n  function ", 1)[0]
+    assert "window.location.reload()" not in corpo_salvar, "gravar um campo nao recarrega"
+    for trecho in js.split("window.location.reload()")[:-1]:
+        assert "pdmRateio" in trecho[-900:] or "guardarPosicaoAtual" in trecho[-260:], (
+            "reload fora do rateio, ou sem guardar a posicao")
 
 
 def _bloco_com(template, abertura, marca):
@@ -577,11 +581,16 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
         "rateio-obs-inline", "rateio-salvar-inline",
     ):
         assert classe in template
-    assert "function lerRateioInline(id)" in js
-    assert "function validarRateioInline(id)" in js
-    assert "partes: lerRateioInline(id)" in js
+    # a edicao das partes mora no nucleo compartilhado: a Detalhada faz o mesmo,
+    # e duas implementacoes divergiriam na primeira regra nova (secao 7.1)
+    nucleo = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
+    assert "function ler(id)" in nucleo
+    assert "function validar(id)" in nucleo
+    assert "partes: ler(id)" in nucleo
+    assert nucleo.count("fetch(") == 1, "um unico ponto de gravacao do rateio"
+    assert "function lerRateioInline" not in js, "segunda copia do nucleo"
     # o mesmo clique que salva o conjunto assina o OK do pai (secao 4.4)
-    assert "conferir: !!(window.configLancamentos" in js
+    assert "conferir: !!ctx.config().pode_conferir" in nucleo
     assert "conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido" in js
     assert "data-rateio-total" in template
     assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
@@ -589,7 +598,7 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert 'class="rateio-salvar-inline"' in template and '>✓</button>' in template
     assert "rateio-parte-titulo" in js
     assert "el.textContent = fecha ? ''" in js
-    assert "linha.classList.toggle('rateio-invalido', !estado.valido)" in js
+    assert "linha.classList.toggle('rateio-invalido', !estado.valido)" in nucleo
 
 
 def test_registro_substituido_fica_agrupado_sem_heuristica_e_acompanha_ordenacao():

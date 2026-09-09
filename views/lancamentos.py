@@ -1322,6 +1322,11 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         if valor["portfolio_valor_id"]:
             projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
 
+    nomes_por_dim = {
+        d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
+        for d in dimensoes
+    }
+
     dims_por_tx = {}
     rateio_por_tx = {}
     criados_pela_fatura = set()
@@ -1334,14 +1339,23 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         for row in cur.fetchall():
             dims_por_tx.setdefault(str(row["transacao_id"]), {})[row["dimensao_id"]] = row["valor_id"]
         cur.execute(
-            "SELECT r.transacao_id, COUNT(*) AS partes, "
-            "COALESCE(SUM(r.valor_brl), 0) AS soma, "
-            "BOOL_OR(r.categoria IS NULL OR r.categoria = '') AS sem_categoria "
-            "FROM cartao.transacao_rateio r WHERE r.transacao_id IN %s "
-            "GROUP BY r.transacao_id;", (tuple(ids),),
+            "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
+            "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
+            "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
+            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
+            (tuple(ids),),
         )
-        for row in cur.fetchall():
-            rateio_por_tx[str(row["transacao_id"])] = dict(row)
+        partes_por_id = {}
+        for rr in cur.fetchall():
+            item = partes_por_id.setdefault(rr["id"], {
+                "id": rr["id"], "transacao_id": str(rr["transacao_id"]),
+                "ordem": rr["ordem"], "valor_brl": rr["valor_brl"],
+                "categoria": rr["categoria"], "observacao": rr["observacao"] or "", "dims": {},
+            })
+            if rr["dimensao_id"] is not None:
+                item["dims"][rr["dimensao_id"]] = rr["valor_id"]
+        for item in partes_por_id.values():
+            rateio_por_tx.setdefault(item["transacao_id"], []).append(item)
         # F/P: "criado pela fatura" e ser o `transacao_id_criado` de uma linha,
         # NAO o `transacao.importado`, que e outra coisa (secao 11.3).
         cur.execute(
@@ -1402,7 +1416,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["fonte"] = "F" if tid in criados_pela_fatura else "P"
         row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
         row["dims"] = dims_por_tx.get(tid, {})
-        rateio = rateio_por_tx.get(tid)
+        rateio = rateio_por_tx.get(tid) or []
         row["rateado"] = bool(rateio)
         row["exige_dimensoes"] = exige_dimensoes(row["natureza_efetiva"])
         row["principal"], row["tecnico"] = True, False
@@ -1418,11 +1432,38 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             ("Registro de conciliação (compra parcelada inteira) — as parcelas é que contam."
              if row["somente_conciliacao"] else "")
         )
+        rateios_ui = []
+        for parte in rateio:
+            dims_parte = {d["id"]: parte["dims"].get(d["id"]) for d in dimensoes}
+            valor_parte = parte["valor_brl"]
+            rateios_ui.append({
+                "id": parte["id"],
+                "valor": float(abs(valor_parte)),
+                "cor_valor": (
+                    ("color:var(--bad)" if valor_parte < 0 else "color:var(--good)")
+                    if conta.get("tipo") and conta["tipo"] != "CREDIT" else ""
+                ),
+                "categoria": parte["categoria"],
+                "categoria_nome": cat_pt_puro(parte["categoria"]) if parte["categoria"] else "(não definido)",
+                "observacao": parte["observacao"],
+                "dims": dims_parte,
+                "dims_rotulos": {
+                    d["id"]: nomes_por_dim[d["id"]].get(dims_parte[d["id"]], "(não definido)")
+                    for d in dimensoes
+                },
+            })
         if rateio:
+            soma = sum(
+                (Decimal(str(parte["valor_brl"])) for parte in rateio), Decimal("0.00"),
+            ).quantize(Decimal("0.01"))
             valido = (
-                rateio["partes"] >= 2
-                and Decimal(str(rateio["soma"])).quantize(Decimal("0.01")) == valor.quantize(Decimal("0.01"))
-                and not rateio["sem_categoria"]
+                len(rateio) >= 2
+                and soma == valor.quantize(Decimal("0.01"))
+                and all(parte["categoria"] for parte in rateio)
+                and all(
+                    all(parte["dims"].get(dim_id) is not None for dim_id in obrigatorias)
+                    for parte in rateio
+                )
             )
             faltando = [] if valido else ["Rateio"]
         else:
@@ -1468,6 +1509,9 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             "suspeita_duplicidade": tid in ids_suspeitos,
             "pendente_banco": (row["status"] or "").upper() == "PENDING",
             "pendente_bloqueia_ok": _pendente_bloqueia(row["status"], row["data_local"]),
+            "rateios": rateios_ui,
+            "rateio_valido": not bool(rateio) or not faltando,
+            "valor_rateio": float(abs(valor)),
             "situacoes": situacoes_da_linha(
                 conferida=bool(row["conferida"]), duplicada=bool(row["duplicada"]),
                 suspeita=tid in ids_suspeitos,
