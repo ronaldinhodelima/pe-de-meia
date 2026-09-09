@@ -1592,6 +1592,8 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         categorias=[{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
         dimensoes=dimensoes, valores_por_dim=valores_por_dim, status=status,
         mes=mes, periodo=periodo, data_inicio=data_inicio_str, data_fim=data_fim_str,
+        # o formulario de lancamento manual nasce com a data de hoje
+        hoje_iso=datetime.now().strftime("%Y-%m-%d"),
         origem_filtro_html=chip_filter_html(
             "origem", "Origem", origem_opcoes, origem_sel,
             onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,

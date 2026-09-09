@@ -142,7 +142,7 @@
     <option value="substituido" {{ 'selected' if status == 'substituido' }}>Substituídos por outro</option>
     <option value="rateio_incompleto" {{ 'selected' if status == 'rateio_incompleto' }}>Rateio incompleto</option>
   </select>
-  {% if pode_manual %}<a class="btn-manual ver-btn" href="/?manual=1" data-tip="Cria um lançamento que não veio do banco. O formulário ainda mora na Resumida.">+ manual</a>{% endif %}
+  {% if pode_manual %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% endif %}
   <div class="visao-lancamentos" aria-label="Recorte dos lançamentos">
     <a href="#" class="ativo" aria-current="page">Por período</a>
     <a href="/lancamentos/fatura">Por fatura</a>
@@ -169,7 +169,7 @@
     <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
     <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>{% endif %}
   </select>
-  {% if pode_manual %}<a class="btn-manual ver-btn" href="/?manual=1" data-tip="Cria um lançamento que não veio do banco. O formulário abre na Resumida, que é onde ele vive.">+ manual</a>{% endif %}
+  {% if pode_manual %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}
   <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
     <a href="{{ url_resumida }}">Resumida</a>
     <a href="/lancamentos/fatura?{% if fatura.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura.id }}{% endif %}" class="ativo" aria-current="page">Detalhada</a>
@@ -182,6 +182,8 @@
 {% endif %}
 
 {% if modo_periodo %}
+{% include "_form_manual.html" %}
+
 <div class="cards fatura-cards">
   <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
   <div class="card" data-filtro="despesa" title="Ver só as despesas deste período; investimentos continuam fora"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
@@ -415,4 +417,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-2"></script>{% endblock %}

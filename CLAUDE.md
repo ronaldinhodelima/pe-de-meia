@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 400 aprovados, 6 ignorados
+**Última revisão:** 08/09/2026 · **Schema:** migração 61 · **Testes:** 402 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -791,7 +791,8 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 
 **Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
 3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio · 7 ✓ ações do lançamento
-(rateio, exclusão, confirmação ao retirar o OK) · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
+(rateio, exclusão, confirmação ao retirar o OK) · 8 ✓ lançamento manual · 9 filtros por AJAX com
+histórico · 10 gasto por categoria · 7 modal de detalhes, exclusão de manual e confirmação ao retirar
 OK · 8 formulário de lançamento manual · 9 filtros por AJAX com histórico · 10 gasto por categoria.
 
 > **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
@@ -1035,6 +1036,22 @@ renderiza com config vazio) nem no `py_compile`: só abrindo a tela. É a mesma 
 ausente num `.get()` (§11.3-A). `test_quem_desenha_o_quadro_de_rateio_entrega_as_listas_no_config`
 lê do próprio `rateio.js` quais chaves ele consome, então **uma chave nova passa a ser cobrada
 sozinha**.
+
+### O lançamento manual é o mesmo formulário nas duas telas (etapa 8, 09/09/2026)
+
+`templates/_form_manual.html` + `static/manual.js`. Ele viveu tempo demais só na Resumida: a
+Detalhada tinha o botão e **mandava o usuário para a outra tela** por um link, porque copiar o
+formulário criaria a segunda implementação que diverge na primeira regra nova. Um único
+`POST /api/lancamento-manual`, como sempre.
+
+**No recorte por FATURA o formulário não entra** — um lançamento manual não pertence a fatura
+nenhuma, e criá-lo ali sem vê-lo aparecer confundiria. Ali o botão leva ao recorte por período.
+
+**Variável que falta no `render_template` não levanta erro no Jinja: o campo só nasce vazio.** O
+`hoje_iso` não estava sendo passado pelo recorte por período, e o campo de data do formulário
+nasceria em branco — em silêncio. É a mesma família do config incompleto acima e da coluna ausente
+num `.get()` (§11.3-A). Por isso o teste renderiza o formulário **com o contexto real de cada tela**
+e confere o valor, não só a presença do campo.
 
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
@@ -1855,7 +1872,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**400 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**402 aprovados e 6 ignorados** (08/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -1994,11 +2011,19 @@ outra derrubou `/relatorios` em produção. O que funciona:
    a classificação automática simplesmente não rodava ali — na primeira passada depois da
    correção, **94 lançamentos e 134 dimensões**. **Log com FALHA repetida não é ruído: abra
    um.**
-12. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
+12. **Mudança só em Python não tem sonda pública.** Para confirmar um deploy, a sonda usada é um
+   símbolo novo em `static/*` — mas quando o commit muda apenas `views/` ou `core.py`, nenhum
+   arquivo estático muda e **não há como saber do lado de fora se o container já trocou**:
+   `/health` responde `{"status":"ok"}` em qualquer versão, e as telas exigem login (§10.4 nº 9:
+   rota com login não serve de sonda). Em 09/09/2026 escolhi como sonda um símbolo que **já existia
+   na versão anterior** e o laço acusou "no ar" na primeira tentativa, com o container velho ainda
+   respondendo. **A sonda tem que ser algo que só existe depois DESTE commit**; não havendo, esperar
+   e conferir a tela logado — e nunca concluir pelo laço.
+13. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
    checagem algumas vezes, com parâmetro aleatório na URL**, e só então concluir.
-13. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
+14. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
 

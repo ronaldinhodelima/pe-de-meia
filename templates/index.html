@@ -59,51 +59,7 @@
           title="Selecione uma única origem de cartão de crédito">Detalhada</button>
 </div>
 
-<div id="formManual" class="cat-breakdown" style="display:none" {{ 'hidden' if not pode_manual }}>
-  <h3>Novo lançamento manual (dinheiro)</h3>
-  <div class="ajuda-manual">
-    Dinheiro em espécie, que o banco não enxerga. Os mesmos campos da conferência de qualquer
-    lançamento — inclusive o OK, que só libera com a classificação completa.
-  </div>
-  <form onsubmit="return salvarManual(event)">
-    <div class="editor-manual">
-      <div><label for="manualData">Data</label>
-        <input type="date" id="manualData" required value="{{ hoje_iso }}"></div>
-      <div class="campo-largo"><label for="manualDescricao">Descrição</label>
-        <input type="text" id="manualDescricao" placeholder="Descrição" required></div>
-      <div><label for="manualDirecao">Tipo</label>
-        <select id="manualDirecao" data-pdm-native>
-          <option value="saida">Saída</option>
-          <option value="entrada">Entrada</option>
-        </select></div>
-      <div><label for="manualValor">Valor (R$)</label>
-        <input type="number" id="manualValor" step="0.01" min="0.01" placeholder="0,00" required></div>
-      <div><label for="manualCategoria" class="obrigatorio">Categoria</label>
-        <select id="manualCategoria" data-pdm-combobox aria-label="Categoria">
-          <option value="">(não definido)</option>
-          {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
-        </select></div>
-      {% for d in dimensoes %}
-      <div><label class="{{ 'obrigatorio' if d.obrigatoria }}">{{ d.nome }}</label>
-        <select data-pdm-combobox class="manual-dim" data-dim="{{ d.id }}" aria-label="{{ d.nome }}">
-          <option value="">(não definido)</option>
-          {% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}">{{ rotulo_dim(val) }}</option>{% endfor %}
-        </select></div>
-      {% endfor %}
-      <div class="campo-largo"><label for="manualObservacao">Observação</label>
-        <input type="text" id="manualObservacao" maxlength="500" placeholder="opcional"></div>
-    </div>
-    <div class="rodape-manual">
-      <button type="submit" class="btn-primario">Adicionar</button>
-      {% if pode_conferir %}
-      <label class="manual-ok" data-tip="Marca o OK já na criação. Só é aceito com Categoria, Responsável, Projeto e Portfólio preenchidos.">
-        <input type="checkbox" id="manualConferida"> marcar como conferido
-      </label>
-      {% endif %}
-      <span id="manualStatus"></span>
-    </div>
-  </form>
-</div>
+{% include "_form_manual.html" %}
 
 <div class="cards">
   <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
@@ -353,5 +309,6 @@
 <script type="application/json" data-config>{{ config_json|safe }}</script>
 <script src="/static/lote.js?v=20260907-2"></script>
 <script src="/static/rateio.js?v=20260909-1"></script>
+<script src="/static/manual.js?v=20260909-1"></script>
 <script src="/static/lancamentos.js?v=20260909-1"></script>
 {% endblock %}

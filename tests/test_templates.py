@@ -972,3 +972,34 @@ class TestAcoesDoLancamento:
         for arquivo in ("rateio.js", "lancamentos.js", "lancamentos_fatura.js"):
             texto = (raiz / "static" / arquivo).read_text(encoding="utf-8")
             assert "'Rateado R$ '" not in texto, arquivo
+
+
+class TestFormularioManualCompartilhado:
+    """O formulario e o mesmo nas duas telas (partial + manual.js). Renderizado
+    aqui com o contexto REAL de cada uma: variavel que falta nao levanta erro no
+    Jinja - o campo so nasce vazio, em silencio."""
+
+    def test_o_recorte_por_periodo_desenha_o_formulario_inteiro(self, ctx):
+        from tests.test_templates import TestDetalhadaPorPeriodo
+        base = TestDetalhadaPorPeriodo().contexto()
+        base["linhas"][0]["situacoes"] = []
+        base["linhas"][0]["situacoes_texto"] = ""
+        base["linhas"][0]["rateios"] = []
+        base["linhas"][0]["rateio_valido"] = True
+        base["linhas"][0]["valor_rateio"] = 0
+        base["linhas"][0]["principal"]["pode_excluir"] = False
+        base["hoje_iso"] = "2026-09-09"
+        html = render_template("lancamentos_fatura.html", **base)
+        assert 'id="formManual"' in html
+        # a data nasce preenchida: sem hoje_iso o campo vem vazio e ninguem avisa
+        assert 'id="manualData" required value="2026-09-09"' in html
+        assert 'id="manualCategoria"' in html and 'class="manual-dim"' in html
+        assert "Responsável" in html.split('id="formManual"', 1)[1]
+        assert 'id="manualConferida"' in html
+
+    def test_a_view_do_periodo_entrega_a_data_de_hoje(self):
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+        trecho = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
+        assert "hoje_iso=" in trecho

@@ -1599,15 +1599,27 @@ def test_avatar_de_autor_so_existe_em_lancamento_manual():
 
 
 def test_botao_manual_existe_nas_duas_telas_com_o_mesmo_nome():
-    """"+ manual" nas duas; o formulario continua morando na Resumida."""
+    """"+ manual" nas duas, e o formulario e o MESMO nas duas.
+
+    Ele viveu tempo demais so na Resumida: a Detalhada tinha o botao e mandava
+    o usuario para la por um link, porque copiar o formulario criaria a segunda
+    implementacao que diverge na primeira regra nova (secao 7.1).
+    """
     resumida = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     for html in (resumida, detalhada):
         assert "+ manual" in html
         assert "+ Lançamento manual" not in html
-    assert 'href="/?manual=1"' in detalhada
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
-    assert "get('manual') !== '1'" in js, "a Resumida abre o formulario ao chegar assim"
+        assert '{% include "_form_manual.html" %}' in html
+        assert "/static/manual.js" in html
+        # o formulario mora no partial: nenhuma das telas pode ter uma copia
+        assert 'id="manualDescricao"' not in html
+    js = (RAIZ / "static" / "manual.js").read_text(encoding="utf-8")
+    assert "get('manual') !== '1'" in js, "chegar assim abre o formulario"
+    assert js.count("fetch(") == 1, "um unico ponto de gravacao"
+    # no recorte por fatura o formulario nao entra: um lancamento manual nao
+    # pertence a fatura nenhuma. O botao leva ao recorte por periodo.
+    assert 'href="/lancamentos/fatura?recorte=periodo&amp;manual=1"' in detalhada
 
 
 def test_confirmacao_de_gravacao_usa_um_unico_toast():
@@ -1686,9 +1698,10 @@ def test_toda_gravacao_confirma_com_toast():
     """
     js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
     nucleo_rateio = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
-    for gravacao in ("Lançamento salvo", "Lançamento criado", "Lançamento excluído",
-                     "Descrição salva", "cadastrado"):
+    manual = (RAIZ / "static" / "manual.js").read_text(encoding="utf-8")
+    for gravacao in ("Lançamento salvo", "Lançamento excluído", "Descrição salva", "cadastrado"):
         assert gravacao in js, gravacao
+    assert "Lançamento criado" in manual
     for gravacao in ("Rateio salvo", "Rateio desfeito"):
         assert gravacao in nucleo_rateio, gravacao
     # o fluxo que recarrega nao mostra os dois
