@@ -13,7 +13,7 @@
   .fatura-conciliacao{margin-left:auto}
   .fatura-conciliacao.ver-btn{transition:transform .12s}.fatura-conciliacao.ver-btn:hover{transform:translateX(1px)}
   .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}.fatura-filtros .visao-lancamentos{margin-left:auto;margin-bottom:0}
-  .fatura-filtros label{font-size:var(--fonte-sm);color:var(--ink-faint);text-transform:capitalize;letter-spacing:.03em;font-weight:var(--peso-normal)}
+  .fatura-filtros label{font-size:var(--fonte-sm);color:var(--ink-faint);text-transform: none;letter-spacing:.03em;font-weight:var(--peso-normal)}
 
   /* o desenho dos cards de status mora no app.css (.card-filtra, .card-ok,
      .card-progresso): as duas telas usam os mesmos, e uma segunda definicao
@@ -21,10 +21,10 @@
 
   .fatura-tabela{width:100%}.fatura-tabela td,.fatura-tabela th{white-space:nowrap}.fatura-tabela .desc{white-space:normal}
   .fatura-tabela thead th{position:sticky;top:0;background:var(--surface);z-index:1;box-shadow:0 1px 0 var(--line)}
-  .fatura-tabela tr.fatura-ok{background:var(--raise)}.fatura-tabela tr.fatura-pendente{box-shadow:inset 4px 0 var(--warn)}.fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
+  .fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
   .fatura-tabela tr[data-toggle-linha]{cursor:pointer;transition:background-color .1s}
   .fatura-tabela tr[data-toggle-linha]:hover{background:var(--accent-soft)}
-  .fatura-tabela tr.fatura-ok[data-toggle-linha]:hover{background:var(--line)}
+  .fatura-tabela tr.conferida[data-toggle-linha]:hover{background:var(--selecao-suave)}
 
   .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);font-size:var(--icone-lg);line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
   .expande:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
@@ -50,7 +50,7 @@
   .status-salvamento{align-self:end;min-height:20px;font-size:var(--fonte-sm);color:var(--ink-faint);transition:opacity .3s ease}.status-salvamento.erro{color:var(--bad)}
   .status-salvamento.sumindo{opacity:0}
   .info-toggle{margin-left:7px;width:24px;height:24px;border:0;background:transparent;color:var(--ink-faint);font-size:var(--icone-lg);line-height:1;cursor:pointer;border-radius:var(--radius-xxs);transition:background-color .12s,color .12s,transform .12s}.info-toggle:hover,.info-toggle:focus{background:var(--raise);color:var(--ink)}.info-toggle[aria-expanded="true"]{transform:rotate(180deg)}
-  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform:capitalize}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
+  .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform: none}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}
   .ajuda-fatura{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.45;margin:8px 0}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
@@ -270,18 +270,18 @@
    e por eles que o modo cartao e a ordenacao encontram cada coluna. #}
 <thead><tr><th class="col-abre" data-col="sel" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0" data-tip="{% if modo_periodo %}Descrição do lançamento{% elif fatura.em_andamento %}Descrição como o Pluggy entregou{% else %}Descrição impressa na fatura{% endif %}">Descrição</th>{% if modo_periodo %}<th class="cel-origem" data-col="origem" data-ordenar="origem" tabindex="0">Origem</th>{% endif %}<th class="col-classif" data-col="categoria" data-ordenar="categoria" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{% if modo_periodo %}Valor do lançamento{% elif fatura.em_andamento %}Valor provisório, como o Pluggy entregou{% else %}Valor cobrado na fatura{% endif %}">Valor</th><th class="cel-obs" data-col="obs">Observação</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="check" data-ordenar="check" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
-  <tr class="{{ 'fatura-erro' if linha.requer_validacao else ('fatura-ok' if linha.conferida else 'fatura-pendente') }}"
+  <tr class="{{ linha.classes }}{% if linha.requer_validacao %} fatura-erro{% endif %}"
       data-valor="{{ linha.valor }}"
       data-linha="{{ linha.id }}" data-toggle-linha="{{ linha.id }}"
       data-exige-dimensoes="{{ '0' if (linha.principal and not linha.principal.get('exige_dimensoes', True)) else '1' }}"
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
     <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir detalhes{% else %}Abrir detalhes do lançamento{% endif %}">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button></td>
-    <td class="cel-data-fatura" data-col="data">{{ linha.data.strftime('%d/%m/%Y') }}</td>
+    <td class="cel-data-fatura" data-col="data"><span class="linha-indicadores" data-tip="{{ linha.situacoes_texto }}">{% for si in linha.situacoes %}<i class="linha-ponto {{ si.classe }}"></i>{% endfor %}</span>{{ linha.data.strftime('%d/%m/%Y') }}</td>
     <td class="desc" data-col="desc">
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>
+          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
              pendencia deixava uma linha em branco em todo lancamento que nao
@@ -346,6 +346,19 @@
   <td class="cel-valor-fatura" data-total-valor>—</td>
   <td colspan="{{ 2 + (1 if pode_regras else 0) }}"></td>
 </tr></tfoot></table></div>
+{% if modo_periodo %}
+<details class="legenda-lancamentos">
+  <summary>Legenda das linhas</summary>
+  <div class="legenda-itens">
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=conferida"><i class="linha-ponto conferida"></i>Conferido</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=pendente_banco"><i class="linha-ponto pendente-banco"></i>Pendente no banco</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=duplicidade"><i class="linha-ponto suspeita"></i>Possível duplicidade</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=fora_resultado"><i class="linha-ponto fora"></i>Fora do resultado</a>
+    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=rateio_incompleto"><i class="linha-ponto rateio"></i>Rateio incompleto</a>
+  </div>
+  <div class="legenda-ajuda">Passe o mouse sobre os pontos no início da linha para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
+</details>
+{% endif %}
 <div class="rodape-fatura">
   <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
   {% if pode_editar and not fatura.em_andamento %}<div class="revisao-parcelas">
@@ -366,4 +379,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-5"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/lancamentos_fatura.js?v=20260908-6"></script>{% endblock %}

@@ -770,3 +770,63 @@ def test_as_duas_telas_leem_valor_pela_mesma_conta():
     assert "window.pdmNumeroDeTexto = function" in tabelas
     assert "window.pdmNumeroDeTexto(" in detalhada
     assert "replace(/,/g, '')" not in detalhada
+
+
+class TestSemanticaDeLinha:
+    """Cor nunca e a unica explicacao de estado (secao 7.6): cada situacao vira
+    um ponto no inicio da linha, uma frase no tooltip e um item na legenda."""
+
+    def linha_com(self, base, **flags):
+        from views.lancamentos import situacoes_da_linha, texto_das_situacoes
+        situacoes = situacoes_da_linha(**flags)
+        base["linhas"][0]["situacoes"] = situacoes
+        base["linhas"][0]["situacoes_texto"] = texto_das_situacoes(situacoes)
+        return base
+
+    def test_o_que_falta_conferir_e_que_fica_cinza(self):
+        """Decisao do usuario (07/09/2026). A Detalhada fazia o CONTRARIO -
+        `.fatura-ok` pintava o conferido - e no fim do mes a tela inteira ficava
+        cinza justamente ao contrario do que se procura."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        css = (raiz / "static" / "app.css").read_text(encoding="utf-8")
+        template = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+        assert ".fatura-tabela tbody tr[data-linha]:not(.conferida)" in css
+        assert "tr.conferida { background: transparent; }" in css
+        # a regra nao pode voltar a depender do id de UMA das telas
+        assert "tr.fatura-ok" not in css and "tr.fatura-ok" not in template
+        assert "fatura-pendente" not in template
+
+    def test_as_duas_telas_calculam_situacao_pela_mesma_lista(self):
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+        assert view.count("def situacoes_da_linha") == 1
+        # os quatro construtores de linha do sistema
+        assert view.count("situacoes_da_linha(") == 5
+
+    def test_a_detalhada_mostra_os_pontos_e_o_selo_de_fora_do_resultado(self, ctx):
+        from tests.test_templates import TestDetalhadaPorPeriodo
+        base = TestDetalhadaPorPeriodo().contexto()
+        base["linhas"][0]["fora_do_resultado"] = "Mesmo evento que outro lançamento."
+        base = self.linha_com(base, substituido=True, suspeita=True)
+        html = render_template("lancamentos_fatura.html", **base)
+        assert 'class="linha-ponto fora"' in html
+        assert 'class="linha-ponto suspeita"' in html
+        assert 'class="selo-fora"' in html
+        assert "Possível duplicidade — revisar" in html
+        assert 'class="legenda-lancamentos"' in html
+
+    def test_linha_sem_situacao_nao_fica_com_tooltip_vazio(self, ctx):
+        from tests.test_templates import TestDetalhadaPorPeriodo
+        base = self.linha_com(TestDetalhadaPorPeriodo().contexto())
+        html = render_template("lancamentos_fatura.html", **base)
+        assert "Lançamento contabilizado" in html
+
+    def test_o_resumo_parcial_atualiza_os_pontos_junto_com_o_ok(self):
+        """Sem isso o ponto "Conferido" so apareceria no proximo carregamento:
+        a linha diria uma coisa e a cor, outra."""
+        import pathlib
+        raiz = pathlib.Path(__file__).resolve().parent.parent
+        js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+        assert "linha-indicadores" in js and "linha.className = nova.className" in js

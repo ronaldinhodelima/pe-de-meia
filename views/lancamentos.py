@@ -446,21 +446,13 @@ def index():
 
         pendente_banco = (r["status"] or "").upper() == "PENDING"
         pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
-        situacoes = []
-        if r["conferida"]:
-            situacoes.append({"classe": "conferida", "rotulo": "Conferido"})
-        if r["duplicada"]:
-            situacoes.append({"classe": "duplicada", "rotulo": "Duplicado confirmado — não contabilizado"})
-        if str(rid) in ids_suspeitos:
-            situacoes.append({"classe": "suspeita", "rotulo": "Possível duplicidade — revisar"})
-        if pendente_banco:
-            situacoes.append({"classe": "pendente-banco", "rotulo": "Pendente no banco"})
-        if r["substituido_por"]:
-            situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — substituído por outro lançamento"})
-        elif r["somente_conciliacao"]:
-            situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — somente conciliação"})
-        if rateios_ui and not rateio_valido:
-            situacoes.append({"classe": "rateio", "rotulo": "Rateio incompleto"})
+        situacoes = situacoes_da_linha(
+            conferida=r["conferida"], duplicada=r["duplicada"],
+            suspeita=str(rid) in ids_suspeitos, pendente_banco=pendente_banco,
+            substituido=bool(r["substituido_por"]),
+            somente_conciliacao=bool(r["somente_conciliacao"]),
+            rateio_incompleto=bool(rateios_ui) and not rateio_valido,
+        )
         linhas_tabela.append({
             "id": str(rid),
             "substituido_por": str(r["substituido_por"]) if r["substituido_por"] else None,
@@ -526,7 +518,7 @@ def index():
             "valor_rateio": float(abs(valor_pai_rateio)),
             "registros_tecnicos": [],
             "situacoes": situacoes,
-            "situacoes_texto": " · ".join(s["rotulo"] for s in situacoes) or "Lançamento contabilizado",
+            "situacoes_texto": texto_das_situacoes(situacoes),
         })
 
         detalhes = {
@@ -899,6 +891,46 @@ def janela_do_periodo():
     return mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes
 
 
+def situacoes_da_linha(conferida=False, duplicada=False, suspeita=False,
+                       pendente_banco=False, substituido=False,
+                       somente_conciliacao=False, rateio_incompleto=False,
+                       requer_validacao=None, sem_vinculo=False):
+    """As situacoes de um lancamento, na ordem em que a linha as mostra.
+
+    Ponto unico das duas telas. Cor nunca e a unica explicacao de estado
+    (secao 7.6): cada situacao vira um ponto no inicio da linha e uma frase no
+    tooltip, e a legenda no rodape filtra por ela. Duas listas divergiriam - e
+    a Detalhada ficaria com um estado a menos, em silencio.
+    """
+    situacoes = []
+    if conferida:
+        situacoes.append({"classe": "conferida", "rotulo": "Conferido"})
+    if duplicada:
+        situacoes.append({"classe": "duplicada", "rotulo": "Duplicado confirmado — não contabilizado"})
+    if suspeita:
+        situacoes.append({"classe": "suspeita", "rotulo": "Possível duplicidade — revisar"})
+    if pendente_banco:
+        situacoes.append({"classe": "pendente-banco", "rotulo": "Pendente no banco"})
+    if substituido:
+        situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — substituído por outro lançamento"})
+    elif somente_conciliacao:
+        situacoes.append({"classe": "fora", "rotulo": "Fora do resultado — somente conciliação"})
+    if rateio_incompleto:
+        situacoes.append({"classe": "rateio", "rotulo": "Rateio incompleto"})
+    # Proprias da conciliacao: so existem quando a linha vem de um documento.
+    if sem_vinculo:
+        situacoes.append({"classe": "suspeita", "rotulo": "Cobrança sem lançamento vinculado"})
+    elif requer_validacao:
+        situacoes.append({"classe": "suspeita", "rotulo": "Validar: " + ", ".join(requer_validacao)})
+    return situacoes
+
+
+def texto_das_situacoes(situacoes):
+    """O tooltip dos pontos: todas as situacoes, ou a frase de quem nao tem
+    nenhuma. Sem ele, linha sem situacao ficaria com um tooltip vazio."""
+    return " · ".join(x["rotulo"] for x in situacoes) or "Lançamento contabilizado"
+
+
 def _eh_pagamento_fatura(descricao):
     texto = (descricao or "").strip().upper()
     return texto.startswith(("PAGAMENTO RECEBIDO", "PAG DE FATURA"))
@@ -1130,8 +1162,19 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
             "natureza_rotulo": NATUREZAS.get(tx["natureza_efetiva"], tx["natureza_efetiva"]),
             "cartao_final": tx["numero_cartao_final"],
             "cartao_nome": nomes_cartao.get(tx["numero_cartao_final"]),
+            "situacoes": situacoes_da_linha(
+                conferida=bool(tx["conferida"]),
+                pendente_banco=(tx["status"] or "").upper() == "PENDING",
+            ),
+            "classes": " ".join(c for c in [
+                "conferida" if tx["conferida"] else "",
+                "pendente-banco" if (tx["status"] or "").upper() == "PENDING" else "",
+            ] if c),
             "estado": "andamento",
         })
+
+    for linha in linhas:
+        linha["situacoes_texto"] = texto_das_situacoes(linha["situacoes"])
 
     status = request.args.get("status", "todas")
     if status not in {"todas", "pendente_classificacao", "dre", "fora"}:
@@ -1425,6 +1468,21 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             "suspeita_duplicidade": tid in ids_suspeitos,
             "pendente_banco": (row["status"] or "").upper() == "PENDING",
             "pendente_bloqueia_ok": _pendente_bloqueia(row["status"], row["data_local"]),
+            "situacoes": situacoes_da_linha(
+                conferida=bool(row["conferida"]), duplicada=bool(row["duplicada"]),
+                suspeita=tid in ids_suspeitos,
+                pendente_banco=(row["status"] or "").upper() == "PENDING",
+                substituido=bool(row["substituido_por"]),
+                somente_conciliacao=bool(row["somente_conciliacao"]),
+                rateio_incompleto=bool(rateio) and bool(faltando),
+            ),
+            "classes": " ".join(c for c in [
+                "conferida" if row["conferida"] else "",
+                "duplicada" if row["duplicada"] else "",
+                "fora-resultado" if fora else "",
+                "pendente-banco" if (row["status"] or "").upper() == "PENDING" else "",
+                "suspeita-dup" if tid in ids_suspeitos else "",
+            ] if c),
             "natureza_estado": "dre" if natureza in ("despesa", "receita") else "fora",
             "natureza_rotulo": NATUREZAS.get(natureza, natureza),
             "estado": "periodo",
@@ -1449,6 +1507,9 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         else:
             principais.append(linha)
     linhas = principais
+
+    for linha in linhas:
+        linha["situacoes_texto"] = texto_das_situacoes(linha["situacoes"])
 
     resumo, por_categoria = resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo)
     receita = resumo["receita_mes"] or 0
@@ -1889,6 +1950,21 @@ def lancamentos_por_fatura():
         else:
             contagens["pendente_ok"] += 1
             total_pendente_ok += abs(valor_pdf)
+        principal_linha = linha.get("principal") or {}
+        linha["situacoes"] = situacoes_da_linha(
+            conferida=bool(linha["conferida"]),
+            pendente_banco=(principal_linha.get("status") or "").upper() == "PENDING",
+            rateio_incompleto=principal_linha.get("rateado") and "Rateio" in linha.get("faltando", []),
+            requer_validacao=linha["validacao_motivos"] if linha["requer_validacao"] else None,
+            sem_vinculo=linha["estado"] == "sem_vinculo",
+        )
+        linha["classes"] = " ".join(c for c in [
+            "conferida" if linha["conferida"] else "",
+            "pendente-banco" if (principal_linha.get("status") or "").upper() == "PENDING" else "",
+        ] if c)
+
+    for linha in linhas:
+        linha["situacoes_texto"] = texto_das_situacoes(linha.get("situacoes", []))
 
     status = request.args.get("status", "todas")
     filtros_validos = {

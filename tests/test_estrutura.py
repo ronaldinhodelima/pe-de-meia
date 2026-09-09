@@ -2677,3 +2677,21 @@ def test_regra_pode_ser_presa_a_uma_origem():
     assert "account_id" in html.split("URLSearchParams", 1)[1][:400], (
         "o JS da previa nao envia a origem escolhida"
     )
+
+
+def test_rotulo_tem_maiuscula_so_na_primeira_letra():
+    """Decisao do usuario (08/09/2026).
+
+    `capitalize` maiuscula CADA palavra e escrevia "Receitas No DRE";
+    `uppercase`, que veio antes dele, gritava. A base e `none` - o texto como
+    esta escrito - com `::first-letter` garantindo a inicial quando o rotulo vem
+    do banco em caixa baixa. `lowercase` como base destruiria DRE, IOF e PIX.
+    """
+    for arquivo in ("static/app.css", "templates/lancamentos_fatura.html",
+                    "templates/index.html", "templates/login.html",
+                    "templates/contas.html"):
+        texto = (RAIZ / arquivo).read_text(encoding="utf-8")
+        assert "text-transform: capitalize" not in texto, arquivo
+        assert "text-transform:capitalize" not in texto, arquivo
+    css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
+    assert "::first-letter" in css and "text-transform: uppercase" in css
