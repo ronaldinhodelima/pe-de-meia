@@ -3,6 +3,7 @@ import uuid
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from urllib.parse import urlencode
 
 import psycopg2
 import psycopg2.extras
@@ -349,29 +350,14 @@ def index():
     pode_conferir = pode("lancamentos_conferir")
     pode_manual = pode("lancamentos_manual")
 
-    def nome_cartao_curto(final4):
-        if not final4:
-            return "-"
-        prefixo = nomes_cartao.get(final4)
-        return prefixo if prefixo else f"final {final4}"
-
     def origem_partes(account_id, final4=None):
-        """(selo_html, texto). O selo e HTML montado pelo app; o texto vem do
-        apelido do cartao, digitado pelo usuario, e o template escapa."""
-        c = contas_by_id.get(str(account_id))
-        if not c:
-            return "", "-"
-        if c["tipo"] == "CREDIT" and final4 and nomes_cartao.get(final4):
-            return c["selo"], nomes_cartao[final4]
-        return c["selo"], c["label_curto"]
+        selo, curto, _ = origem_da_linha(
+            contas_by_id.get(str(account_id)), final4, nomes_cartao)
+        return selo, curto
 
     def origem_completa(account_id, final4=None):
-        c = contas_by_id.get(str(account_id))
-        if not c:
-            return "-"
-        if c["tipo"] == "CREDIT" and final4:
-            return f'{c["label"]} - {nome_cartao_curto(final4)}'
-        return c["label"]
+        return origem_da_linha(
+            contas_by_id.get(str(account_id)), final4, nomes_cartao)[2]
 
     linhas_tabela = []
     detalhes_js = {}
@@ -634,9 +620,7 @@ def index():
         valores_por_dim=valores_por_dim,
         naturezas=NATUREZAS,
         linhas=linhas_tabela,
-        por_categoria=[
-            {"nome": cat_pt_puro(c["categoria"]), "total": float(c["total"])} for c in por_categoria
-        ],
+        por_categoria=por_categoria,
         receita_mes=receita_mes,
         gasto_real=gasto_real,
         resultado_mes=receita_mes - gasto_real,
@@ -843,19 +827,12 @@ def resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo):
             total_fatura_dre = calcular_totais_dre_fatura(cur, fatura_do_periodo["id"])
             resumo["gasto_real"] = total_fatura_dre["despesas_dre"]
 
-    where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s", f"{NATUREZA_SQL} = 'despesa'",
-                 "t.categoria IS NOT NULL", "COALESCE(t.duplicada, false) = false"]
+    where_cat = ["t.data_transacao >= %s", "t.data_transacao < %s"]
     params_cat = [inicio_mes, fim_mes]
     if origem_sel:
         where_cat.append("t.account_id IN %s")
         params_cat.append(tuple(origem_sel))
-    cur.execute(
-        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
-        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE " + " AND ".join(where_cat) +
-        " GROUP BY t.categoria ORDER BY total DESC LIMIT 8;",
-        params_cat,
-    )
-    return resumo, cur.fetchall()
+    return resumo, gasto_por_categoria(cur, where_cat, params_cat)
 
 
 def janela_do_periodo():
@@ -891,6 +868,61 @@ def janela_do_periodo():
     return mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes
 
 
+def origem_da_linha(conta, final4=None, nomes_cartao=None):
+    """(selo em HTML, texto curto, texto completo) da origem de um lancamento.
+
+    Ponto unico dos TRES construtores de linha - a Resumida, o recorte por
+    periodo e o recorte por fatura. A coluna Origem existe nos tres desde
+    10/09/2026 (a tabela e a mesma nos dois recortes da Detalhada); tres copias
+    da mesma regra divergiriam no primeiro banco novo, que foi exatamente como
+    nasceram os 57 falsos pendentes da secao 6.5 nº 10.
+
+    O selo e HTML montado pelo app e vai com `|safe`; o texto vem do apelido do
+    cartao, digitado pelo usuario, e o template escapa.
+    """
+    conta = conta or {}
+    nomes_cartao = nomes_cartao or {}
+    if not conta:
+        return "", "-", "-"
+    apelido = nomes_cartao.get(final4) if final4 else None
+    if conta.get("tipo") == "CREDIT" and final4:
+        curto = apelido or conta.get("label_curto") or "-"
+        completa = f'{conta.get("label", "-")} - ' + (apelido or f"final {final4}")
+    else:
+        curto = conta.get("label_curto") or "-"
+        completa = conta.get("label", "-")
+    return conta.get("selo", ""), curto, completa
+
+
+def gasto_por_categoria(cur, where, params, limite=8):
+    """Os maiores gastos por categoria, do maior para o menor.
+
+    Ponto unico dos recortes por periodo e por fatura: os dois mostram o mesmo
+    quadro, e o que muda entre eles e so o WHERE - janela + origem num, conjunto
+    de lancamentos no outro. Roda sobre a view financeira, entao um lancamento
+    rateado aparece pela categoria de cada PARTE, e nao como "(sem categoria)"
+    do pai, que nao tem categoria propria (secao 4.4).
+    """
+    cur.execute(
+        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE "
+        + " AND ".join(list(where) + [
+            f"{NATUREZA_SQL} = 'despesa'", "t.categoria IS NOT NULL",
+            "COALESCE(t.duplicada, false) = false",
+        ])
+        + " GROUP BY t.categoria ORDER BY total DESC LIMIT %s;",
+        list(params) + [limite],
+    )
+    # Devolve ja no formato que o template imprime. A traducao do nome ficava
+    # em cada chamador, e um chamador novo que a esquecesse renderizaria o
+    # quadro com os nomes em branco, sem erro nenhum - a mesma familia da
+    # coluna ausente num `.get()` (secao 11.3-A).
+    return [
+        {"nome": cat_pt_puro(r["categoria"]), "total": float(r["total"] or 0)}
+        for r in cur.fetchall()
+    ]
+
+
 def situacoes_da_linha(conferida=False, duplicada=False, suspeita=False,
                        pendente_banco=False, substituido=False,
                        somente_conciliacao=False, rateio_incompleto=False,
@@ -923,6 +955,32 @@ def situacoes_da_linha(conferida=False, duplicada=False, suspeita=False,
     elif requer_validacao:
         situacoes.append({"classe": "suspeita", "rotulo": "Validar: " + ", ".join(requer_validacao)})
     return situacoes
+
+
+def tem_situacao(linha, classe):
+    """A linha esta nesta situacao? Le a lista que `situacoes_da_linha` monta.
+
+    E o mesmo ponto de verdade que pinta a linha e escreve o tooltip, entao
+    filtrar por situacao devolve exatamente o que a tela mostra. Uma segunda
+    condicao aqui divergiria da primeira regra nova - a licao da secao 6.5 nº 10.
+    """
+    return any(s["classe"] == classe for s in linha.get("situacoes", []))
+
+
+def filtros_por_situacao(disponiveis):
+    """Os atalhos de "Filtrar por situacao" do rodape da tela.
+
+    Cada recorte declara os status que ele de fato entende, e o template so
+    imprime - as URLs escritas a mao no template prendiam o bloco a um recorte
+    so. A URL preserva tudo o que ja esta na barra (mes, origem, fatura) e troca
+    apenas o status, senao filtrar por situacao jogaria o usuario para outro
+    periodo sem avisar.
+    """
+    base = [(k, v) for k, valores in request.args.lists() for v in valores if k != "status"]
+    return [
+        {"rotulo": rotulo, "url": "?" + urlencode(base + [("status", chave)])}
+        for chave, rotulo in disponiveis
+    ]
 
 
 def texto_das_situacoes(situacoes):
@@ -1111,7 +1169,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
     nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
 
-    titular_conexao = (contas_by_id.get(account_id) or {}).get("titular")
+    conta_da_fatura = contas_by_id.get(account_id) or {}
+    titular_conexao = conta_da_fatura.get("titular")
 
     linhas, total, total_dre, total_fora, classificadas = [], Decimal("0"), Decimal("0"), Decimal("0"), 0
     for indice, tx in enumerate(transacoes, 1):
@@ -1126,6 +1185,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         tx["dims"] = dims_por_tx.get(tid, {})
         tx["rateado"] = False
         tx["exige_dimensoes"] = exige_dimensoes(tx["natureza_efetiva"])
+        origem_selo, origem_texto, origem_full = origem_da_linha(
+            conta_da_fatura, tx["numero_cartao_final"], nomes_cartao)
         faltando = ([] if tx["categoria"] else ["Categoria"]) + [
             nomes_dimensoes[d] for d in obrigatorias
             if tx["exige_dimensoes"] and not tx["dims"].get(d)
@@ -1153,6 +1214,13 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
             # sobre o que foi cobrado (secao 5).
             "titular": nomes_cartao.get(tx["numero_cartao_final"]) or titular_conexao,
             "titular_fonte": "pluggy",
+            # A coluna Origem existe nos DOIS recortes (a tabela e a mesma).
+            # Aqui todas as linhas sao do mesmo cartao, mas nao da mesma via:
+            # um cartao de credito pode ter varios cartoes fisicos/virtuais, e
+            # e o final4 que os separa - por isso a origem e por linha, nao da
+            # tela. Lancamento de fatura nunca tem autor: ninguem o digitou.
+            "origem_selo": origem_selo, "origem_texto": origem_texto,
+            "origem_completa": origem_full, "autor": None,
             "cartao_aguardando": not tx["numero_cartao_final"],
             "parcela_atual": tx["parcela_atual"], "parcela_total": tx["parcela_total"],
             "valor": valor, "pagamento": False, "vinculos": [tx], "principal": tx,
@@ -1176,15 +1244,33 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
     for linha in linhas:
         linha["situacoes_texto"] = texto_das_situacoes(linha["situacoes"])
 
+    # "Gasto por categoria" existe nos DOIS recortes: soma os lancamentos deste
+    # ciclo, os mesmos que a tela lista.
+    ids_principais = sorted({str(l["principal"]["transacao_id"]) for l in linhas})
+    por_categoria = gasto_por_categoria(
+        cur, ["t.transacao_id::text = ANY(%s)"], [ids_principais]
+    ) if ids_principais else []
+
     status = request.args.get("status", "todas")
-    if status not in {"todas", "pendente_classificacao", "dre", "fora"}:
+    if status not in {"todas", "pendente_classificacao", "dre", "fora",
+                      "conferida", "pendente_banco"}:
         status = "todas"
     linhas_visiveis = [l for l in linhas if (
         status == "todas" or
         (status == "pendente_classificacao" and not l["classificada"]) or
         (status == "dre" and l["natureza_estado"] == "dre") or
-        (status == "fora" and l["natureza_estado"] == "fora")
+        (status == "fora" and l["natureza_estado"] == "fora") or
+        (status == "conferida" and tem_situacao(l, "conferida")) or
+        (status == "pendente_banco" and tem_situacao(l, "pendente-banco"))
     )]
+    # Sem rateio e sem vinculo aqui: o ciclo em andamento nao tem documento,
+    # entao essas situacoes nao existem nele - lista-las prometeria um filtro
+    # que nunca traria linha nenhuma.
+    filtros_situacao = filtros_por_situacao([
+        ("conferida", "Conferido"),
+        ("pendente_banco", "Pendente no banco"),
+        ("fora", "Fora do DRE"),
+    ])
     fatura = {
         "id": ("futuro-" + mes_futuro) if mes_futuro else "andamento",
         "mes_referencia": mes, "ano_referencia": ano,
@@ -1235,6 +1321,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         totais={"pdf": total, "dre": total_dre, "fora": total_fora, "pendente": sum(abs(l["valor"]) for l in linhas if not l["classificada"]), "pendente_ok": Decimal("0"), "sem_vinculo": Decimal("0"), "divergencia": Decimal("0")},
         contagens={"linhas": len(linhas), "vinculadas": len(linhas), "classificadas": classificadas, "conferidas": 0, "multiplos": 0, "pendente_classificacao": len(linhas)-classificadas, "pendente_ok": 0, "divergencias": 0},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
+        por_categoria=por_categoria, filtros_situacao=filtros_situacao,
         url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
@@ -1391,20 +1478,6 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
     nomes_cartao = {r["final4"]: r["prefixo"] for r in cur.fetchall()}
 
-    def origem_da_linha(row):
-        conta = contas_by_id.get(str(row["account_id"])) or {}
-        final4 = row["numero_cartao_final"]
-        if conta.get("tipo") == "CREDIT" and final4 and nomes_cartao.get(final4):
-            texto = nomes_cartao[final4]
-        else:
-            texto = conta.get("label_curto") or "-"
-        if conta.get("tipo") == "CREDIT" and final4:
-            completa = f'{conta.get("label", "-")} - ' + (
-                nomes_cartao.get(final4) or f"final {final4}")
-        else:
-            completa = conta.get("label", "-")
-        return conta.get("selo", ""), texto, completa
-
     linhas, por_id = [], {}
     for row in rows:
         tid = str(row["transacao_id"])
@@ -1422,7 +1495,8 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["principal"], row["tecnico"] = True, False
         conta_row = contas_by_id.get(str(row["account_id"])) or {}
         row["pode_excluir"] = bool(conta_row.get("tipo") == "MANUAL" or row["importado"])
-        selo, origem_texto, origem_full = origem_da_linha(row)
+        selo, origem_texto, origem_full = origem_da_linha(
+            conta_row, row["numero_cartao_final"], nomes_cartao)
         valor = Decimal(str(row["valor"] or 0))
         conta = contas_by_id.get(str(row["account_id"])) or {}
         # Fora do resultado: existe, e consultavel, e nao entra no DRE. Sem
@@ -1585,6 +1659,13 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         "lancamentos_fatura.html", titulo="Lançamentos",
         topbar=topbar_html("Lançamentos", "inicio"),
         modo_periodo=True,
+        filtros_situacao=filtros_por_situacao([
+            ("conferida", "Conferido"),
+            ("pendente_banco", "Pendente no banco"),
+            ("duplicidade", "Possível duplicidade"),
+            ("fora_resultado", "Fora do resultado"),
+            ("rateio_incompleto", "Rateio incompleto"),
+        ]),
         fatura={"id": "periodo", "periodo": True, "em_andamento": False, "previsto": False},
         fatura_nova=None, fatura_antiga=None, faturas=[],
         conta=None, avatar_banco=None, contas_credito=contas_credito,
@@ -1598,9 +1679,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             "origem", "Origem", origem_opcoes, origem_sel,
             onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,
         ),
-        por_categoria=[
-            {"nome": cat_pt_puro(c["categoria"]), "total": float(c["total"])} for c in por_categoria
-        ],
+        por_categoria=por_categoria,
         receita_mes=receita, gasto_real=gasto, resultado_mes=receita - gasto,
         total_reais=total_reais,
         total_recebidos=resumo["total_recebidos"] or 0,
@@ -1886,6 +1965,7 @@ def lancamentos_por_fatura():
         "pendente_ok": 0, "divergencias": 0,
     }
     tolerancia_valor = Decimal("0.01")
+    conta_da_fatura = contas_by_id.get(account_id) or {}
     for linha in linhas:
         linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
         vinculos = vinculos_por_linha.get(linha["id"], [])
@@ -1929,6 +2009,14 @@ def lancamentos_por_fatura():
         linha["cartao_nome"] = (
             nomes_cartao.get(final_cartao) or (f"final {final_cartao}" if final_cartao else None)
         )
+        # A coluna Origem existe nos DOIS recortes (a tabela e a mesma). Numa
+        # fatura ela nasce oculta - todas as linhas sao do mesmo cartao - mas o
+        # final4 separa os cartoes fisicos/virtuais da mesma conta, entao a
+        # origem e por linha. Linha de fatura nunca tem autor: ninguem digitou.
+        (linha["origem_selo"], linha["origem_texto"],
+         linha["origem_completa"]) = origem_da_linha(
+            conta_da_fatura, final_cartao, nomes_cartao)
+        linha["autor"] = None
         if linha["multiplos"]:
             contagens["multiplos"] += 1
         # Estorno vem negativo no PDF e precisa reduzir tanto a fatura quanto
@@ -2038,10 +2126,25 @@ def lancamentos_por_fatura():
     for linha in linhas:
         linha["situacoes_texto"] = texto_das_situacoes(linha.get("situacoes", []))
 
+    # "Gasto por categoria" existe nos DOIS recortes (decisao do usuario,
+    # 10/09/2026). Aqui ele soma os lancamentos que a FATURA cobrou - nao a
+    # janela de datas -, entao bate com o "Despesas no DRE" da propria tela;
+    # somar por data traria compras de outro ciclo e o quadro contradiria o
+    # card ao lado.
+    ids_principais = sorted({
+        str(l["principal"]["transacao_id"]) for l in linhas if l.get("principal")
+    })
+    por_categoria = gasto_por_categoria(
+        cur, ["t.transacao_id::text = ANY(%s)"], [ids_principais]
+    ) if ids_principais else []
+
     status = request.args.get("status", "todas")
     filtros_validos = {
         "todas", "pendente_classificacao", "pendente_ok", "dre", "fora",
         "sem_vinculo", "requer_validacao", "multiplos",
+        # Os mesmos nomes do recorte por periodo: duas visoes do mesmo dado que
+        # chamam o mesmo filtro de nomes diferentes obrigam a reaprender a tela.
+        "conferida", "pendente_banco", "rateio_incompleto",
     }
     if status not in filtros_validos:
         status = "todas"
@@ -2053,8 +2156,19 @@ def lancamentos_por_fatura():
         (status == "fora" and l.get("natureza_estado") in {"fora", "misto"}) or
         (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
         (status == "requer_validacao" and l["requer_validacao"]) or
-        (status == "multiplos" and l["multiplos"])
+        (status == "multiplos" and l["multiplos"]) or
+        (status == "conferida" and tem_situacao(l, "conferida")) or
+        (status == "pendente_banco" and tem_situacao(l, "pendente-banco")) or
+        (status == "rateio_incompleto" and tem_situacao(l, "rateio"))
     )]
+    filtros_situacao = filtros_por_situacao([
+        ("conferida", "Conferido"),
+        ("pendente_banco", "Pendente no banco"),
+        ("sem_vinculo", "Cobrança sem lançamento vinculado"),
+        ("requer_validacao", "Requer validação"),
+        ("rateio_incompleto", "Rateio incompleto"),
+        ("fora", "Fora do DRE"),
+    ])
 
     config = {
         "pode_editar": pode("lancamentos_editar"),
@@ -2093,6 +2207,7 @@ def lancamentos_por_fatura():
         },
         contagens=contagens, config_json=json_script(config),
         projeto_portfolio_map=projeto_portfolio_map,
+        por_categoria=por_categoria, filtros_situacao=filtros_situacao,
         url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),

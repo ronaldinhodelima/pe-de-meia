@@ -9,6 +9,7 @@ formato usado aqui tem que espelhar o que a view realmente entrega.
 from pathlib import Path
 from datetime import date
 
+import re
 import pytest
 
 import app  # noqa: F401  (cria o Flask app e registra os blueprints)
@@ -669,6 +670,7 @@ class TestDetalhadaPorPeriodo:
             "mes": "2026-08", "periodo": "mes", "data_inicio": "", "data_fim": "",
             "origem_filtro_html": '<div class="chipfilter"></div>',
             "por_categoria": [{"nome": "Água", "total": 212.35}],
+            "filtros_situacao": [{"rotulo": "Conferido", "url": "?status=conferida"}],
             "receita_mes": 0, "gasto_real": 212.35, "resultado_mes": -212.35,
             "total_reais": 1, "total_recebidos": 1, "total_fora": 0, "conf_reais": 0,
             "pendente_classificacao": 0, "classificados_reais": 1, "pendentes_ok": 1,
@@ -761,8 +763,75 @@ class TestDetalhadaPorPeriodo:
         html = render_template("lancamentos_fatura.html", **ctxt)
         assert "Fatura Agosto de 2026" in html
         assert "Ver conciliação da fatura" in html
-        # sem o recorte por periodo, a coluna Origem nao existe
-        assert 'data-col="origem"' not in html
+        # A TABELA e a mesma nos dois recortes (decisao do usuario, 10/09/2026):
+        # o que muda entre fatura e periodo sao os filtros, nao as colunas.
+        assert 'data-col="origem"' in html
+        # o formulario manual continua FORA da fatura, de proposito: um
+        # lancamento manual nao pertence a fatura nenhuma
+        assert 'id="formManual"' not in html
+
+
+    def test_a_tabela_e_a_mesma_nos_dois_recortes(self, ctx):
+        """Decisao do usuario (10/09/2026): trocar de fatura para periodo nao
+        pode mudar COMO os lancamentos sao vistos - o que esses botoes mudam sao
+        os filtros. Colunas diferentes obrigam a reaprender a tela a cada troca,
+        e foi por isso que os `data-col` ja tinham sido unificados (secao 7.1).
+        """
+        from datetime import date
+        por_fatura = self.contexto(
+            modo_periodo=False,
+            fatura={"id": 3, "mes_referencia": 8, "ano_referencia": 2026,
+                    "periodo_inicio": date(2026, 7, 13), "periodo_fim": date(2026, 8, 12),
+                    "vencimento": date(2026, 8, 20), "em_andamento": False, "previsto": False},
+            faturas=[{"id": 3, "mes_referencia": 8, "ano_referencia": 2026,
+                      "em_andamento": False, "previsto": False}],
+            contas_credito=[("abc", "Unicred", "Unicred Conjunta", "Unicred", "")],
+            account_id="abc",
+            totais={"pdf": 100, "dre": 100, "fora": 0, "pendente": 0,
+                    "pendente_ok": 0, "sem_vinculo": 0, "divergencia": 0},
+            contagens={"linhas": 1, "vinculadas": 1, "classificadas": 1, "conferidas": 1,
+                       "multiplos": 0, "pendente_classificacao": 0, "pendente_ok": 0,
+                       "divergencias": 0},
+        )
+        por_fatura["linhas"][0]["data"] = date(2026, 8, 10)
+        htmls = {
+            "periodo": render_template("lancamentos_fatura.html", **self.contexto()),
+            "fatura": render_template("lancamentos_fatura.html", **por_fatura),
+        }
+        for recorte, html in htmls.items():
+            cabecalho = html.split("<thead>")[1].split("</thead>")[0]
+            colunas = re.findall(r'data-col="([^"]+)"', cabecalho)
+            assert colunas == ["sel", "data", "desc", "origem", "categoria",
+                               "dim_1", "valor", "obs", "regra", "check"], recorte
+            # Gasto por categoria e "Filtrar por situacao" existem nos dois: um
+            # deles so no periodo era um recurso que sumia ao trocar de botao.
+            assert "Gasto por categoria" in html, recorte
+            assert 'class="legenda-lancamentos"' in html, recorte
+
+    def test_a_coluna_origem_nao_nasce_oculta_em_recorte_nenhum(self, ctx):
+        """Os dois recortes compartilham o mesmo `data-tabela="fatura"`, entao o
+        estado de colunas escondidas e UM SO no localStorage. Marcar
+        `data-oculta-padrao` na Origem de um dos recortes esconderia a coluna no
+        outro tambem, e quem decidiria seria o recorte que o usuario abrisse
+        primeiro - esconder passa a ser escolha dele, pelo cabecalho."""
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        cabecalho = html.split("<thead>")[1].split("</thead>")[0]
+        origem = re.search(r'<th[^>]*data-col="origem"[^>]*>', cabecalho).group(0)
+        assert "data-oculta-padrao" not in origem
+
+
+def test_a_origem_da_linha_tem_uma_implementacao_so():
+    """Tres construtores de linha mostram a coluna Origem - a Resumida, o
+    recorte por periodo e o recorte por fatura. Tres copias da mesma regra
+    divergiriam no primeiro banco novo, que e literalmente como nasceram os 57
+    falsos pendentes da secao 6.5 nº 10."""
+    import pathlib
+    fonte = (pathlib.Path(__file__).resolve().parent.parent
+             / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert fonte.count("def origem_da_linha(") == 1
+    # e ela mora no modulo, nao aninhada dentro de uma rota
+    assert "\ndef origem_da_linha(" in fonte
+    assert fonte.count("origem_da_linha(") >= 4
 
 
 def test_as_duas_telas_leem_valor_pela_mesma_conta():

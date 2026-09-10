@@ -235,3 +235,34 @@ def test_auditoria_fecha_conexao_quando_o_banco_falha(monkeypatch):
     assert conexao.rollback_chamado is True
     assert conexao.cursor_criado.fechado is True
     assert conexao.fechado is True
+
+
+def test_gasto_por_categoria_devolve_o_nome_ja_traduzido():
+    """O quadro "Gasto por categoria" existe nos dois recortes da Detalhada, e
+    quem monta a lista e um so. A traducao do nome morava em cada chamador: um
+    chamador novo que a esquecesse renderizaria o quadro com os nomes EM BRANCO,
+    sem erro nenhum - a mesma familia da coluna ausente num `.get()`
+    (secao 11.3-A). Por isso ela mora dentro do ponto unico.
+    """
+    from views.lancamentos import gasto_por_categoria
+
+    class CursorFalso:
+        def __init__(self):
+            self.sql = None
+            self.params = None
+
+        def execute(self, sql, params):
+            self.sql, self.params = sql, params
+
+        def fetchall(self):
+            return [{"categoria": "Water", "total": "212.35"}]
+
+    cur = CursorFalso()
+    linhas = gasto_por_categoria(cur, ["t.transacao_id::text = ANY(%s)"], [["a", "b"]])
+    from core import cat_pt_puro
+    assert linhas == [{"nome": cat_pt_puro("Water"), "total": 212.35}]
+    # uuid nao se compara com lista de texto (secao 10.4 nº 6): o cast e o que
+    # impede a consulta inteira de cair
+    assert "t.transacao_id::text = ANY(%s)" in cur.sql
+    # o limite entra por parametro, e nao concatenado na SQL
+    assert cur.params[-1] == 8

@@ -115,7 +115,16 @@
 {% block conteudo %}
 {% if fatura %}
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
-{% set colunas_extra = 1 if modo_periodo else 0 %}
+{# A coluna Origem existe nos dois recortes: a tabela dos lancamentos e a
+   mesma, e o que muda entre fatura e periodo sao os FILTROS (decisao do
+   usuario, 10/09/2026). Numa fatura ela nao e redundante: um cartao de credito
+   tem varios cartoes fisicos e virtuais, e e o final4 que os separa.
+
+   Ela NAO nasce oculta na fatura: os dois recortes compartilham o mesmo
+   `data-tabela="fatura"`, entao esconder por padrao aqui esconderia tambem no
+   recorte por periodo - e quem decidiria seria o recorte que o usuario abrisse
+   primeiro. Esconder e escolha dele, pelo cabecalho, e vale nos dois. #}
+{% set colunas_extra = 1 %}
 {% if modo_periodo %}
 <div class="fatura-cabecalho">
   <button type="button" onclick="mudarMesPeriodo(-1)" class="nav" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}">‹</button>
@@ -180,6 +189,11 @@
     {% if not fatura.em_andamento %}<option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>{% endif %}
     <option value="dre" {{ 'selected' if status=='dre' }}>Despesas no DRE</option>
     <option value="fora" {{ 'selected' if status=='fora' }}>Fora do DRE</option>
+    {# Mesmos nomes do recorte por periodo: o mesmo filtro nao pode ter dois
+       nomes nas duas metades da mesma tela. #}
+    <option value="conferida" {{ 'selected' if status=='conferida' }}>Conferidas</option>
+    <option value="pendente_banco" {{ 'selected' if status=='pendente_banco' }}>Pendentes no banco</option>
+    {% if not fatura.em_andamento %}<option value="rateio_incompleto" {{ 'selected' if status=='rateio_incompleto' }}>Rateio incompleto</option>{% endif %}
     {% if not fatura.em_andamento %}<option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
     <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
     <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>{% endif %}
@@ -196,11 +210,13 @@
 </div>
 {% endif %}
 
-{% if modo_periodo %}
-{% include "_form_manual.html" %}
+{# O formulario manual fica de fora da fatura de proposito: um lancamento
+   manual nao pertence a fatura nenhuma, e cria-lo aqui sem ve-lo aparecer
+   confundiria. Ali o botao leva ao recorte por periodo. #}
+{% if modo_periodo %}{% include "_form_manual.html" %}{% endif %}
 
 <details class="cat-breakdown">
-  <summary>Gasto por categoria ({{ 'ano' if periodo == 'ano' else ('período' if periodo == 'intervalo' else 'mês') }})</summary>
+  <summary>Gasto por categoria ({% if not modo_periodo %}fatura{% else %}{{ 'ano' if periodo == 'ano' else ('período' if periodo == 'intervalo' else 'mês') }}{% endif %})</summary>
   <div class="det-body">
     {% for c in por_categoria %}
       <div class="cat-row"><span>{{ c.nome }}</span><span>{{ c.total|moeda }}</span></div>
@@ -210,6 +226,7 @@
   </div>
 </details>
 
+{% if modo_periodo %}
 <div class="cards fatura-cards">
   <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
   <div class="card" data-filtro="despesa" title="Ver só as despesas deste período; investimentos continuam fora"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
@@ -301,7 +318,7 @@
    dado que nomeiam as colunas de formas diferentes obrigam o usuario a
    reaprender a tela ao trocar de visao. Os `data-col` tambem sao os mesmos -
    e por eles que o modo cartao e a ordenacao encontram cada coluna. #}
-<thead><tr><th class="col-abre" data-col="sel" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0" data-tip="{% if modo_periodo %}Descrição do lançamento{% elif fatura.em_andamento %}Descrição como o Pluggy entregou{% else %}Descrição impressa na fatura{% endif %}">Descrição</th>{% if modo_periodo %}<th class="cel-origem" data-col="origem" data-ordenar="origem" tabindex="0">Origem</th>{% endif %}<th class="col-classif" data-col="categoria" data-ordenar="categoria" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{% if modo_periodo %}Valor do lançamento{% elif fatura.em_andamento %}Valor provisório, como o Pluggy entregou{% else %}Valor cobrado na fatura{% endif %}">Valor</th><th class="cel-obs" data-col="obs">Observação</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="check" data-ordenar="check" tabindex="0">OK</th></tr></thead><tbody>
+<thead><tr><th class="col-abre" data-col="sel" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0" data-tip="{% if modo_periodo %}Descrição do lançamento{% elif fatura.em_andamento %}Descrição como o Pluggy entregou{% else %}Descrição impressa na fatura{% endif %}">Descrição</th><th class="cel-origem" data-col="origem" data-ordenar="origem" tabindex="0">Origem</th><th class="col-classif" data-col="categoria" data-ordenar="categoria" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{% if modo_periodo %}Valor do lançamento{% elif fatura.em_andamento %}Valor provisório, como o Pluggy entregou{% else %}Valor cobrado na fatura{% endif %}">Valor</th><th class="cel-obs" data-col="obs">Observação</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="check" data-ordenar="check" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ linha.classes }}{% if linha.requer_validacao %} fatura-erro{% endif %}"
       data-valor="{{ linha.valor }}"
@@ -328,7 +345,7 @@
         </div> <button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" data-tip="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir procedência{% else %}Abrir procedência do lançamento{% endif %}" aria-label="Abrir procedência">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button>
       </div>
     </td>
-    {% if modo_periodo %}<td class="cel-origem" data-col="origem" data-tip="{{ linha.origem_completa }}{% if linha.autor %} · lançado por {{ linha.autor }}{% endif %}"><span class="origem-conteudo">{{ linha.origem_selo|safe }}{% if linha.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ linha.autor }}">{{ linha.autor[:2]|upper }}</span>{% endif %}<span class="origem-texto">{{ linha.origem_texto }}</span></span></td>{% endif %}
+    <td class="cel-origem" data-col="origem" data-tip="{{ linha.origem_completa }}{% if linha.autor %} · lançado por {{ linha.autor }}{% endif %}"><span class="origem-conteudo">{{ linha.origem_selo|safe }}{% if linha.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ linha.autor }}">{{ linha.autor[:2]|upper }}</span>{% endif %}<span class="origem-texto">{{ linha.origem_texto }}</span></span></td>
     {% if linha.principal and not linha.principal.rateado %}
       {% set v = linha.principal %}
       <td class="cel-classif" data-col="categoria"><select data-pdm-combobox data-campo="categoria" aria-label="Categoria" class="{{ 'classificacao-faltando' if not v.categoria }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==v.categoria }}>{{ c.nome }}</option>{% endfor %}</select></td>
@@ -351,7 +368,7 @@
     <td class="cel-sel-fatura" data-col="sel"></td>
     <td class="cel-data-fatura" data-col="data"></td>
     <td class="desc" data-col="desc" data-tip="{{ linha.descricao }} — Parte {{ loop.index }}"><span class="rateio-seta">↳</span> {{ linha.descricao }} — Parte {{ loop.index }}</td>
-    {% if modo_periodo %}<td class="cel-origem" data-col="origem">Rateio interno</td>{% endif %}
+    <td class="cel-origem" data-col="origem">Rateio interno</td>
     <td class="cel-classif" data-col="categoria"><select data-pdm-combobox class="rateio-cat-select" aria-label="Categoria" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==parte.categoria }}>{{ c.nome }}</option>{% endfor %}</select></td>
     {% for d in dimensoes %}<td class="cel-classif" data-col="dim_{{ d.id }}"><select data-pdm-combobox class="rateio-dim-select" data-dim="{{ d.id }}" aria-label="{{ d.nome }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}" {{ 'selected' if parte.dims.get(d.id)==val.id }}>{{ rotulo_dim(val) }}</option>{% endfor %}</select></td>{% endfor %}
     <td class="valor cel-valor-fatura" data-col="valor" style="{{ parte.cor_valor }}"><input class="rateio-valor-inline{{ '' if linha.rateio_valido else ' invalido' }}" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(parte.valor) }}" aria-label="Valor da parte {{ loop.index }}" {{ 'disabled' if not pode_editar }}></td>
@@ -418,15 +435,14 @@
   <td class="cel-valor-fatura" data-total-valor>—</td>
   <td colspan="{{ 2 + (1 if pode_regras else 0) }}"></td>
 </tr></tfoot></table></div>
-{% if modo_periodo %}
+{# Os atalhos vem da ROTA, nao escritos aqui: cada recorte declara as situacoes
+   que ele de fato tem, e a URL preserva o recorte atual. Escritos no template,
+   eles prendiam o bloco ao periodo e mandariam a fatura para outra tela. #}
+{% if filtros_situacao %}
 <details class="legenda-lancamentos">
   <summary>Filtrar por situação</summary>
   <div class="legenda-itens">
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=conferida">Conferido</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=pendente_banco">Pendente no banco</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=duplicidade">Possível duplicidade</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=fora_resultado">Fora do resultado</a>
-    <a class="legenda-item" href="?recorte=periodo&amp;mes={{ mes }}&amp;periodo={{ periodo }}&amp;status=rateio_incompleto">Rateio incompleto</a>
+    {% for f in filtros_situacao %}<a class="legenda-item" href="{{ f.url }}">{{ f.rotulo }}</a>{% endfor %}
   </div>
   <div class="legenda-ajuda">Passe o mouse sobre a data para ver todas as situações daquele lançamento. Clique em um item acima para filtrar.</div>
 </details>

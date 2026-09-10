@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 09/09/2026 · **Schema:** migração 61 · **Testes:** 406 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 414 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -915,6 +915,42 @@ recarrega e não desmonta o grupo.
 - Navegação de mês, filtros e troca de tela criam **histórico real** — o botão Voltar do navegador
   retorna ao estado anterior, com a rolagem preservada.
 
+### Fatura e período são a mesma TABELA; o que muda são os filtros (10/09/2026)
+
+**Decisão do usuário.** Trocar de "Por fatura" para "Por período" não pode mudar *como* os
+lançamentos são vistos — os botões mudam o **recorte e os filtros**, não as colunas. Colunas
+diferentes obrigavam a reaprender a tela a cada troca, que é exatamente o que a unificação dos
+`data-col` (§7.1) já tinha resolvido entre a Resumida e a Detalhada.
+
+O que passou a valer nos dois recortes: a **coluna Origem**, o **Gasto por categoria** e o rodapé
+**Filtrar por situação**. Numa fatura a Origem não é redundante — um cartão de crédito tem vários
+cartões físicos e virtuais, e é o `numero_cartao_final` que os separa.
+
+**A coluna Origem NÃO nasce oculta na fatura**, embora fosse a intenção inicial: os dois recortes
+compartilham o mesmo `data-tabela="fatura"`, então o estado de colunas escondidas é **um só** no
+`localStorage`. `data-oculta-padrao` num dos recortes esconderia a coluna no outro também, e quem
+decidiria seria o recorte que o usuário abrisse primeiro. Esconder é escolha dele, pelo cabeçalho, e
+vale nos dois — que é o que "a tabela é a mesma" significa.
+
+**`origem_da_linha()` virou ponto único dos TRÊS construtores** (Resumida, período e fatura). Eram
+duas cópias divergindo em silêncio; uma terceira teria divergido no primeiro banco novo.
+
+**Os atalhos de "Filtrar por situação" saem da ROTA, não do template.** Escritos à mão ali, eles
+carregavam `?recorte=periodo` embutido e mandariam a fatura para outra tela. Hoje cada recorte
+declara as situações que de fato tem — a fatura não lista rateio nem vínculo quando não os tem — e
+`filtros_por_situacao()` preserva tudo o que já está na barra, trocando só o status.
+
+**Os status usam os MESMOS nomes nos dois recortes.** A fatura ganhou `conferida`, `pendente_banco` e
+`rateio_incompleto`, filtrados por `tem_situacao()`, que lê a lista que `situacoes_da_linha()` monta —
+o mesmo ponto de verdade que pinta a linha e escreve o tooltip. Uma segunda condição divergiria.
+
+**O formulário manual continua fora da fatura, de propósito** (§7.1 etapa 8).
+
+**Ainda pendente desta frente:** Ratear/Excluir só aparecem no período (a fatura ainda não monta as
+partes do rateio para a interface), os filtros ainda não se autogerenciam (fatura/ciclo deveria
+aparecer só quando a origem é cartão com fatura importada) e o alternador "Por período | Por fatura"
+ainda existe.
+
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 
 **A Detalhada é a tela principal do sistema** (decisão do usuário, 09/09/2026): o item
@@ -1098,8 +1134,13 @@ em silêncio.
 coisa — atualiza linha a linha sem destruir o que o usuário está preenchendo (§7.2). O teste que
 proíbe uma segunda cópia da troca olha só o corpo da função de filtro.
 
-**"Gasto por categoria" é do PERÍODO, não da fatura.** Numa fatura o total já é a soma das compras
-daquele cartão, e a quebra por categoria vive na conciliação.
+**"Gasto por categoria" existe nos DOIS recortes** (decisão do usuário, 10/09/2026 — até 09/09 ele
+era só do período). Na fatura ele soma **os lançamentos que a fatura cobrou**, não a janela de datas:
+assim bate com o "Despesas no DRE" da própria tela. Somar por data traria compras de outro ciclo e o
+quadro contradiria o card ao lado. `gasto_por_categoria()` é o ponto único dos dois — o que muda é só
+o WHERE (janela + origem num, conjunto de lançamentos no outro) — e ele **devolve o nome já
+traduzido**: a tradução morava em cada chamador, e um chamador novo que a esquecesse renderizaria o
+quadro com os nomes em branco, sem erro nenhum.
 
 **Renderizar o template virou teste.** `tests/test_templates.py::TestDetalhadaPorPeriodo` monta o
 formato REAL que `_render_periodo` entrega e renderiza nos **dois** recortes. Erro de Jinja passa
@@ -1926,7 +1967,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**406 aprovados e 6 ignorados** (09/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**414 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
