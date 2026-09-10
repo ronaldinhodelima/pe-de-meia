@@ -2263,6 +2263,25 @@ precisam de decisão caso a caso.
   R$ 107,50. **Não usar `duplicada`** — existe par identificável, então o estado certo é o que diz
   qual registro conta (§4.3).
 
+### Objetivo em curso (10/09/2026): conferir 2026 na Conta Corrente Unicred
+
+Meta declarada pelo usuário: **conferir todos os lançamentos de 2026 sem OK na Conta Corrente
+Unicred** (`007918c7-3334-49b9-ac94-8cbafe7f554b`). Levantamento de 07/09/2026: **213 sem OK** —
+72 já com classificação completa (só falta a assinatura dele) e 141 faltando dimensões. Já
+padronizados neste esforço: pagamento de fatura, MONGERAL (§4.4), Colégio Salvatoriano, água Visan,
+aluguel BRDrive, pró-labore BRsim e mesada (§8.4, §11.3). Próximo passo: classificar os 141 em
+blocos, sempre com prévia e decisão do usuário — **o OK continua sendo dele** (§1.2).
+
+**Anotado para depois, a pedido do usuário** (não mexer sem ele retomar):
+
+- custo da casa atribuível ao aluguel da BRDrive (§11.3);
+- BRsim R$ 60.038,73 e R$ 189.961,27 (30/12/2025), sem classificação;
+- os 31 créditos `Transferência Recebida|BRSIM` na conta Nubank da Andrea (§8.4);
+- Projeto `BRDrive` × BRsim nos relatórios (§8.4);
+- travas de exclusão de categoria/dimensão contando pela view (defeito latente, §8.4);
+- filtro `status=despesa` incluir lançamentos fora do resultado;
+- log `regra_automatica` gravando `"erro":"0"` — abrir e achar a causa (§10.4 nº 11).
+
 ## 11.2-A Vínculos que ligam estabelecimentos diferentes (varredura de 01/09/2026)
 
 `GET /api/fatura/vinculos-suspeitos` lista, sem desfazer nada, os vínculos em que a linha da
