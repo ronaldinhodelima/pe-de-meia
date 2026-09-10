@@ -26,8 +26,11 @@
   .fatura-tabela tr[data-toggle-linha]:hover{background:var(--accent-soft)}
   .fatura-tabela tr.conferida[data-toggle-linha]:hover{background:var(--selecao-suave)}
 
-  .expande{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:var(--radius-xs);background:var(--surface);font-size:var(--icone-lg);line-height:1;color:var(--ink-soft);cursor:pointer;transition:border-color .12s,color .12s,background-color .12s}
-  .expande:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  /* Sem caixa: o glifo acompanha os +/- de rateio e de registro tecnico, que
+     ja moravam depois da descricao (secao 7.6). Com borda e fundo proprios ele
+     competia com o checkbox e empurrava a primeira coluna para 56px. */
+  .expande{width:20px;height:20px;padding:0;border:0;border-radius:var(--radius-xxs);background:transparent;font-size:var(--icone-lg);line-height:1;color:var(--ink-faint);cursor:pointer;vertical-align:middle;transition:color .12s,background-color .12s}
+  .expande:hover,.expande:focus{background:var(--raise);color:var(--accent)}
 
   .estado{display:inline-flex;align-items:center;padding:3px 8px;border-radius:12px;font-size:var(--fonte-xs);font-weight:var(--peso-normal);background:var(--bg);border:1px solid var(--line)}
   .estado.dre{color:var(--ink-soft);background:var(--raise);border-color:transparent}
@@ -76,7 +79,7 @@
   /* ---- Layout B: uma linha por lancamento, classificacao em colunas largas.
      A largura vem de encolher data/valor e de fundir titular+parcela na
      descricao; o titular vira o avatar, com o nome no tooltip. ---- */
-  .fatura-tabela th.col-abre,.fatura-tabela td.cel-sel-fatura{width:56px}
+  .fatura-tabela th.col-abre,.fatura-tabela td.cel-sel-fatura{width:34px}
   .fatura-tabela th.col-data,.fatura-tabela td.cel-data-fatura{width:82px;white-space:nowrap;color:var(--ink-soft);font-variant-numeric:tabular-nums}
   .fatura-tabela th.col-valor,.fatura-tabela td.cel-valor-fatura{width:104px;white-space:nowrap;font-variant-numeric:tabular-nums}
 
@@ -306,13 +309,13 @@
       data-exige-dimensoes="{{ '0' if (linha.principal and not linha.principal.get('exige_dimensoes', True)) else '1' }}"
       {% if linha.rateios %}data-id="{{ linha.principal.transacao_id }}" data-rateio-total="{{ linha.valor_rateio }}" data-rateio-valido="{{ '1' if linha.rateio_valido else '0' }}"{% endif %}
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
-    <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}<button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" title="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir detalhes{% else %}Abrir detalhes do lançamento{% endif %}">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button></td>
+    <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}</td>
     <td class="cel-data-fatura" data-col="data" data-tip="{{ linha.situacoes_texto }}">{{ linha.data.strftime('%d/%m/%Y') }}</td>
     <td class="desc" data-col="desc">
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %} <button type="button" class="expande" data-expande="{{ linha.id }}" aria-expanded="false" data-tip="{% if linha.vinculos|length > 1 %}{{ linha.vinculos|length - 1 }} registro(s) técnico(s) agregado(s) · abrir procedência{% else %}Abrir procedência do lançamento{% endif %}" aria-label="Abrir procedência">+{% if linha.vinculos|length > 1 %}<sup>{{ linha.vinculos|length - 1 }}</sup>{% endif %}</button>
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
              pendencia deixava uma linha em branco em todo lancamento que nao
@@ -448,4 +451,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-4"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-5"></script>{% endblock %}

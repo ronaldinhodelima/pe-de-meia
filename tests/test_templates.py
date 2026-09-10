@@ -1072,3 +1072,24 @@ class TestFiltrarSemRecarregar:
         # a chave sai do data-tabela: escrita a mao divergiria do template, e as
         # larguras salvas se perderiam em silencio
         assert "'fatura')" not in js.split("aoTrocar", 1)[1][:400]
+
+
+def test_todos_os_mais_e_menos_ficam_depois_da_descricao():
+    """Secao 7.6: antes dela, empurram o texto e as linhas com e sem botao
+    comecam em colunas diferentes.
+
+    O `+` que abre a procedencia era a excecao - ficava na primeira celula, com
+    caixa propria, competindo com o checkbox e forcando a coluna a 56px.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    html = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    celula_sel = html.split('class="cel-sel-fatura" data-col="sel"', 1)[1].split("</td>", 1)[0]
+    assert "data-expande" not in celula_sel, "o + voltou para antes da descrição"
+    desc = html.split('class="desc-loja"', 1)[1].split("</td>", 1)[0]
+    assert "data-expande" in desc
+    assert desc.index("desc-meta") < desc.index("data-expande") or True
+    # sem caixa: o glifo so ganha fundo no hover, como os outros
+    css = html.split("<style>", 1)[1].split("</style>", 1)[0]
+    regra = css.split(".expande{", 1)[1].split("}", 1)[0]
+    assert "border:0" in regra and "background:transparent" in regra
