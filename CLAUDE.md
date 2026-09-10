@@ -2159,6 +2159,19 @@ todos os ajustes visuais desta semana foram conferidos.
    que o Coolify faz deploy), então fica um commit que mente sobre o próprio conteúdo. É a mesma
    auditoria que permitiu reverter as 22 datas corrompidas da §6.4: enfraquecê-la custa caro.
    Antes de commitar, `git status --short` e conferir que só está indo o assunto daquele commit.
+
+   **O índice é compartilhado por toda sessão que trabalha no mesmo diretório** — e o `git add` com
+   lista explícita não protege disso: `git commit` sem caminhos grava **tudo o que está no índice**,
+   inclusive o que outra sessão preparou. Em 10/09/2026 o `git rm` de `index.html` e `lancamentos.js`
+   estava preparado por uma sessão (a remoção da Resumida, ainda sem a view nova) e o commit
+   `11fbd4f` de **outra** sessão, com mensagem só sobre o CLAUDE.md, levou as 1.471 linhas apagadas
+   junto e foi publicado. A view no ar ainda renderizava `index.html`, e o botão "Resumida" passou a
+   dar **500** até o commit seguinte (`c60c160`) chegar. Duas regras saem disso:
+   - **commitar com `git commit --only -m ... -- <arquivos>`**: grava só os caminhos listados, seja
+     qual for o estado do índice;
+   - **não deixar nada preparado no índice entre um passo e outro** — `git rm`/`git add` na mesma
+     chamada do commit. Uma remoção preparada e esquecida é trabalho publicável por qualquer sessão.
+   Antes de commitar, `git log --oneline -3` também: foi ele que mostrou que o HEAD tinha andado.
 4. Commit + push, **e então validar em produção**: status no Coolify, `/health`, logs (procurar
    traceback e `Aviso: falha ao rodar migracao`) e a tela real pelo navegador.
 5. **Testar de verdade, não só ler o código.** O teste com payload real de XSS encontrou 3 pontos
