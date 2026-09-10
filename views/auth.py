@@ -7,6 +7,7 @@ import psycopg2.extras
 from flask import Blueprint, request, redirect, session, render_template
 
 from core import (
+    URL_LANCAMENTOS,
     USERS,
     fechar_recursos_banco,
     get_conn,
@@ -87,7 +88,7 @@ def login():
                 session["perfil"] = conta["perfil"]
                 session["permissoes"] = list(conta["permissoes"] or [])
                 _limpar_falhas(chave_tentativa)
-                return redirect("/")
+                return redirect(URL_LANCAMENTOS)
         except Exception as e:
             print("Aviso: falha ao autenticar pelo banco:", e)
         finally:
@@ -102,7 +103,7 @@ def login():
             session["perfil"] = "admin"
             session["permissoes"] = permissoes_do_perfil("admin")
             _limpar_falhas(chave_tentativa)
-            return redirect("/")
+            return redirect(URL_LANCAMENTOS)
 
         _registrar_falha(chave_tentativa)
         _registrar_falha(chave_ip)

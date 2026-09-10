@@ -917,6 +917,12 @@ recarrega e não desmonta o grupo.
 
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 
+**A Detalhada é a tela principal do sistema** (decisão do usuário, 09/09/2026): o item
+**Lançamentos** do menu, a marca do topbar e o destino do login apontam para ela. A URL mora num
+ponto único — `core.URL_LANCAMENTOS` — porque aparece nesses três lugares; escrita nos três,
+divergiria no dia em que um fosse esquecido, e quando a Resumida sair muda só ali. **A Resumida
+continua respondendo em `/`**, alcançável pelo botão, como rede de segurança até ser removida.
+
 **O recorte por período é o PADRÃO da tela** (decisão do usuário, 09/09/2026, ao perguntar como
 via as outras origens). Abrindo por fatura, o seletor lista **só cartões de crédito** — conta
 corrente, dinheiro e lançamento manual não aparecem ali, e quem não conhecesse o alternador

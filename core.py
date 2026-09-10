@@ -5427,12 +5427,19 @@ recarregar_categorias_db()
 
 
 
+# Qual e a tela de Lancamentos do sistema. E a Detalhada desde 09/09/2026
+# (decisao do usuario): so ela alcanca conta corrente, dinheiro e lancamento
+# manual no mesmo lugar. A Resumida continua respondendo em "/" como rede de
+# seguranca ate ser removida - quando isso acontecer, muda so aqui.
+URL_LANCAMENTOS = "/lancamentos/fatura"
+
+
 def topbar_html(titulo, ativo=None):
     def cls(nome):
         return "ativo" if ativo == nome else ""
     return f"""
       <div class="topbar">
-        <a href="/" class="marca-box" style="text-decoration:none" title="Ir para o início">
+        <a href="{URL_LANCAMENTOS}" class="marca-box" style="text-decoration:none" title="Ir para o início">
           <img class="marca-icon" src="/static/logo-topbar.png" alt="Pé de Meia">
           <div>
             <span class="marca">{APP_NOME}</span><br>
@@ -5442,7 +5449,7 @@ def topbar_html(titulo, ativo=None):
         <button type="button" class="menu-toggle" onclick="menuMobile(this)"
                 aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menu">&#9776;</button>
         <div class="nav-menu" id="navMenu">
-          {f'<a href="/" class="{cls("inicio")}">Lançamentos</a>' if pode("lancamentos_ver") else ""}
+          {f'<a href="{URL_LANCAMENTOS}" class="{cls("inicio")}">Lançamentos</a>' if pode("lancamentos_ver") else ""}
           {f'<a href="/compras-futuras" class="{cls("compras-futuras")}">Compras futuras</a>' if pode("lancamentos_ver") else ""}
           {f'''<div class="dropdown">
             <button type="button" class="dropbtn" onclick="menuToggle(event, this)">Relatórios ▾</button>
