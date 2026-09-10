@@ -1088,7 +1088,9 @@ def test_todos_os_mais_e_menos_ficam_depois_da_descricao():
     assert "data-expande" not in celula_sel, "o + voltou para antes da descrição"
     desc = html.split('class="desc-loja"', 1)[1].split("</td>", 1)[0]
     assert "data-expande" in desc
-    assert desc.index("desc-meta") < desc.index("data-expande") or True
+    assert desc.index("</div>") < desc.index("data-expande"), (
+        "o + tem que ficar FORA do .desc-texto: ali dentro ele vira uma linha "
+        "propria e engorda toda a tabela")
     # sem caixa: o glifo so ganha fundo no hover, como os outros
     css = html.split("<style>", 1)[1].split("</style>", 1)[0]
     regra = css.split(".expande{", 1)[1].split("}", 1)[0]
