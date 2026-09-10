@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 407 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 408 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1032,9 +1032,16 @@ em produção. Saíram `templates/index.html`, `static/lancamentos.js`, a rota `
 editar a descrição de um lançamento manual.** Morava no modal de detalhes dela. Veio para o
 **painel de procedência**, atrás de um botão **"Editar"** — e **nunca na linha** (decisão do usuário,
 10/09/2026: a linha é para ler e classificar, e um campo aberto ali se alterava sem querer; ela chegou a
-ficar na linha por algumas horas). O botão só aparece quando `descricao_editavel` (conta manual), há
-permissão de editar e o lançamento **não** é rateado — a linha do rateado não tem editor próprio,
-porque a classificação mora nas partes. Enter ou sair do campo grava; Esc cancela. Grava pelo
+ficar na linha por algumas horas). O botão aparece quando `descricao_editavel` (conta manual) e há
+permissão de editar — **inclusive no rateado** (pedido do usuário, 10/09/2026). A linha do rateado
+não tem `data-editor`, porque a classificação mora nas partes; a gravação a acha pelo `data-id`.
+
+**Gravar texto livre não repinta a pendência de classificação.** O recálculo da pílula "Faltam:" lê
+os seletores de categoria e dimensão do editor, e numa linha sem seletores — a do rateado — ele
+concluía "não falta nada" e **apagava o "Faltam: Rateio"** de um rateio que ainda não fecha; a tela
+dizia que estava tudo certo até o resumo parcial voltar do servidor, uns 700 ms depois. Hoje o
+`salvarEditor` só repinta quando o campo alterado é de classificação (`SELETOR_CLASSIF`) —
+descrição e observação não mudam pendência nenhuma. Enter ou sair do campo grava; Esc cancela. Grava pelo
 **mesmo** `salvarEditor` da linha — não há segundo caminho de gravação — e o texto na tela só muda se o
 servidor aceitou; o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando no
 próprio `UPDATE` a descrição de qualquer outra origem (§4.6).
@@ -2127,7 +2134,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**407 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**408 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

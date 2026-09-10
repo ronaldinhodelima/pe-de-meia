@@ -329,7 +329,8 @@ def test_descricao_do_manual_se_edita_no_painel_por_um_botao(ctx):
         ("manual", True, True, False, True),
         ("banco", False, True, False, False),
         ("sem permissao", True, False, False, False),
-        ("manual rateado", True, True, True, False),
+        # o rateado tambem: a gravacao acha a linha pelo `data-id` (10/09/2026)
+        ("manual rateado", True, True, True, True),
     )
     for rotulo, editavel, pode, rateado, esperado in casos:
         ctxt = TestDetalhadaPorPeriodo().contexto(pode_editar=pode)
@@ -356,6 +357,32 @@ def test_descricao_do_manual_se_edita_no_painel_por_um_botao(ctx):
     assert "fetch(" not in fluxo, "segundo caminho de gravacao"
     # so troca o texto na tela se o servidor aceitou
     assert "classList.contains('erro')" in fluxo
+    # a linha do rateado nao tem data-editor: a gravacao a acha pelo data-id
+    assert 'tr[data-linha][data-id="' in fluxo
+    gravacao = js.split("function salvarEditor(editor, alterado)", 1)[1].split("\n  }\n", 1)[0]
+    assert "editor.dataset.editor || editor.dataset.id" in gravacao
+
+
+def test_gravar_texto_livre_nao_repinta_a_pendencia_de_classificacao():
+    """So campo de classificacao repinta a pilula "Faltam:" (10/09/2026).
+
+    O recalculo le os seletores de categoria e dimensao do editor. Numa linha
+    sem seletores - a do lancamento rateado, cuja classificacao mora nas partes
+    - ele concluia "nao falta nada" e APAGAVA o "Faltam: Rateio" de um rateio
+    que ainda nao fecha: a tela dizia que estava tudo certo ate o resumo
+    parcial voltar do servidor. Descricao e observacao nao mudam pendencia
+    nenhuma, entao nao ha o que repintar nelas.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    gravacao = js.split("function salvarEditor(editor, alterado)", 1)[1].split("\n  }\n", 1)[0]
+    assert "const mexeNaClassificacao = alterado.matches(SELETOR_CLASSIF)" in gravacao
+    # as DUAS repinturas - antes de gravar e na resposta - passam pela guarda
+    assert gravacao.count("atualizarAvisoClassificacao(editor)") == 2
+    assert gravacao.count("if (mexeNaClassificacao) {") == 2
+    for trecho in gravacao.split("if (mexeNaClassificacao) {")[1:]:
+        assert "atualizarAvisoClassificacao(editor)" in trecho.split("}", 1)[0]
 
 
 def test_lancamento_manual_nao_se_diz_do_pluggy(ctx):

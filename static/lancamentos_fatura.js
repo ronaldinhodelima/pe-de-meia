@@ -792,11 +792,20 @@
   }
 
   function salvarEditor(editor, alterado) {
-    const id = editor.dataset.editor;
+    // `data-id` e o id do lancamento RATEADO, cuja linha nao tem editor proprio
+    // (a classificacao mora nas partes) - mas a descricao dele se edita igual.
+    const id = editor.dataset.editor || editor.dataset.id;
     const aviso = editor.querySelector('[data-status]');
     const payload = payloadEditor(editor, alterado);
-    atualizarDestaquesObrigatorios(editor);
-    atualizarAvisoClassificacao(editor);
+    // Pendencia de classificacao so se repinta quando o campo alterado E de
+    // classificacao. Descricao e observacao nao mudam pendencia nenhuma, e numa
+    // linha sem seletores (a do rateado) o recalculo daria "nao falta nada" e
+    // APAGARIA o "Faltam: Rateio" de um rateio que ainda nao fecha.
+    const mexeNaClassificacao = alterado.matches(SELETOR_CLASSIF);
+    if (mexeNaClassificacao) {
+      atualizarDestaquesObrigatorios(editor);
+      atualizarAvisoClassificacao(editor);
+    }
     const versao = String((Number(editor.dataset.versaoSalva || 0) + 1));
     editor.dataset.versaoSalva = versao;
     const anterior = filaSalvar[id] || Promise.resolve();
@@ -824,8 +833,10 @@
         if ('exige_dimensoes' in json) {
           const linha = linhaDoEditor(editor);
           if (linha) linha.dataset.exigeDimensoes = json.exige_dimensoes ? '1' : '0';
-          atualizarDestaquesObrigatorios(editor);
-          atualizarAvisoClassificacao(editor);
+          if (mexeNaClassificacao) {
+            atualizarDestaquesObrigatorios(editor);
+            atualizarAvisoClassificacao(editor);
+          }
         }
         agendarResumo(editor);
       } catch (e) {
@@ -953,7 +964,10 @@
     const texto = faixa.querySelector('.vinculo-desc');
     const botao = faixa.querySelector('[data-editar-descricao]');
     const nova = campo.value.trim();
-    const linha = document.querySelector('tr[data-editor="' + CSS.escape(campo.dataset.editorDe) + '"]');
+    // o rateado nao tem `data-editor` na linha, so `data-id`
+    const alvo = CSS.escape(campo.dataset.editorDe);
+    const linha = document.querySelector('tr[data-editor="' + alvo + '"]')
+      || document.querySelector('tr[data-linha][data-id="' + alvo + '"]');
     try {
       if (gravar && linha && nova && nova !== texto.textContent) {
         await salvarEditor(linha, campo);

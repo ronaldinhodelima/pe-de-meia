@@ -357,9 +357,10 @@
         <span class="vinculo-quem"><b class="vinculo-desc">{{ v.descricao }}</b>{#
           A descricao do MANUAL se edita aqui, por um botao - nunca na linha
           (decisao do usuario, 10/09/2026): a linha e para ler e classificar, e
-          um campo aberto ali se alterava sem querer. Rateado fica de fora: a
-          linha dele nao tem editor proprio, porque a classificacao mora nas
-          partes. #}{% if v.principal and linha.descricao_editavel and pode_editar and not linha.principal.rateado %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden><button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição deste lançamento manual. A de um lançamento do banco não se edita: ela pertence ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
+          um campo aberto ali se alterava sem querer. Vale tambem no RATEADO:
+          a linha dele nao tem editor proprio, entao a gravacao acha a linha
+          pelo `data-id`, e o JS so repinta pendencia quando o campo alterado
+          e de classificacao - senao apagaria o "Faltam: Rateio". #}{% if v.principal and linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden><button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição deste lançamento manual. A de um lançamento do banco não se edita: ela pertence ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
         <span class="vinculo-quando">{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</span>
         <span class="valor vinculo-valor">{{ v.valor|moeda }}</span>
         <span class="estado {{ 'ok' if v.principal else '' }} vinculo-estado">{{ 'contabilizado e editável' if v.principal else 'somente leitura' }}</span>
@@ -449,4 +450,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-4"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-5"></script>{% endblock %}
