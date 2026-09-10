@@ -284,8 +284,8 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     abrir.className = 'ver-btn';
     abrir.textContent = '☰ Colunas';
     abrir.title = 'Escolher quais colunas aparecem';
-    // toggle proprio: cfToggle() mora em lancamentos.js/relatorios.js e nao
-    // existe nas demais telas, onde este menu tambem aparece
+    // toggle proprio, e nao o cfToggle(): o menu de colunas nao e um filtro em
+    // chip, e o cfToggle espera a estrutura do chip (ver mais abaixo)
     abrir.addEventListener('click', function (e) {
       e.stopPropagation();
       const aberto = painel.classList.contains('show');

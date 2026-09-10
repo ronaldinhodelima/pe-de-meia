@@ -1223,3 +1223,29 @@ def test_painel_do_manual_mostra_criado_em_e_ultima_alteracao(ctx):
     gravacao = js.split("function salvarEditor(editor, alterado)", 1)[1].split("\n  }\n", 1)[0]
     assert "[data-atualizado=\"" in gravacao and "json.atualizado_em" in gravacao
     assert "new Date(" not in gravacao, "a hora nao pode vir do relogio do navegador"
+
+
+def test_a_linha_de_um_painel_e_achada_pelo_id_e_nao_pelo_vizinho():
+    """Entre a linha principal e o painel ficam as linhas das PARTES do rateio.
+
+    `previousElementSibling` devolvia a ultima parte, e a pintura de pendencia e
+    a pilula "Faltam:" iriam para a linha errada. Latente em 10/09/2026 - nenhum
+    campo do painel passava por ali - mas voltaria no primeiro que passasse. E
+    havia DUAS formas de achar a linha: a do aviso de classificacao reescrevia a
+    propria. Ficou uma so, pelo id do painel (`vinculos-<linha>`).
+    """
+    import pathlib, re
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    # olha o CODIGO, nao o comentario - que cita previousElementSibling
+    # justamente para explicar por que ele saiu
+    js = re.sub(r"//[^\n]*", "", (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8"))
+    achar = js.split("function linhaDoEditor(editor)", 1)[1].split("\n  }\n", 1)[0]
+    assert "previousElementSibling" not in achar
+    assert "detalhe.id.replace(/^vinculos-/, '')" in achar
+    aviso = js.split("function atualizarAvisoClassificacao(editor)", 1)[1].split("\n  }\n", 1)[0]
+    assert "previousElementSibling" not in aviso
+    assert "linhaDoEditor(editor)" in aviso
+    # e o painel continua se chamando assim no template
+    html = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert 'class="vinculos-detalhe" id="vinculos-{{ linha.id }}"' in html
+    assert 'data-linha="{{ linha.id }}"' in html

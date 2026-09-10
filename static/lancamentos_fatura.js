@@ -618,7 +618,14 @@
     if (!editor) return null;
     if (editor.matches('tr[data-linha]')) return editor;
     const detalhe = editor.closest('tr.vinculos-detalhe');
-    if (detalhe) return detalhe.previousElementSibling;
+    // Pelo id do painel, e nao pelo "elemento de cima": num rateado, entre a
+    // linha principal e o painel ficam as linhas das PARTES, e o
+    // previousElementSibling devolvia a ultima parte - a pintura e a pilula
+    // iriam para a linha errada.
+    if (detalhe) {
+      return document.querySelector(
+        'tr[data-linha="' + CSS.escape(detalhe.id.replace(/^vinculos-/, '')) + '"]');
+    }
     return editor.closest('tr[data-linha]');
   }
 
@@ -651,14 +658,10 @@
   function atualizarAvisoClassificacao(editor) {
     // O editor pode ser a PROPRIA linha (classificacao inline) ou o painel
     // aberto abaixo dela. Nos dois casos o aviso mora na linha.
-    let destino = null;
-    if (editor.matches('tr[data-linha]')) {
-      destino = editor.querySelector('[data-classificacao]');
-    } else {
-      const detalhe = editor.closest('tr.vinculos-detalhe');
-      const linha = detalhe && detalhe.previousElementSibling;
-      destino = linha && linha.querySelector('[data-classificacao]');
-    }
+    // a linha sai do MESMO ponto de quem pinta: duas formas de achar a linha
+    // divergiram, e a daqui apontava para a ultima parte de um rateio
+    const linha = linhaDoEditor(editor);
+    const destino = linha && linha.querySelector('[data-classificacao]');
     if (!destino) return;
 
     const faltando = [];

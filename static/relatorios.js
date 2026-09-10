@@ -30,8 +30,9 @@ function atualizarChipLabels() {
       const lbl = cb.closest('.chip-opt');
       const curto = lbl.dataset.curto || textoDaOpcao(lbl);
       const completo = lbl.getAttribute('data-tip') || curto;
-      // nome/valor vao em data-attribute e o clique e tratado por delegacao - ver
-      // a nota equivalente em lancamentos.js
+      // nome/valor vao em data-attribute e o clique e tratado por delegacao:
+      // interpolado num onclick, um nome com aspas fecharia o atributo cedo e o
+      // handler falharia em silencio (secao 2.2)
       return '<span class="chip-tag" title="' + escHtml(completo) + '"><span>' + escHtml(curto) + '</span>' +
              '<b class="chip-x" data-nome="' + escHtml(cb.name) + '" data-valor="' + escHtml(cb.value) + '">&times;</b></span>';
     }).join('');

@@ -367,8 +367,9 @@ def resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo):
 def janela_do_periodo():
     """Le mes/periodo/intervalo da URL e devolve a janela local ja validada.
 
-    Ponto unico das duas telas: a Resumida e a Detalhada tem que recortar
-    exatamente o mesmo intervalo a partir dos mesmos parametros.
+    Ponto unico de quem recorta por periodo. Nasceu servindo as duas telas de
+    lancamentos (a Resumida saiu em 10/09/2026): recortes escritos duas vezes
+    divergem na primeira regra nova.
     """
     mes = request.args.get("mes") or datetime.now().strftime("%Y-%m")
     periodo = request.args.get("periodo") or "mes"
@@ -431,10 +432,10 @@ def config_da_tela(obrigatorias, projeto_portfolio_map, ids_dimensoes, categoria
 def partes_do_rateio(cur, ids):
     """As partes de cada rateio, cruas do banco, agrupadas por transacao_id.
 
-    Ponto unico dos QUATRO construtores de linha - Resumida, recorte por
-    periodo, fatura oficial e fatura em andamento. A consulta estava escrita
-    duas vezes, palavra por palavra, e uma copia nova teria divergido na
-    primeira regra nova. E o mesmo motivo do `lote.js` e do `rateio.js`
+    Ponto unico dos TRES construtores de linha - recorte por periodo, fatura
+    oficial e fatura em andamento (a Resumida, o quarto, saiu em 10/09/2026). A
+    consulta estava escrita duas vezes, palavra por palavra, e uma copia nova
+    teria divergido na primeira regra nova. E o mesmo motivo do `lote.js` e do `rateio.js`
     (secoes 7.2-A e 7.1).
     """
     if not ids:
@@ -521,9 +522,10 @@ def rateio_da_linha(partes, valor_pai, dimensoes, nomes_por_dim, obrigatorias,
 def origem_da_linha(conta, final4=None, nomes_cartao=None):
     """(selo em HTML, texto curto, texto completo) da origem de um lancamento.
 
-    Ponto unico dos TRES construtores de linha - a Resumida, o recorte por
-    periodo e o recorte por fatura. A coluna Origem existe nos tres desde
-    10/09/2026 (a tabela e a mesma nos dois recortes da Detalhada); tres copias
+    Ponto unico de quem mostra a coluna Origem - o recorte por periodo e o
+    recorte por fatura (a Resumida tambem usava, ate sair em 10/09/2026). A
+    coluna existe nos dois recortes desde 10/09/2026, porque a tabela e a
+    mesma; copias
     da mesma regra divergiriam no primeiro banco novo, que foi exatamente como
     nasceram os 57 falsos pendentes da secao 6.5 nº 10.
 
@@ -1485,8 +1487,8 @@ def lancamentos_por_fatura():
     """
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    # Regras sao do lancamento, nao da tela. Abrir diretamente a visao
-    # detalhada precisa aplicar exatamente as mesmas regras da resumida.
+    # Regras sao do lancamento, nao da tela: abrir a tela aplica as regras
+    # automaticas pendentes, como a Resumida fazia antes de sair.
     regras_resultado = aplicar_regras(cur)
     conn.commit()
     if (

@@ -1,10 +1,10 @@
 // Edicao das partes de um rateio, nas linhas abaixo do lancamento pai.
 //
-// Compartilhado pelas duas telas de Lancamentos pelo mesmo motivo do lote.js:
-// quando o comportamento e o mesmo, o codigo tem que ser o mesmo - duas
-// implementacoes divergem na primeira regra nova (secao 7.1). O que muda entre
-// as telas e so COMO se acha a linha pai e o que se repinta nela; isso entra
-// por configuracao, nao por copia.
+// Nucleo unico do rateio, pelo mesmo motivo do lote.js: quando o comportamento
+// e o mesmo, o codigo tem que ser o mesmo - duas implementacoes divergem na
+// primeira regra nova (secao 7.1). Nasceu servindo duas telas (a Resumida saiu
+// em 10/09/2026); o que depende da tela - COMO se acha a linha pai e o que se
+// repinta nela - entra por `configurar`, nao por copia.
 //
 // Nao existe segundo caminho de gravacao: tudo passa pelo mesmo
 // POST /api/transacao/<id>/rateios de sempre, com as mesmas validacoes e a
@@ -13,7 +13,9 @@
   let ctx = {
     // a linha do lancamento pai, a partir do id da transacao
     paiDe: function (id) { return document.querySelector('tr[data-id="' + id + '"]'); },
-    config: function () { return window.configLancamentos || {}; },
+    // cada tela entrega o proprio config em `configurar`; `window.configLancamentos`
+    // era o da Resumida, que saiu
+    config: function () { return {}; },
     // repintura propria da tela (o OK do pai, o resumo "Rateado R$ X de R$ Y")
     aoValidar: function () {},
     // o que fazer depois de gravar. Sem padrao que recarregue: recarregar sem

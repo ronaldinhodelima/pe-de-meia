@@ -313,9 +313,12 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
     _worker, _core, webapp = sistema_real
     cliente = webapp.app.test_client()
     _login(cliente)
+    # "/" so redireciona desde que a Resumida saiu (10/09/2026); a tela de
+    # lancamentos e /lancamentos/fatura - que nem estava nesta lista.
     rotas = (
-        "/", "/relatorios", "/dre", "/investimentos", "/logs", "/pendencias",
-        "/categorias", "/grupos", "/dimensoes", "/contas", "/regras", "/usuarios",
+        "/lancamentos/fatura", "/relatorios", "/dre", "/investimentos", "/logs",
+        "/pendencias", "/categorias", "/grupos", "/dimensoes", "/contas",
+        "/regras", "/usuarios",
     )
 
     for rota in rotas:
@@ -411,18 +414,18 @@ def test_tela_suporta_dez_vezes_o_volume_atual(sistema_real):
     cliente = webapp.app.test_client()
     _login(cliente)
     inicio = time.perf_counter()
-    resposta = cliente.get("/?mes=2026-08")
+    resposta = cliente.get("/lancamentos/fatura?recorte=periodo&mes=2026-08&periodo=mes")
     duracao = time.perf_counter() - inicio
     assert resposta.status_code == 200
+    # O que o usuario sente e o tempo de abrir. A Resumida carregava as opcoes
+    # sob demanda (uma por caixa); a Detalhada, que ficou, traz a lista inteira
+    # em cada linha - e e esse custo que este teste passou a medir (10/09/2026).
     assert duracao < 8.0, f"tela levou {duracao:.2f}s para {total_mes} lancamentos"
 
     html = resposta.get_data(as_text=True)
     tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
-    assert tabela.count('data-lazy-options="categoria"') == total_mes
-    # Uma opcao atual por caixa; as 84 categorias nao podem voltar a ser
-    # repetidas em cada linha, pois isso multiplicaria o HTML e o tempo do DOM.
-    dimensoes = tabela.count('data-lazy-options="dimensao"') // total_mes
-    assert tabela.count("<option") == total_mes * (1 + dimensoes)
+    # cada lancamento do mes vira uma linha: nenhum some da tela com o volume
+    assert tabela.count('data-linha="') == total_mes
 
     conn = core.get_conn()
     cur = conn.cursor()

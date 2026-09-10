@@ -53,7 +53,14 @@ def test_layout_sombra_flutuante_e_compacto():
 def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():
     js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
 
-    assert "select.hasAttribute('data-lazy-options')" in js
+    # `data-lazy-options` e o gancho `hidratarSelect` eram da Resumida (opcoes
+    # carregadas sob demanda) e sairam com ela em 10/09/2026 - nenhuma tela os
+    # emite, e codigo que ninguem aciona so confunde quem le
+    import re
+    # olha o CODIGO, nao o comentario - que cita os dois nomes para explicar a saida
+    codigo = re.sub(r"//[^\n]*", "", js)
+    assert "data-lazy-options" not in codigo
+    assert "hidratarSelect" not in codigo
     assert "select.matches('[data-pdm-native], [multiple]')" in js
     assert "escopo.querySelectorAll('select')" in js
     assert "new MutationObserver(function (mudancas)" in js

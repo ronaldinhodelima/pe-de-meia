@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 408 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 409 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1082,6 +1082,23 @@ ramo de filtro para cada valor oferecido.
 que ela calculava já não aparecia em tela nenhuma. Consequência: **`cartao.metrica_diaria` para de
 receber o snapshot diário** — nada mais a lê. A tabela fica: migração não se reescreve (§3).
 
+**O que ela deixou para trás saiu num segundo passo (10/09/2026):** o `window.configLancamentos` no
+`rateio.js`, o gancho `hidratarSelect` e o `data-lazy-options` no `combobox.js`, e comentários que
+ficaram **falsos** — o que dizia que o `cfToggle` morava no `lancamentos.js`, o que mandava ver uma
+nota num arquivo que não existe mais, o do `URL_RESUMIDA` dizendo que ela "continua existindo".
+Menção histórica ("isto veio da Resumida") ficou: explica decisão. No caminho, um defeito latente:
+`linhaDoEditor` achava a linha principal pelo `previousElementSibling` do painel, e num rateado esse
+vizinho é a **última parte**; o aviso de classificação ainda reescrevia a própria busca. Hoje há uma
+só, pelo id do painel (`vinculos-<linha>`).
+
+**Uma coisa que a Resumida fazia e a Detalhada NÃO faz: carregar as opções sob demanda.** Na Resumida
+cada caixa trazia só a opção escolhida, e a lista completa entrava ao abrir; na Detalhada cada linha
+traz **todas** as categorias e todos os valores de cada dimensão. Com ~84 categorias e 190–321 linhas
+por mês, isso multiplica o HTML. O teste de volume (`test_tela_suporta_dez_vezes_o_volume_atual`, que
+só roda com Postgres) cobrava justamente a versão sob demanda; passou a medir a Detalhada e a cobrar
+**o tempo de abertura**, que é o que o usuário sente. **Se a tela ficar lenta, é por aqui que se
+começa** — não medido ainda com o volume real.
+
 **Os testes que cobravam regra do sistema PELA Resumida passaram a cobrar pela Detalhada**, em vez
 de sumir junto com ela: escape de descrição e de apelido (XSS), card que filtra só por status que
 existe, pendência que respeita a natureza, fila de gravação por campo, confirmação ao retirar o OK,
@@ -1596,8 +1613,9 @@ permissões, validações e salvamento automático.
   mantém sinalização vermelha discreta. **Não exibir o lembrete textual `Enter`.**
 - O campo nativo fica oculto **também da árvore de acessibilidade** — leitores de tela encontram
   só o combobox, sem controles duplicados.
-- Aplica-se a qualquer `select` com `data-pdm-combobox` ou `data-lazy-options`, inclusive inseridos
-  dinamicamente. **Nunca usar quantidade de opções como critério automático** — quebrou o
+- Aplica-se a qualquer `select` com `data-pdm-combobox`, inclusive inseridos dinamicamente.
+  (`data-lazy-options` e o gancho `hidratarSelect`, que carregavam as opções sob demanda, eram da
+  Resumida e saíram com ela em 10/09/2026.) **Nunca usar quantidade de opções como critério automático** — quebrou o
   alinhamento dos filtros Fatura e Status. Seletores de navegação (cartão, fatura, status, ano,
   tipo) continuam nativos, protegidos com `data-pdm-native`.
 ### Tabular por um campo não pode editá-lo (07/09/2026)
@@ -2134,7 +2152,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**408 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**409 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2303,6 +2321,14 @@ outra derrubou `/relatorios` em produção. O que funciona:
    construção e nunca vão ter classificação completa.
 
 ---
+
+15. **Teste que procura palavra no código-fonte confunde comentário com código.** Aconteceu TRÊS
+   vezes em 10/09/2026, sempre do mesmo jeito: o código tinha saído, e o comentário que explicava a saída
+   citava o nome — `importado`, `data-lazy-options`, `previousElementSibling`. O teste lia o comentário
+   e acusava a volta de algo que não existia mais. Duas saídas: asserir sobre a **linha de código**
+   (a condição do `if`, a chamada), ou tirar os comentários antes de procurar
+   (`re.sub(r"//[^\n]*", "", js)` no JS, e o AST no Python). E o contrário também vale: teste que
+   exige que uma palavra **exista** pode passar só porque ela está num comentário.
 
 # 11. Estado atual e pendências
 

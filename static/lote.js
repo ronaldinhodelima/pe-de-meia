@@ -1,4 +1,4 @@
-// Nucleo compartilhado da edicao em lote (Resumida e Detalhada).
+// Nucleo unico da edicao em lote (servia tambem a Resumida, que saiu em 10/09/2026).
 //
 // Existe para que as duas telas NAO tenham cada uma a sua copia das regras:
 // duas implementacoes do mesmo comportamento divergem na primeira regra nova -
