@@ -368,8 +368,18 @@
         <div><b>Status</b>{{ v.status or '-' }}</div><div><b>Tipo</b>{{ v.tipo or '-' }}</div>
         <div><b>Valor original</b>{{ v.valor_original if v.valor_original is not none else '-' }} {{ v.moeda_original or '' }}</div>
         <div><b>Parcela</b>{{ rotulo_parcela(v.descricao, v.parcela_atual, v.parcela_total) or 'na descrição' }}</div>
+        {# Lancamento manual nunca sincroniza: "ultima sincronizacao" nao diria
+           nada. Ali o painel mostra quando foi criado e quando foi editado pela
+           ultima vez - o que responde "minha edicao entrou?". A regra veio do
+           modal da Resumida, que saiu em 10/09/2026. #}
+        {% if v.manual %}
+        {% set criado = v.primeiro_sincronizado_local or v.sincronizado_local %}
+        <div><b>Criado em</b>{{ criado.strftime('%d/%m/%Y %H:%M') if criado else '-' }}</div>
+        <div><b>Última alteração</b><span data-atualizado="{{ v.transacao_id }}">{{ v.atualizado_local.strftime('%d/%m/%Y %H:%M') if v.atualizado_local else '-' }}</span></div>
+        {% else %}
         <div><b>Primeira sincronização</b>{{ v.primeiro_sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.primeiro_sincronizado_local else '-' }}</div>
         <div><b>Última sincronização</b>{{ v.sincronizado_local.strftime('%d/%m/%Y %H:%M') if v.sincronizado_local else '-' }}</div>
+        {% endif %}
         {% if v.conferida %}<div><b>OK por</b>{{ v.conferida_por or '-' }}{% if v.conferida_local %} · {{ v.conferida_local.strftime('%d/%m/%Y %H:%M') }}{% endif %}</div>{% endif %}
         {% if v.observacao_sistema %}<div class="nota-sistema"><b>Informação interna do sistema</b>{{ v.observacao_sistema }}</div>{% endif %}
       </div></div>
@@ -429,4 +439,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-3"></script>{% endblock %}

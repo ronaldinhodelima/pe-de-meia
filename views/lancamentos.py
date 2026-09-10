@@ -1178,7 +1178,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         "COALESCE(t.duplicada, false) AS duplicada, t.substituido_por, "
         "COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
         "COALESCE(t.importado, false) AS importado, t.sincronizado_em, "
-        "t.primeiro_sincronizado_em, t.criado_por, "
+        "t.primeiro_sincronizado_em, t.atualizado_em, t.criado_por, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) +
         " ORDER BY t.data_transacao DESC, t.transacao_id;",
@@ -1262,6 +1262,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["conferida_local"] = data_hora_local(row.pop("conferida_em"))
         row["sincronizado_local"] = data_hora_local(row.pop("sincronizado_em"))
         row["primeiro_sincronizado_local"] = data_hora_local(row.pop("primeiro_sincronizado_em"))
+        row["atualizado_local"] = data_hora_local(row.pop("atualizado_em"))
         row["fonte"] = "F" if tid in criados_pela_fatura else "P"
         row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
         row["dims"] = dims_por_tx.get(tid, {})
@@ -1271,6 +1272,11 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["principal"], row["tecnico"] = True, False
         conta_row = contas_by_id.get(str(row["account_id"])) or {}
         row["pode_excluir"] = bool(conta_row.get("tipo") == "MANUAL" or row["importado"])
+        # Lancamento manual nunca sincroniza: no painel, "ultima sincronizacao"
+        # nao quer dizer nada nele. O que responde "minha edicao entrou?" e o
+        # `atualizado_em` - por isso o painel troca os carimbos quando e manual,
+        # como o modal da Resumida fazia.
+        row["manual"] = conta_row.get("tipo") == "MANUAL"
         selo, origem_texto, origem_full = origem_da_linha(
             conta_row, row["numero_cartao_final"], nomes_cartao)
         valor = Decimal(str(row["valor"] or 0))

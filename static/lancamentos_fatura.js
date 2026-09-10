@@ -811,6 +811,13 @@
         const json = await resp.json();
         if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível salvar.');
         if (editor.dataset.versaoSalva === versao) mostrarSalvo(aviso, alterado);
+        // "Ultima alteracao" do painel reflete esta gravacao na hora, senao ele
+        // afirmaria um horario que ja nao e o do dado. A hora vem do SERVIDOR,
+        // nunca do relogio do navegador - adiantado, ele mentiria sutilmente.
+        if (json.atualizado_em) {
+          document.querySelectorAll('[data-atualizado="' + CSS.escape(id) + '"]')
+            .forEach(function (el) { el.textContent = json.atualizado_em; });
+        }
         // Trocar a categoria pode trocar a NATUREZA, e com ela a
         // obrigatoriedade das dimensoes. So o servidor sabe: releia a flag da
         // resposta em vez de deduzir no cliente.

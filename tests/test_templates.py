@@ -1096,3 +1096,43 @@ def test_todos_os_mais_e_menos_ficam_depois_da_descricao():
     css = html.split("<style>", 1)[1].split("</style>", 1)[0]
     regra = css.split(".expande{", 1)[1].split("}", 1)[0]
     assert "border:0" in regra and "background:transparent" in regra
+
+
+def test_painel_do_manual_mostra_criado_em_e_ultima_alteracao(ctx):
+    """Lancamento manual nunca sincroniza: "ultima sincronizacao" nao diria nada.
+
+    No manual o painel troca os carimbos por "Criado em / Ultima alteracao" -
+    o que responde "minha edicao entrou?". A regra veio do modal da Resumida
+    (saiu em 10/09/2026) e voltou a pedido do usuario no mesmo dia. Lancamento
+    do banco continua com primeira e ultima sincronizacao.
+    """
+    import pathlib
+    from datetime import datetime
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    for manual in (True, False):
+        ctxt = TestDetalhadaPorPeriodo().contexto()
+        principal = ctxt["linhas"][0]["principal"]
+        principal["manual"] = manual
+        principal["primeiro_sincronizado_local"] = None
+        principal["sincronizado_local"] = datetime(2026, 8, 10, 9, 0)
+        principal["atualizado_local"] = datetime(2026, 9, 10, 18, 42)
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        painel = html.split('class="detalhes-grid"', 1)[1].split("</div></div>", 1)[0]
+        assert ("Criado em" in painel) is manual
+        assert ("Última alteração" in painel) is manual
+        assert ("Primeira sincronização" in painel) is not manual
+        if manual:
+            # sem primeira sincronizacao, "Criado em" cai na ultima - a regra do modal
+            assert "10/08/2026 09:00" in painel
+            assert "10/09/2026 18:42" in painel
+            assert 'data-atualizado="' in painel
+
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    periodo = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
+    assert "t.atualizado_em" in periodo, "so o periodo alcanca lancamento manual"
+    assert 'row["manual"] = conta_row.get("tipo") == "MANUAL"' in periodo
+    # a hora se atualiza na hora, e vem do servidor
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    gravacao = js.split("function salvarEditor(editor, alterado)", 1)[1].split("\n  }\n", 1)[0]
+    assert "[data-atualizado=\"" in gravacao and "json.atualizado_em" in gravacao
+    assert "new Date(" not in gravacao, "a hora nao pode vir do relogio do navegador"
