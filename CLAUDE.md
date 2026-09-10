@@ -1995,6 +1995,25 @@ valores variáveis — não é o mesmo evento e ficou fora. Ainda sem classifica
 usuário já havia conferido (o pró-labore e a distribuição de lucros) usam `BRDrive`, então o padrão
 foi mantido — mas se as duas empresas precisarem ser separadas nos relatórios, é aqui que se mexe.
 
+**Mesada da Amanda — padronizada em 10/09/2026.** Transferências semanais do Ronaldo: **Mesada /
+Amanda / Compras Pessoais / Vida Familiar**. O portfólio e o projeto vêm dos OK do usuário para o
+gasto pessoal da Amanda (59 conferidos em Compras Pessoais / Vida Familiar, sem divergência); a
+mesada é dinheiro que ela gasta consigo. **Não é Colégio Salvatoriano** — misturaria mesada com o
+custo da escola. Natureza `despesa`, correta: a conta da Amanda não é acompanhada, então o dinheiro
+sai do patrimônio da família.
+
+O valor semanal mudou duas vezes: **R$ 50** (ago/2025–jan/2026), R$ 50 e R$ 100 convivendo em
+fev–abr/2026, **R$ 100** (mai–ago/2026) e **R$ 200** a partir de ago/2026 — por isso as regras não
+têm filtro de valor. Os 3 PIX de R$ 200,00 pela Unicred (dez/25, jan/26, fev/26) **também são
+mesada** (decisão do usuário).
+
+Duas regras, cada uma presa à sua origem: `Transferência enviada|Amanda Bressan` → Conta Corrente
+Nubank · Ronaldo, e `Amanda Bressan de Lima DEBITO TRANSF PIX` → Conta Corrente Unicred. A regra
+antiga (`Amanda Bressan de Lima`, global) foi editada para a primeira: ela alcançava **qualquer**
+transferência para a Amanda, inclusive da conta da Andrea. **Os 2 da conta da Andrea (R$ 189,90 e
+R$ 10,00, maio/2026) ficaram como estavam, por decisão do usuário** — seguem em Mesada / Amanda sem
+projeto nem portfólio, e as regras novas não os alcançam mais.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
