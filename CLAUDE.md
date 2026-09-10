@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 416 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 418 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -946,10 +946,46 @@ o mesmo ponto de verdade que pinta a linha e escreve o tooltip. Uma segunda cond
 
 **O formulário manual continua fora da fatura, de propósito** (§7.1 etapa 8).
 
-**Ainda pendente desta frente:** Ratear/Excluir só aparecem no período (a fatura ainda não monta as
-partes do rateio para a interface), os filtros ainda não se autogerenciam (fatura/ciclo deveria
-aparecer só quando a origem é cartão com fatura importada) e o alternador "Por período | Por fatura"
-ainda existe.
+### Um layout de lançamento só (10/09/2026)
+
+**Decisão do usuário.** O `<tbody>` **não sabe em que recorte está**: ele lê sempre os mesmos campos
+— `procedencia`, `valor_fmt`, `cor_valor`, `rateios`, `pendente_bloqueia_ok` — e quem decide o
+conteúdo é o construtor da linha. Assim o que muda de um lançamento para outro é o **tipo dele** (tem
+rateio, tem titular, é de conta corrente), nunca a tela em que está sendo visto. Enquanto o template
+perguntava `modo_periodo` dentro da tabela, cada `if` era uma diferença a mais para manter viva nos
+dois lados. `test_o_corpo_da_tabela_nao_sabe_em_que_recorte_esta` trava isso.
+
+**O `<thead>` continua podendo perguntar**, e isso é decisão, não sobra: ali o tooltip diz **de onde
+o número vem**, e isso realmente muda — na fatura o valor é o cobrado pela operadora, no período é o
+do lançamento.
+
+**Toda linha nasce com o contrato completo**, inclusive `rateios: []`. O template percorre
+`linha.rateios`, e iterar um valor ausente levanta `UndefinedError` e derruba a **tela inteira**, não
+só o pedaço.
+
+**Ratear e Excluir passaram a valer nos quatro construtores** — Resumida, período, fatura oficial e
+fatura em andamento. Compra de cartão se rateia como qualquer outra, e até aqui a fatura era a única
+tela que não deixava. Três pontos únicos nasceram disso, porque a alternativa era a terceira e a
+quarta cópia da mesma regra:
+
+- **`partes_do_rateio()`** — a consulta das partes, que estava escrita duas vezes palavra por
+  palavra. (`_estado_rateios` fica de fora de propósito: lê **uma** transação para a auditoria
+  antes/depois da API, com cursor de tupla.)
+- **`rateio_da_linha()`** — as partes prontas para a linha e se o conjunto fecha (duas partes ou
+  mais, soma exata, categoria e dimensões obrigatórias em todas — §4.4). `com_sinal` é a diferença
+  **legítima**: conta corrente mostra entrada e saída, cartão de crédito não tem sinal.
+- **`config_da_tela()`** — o `config` que o JS lê. O quadro de rateio monta os campos **por JS** a
+  partir dele: sem `categorias` e `dimensoes` ele nasce com "(sem categoria)" como única opção e sem
+  dimensão nenhuma, com a tela respondendo 200 e o `py_compile` passando. Escrito uma vez por tela,
+  bastava **uma** esquecer uma chave para a interface desligar em silêncio ali.
+
+**Onde a explicação do "cartão pendente" mora mudou de lugar, não de regra:** ela era escrita no
+template e agora sai do construtor, dentro de `procedencia`. Continua fora do tooltip do avatar, que
+é uma lista de identificação (titular · cartão · banco).
+
+**Ainda pendente desta frente:** os filtros ainda não se autogerenciam (fatura/ciclo deveria aparecer
+só quando a origem é cartão com fatura importada) e o alternador "Por período | Por fatura" ainda
+existe.
 
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 
@@ -1978,7 +2014,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**416 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**418 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

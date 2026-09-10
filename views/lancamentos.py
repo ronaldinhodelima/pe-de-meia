@@ -284,28 +284,9 @@ def index():
         for m in cur.fetchall():
             mapa_dim_transacao[(str(m["transacao_id"]), m["dimensao_id"])] = m["valor_id"]
 
-    rateios_por_transacao = {}
+    rateios_por_transacao = partes_do_rateio(cur, ids_visiveis)
     principal_por_registro_conciliacao = {}
     if ids_visiveis:
-        cur.execute(
-            "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
-            "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
-            "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
-            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
-            (tuple(ids_visiveis),),
-        )
-        rateios_por_id = {}
-        for rr in cur.fetchall():
-            item = rateios_por_id.setdefault(rr["id"], {
-                "id": rr["id"], "transacao_id": str(rr["transacao_id"]),
-                "ordem": rr["ordem"], "valor_brl": rr["valor_brl"],
-                "categoria": rr["categoria"], "observacao": rr["observacao"] or "", "dims": {},
-            })
-            if rr["dimensao_id"] is not None:
-                item["dims"][rr["dimensao_id"]] = rr["valor_id"]
-        for item in rateios_por_id.values():
-            rateios_por_transacao.setdefault(item["transacao_id"], []).append(item)
-
         # Uma compra marcada como somente_conciliacao pode estar ligada a uma
         # ou mais parcelas geradas pela fatura. Recolhe sob a parcela somente
         # quando ha UM unico destino visivel no filtro atual; em caso ambiguo,
@@ -407,45 +388,9 @@ def index():
             valor_sort = r["valor"]
 
         dims_sel = {d["id"]: mapa_dim_transacao.get((str(rid), d["id"])) for d in dimensoes}
-        rateios_ui = []
-        for parte in rateios_por_transacao.get(str(rid), []):
-            dims_parte = {d["id"]: parte["dims"].get(d["id"]) for d in dimensoes}
-            valor_parte = parte["valor_brl"]
-            if eh_nao_credito:
-                sinal_parte = "-" if valor_parte < 0 else "+"
-                cor_parte = "color:var(--bad)" if valor_parte < 0 else "color:var(--good)"
-                valor_parte_fmt = f'{sinal_parte} R$ {valor_pt(abs(valor_parte))}'
-            else:
-                cor_parte = ""
-                valor_parte_fmt = f'R$ {valor_pt(abs(valor_parte))}'
-            rateios_ui.append({
-                "id": parte["id"],
-                "valor": float(abs(valor_parte)),
-                "valor_fmt": valor_parte_fmt,
-                "cor_valor": cor_parte,
-                "categoria": parte["categoria"],
-                "categoria_nome": cat_pt_puro(parte["categoria"]),
-                "observacao": parte["observacao"],
-                "dims": dims_parte,
-                "dims_rotulos": {
-                    d["id"]: nomes_por_dim[d["id"]].get(dims_parte[d["id"]], "(nao definido)")
-                    for d in dimensoes
-                },
-            })
-        soma_rateio = sum(
-            (Decimal(str(parte["valor_brl"])) for parte in rateios_por_transacao.get(str(rid), [])),
-            Decimal("0.00"),
-        ).quantize(Decimal("0.01"))
-        valor_pai_rateio = Decimal(str(r["valor"] or 0)).quantize(Decimal("0.01"))
-        rateio_valido = bool(rateios_ui) and (
-            len(rateios_ui) >= 2
-            and soma_rateio == valor_pai_rateio
-            and all(parte["categoria"] for parte in rateios_ui)
-            and all(
-                all(parte["dims"].get(dim_id) is not None for dim_id in dimensoes_obrigatorias)
-                for parte in rateios_ui
-            )
-        )
+        rateios_ui, rateio_valido = rateio_da_linha(
+            rateios_por_transacao.get(str(rid), []), r["valor"], dimensoes,
+            nomes_por_dim, dimensoes_obrigatorias, com_sinal=bool(eh_nao_credito))
         selo, origem_texto = origem_partes(r["account_id"], r["numero_cartao_final"])
         origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
 
@@ -520,7 +465,7 @@ def index():
             "suspeita_duplicidade": str(rid) in ids_suspeitos,
             "rateios": rateios_ui,
             "rateio_valido": rateio_valido,
-            "valor_rateio": float(abs(valor_pai_rateio)),
+            "valor_rateio": float(abs(Decimal(str(r["valor"] or 0)).quantize(Decimal("0.01")))),
             "registros_tecnicos": [],
             "situacoes": situacoes,
             "situacoes_texto": texto_das_situacoes(situacoes),
@@ -887,6 +832,127 @@ def janela_do_periodo():
     return mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes
 
 
+def config_da_tela(obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
+                   dimensoes, valores_por_dim, pode_conferir, em_andamento=False):
+    """O `config` que o JS da tela le. Ponto unico dos QUATRO construtores.
+
+    O quadro de rateio monta os campos POR JS a partir daqui: sem `categorias` e
+    `dimensoes` ele nasce com "(sem categoria)" como unica opcao e sem dimensao
+    nenhuma, e o rateio novo fica impossivel de preencher - com a tela
+    respondendo 200 e o `py_compile` passando (secao 7.1, etapa 7). Escrito uma
+    vez por tela, bastava uma delas esquecer uma chave para a interface desligar
+    em silencio naquela tela so.
+    """
+    return {
+        "pode_editar": pode("lancamentos_editar"),
+        "pode_conferir": pode_conferir,
+        "em_andamento": em_andamento,
+        "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
+        "projeto_portfolio_map": projeto_portfolio_map,
+        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
+        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
+        "categorias": [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
+        "dimensoes": {
+            str(d["id"]): [
+                {"id": v["id"], "rotulo": rotulo_valor_dimensao(v)}
+                for v in valores_por_dim.get(d["id"], [])
+            ]
+            for d in dimensoes
+        },
+        "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
+    }
+
+
+def partes_do_rateio(cur, ids):
+    """As partes de cada rateio, cruas do banco, agrupadas por transacao_id.
+
+    Ponto unico dos QUATRO construtores de linha - Resumida, recorte por
+    periodo, fatura oficial e fatura em andamento. A consulta estava escrita
+    duas vezes, palavra por palavra, e uma copia nova teria divergido na
+    primeira regra nova. E o mesmo motivo do `lote.js` e do `rateio.js`
+    (secoes 7.2-A e 7.1).
+    """
+    if not ids:
+        return {}
+    cur.execute(
+        "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
+        "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
+        "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
+        "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
+        (tuple(ids),),
+    )
+    por_id = {}
+    for rr in cur.fetchall():
+        item = por_id.setdefault(rr["id"], {
+            "id": rr["id"], "transacao_id": str(rr["transacao_id"]),
+            "ordem": rr["ordem"], "valor_brl": rr["valor_brl"],
+            "categoria": rr["categoria"], "observacao": rr["observacao"] or "", "dims": {},
+        })
+        # LEFT JOIN: parte sem dimensao nenhuma vem com dimensao_id nulo, e nao
+        # pode virar uma chave None no dicionario.
+        if rr["dimensao_id"] is not None:
+            item["dims"][rr["dimensao_id"]] = rr["valor_id"]
+    por_tx = {}
+    for item in por_id.values():
+        por_tx.setdefault(item["transacao_id"], []).append(item)
+    return por_tx
+
+
+def rateio_da_linha(partes, valor_pai, dimensoes, nomes_por_dim, obrigatorias,
+                    com_sinal=False):
+    """(as partes prontas para a linha, o rateio fecha?).
+
+    Ponto unico dos quatro construtores, pelo mesmo motivo de `partes_do_rateio`.
+    Um rateio so e valido com duas partes ou mais, soma exata, categoria em
+    todas e as dimensoes obrigatorias preenchidas (secao 4.4) - Salvar e OK
+    ficam bloqueados enquanto nao fechar.
+
+    `com_sinal` e a diferenca legitima entre as telas: conta corrente mostra
+    entrada e saida, cartao de credito nao tem sinal.
+    """
+    ui = []
+    for parte in partes:
+        dims_parte = {d["id"]: parte["dims"].get(d["id"]) for d in dimensoes}
+        valor_parte = Decimal(str(parte["valor_brl"] or 0))
+        if com_sinal:
+            sinal = "-" if valor_parte < 0 else "+"
+            cor = "color:var(--bad)" if valor_parte < 0 else "color:var(--good)"
+            valor_fmt = f"{sinal} R$ {valor_pt(abs(valor_parte))}"
+        else:
+            cor, valor_fmt = "", f"R$ {valor_pt(abs(valor_parte))}"
+        ui.append({
+            "id": parte["id"],
+            "valor": float(abs(valor_parte)),
+            "valor_fmt": valor_fmt,
+            "cor_valor": cor,
+            "categoria": parte["categoria"],
+            "categoria_nome": (
+                cat_pt_puro(parte["categoria"]) if parte["categoria"] else "(não definido)"
+            ),
+            "observacao": parte["observacao"],
+            "dims": dims_parte,
+            "dims_rotulos": {
+                d["id"]: nomes_por_dim[d["id"]].get(dims_parte[d["id"]], "(não definido)")
+                for d in dimensoes
+            },
+        })
+    if not ui:
+        return [], False
+    soma = sum(
+        (Decimal(str(parte["valor_brl"] or 0)) for parte in partes), Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+    valido = (
+        len(ui) >= 2
+        and soma == Decimal(str(valor_pai or 0)).quantize(Decimal("0.01"))
+        and all(parte["categoria"] for parte in partes)
+        and all(
+            all(parte["dims"].get(dim_id) is not None for dim_id in obrigatorias)
+            for parte in partes
+        )
+    )
+    return ui, valido
+
+
 def origem_da_linha(conta, final4=None, nomes_cartao=None):
     """(selo em HTML, texto curto, texto completo) da origem de um lancamento.
 
@@ -1146,7 +1212,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         "t.categoria, t.observacao, t.observacao_sistema, t.conferida, t.conferida_por, "
         "t.conferida_em, t.numero_cartao_final, t.parcela_atual, t.parcela_total, t.status, t.tipo, "
         "t.sincronizado_em, t.primeiro_sincronizado_em, false AS duplicada, NULL AS substituido_por, "
-        "false AS somente_conciliacao, " + NATUREZA_SQL + " AS natureza_efetiva "
+        "false AS somente_conciliacao, COALESCE(t.importado,false) AS importado, "
+        + NATUREZA_SQL + " AS natureza_efetiva "
         "FROM cartao.transacao t " + JOIN_NATUREZA + " WHERE t.account_id=%s "
         "AND (" + DATA_LOCAL_SQL + ")::date >= %s AND (" + DATA_LOCAL_SQL + ")::date <= %s "
         "AND COALESCE(t.duplicada,false)=false AND t.substituido_por IS NULL "
@@ -1170,7 +1237,12 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         valores_por_dim.setdefault(valor["dimensao_id"], []).append(valor)
         if valor["portfolio_valor_id"]:
             projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
+    nomes_por_dim = {
+        d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
+        for d in dimensoes
+    }
     dims_por_tx = {}
+    partes_por_tx = {}
     if ids:
         cur.execute(
             "SELECT transacao_id, dimensao_id, valor_id FROM cartao.transacao_dimensao "
@@ -1178,6 +1250,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         )
         for row in cur.fetchall():
             dims_por_tx.setdefault(str(row["transacao_id"]), {})[row["dimensao_id"]] = row["valor_id"]
+        partes_por_tx = partes_do_rateio(cur, ids)
 
     cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
     categorias_db = {r["categoria"] for r in cur.fetchall()}
@@ -1202,14 +1275,24 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         tx["elegivel"] = True
         tx["principal"], tx["tecnico"], tx["fonte"], tx["fonte_nome"] = True, False, "P", "Pluggy"
         tx["dims"] = dims_por_tx.get(tid, {})
-        tx["rateado"] = False
+        partes = partes_por_tx.get(tid, [])
+        tx["rateado"] = bool(partes)
+        tx["pode_excluir"] = bool(tx["importado"])
+        rateios_ui, valido_do_rateio = rateio_da_linha(
+            partes, tx["valor"], dimensoes, nomes_por_dim, obrigatorias)
         tx["exige_dimensoes"] = exige_dimensoes(tx["natureza_efetiva"])
         origem_selo, origem_texto, origem_full = origem_da_linha(
             conta_da_fatura, tx["numero_cartao_final"], nomes_cartao)
-        faltando = ([] if tx["categoria"] else ["Categoria"]) + [
-            nomes_dimensoes[d] for d in obrigatorias
-            if tx["exige_dimensoes"] and not tx["dims"].get(d)
-        ]
+        if partes:
+            # Num rateado a classificacao mora nas partes (secao 4.4): o pai nao
+            # tem categoria propria, e cobra-la aqui daria todo rateado como
+            # pendente, inclusive os completos.
+            faltando = [] if valido_do_rateio else ["Rateio"]
+        else:
+            faltando = ([] if tx["categoria"] else ["Categoria"]) + [
+                nomes_dimensoes[d] for d in obrigatorias
+                if tx["exige_dimensoes"] and not tx["dims"].get(d)
+            ]
         completo = not faltando
         classificadas += int(completo)
         valor = Decimal(str(tx["valor"] or 0))
@@ -1240,9 +1323,21 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
             # tela. Lancamento de fatura nunca tem autor: ninguem o digitou.
             "origem_selo": origem_selo, "origem_texto": origem_texto,
             "origem_completa": origem_full, "autor": None,
+            # A linha tem UM contrato so nos dois recortes: o template le sempre
+            # os mesmos campos, e quem decide o conteudo e o construtor. Assim a
+            # tabela e a mesma e o que muda e o TIPO do lancamento, nao a tela.
+            "procedencia": (
+                (nomes_cartao.get(tx["numero_cartao_final"]) or titular_conexao or origem_full)
+                + (" · cartão pendente (o Pluggy ainda não confirmou)"
+                   if not tx["numero_cartao_final"] else "")
+            ),
+            "valor_fmt": f"R$ {valor_pt(valor)}", "cor_valor": "",
+            "pendente_bloqueia_ok": _pendente_bloqueia(tx["status"], tx["data_local"]),
             "cartao_aguardando": not tx["numero_cartao_final"],
             "parcela_atual": tx["parcela_atual"], "parcela_total": tx["parcela_total"],
             "valor": valor, "pagamento": False, "vinculos": [tx], "principal": tx,
+            "rateios": rateios_ui, "rateio_valido": (not rateios_ui) or valido_do_rateio,
+            "valor_rateio": float(abs(valor.quantize(Decimal("0.01")))),
             "multiplos": False, "requer_validacao": False, "validacao_motivos": [],
             "faltando": faltando, "classificada": completo, "conferida": bool(tx["conferida"]),
             "natureza_estado": "dre" if tx["natureza_efetiva"] == "despesa" else "fora",
@@ -1321,13 +1416,9 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         item["url"] = _url_da_fatura(item, account_id)
     seguinte, anterior = _vizinhas_no_seletor(lista_faturas, fatura["id"])
 
-    config = {
-        "pode_editar": pode("lancamentos_editar"), "pode_conferir": False,
-        "em_andamento": True, "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
-        "projeto_portfolio_map": projeto_portfolio_map,
-        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
-        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
-    }
+    config = config_da_tela(
+        obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
+        dimensoes, valores_por_dim, pode_conferir=False, em_andamento=True)
     return render_template(
         "lancamentos_fatura.html", titulo="Fatura em andamento",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
@@ -1444,24 +1535,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         )
         for row in cur.fetchall():
             dims_por_tx.setdefault(str(row["transacao_id"]), {})[row["dimensao_id"]] = row["valor_id"]
-        cur.execute(
-            "SELECT r.id, r.transacao_id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
-            "rd.dimensao_id, rd.valor_id FROM cartao.transacao_rateio r "
-            "LEFT JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id=r.id "
-            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
-            (tuple(ids),),
-        )
-        partes_por_id = {}
-        for rr in cur.fetchall():
-            item = partes_por_id.setdefault(rr["id"], {
-                "id": rr["id"], "transacao_id": str(rr["transacao_id"]),
-                "ordem": rr["ordem"], "valor_brl": rr["valor_brl"],
-                "categoria": rr["categoria"], "observacao": rr["observacao"] or "", "dims": {},
-            })
-            if rr["dimensao_id"] is not None:
-                item["dims"][rr["dimensao_id"]] = rr["valor_id"]
-        for item in partes_por_id.values():
-            rateio_por_tx.setdefault(item["transacao_id"], []).append(item)
+        rateio_por_tx = partes_do_rateio(cur, ids)
         # F/P: "criado pela fatura" e ser o `transacao_id_criado` de uma linha,
         # NAO o `transacao.importado`, que e outra coisa (secao 11.3).
         cur.execute(
@@ -1527,40 +1601,11 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             ("Registro de conciliação (compra parcelada inteira) — as parcelas é que contam."
              if row["somente_conciliacao"] else "")
         )
-        rateios_ui = []
-        for parte in rateio:
-            dims_parte = {d["id"]: parte["dims"].get(d["id"]) for d in dimensoes}
-            valor_parte = parte["valor_brl"]
-            rateios_ui.append({
-                "id": parte["id"],
-                "valor": float(abs(valor_parte)),
-                "cor_valor": (
-                    ("color:var(--bad)" if valor_parte < 0 else "color:var(--good)")
-                    if conta.get("tipo") and conta["tipo"] != "CREDIT" else ""
-                ),
-                "categoria": parte["categoria"],
-                "categoria_nome": cat_pt_puro(parte["categoria"]) if parte["categoria"] else "(não definido)",
-                "observacao": parte["observacao"],
-                "dims": dims_parte,
-                "dims_rotulos": {
-                    d["id"]: nomes_por_dim[d["id"]].get(dims_parte[d["id"]], "(não definido)")
-                    for d in dimensoes
-                },
-            })
+        rateios_ui, rateio_valido = rateio_da_linha(
+            rateio, valor, dimensoes, nomes_por_dim, obrigatorias,
+            com_sinal=bool(conta.get("tipo") and conta["tipo"] != "CREDIT"))
         if rateio:
-            soma = sum(
-                (Decimal(str(parte["valor_brl"])) for parte in rateio), Decimal("0.00"),
-            ).quantize(Decimal("0.01"))
-            valido = (
-                len(rateio) >= 2
-                and soma == valor.quantize(Decimal("0.01"))
-                and all(parte["categoria"] for parte in rateio)
-                and all(
-                    all(parte["dims"].get(dim_id) is not None for dim_id in obrigatorias)
-                    for parte in rateio
-                )
-            )
-            faltando = [] if valido else ["Rateio"]
+            faltando = [] if rateio_valido else ["Rateio"]
         else:
             faltando = ([] if row["categoria"] else ["Categoria"]) + [
                 nomes_dimensoes[d] for d in obrigatorias
@@ -1576,6 +1621,11 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             "data": row["data_local"],
             "descricao": row["descricao"] or "",
             "origem_selo": selo, "origem_texto": origem_texto, "origem_completa": origem_full,
+            # No recorte por periodo nao existe titular: o nome do portador so
+            # vem impresso no documento, e quem identifica a procedencia aqui e
+            # a origem. "Titular nao informado" sugeriria um dado faltando que
+            # nem se aplica.
+            "procedencia": origem_full,
             # So o MANUAL tem autor: o que veio do banco nao foi digitado por
             # ninguem, e inventar uma inicial diria que alguem lancou o que o
             # Pluggy mandou (secao 7.1).
@@ -1605,7 +1655,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             "pendente_banco": (row["status"] or "").upper() == "PENDING",
             "pendente_bloqueia_ok": _pendente_bloqueia(row["status"], row["data_local"]),
             "rateios": rateios_ui,
-            "rateio_valido": not bool(rateio) or not faltando,
+            "rateio_valido": (not rateios_ui) or rateio_valido,
             "valor_rateio": float(abs(valor)),
             "situacoes": situacoes_da_linha(
                 conferida=bool(row["conferida"]), duplicada=bool(row["duplicada"]),
@@ -1654,26 +1704,9 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
     receita = resumo["receita_mes"] or 0
     gasto = resumo["gasto_real"] or 0
     total_reais = resumo["total_reais"] or 0
-    config = {
-        "pode_editar": pode("lancamentos_editar"),
-        "pode_conferir": pode("lancamentos_conferir"),
-        "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
-        "projeto_portfolio_map": projeto_portfolio_map,
-        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
-        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
-        # O quadro de rateio monta os campos POR JS, entao precisa das listas
-        # aqui - sem elas ele nascia com "(sem categoria)" como unica opcao e
-        # sem dimensao nenhuma, e o rateio novo era impossivel de preencher.
-        "categorias": [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias],
-        "dimensoes": {
-            str(d["id"]): [
-                {"id": v["id"], "rotulo": rotulo_valor_dimensao(v)}
-                for v in valores_por_dim.get(d["id"], [])
-            ]
-            for d in dimensoes
-        },
-        "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
-    }
+    config = config_da_tela(
+        obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
+        dimensoes, valores_por_dim, pode_conferir=pode("lancamentos_conferir"))
     return render_template(
         "lancamentos_fatura.html", titulo="Lançamentos",
         topbar=topbar_html("Lançamentos", "inicio"),
@@ -1877,6 +1910,7 @@ def lancamentos_por_fatura():
         f"t.sincronizado_em, t.primeiro_sincronizado_em, "
         f"COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
         f"COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
+        f"COALESCE(t.importado,false) AS importado, "
         f"{NATUREZA_SQL} AS natureza_efetiva "
         f"FROM cartao.fatura_vinculo v "
         f"JOIN cartao.transacao t ON t.transacao_id=v.transacao_id "
@@ -1915,6 +1949,10 @@ def lancamentos_por_fatura():
         valores_por_dim.setdefault(v["dimensao_id"], []).append(v)
         if v["portfolio_valor_id"]:
             projeto_portfolio_map[str(v["id"])] = str(v["portfolio_valor_id"])
+    nomes_por_dim = {
+        d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
+        for d in dimensoes
+    }
 
     dims_por_tx = {}
     if todos_ids:
@@ -1939,27 +1977,18 @@ def lancamentos_por_fatura():
             (tuple(set(todos_ids)),),
         )
         proporcao_dre = {str(r["transacao_id"]): Decimal(str(r["proporcao"] or 0)) for r in cur.fetchall()}
-        cur.execute(
-            "SELECT r.transacao_id, r.id, r.valor_brl, r.categoria, "
-            "ABS(COALESCE(t.valor_brl,t.valor_original)) AS total, "
-            "EXISTS (SELECT 1 FROM cartao.dimensao d LEFT JOIN cartao.transacao_rateio_dimensao rd "
-            "ON rd.rateio_id=r.id AND rd.dimensao_id=d.id "
-            "WHERE d.obrigatoria=true AND rd.valor_id IS NULL) AS dim_faltando "
-            "FROM cartao.transacao_rateio r JOIN cartao.transacao t ON t.transacao_id=r.transacao_id "
-            "WHERE r.transacao_id IN %s ORDER BY r.transacao_id, r.ordem, r.id;",
-            (tuple(set(todos_ids)),),
-        )
-        for r in cur.fetchall():
-            tid = str(r["transacao_id"])
-            item = resumo_rateios.setdefault(tid, {
-                "partes": 0, "soma": Decimal("0"), "total": Decimal(str(r["total"] or 0)), "incompleto": False,
-            })
-            item["partes"] += 1
-            item["soma"] += abs(Decimal(str(r["valor_brl"] or 0)))
-            item["incompleto"] = item["incompleto"] or not r["categoria"] or r["dim_faltando"]
-        for tid, item in resumo_rateios.items():
+        # As partes saem do mesmo nucleo das outras duas telas: a fatura passou
+        # a mostrar e a editar rateio (decisao do usuario, 10/09/2026), e uma
+        # terceira consulta propria divergiria na primeira regra nova.
+        partes_por_tx = partes_do_rateio(cur, sorted(set(todos_ids)))
+        for tid, partes in partes_por_tx.items():
             rateados.add(tid)
-            rateio_valido[tid] = item["partes"] >= 2 and item["soma"] == item["total"] and not item["incompleto"]
+            resumo_rateios[tid] = {
+                "soma": sum(
+                    (abs(Decimal(str(parte["valor_brl"] or 0))) for parte in partes),
+                    Decimal("0.00"),
+                ).quantize(Decimal("0.01")),
+            }
 
     cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
     categorias_db = {r["categoria"] for r in cur.fetchall()}
@@ -1987,6 +2016,11 @@ def lancamentos_por_fatura():
     conta_da_fatura = contas_by_id.get(account_id) or {}
     for linha in linhas:
         linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
+        # Toda linha nasce com o contrato completo: o template percorre
+        # `linha.rateios`, e iterar um valor ausente levanta UndefinedError e
+        # derruba a TELA INTEIRA, nao so o pedaco (secao 7.2-B).
+        linha["rateios"], linha["rateio_valido"] = [], True
+        linha["valor_rateio"] = 0.0
         vinculos = vinculos_por_linha.get(linha["id"], [])
         criado = str(linha["transacao_id_criado"]) if linha["transacao_id_criado"] else None
         elegiveis = [v for v in vinculos if v["elegivel"]]
@@ -2036,6 +2070,16 @@ def lancamentos_por_fatura():
          linha["origem_completa"]) = origem_da_linha(
             conta_da_fatura, final_cartao, nomes_cartao)
         linha["autor"] = None
+        # Mesmo contrato de linha do recorte por periodo: o template le sempre os
+        # mesmos campos. Aqui o titular vem impresso no documento, que e a fonte
+        # sobre quem realizou a compra (secao 5).
+        linha["procedencia"] = (linha["titular"] or "Titular não informado") + (
+            " · " + linha["cartao_nome"] if linha["cartao_nome"] else "")
+        linha["valor_fmt"] = f"R$ {valor_pt(Decimal(str(linha['valor'] or 0)))}"
+        linha["cor_valor"] = ""
+        principal_da_linha = linha.get("principal") or {}
+        linha["pendente_bloqueia_ok"] = _pendente_bloqueia(
+            principal_da_linha.get("status"), principal_da_linha.get("data_local"))
         if linha["multiplos"]:
             contagens["multiplos"] += 1
         # Estorno vem negativo no PDF e precisa reduzir tanto a fatura quanto
@@ -2053,6 +2097,19 @@ def lancamentos_por_fatura():
             tid = principal["transacao_id"]
             principal["dims"] = dims_por_tx.get(tid, {})
             principal["rateado"] = tid in rateados
+            # Lancamento manual ou nascido de arquivo pode ser excluido; o que
+            # veio do Pluggy nunca (secao 9.3) - a mesma regra do periodo.
+            principal["pode_excluir"] = bool(principal.get("importado"))
+            # Ratear vale nos DOIS recortes (decisao do usuario, 10/09/2026):
+            # compra de cartao se rateia como qualquer outra, e ate aqui a
+            # fatura era a unica tela que nao deixava.
+            linha["rateios"], valido_do_rateio = rateio_da_linha(
+                partes_por_tx.get(tid, []), principal["valor"], dimensoes,
+                nomes_por_dim, obrigatorias)
+            rateio_valido[tid] = valido_do_rateio
+            linha["rateio_valido"] = (not linha["rateios"]) or valido_do_rateio
+            linha["valor_rateio"] = float(
+                abs(Decimal(str(principal["valor"] or 0)).quantize(Decimal("0.01"))))
             # Natureza neutra (pagamento de fatura, transferencia, bem,
             # investimento) nao participa do resultado: cobrar dimensao dela so
             # cria pendencia que nunca sera resolvida (secao 4.1).
@@ -2189,14 +2246,9 @@ def lancamentos_por_fatura():
         ("fora", "Fora do DRE"),
     ])
 
-    config = {
-        "pode_editar": pode("lancamentos_editar"),
-        "pode_conferir": pode("lancamentos_conferir"),
-        "dimensoes_obrigatorias": [str(x) for x in obrigatorias],
-        "projeto_portfolio_map": projeto_portfolio_map,
-        "dim_id_projeto": str(ids_dimensoes.get("projeto") or ""),
-        "dim_id_portfolio": str(ids_dimensoes.get("portfolio") or ""),
-    }
+    config = config_da_tela(
+        obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
+        dimensoes, valores_por_dim, pode_conferir=pode("lancamentos_conferir"))
     conta = contas_by_id.get(account_id)
     cur.close()
     conn.close()

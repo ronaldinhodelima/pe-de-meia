@@ -685,6 +685,8 @@ class TestDetalhadaPorPeriodo:
                 "origem_selo": '<span class="selo">UN</span>',
                 "origem_texto": "Unicred C/C", "origem_completa": "Unicred conta corrente",
                 "autor": None, "titular": None, "titular_fonte": None,
+                "procedencia": "Unicred conta corrente",
+                "rateios": [], "rateio_valido": True, "valor_rateio": 0.0,
                 "cartao_aguardando": False, "cartao_nome": None, "cartao_final": None,
                 "parcela_atual": None, "parcela_total": None,
                 "valor": Decimal("212.35"), "valor_fmt": "- R$ 212,35",
@@ -818,6 +820,46 @@ class TestDetalhadaPorPeriodo:
         cabecalho = html.split("<thead>")[1].split("</thead>")[0]
         origem = re.search(r'<th[^>]*data-col="origem"[^>]*>', cabecalho).group(0)
         assert "data-oculta-padrao" not in origem
+
+
+    def test_o_corpo_da_tabela_nao_sabe_em_que_recorte_esta(self, ctx):
+        """Um layout de lancamento so (decisao do usuario, 10/09/2026).
+
+        O `<tbody>` le SEMPRE os mesmos campos - `procedencia`, `valor_fmt`,
+        `cor_valor`, `rateios`, `pendente_bloqueia_ok` - e quem decide o conteudo
+        e o construtor da linha. Assim o que muda de um lancamento para o outro e
+        o TIPO dele (tem rateio, tem titular, e de conta corrente), nunca a tela
+        em que ele esta sendo visto. Enquanto o template perguntava
+        `modo_periodo`, cada `if` era uma diferenca a mais para manter viva nos
+        dois lados.
+
+        O `<thead>` continua podendo perguntar: ali o tooltip diz DE ONDE o
+        numero vem, e isso realmente muda - na fatura o valor e o cobrado pela
+        operadora, no periodo e o do lancamento.
+        """
+        from pathlib import Path
+        template = (Path(__file__).resolve().parent.parent
+                    / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+        corpo = template.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
+        assert "modo_periodo" not in corpo
+
+
+def test_o_rateio_tem_um_construtor_so():
+    """As partes de um rateio sao montadas pelos QUATRO construtores de linha -
+    Resumida, recorte por periodo, fatura oficial e fatura em andamento, que
+    passaram a ratear em 10/09/2026. A consulta estava escrita duas vezes,
+    palavra por palavra, e uma copia nova divergiria na primeira regra nova."""
+    import pathlib
+    fonte = (pathlib.Path(__file__).resolve().parent.parent
+             / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    # `_estado_rateios` fica de fora de proposito: ele le UMA transacao para a
+    # auditoria antes/depois da API, com cursor de tupla - outro proposito.
+    assert fonte.count('"WHERE r.transacao_id IN %s ORDER BY r.transacao_id') == 1, (
+        "a consulta das partes das telas tem que sair de partes_do_rateio()")
+    assert fonte.count("def rateio_da_linha(") == 1
+    # a definicao mais uma chamada em cada um dos quatro construtores
+    assert fonte.count("rateio_da_linha(") == 5
+    assert fonte.count("partes_do_rateio(") == 5
 
 
 def test_a_origem_da_linha_tem_uma_implementacao_so():

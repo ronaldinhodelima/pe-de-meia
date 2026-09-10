@@ -267,8 +267,13 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     trecho = view.split("def lancamentos_por_fatura", 1)[1].split('@bp.route("/api/lancamento-manual"', 1)[0]
 
     assert "aplicar_regras(cur)" in trecho
-    assert '"projeto_portfolio_map": projeto_portfolio_map' in trecho
-    assert '"dim_id_projeto"' in trecho and '"dim_id_portfolio"' in trecho
+    # o config de todas as telas sai de `config_da_tela` (ponto unico); o que se
+    # cobra aqui e que a tela por fatura chame esse ponto, e que ele entregue o
+    # mapa Projeto -> Portfolio e os ids que o JS usa
+    assert "config_da_tela(" in trecho
+    config = view.split("def config_da_tela(", 1)[1].split("\ndef ", 1)[0]
+    assert '"projeto_portfolio_map": projeto_portfolio_map' in config
+    assert '"dim_id_projeto"' in config and '"dim_id_portfolio"' in config
     assert "data-salvar" not in template
     assert "Salvar</button>" not in template
     # a confirmacao e "Salvo" e some sozinha; o que importa e que exista uma,
@@ -1055,11 +1060,15 @@ def test_cartao_pendente_explica_por_que_falta_o_titular_na_fatura_em_andamento(
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert '"cartao_aguardando": not tx["numero_cartao_final"]' in view
     assert 'linha["cartao_aguardando"] = False' in view  # fatura fechada: nunca se aplica
-    # A explicacao mora no painel de detalhes, com o motivo. NAO entra no
-    # tooltip do avatar: ali o texto e uma lista de identificacao (titular ·
-    # cartao · banco), e "cartao pendente" no meio dela le mal.
-    assert template.count("cartao_aguardando") == 1
-    assert "cartão pendente (o Pluggy ainda não confirmou)" in template
+    # A explicacao mora no painel de detalhes, com o motivo, e quem a escreve e o
+    # CONSTRUTOR da linha: o template le um campo so (`procedencia`), porque a
+    # tabela e a mesma nos dois recortes e o texto e que muda com o tipo do
+    # lancamento (10/09/2026). NAO entra no tooltip do avatar: ali o texto e uma
+    # lista de identificacao (titular · cartao · banco), e "cartao pendente" no
+    # meio dela le mal.
+    assert "cartão pendente (o Pluggy ainda não confirmou)" in view
+    assert "cartão pendente" not in template
+    assert "{{ linha.procedencia if v.principal else 'registro técnico' }}" in template
 
 
 def _bloco_migracao(core, versao):
@@ -2748,11 +2757,16 @@ def test_quem_desenha_o_quadro_de_rateio_entrega_as_listas_no_config():
     assert {"categorias", "dimensoes"} <= lidas, lidas
 
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    # o config do recorte por periodo, que e onde o quadro aparece
-    trecho = view.split("def _render_periodo", 1)[1].split("return render_template", 1)[0]
-    config = trecho.split("config = {", 1)[1]
+    # O config tem um ponto unico - `config_da_tela` - porque o quadro de rateio
+    # existe nos TRES construtores desde 10/09/2026. Escrito tres vezes, bastava
+    # um deles esquecer uma chave para o quadro nascer vazio naquela tela so.
+    config = view.split("def config_da_tela(", 1)[1].split("\ndef ", 1)[0]
     for chave in sorted(lidas):
-        assert f'"{chave}"' in config, f"config do recorte por periodo sem {chave}"
+        assert f'"{chave}"' in config, f"config_da_tela sem {chave}"
+    assert view.count("config_da_tela(") == 4, (
+        "as tres telas tem que usar o mesmo config: a definicao mais uma chamada "
+        "em cada uma")
+    assert "config = {" not in view, "nenhuma tela monta o proprio config"
 
 
 def test_a_detalhada_abre_por_periodo_e_so_vai_para_a_fatura_quando_pedem():
