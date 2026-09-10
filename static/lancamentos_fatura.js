@@ -3,30 +3,41 @@
   let config = {};
   try { config = configEl ? JSON.parse(configEl.textContent) : {}; } catch (e) {}
 
-  function ir(params) {
-    const atual = new URL(window.location.href);
-    Object.keys(params).forEach(k => {
-      if (params[k] === null) atual.searchParams.delete(k);
-      else atual.searchParams.set(k, params[k]);
-    });
-    window.location.assign(atual.pathname + '?' + atual.searchParams.toString());
-  }
+  // O filtro Fatura carrega a URL de cada ciclo pronta do servidor: montada
+  // aqui tambem, ela discordaria da que as setas usam na primeira regra nova
+  // (`_url_da_fatura` e o ponto unico). A opcao "Periodo inteiro" traz a URL do
+  // ciclo desta fatura, entao sair dela nao joga o usuario para outro mes.
+  // `onchange` no proprio elemento, e nao `addEventListener`: filtrar troca a
+  // barra inteira por AJAX, e o listener anexado morreria junto com o elemento
+  // antigo - o seletor pararia de responder, em silencio (secao 7.1).
+  window.irParaFatura = function (seletor) {
+    if (!seletor || !seletor.value) return;
+    if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+    window.location.assign(seletor.value);
+  };
 
-  const conta = document.getElementById('faturaConta');
-  const fatura = document.getElementById('faturaSelecionada');
-  const status = document.getElementById('faturaStatus');
-  if (conta) conta.addEventListener('change', () => ir({account_id: conta.value, fatura_id: null, status: 'todas'}));
-  if (fatura) fatura.addEventListener('change', () => {
-    if (fatura.value === 'andamento') ir({andamento: '1', mes: null, fatura_id: null, status: 'todas'});
-    // futuro-AAAA-MM: mes que o Pluggy ja entregou e a fatura ainda nao cobrou
-    else if (fatura.value.startsWith('futuro-')) {
-      ir({andamento: '1', mes: fatura.value.slice(7), fatura_id: null, status: 'todas'});
-    } else ir({fatura_id: fatura.value, andamento: null, mes: null, account_id: null, status: 'todas'});
-  });
-  if (status) status.addEventListener('change', () => ir({status: status.value}));
+  // Trocar o Status mexe SO no status: tudo o mais que esta na URL - a fatura
+  // em foco, o periodo, as origens - continua valendo. Vale nos dois recortes,
+  // porque os dois tem os mesmos blocos na tela.
+  window.aplicarFiltroStatus = function () {
+    const status = document.getElementById('periodoStatus');
+    if (!status) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('status', status.value);
+    return trocarBlocos(url.pathname + '?' + url.searchParams.toString());
+  };
+
+  // O card e a porta de entrada para as proprias linhas: ele escolhe o Status,
+  // e dai em diante e o mesmo caminho do seletor. Antes ele recarregava a
+  // pagina enquanto o seletor ao lado trocava a lista no lugar - dois
+  // comportamentos para a mesma acao.
   document.addEventListener('click', evento => {
     const card = evento.target.closest('[data-filtro]');
-    if (card) ir({status: card.dataset.filtro});
+    if (!card) return;
+    const status = document.getElementById('periodoStatus');
+    if (!status) return;
+    status.value = card.dataset.filtro;
+    aplicarFiltroStatus();
   });
 
   // ---- rateio: as partes moram no nucleo compartilhado (rateio.js) ---------
@@ -167,28 +178,44 @@
   function queryDoPeriodo() {
     const params = new URLSearchParams();
     params.set('recorte', 'periodo');
-    params.set('mes', mesInput.value);
+    const barra = document.querySelector('.fatura-filtros');
     const intervalo = document.getElementById('periodoIntervalo');
-    if (intervalo && intervalo.checked) {
-      params.set('periodo', 'intervalo');
-      params.set('data_inicio', document.getElementById('dataInicioInput').value);
-      params.set('data_fim', document.getElementById('dataFimInput').value);
-    } else {
-      params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
+    if (mesInput) {
+      params.set('mes', mesInput.value);
+      if (intervalo && intervalo.checked) {
+        params.set('periodo', 'intervalo');
+        params.set('data_inicio', document.getElementById('dataInicioInput').value);
+        params.set('data_fim', document.getElementById('dataFimInput').value);
+      } else {
+        params.set('periodo', document.getElementById('periodoAno').checked ? 'ano' : 'mes');
+      }
+    } else if (barra) {
+      // Com uma fatura em foco nao ha controle de periodo na tela: o recorte e
+      // o CICLO dela, que o servidor manda na barra. Assim trocar a origem sai
+      // da fatura para o periodo dela, e nao para o mes corrente - quem estava
+      // olhando julho continua em julho.
+      params.set('mes', barra.dataset.mes || '');
+      params.set('periodo', barra.dataset.periodo || 'mes');
+      if (barra.dataset.periodo === 'intervalo') {
+        params.set('data_inicio', barra.dataset.inicio || '');
+        params.set('data_fim', barra.dataset.fim || '');
+      }
     }
     const status = document.getElementById('periodoStatus');
-    if (status) params.set('status', status.value);
+    // Status da fatura nao existe no periodo (sem_vinculo, requer_validacao,
+    // multiplos falam do DOCUMENTO): sair da fatura com um deles na URL cairia
+    // no default sem dizer nada. Melhor sair mostrando tudo.
+    if (status && mesInput) params.set('status', status.value);
     // [name] exigido: checkbox sem nome (o do menu de colunas) nao e filtro
     document.querySelectorAll('.chipfilter input[type=checkbox][name]:checked')
       .forEach(cb => params.append(cb.name, cb.value));
     return params;
   }
-  // Filtrar troca a lista NO LUGAR, sem recarregar: recarregar joga quem esta
-  // no meio da conferencia de volta ao topo. A URL acompanha, entao o Voltar
-  // do navegador retorna ao filtro anterior.
-  window.aplicarFiltrosPeriodo = function () {
-    if (!mesInput) return;
-    const url = '/lancamentos/fatura?' + queryDoPeriodo().toString();
+
+  // A troca de blocos e uma so: filtrar por periodo, por origem ou por status
+  // muda os MESMOS pedacos da tela. Escrita duas vezes, a segunda esqueceria um
+  // bloco e a tela ficaria meio atualizada, sem erro nenhum.
+  function trocarBlocos(url) {
     return window.pdmTrocarPorAjax(url, [
       {seletor: 'table.compacta', aoTrocar: function (tabela) {
         // a tabela nova veio do servidor sem os listeners nem as alcas de
@@ -202,7 +229,9 @@
         if (window.pdmPrepararLinhas) window.pdmPrepararLinhas(tabela);
       }},
       {seletor: '.cards'},
-      {seletor: '.chipfilter'},
+      // a barra inteira, e nao so o chip: o filtro Fatura aparece e some
+      // conforme a origem, e o Status cresce e encolhe junto
+      {seletor: '.fatura-filtros'},
       {seletor: 'details.cat-breakdown', preservarAberto: true},
       {seletor: 'details.legenda-lancamentos', preservarAberto: true},
     ], function (doc) {
@@ -210,11 +239,28 @@
       if (configNovo) {
         try { config = JSON.parse(configNovo.textContent); } catch (e) {}
       }
-      const status = doc.getElementById('periodoStatus');
-      const atual = document.getElementById('periodoStatus');
-      if (status && atual) atual.value = status.value;
       aplicarBuscaFatura();
     });
+  }
+  // Filtrar troca a lista NO LUGAR, sem recarregar: recarregar joga quem esta
+  // no meio da conferencia de volta ao topo. A URL acompanha, entao o Voltar
+  // do navegador retorna ao filtro anterior.
+  window.aplicarFiltrosPeriodo = function () {
+    // Mexer no periodo ou na origem SAI da fatura, e isso e a regra, nao um
+    // efeito colateral: a origem nova pode nem ter fatura, e o ciclo em foco
+    // pertence a um cartao so.
+    const url = '/lancamentos/fatura?' + queryDoPeriodo().toString();
+    // Sair de uma fatura troca o RECORTE, nao so a lista: cabecalho, cards e o
+    // formulario manual sao outros. A troca por AJAX e bloco a bloco, pelo
+    // indice - a fatura tem dois grupos de cards e o periodo um, entao o
+    // segundo grupo da fatura ficaria na tela sob a lista do periodo, e o
+    // cabecalho continuaria dizendo "Fatura Agosto". Ai recarrega.
+    if (!mesInput) {
+      if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+      window.location.assign(url);
+      return;
+    }
+    return trocarBlocos(url);
   };
 
   // Cada filtro vira uma etapa real do navegador. Voltar recarrega o estado

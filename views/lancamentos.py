@@ -1132,6 +1132,109 @@ def _url_da_fatura(item, account_id):
     return f"/lancamentos/fatura?fatura_id={item['id']}"
 
 
+ROTULO_STATUS = {
+    "todas": "Todas",
+    "pendente": "Pendentes de conferência",
+    "conferida": "Conferidas",
+    "pendente_classificacao": "Pendentes de classificação",
+    "receita": "Só receitas",
+    "despesa": "Só despesas",
+    "pendente_banco": "Pendentes no banco",
+    "duplicidade": "Possíveis duplicidades",
+    "fora_resultado": "Fora do resultado",
+    "somente_conciliacao": "Somente conciliação",
+    "substituido": "Substituídos por outro",
+    "rateio_incompleto": "Rateio incompleto",
+    # So existem com uma fatura em foco: falam do DOCUMENTO, nao do lancamento.
+    "dre": "Despesas no DRE",
+    "fora": "Fora do DRE",
+    "sem_vinculo": "Sem lançamento vinculado",
+    "requer_validacao": "Requer validação",
+    "multiplos": "Com registros agregados",
+}
+
+# Com uma fatura em foco a tela lista linhas do DOCUMENTO, e alguns filtros do
+# periodo nao se aplicam: "possiveis duplicidades", "substituidos" e "somente
+# conciliacao" falam de lancamentos que a fatura nem mostra como linha propria.
+STATUS_COM_FATURA = (
+    "todas", "pendente", "conferida", "pendente_classificacao",
+    "pendente_banco", "rateio_incompleto", "dre", "fora",
+    "sem_vinculo", "requer_validacao", "multiplos",
+)
+# Sem fatura importada nao ha o que conciliar: estes tres sumiriam sozinhos.
+STATUS_SO_COM_DOCUMENTO = ("sem_vinculo", "requer_validacao", "multiplos")
+
+
+def opcoes_de_status(com_fatura=False, em_andamento=False):
+    """A lista de Status, que cresce e encolhe sozinha conforme o recorte.
+
+    Era escrita a mao em dois `<select>` diferentes no template, e por isso o
+    mesmo filtro tinha nomes diferentes nas duas metades da tela. Aqui cada
+    recorte declara o que de fato entende - listar um filtro que nao traria
+    linha nenhuma e prometer o que a tela nao cumpre.
+    """
+    if not com_fatura:
+        chaves = list(STATUS_LANCAMENTO)
+    else:
+        chaves = [
+            c for c in STATUS_COM_FATURA
+            if not (em_andamento and c in STATUS_SO_COM_DOCUMENTO)
+        ]
+    return [(c, ROTULO_STATUS[c]) for c in chaves]
+
+
+def lista_de_faturas(cur, account_id):
+    """Ciclos previstos, ciclo em andamento e faturas oficiais de um cartao, na
+    ordem do seletor e ja com a URL de cada um.
+
+    Ponto unico do filtro Fatura, do seletor e das setas. Estava escrito duas
+    vezes, e as duas listas ja divergiam em quais colunas traziam.
+    """
+    cur.execute(
+        "SELECT id, mes_referencia, ano_referencia, periodo_inicio, periodo_fim "
+        "FROM cartao.fatura_importada WHERE account_id=%s "
+        "ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;",
+        (account_id,),
+    )
+    oficiais = [dict(f) for f in cur.fetchall()]
+    itens = []
+    if oficiais and oficiais[0].get("periodo_fim"):
+        prox_mes, prox_ano = oficiais[0]["mes_referencia"] + 1, oficiais[0]["ano_referencia"]
+        if prox_mes == 13:
+            prox_mes, prox_ano = 1, prox_ano + 1
+        # Os previstos comecam no mes SEGUINTE: o resto do mes corrente pertence
+        # ao ciclo em andamento, e listar o mesmo mes duas vezes confundia.
+        itens = _meses_futuros_com_dados(cur, account_id, datetime.now(FUSO_LOCAL).date())
+        itens = itens + [{
+            "id": "andamento", "mes_referencia": prox_mes,
+            "ano_referencia": prox_ano, "em_andamento": True,
+        }]
+    itens = itens + oficiais
+    for item in itens:
+        item["url"] = _url_da_fatura(item, account_id)
+    return itens
+
+
+def faturas_para_o_filtro(cur, origens, contas_by_id, id_em_foco=None):
+    """O liga/desliga que o usuario pediu (10/09/2026).
+
+    O filtro Fatura so aparece quando UMA origem esta selecionada e ela e um
+    cartao de credito com fatura importada. Com varias origens nao existe "a
+    fatura"; numa conta corrente ou no dinheiro, fatura nao existe. Assim o
+    proprio filtro se gerencia com o que ha, em vez de um alternador fixo que
+    prometia um recorte que nem sempre se aplica.
+    """
+    if len(origens) != 1:
+        return []
+    conta = contas_by_id.get(str(origens[0])) or {}
+    if conta.get("tipo") != "CREDIT":
+        return []
+    itens = lista_de_faturas(cur, str(origens[0]))
+    for item in itens:
+        item["selecionada"] = str(item["id"]) == str(id_em_foco)
+    return itens
+
+
 def _vizinhas_no_seletor(lista, id_atual):
     """A seguinte e a anterior segundo a MESMA ordem do seletor.
 
@@ -1174,7 +1277,8 @@ def _meses_futuros_com_dados(cur, account_id, hoje):
     ]
 
 
-def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, mes_futuro=None):
+def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
+                                origem_opcoes, mes_futuro=None):
     """Mostra o ciclo atual do Pluggy sem fingir que ja existe um PDF oficial.
 
     Com `mes_futuro` ('AAAA-MM'), mostra um mes que ainda nem comecou a ser
@@ -1391,34 +1495,30 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         "periodo_inicio": inicio, "periodo_fim": fim, "vencimento": None,
         "em_andamento": True, "previsto": bool(mes_futuro),
     }
-    oficiais = []
-    cur.execute(
-        "SELECT id, mes_referencia, ano_referencia FROM cartao.fatura_importada "
-        "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;", (account_id,),
-    )
-    oficiais = cur.fetchall()
     # O seletor mostra o mesmo conjunto nas duas telas: previstos, em andamento
-    # e oficiais. Sem isto, entrar num mes futuro escondia os demais.
-    andamento = {
-        "id": "andamento", "mes_referencia": mes, "ano_referencia": ano, "em_andamento": True,
-    } if not mes_futuro else {
-        "id": "andamento",
-        "mes_referencia": (ultima["mes_referencia"] % 12) + 1,
-        "ano_referencia": ultima["ano_referencia"] + (ultima["mes_referencia"] == 12),
-        "em_andamento": True,
-    }
-    futuros = _meses_futuros_com_dados(cur, account_id, hoje)
-    lista_faturas = [f for f in futuros if f["id"] != fatura["id"]]
-    if mes_futuro:
-        lista_faturas = [f if f["id"] != fatura["id"] else fatura for f in futuros]
-    lista_faturas = lista_faturas + [andamento] + [dict(o) for o in oficiais]
+    # e oficiais. Sem isto, entrar num mes futuro escondia os demais. A entrada
+    # que corresponde ao ciclo aberto e trocada pela versao rica dele, que ja
+    # sabe se e previsto.
+    lista_faturas = [
+        fatura if str(f["id"]) == str(fatura["id"]) else f
+        for f in lista_de_faturas(cur, account_id)
+    ]
     for item in lista_faturas:
-        item["url"] = _url_da_fatura(item, account_id)
+        item["selecionada"] = str(item["id"]) == str(fatura["id"])
+        item.setdefault("url", _url_da_fatura(item, account_id))
     seguinte, anterior = _vizinhas_no_seletor(lista_faturas, fatura["id"])
 
     config = config_da_tela(
         obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
         dimensoes, valores_por_dim, pode_conferir=False, em_andamento=True)
+    # Sair da fatura leva ao PERIODO DELA, nao ao mes corrente: o ciclo e o
+    # recorte que o usuario esta olhando, e joga-lo para outro mes ao trocar de
+    # filtro seria perder o lugar.
+    url_do_periodo = (
+        "/lancamentos/fatura?recorte=periodo&periodo=intervalo"
+        f"&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}"
+        f"&origem={account_id}&status=todas"
+    )
     return render_template(
         "lancamentos_fatura.html", titulo="Fatura em andamento",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
@@ -1431,6 +1531,20 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         totais={"pdf": total, "dre": total_dre, "fora": total_fora, "pendente": sum(abs(l["valor"]) for l in linhas if not l["classificada"]), "pendente_ok": Decimal("0"), "sem_vinculo": Decimal("0"), "divergencia": Decimal("0")},
         contagens={"linhas": len(linhas), "vinculadas": len(linhas), "classificadas": classificadas, "conferidas": 0, "multiplos": 0, "pendente_classificacao": len(linhas)-classificadas, "pendente_ok": 0, "divergencias": 0},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
+        # A barra de filtros e a MESMA nos dois recortes e se autogerencia: a
+        # Origem em chip, o filtro Fatura so quando a origem selecionada e um
+        # cartao com fatura, e o Status crescendo junto. O alternador fixo
+        # "Por periodo | Por fatura" deixou de existir (decisao do usuario).
+        origem_filtro_html=chip_filter_html(
+            "origem", "Origem", origem_opcoes, [account_id],
+            onchange="aplicarFiltrosPeriodo()"),
+        faturas_da_origem=faturas_para_o_filtro(
+            cur, [account_id], contas_by_id, fatura["id"]),
+        status_opcoes=opcoes_de_status(
+            com_fatura=True, em_andamento=bool(fatura.get("em_andamento"))),
+        url_do_periodo=url_do_periodo,
+        mes=f"{ano}-{mes:02d}", periodo="intervalo",
+        data_inicio=inicio.isoformat(), data_fim=fim.isoformat(),
         por_categoria=por_categoria, filtros_situacao=filtros_situacao,
         url_resumida=f"{URL_RESUMIDA}?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
@@ -1711,6 +1825,11 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         "lancamentos_fatura.html", titulo="Lançamentos",
         topbar=topbar_html("Lançamentos", "inicio"),
         modo_periodo=True,
+        # O filtro Fatura so aparece quando UMA origem esta selecionada e ela e
+        # cartao com fatura importada - o liga/desliga que se autogerencia.
+        faturas_da_origem=faturas_para_o_filtro(cur, origem_sel, contas_by_id),
+        status_opcoes=opcoes_de_status(),
+        url_do_periodo="",
         filtros_situacao=filtros_por_situacao([
             ("conferida", "Conferido"),
             ("pendente_banco", "Pendente no banco"),
@@ -1830,13 +1949,15 @@ def lancamentos_por_fatura():
         account_id = _conta_credito_padrao(cur, contas_credito)
     if em_andamento:
         resposta = _render_fatura_em_andamento(
-            cur, account_id, contas_credito, contas_by_id, mes_futuro=mes_futuro)
+            cur, account_id, contas_credito, contas_by_id, origem_opcoes,
+            mes_futuro=mes_futuro)
         if resposta is not None:
             cur.close()
             conn.close()
             return resposta
     if not fatura_id and "fatura_id" not in request.args:
-        resposta = _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id)
+        resposta = _render_fatura_em_andamento(
+            cur, account_id, contas_credito, contas_by_id, origem_opcoes)
         if resposta is not None:
             cur.close()
             conn.close()
@@ -1873,25 +1994,12 @@ def lancamentos_por_fatura():
             erro="Nenhuma fatura importada foi encontrada para este cartão.",
         )
 
-    cur.execute(
-        "SELECT id, mes_referencia, ano_referencia, periodo_fim FROM cartao.fatura_importada "
-        "WHERE account_id=%s ORDER BY ano_referencia DESC, mes_referencia DESC, id DESC;",
-        (account_id,),
-    )
-    faturas = [dict(f) for f in cur.fetchall()]
-    if faturas and faturas[0].get("periodo_fim"):
-        prox_mes, prox_ano = faturas[0]["mes_referencia"] + 1, faturas[0]["ano_referencia"]
-        if prox_mes == 13:
-            prox_mes, prox_ano = 1, prox_ano + 1
-        provisoria = {"id": "andamento", "mes_referencia": prox_mes,
-                      "ano_referencia": prox_ano, "em_andamento": True}
-        futuros = _meses_futuros_com_dados(cur, account_id, datetime.now(FUSO_LOCAL).date())
-        faturas = futuros + [provisoria] + faturas
     # As setas seguem a MESMA ordem do seletor, entao andam pelos meses
     # previstos e pelo ciclo em andamento tambem - antes paravam na fatura mais
     # nova e o resto so era alcancavel pelo seletor.
+    faturas = lista_de_faturas(cur, account_id)
     for item in faturas:
-        item["url"] = _url_da_fatura(item, account_id)
+        item["selecionada"] = str(item["id"]) == str(fatura_id)
     fatura_nova, fatura_antiga = _vizinhas_no_seletor(faturas, fatura_id)
 
     cur.execute(
@@ -2250,6 +2358,28 @@ def lancamentos_por_fatura():
         obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
         dimensoes, valores_por_dim, pode_conferir=pode("lancamentos_conferir"))
     conta = contas_by_id.get(account_id)
+    # Sair da fatura leva ao PERIODO DELA - o ciclo e o recorte que o usuario
+    # esta olhando. Sem ciclo no arquivo, cai no mes de referencia.
+    if fatura.get("periodo_inicio") and fatura.get("periodo_fim"):
+        janela = (
+            "periodo=intervalo&data_inicio=" + fatura["periodo_inicio"].isoformat()
+            + "&data_fim=" + fatura["periodo_fim"].isoformat()
+        )
+        mes_da_fatura = fatura["periodo_fim"].strftime("%Y-%m")
+        periodo_da_fatura, inicio_da_fatura, fim_da_fatura = (
+            "intervalo", fatura["periodo_inicio"].isoformat(), fatura["periodo_fim"].isoformat())
+    else:
+        mes_da_fatura = f"{fatura['ano_referencia']}-{fatura['mes_referencia']:02d}"
+        janela = "periodo=mes&mes=" + mes_da_fatura
+        periodo_da_fatura, inicio_da_fatura, fim_da_fatura = "mes", "", ""
+    url_do_periodo = (
+        "/lancamentos/fatura?recorte=periodo&" + janela
+        + "&origem=" + account_id + "&status=todas"
+    )
+    faturas_da_origem = faturas_para_o_filtro(cur, [account_id], contas_by_id, fatura_id)
+    filtro_origem = chip_filter_html(
+        "origem", "Origem", origem_opcoes, [account_id],
+        onchange="aplicarFiltrosPeriodo()")
     cur.close()
     conn.close()
     if fatura.get("periodo_inicio") and fatura.get("periodo_fim"):
@@ -2279,6 +2409,12 @@ def lancamentos_por_fatura():
         contagens=contagens, config_json=json_script(config),
         projeto_portfolio_map=projeto_portfolio_map,
         por_categoria=por_categoria, filtros_situacao=filtros_situacao,
+        # A barra de filtros e a MESMA nos dois recortes e se autogerencia.
+        origem_filtro_html=filtro_origem, faturas_da_origem=faturas_da_origem,
+        status_opcoes=opcoes_de_status(com_fatura=True),
+        url_do_periodo=url_do_periodo,
+        mes=mes_da_fatura, periodo=periodo_da_fatura,
+        data_inicio=inicio_da_fatura, data_fim=fim_da_fatura,
         url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),

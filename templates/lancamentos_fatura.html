@@ -148,67 +148,34 @@
 </div>
 {% endif %}
 
-{% if modo_periodo %}
-<div class="fatura-filtros">
+{# UMA barra de filtros nos dois recortes, e ela se autogerencia (decisao do
+   usuario, 10/09/2026). O alternador fixo "Por periodo | Por fatura" deixou de
+   existir: escolher a fatura virou um FILTRO, e ele so aparece quando a origem
+   selecionada e um cartao com fatura importada. Com varias origens nao existe
+   "a fatura"; numa conta corrente, fatura nao existe. O Status cresce e encolhe
+   junto, pela rota - listar filtro que nao traria linha nenhuma e prometer o
+   que a tela nao cumpre. #}
+<div class="fatura-filtros" data-mes="{{ mes }}" data-periodo="{{ periodo }}"
+     data-inicio="{{ data_inicio }}" data-fim="{{ data_fim }}">
   {{ origem_filtro_html|safe }}
-  <label>Status</label>
-  <select id="periodoStatus" data-pdm-native onchange="aplicarFiltrosPeriodo()">
-    <option value="todas" {{ 'selected' if status == 'todas' }}>Todas</option>
-    <option value="pendente" {{ 'selected' if status == 'pendente' }}>Pendentes de conferência</option>
-    <option value="conferida" {{ 'selected' if status == 'conferida' }}>Conferidas</option>
-    <option value="pendente_classificacao" {{ 'selected' if status == 'pendente_classificacao' }}>Pendentes de classificação</option>
-    <option value="receita" {{ 'selected' if status == 'receita' }}>Só receitas</option>
-    <option value="despesa" {{ 'selected' if status == 'despesa' }}>Só despesas</option>
-    <option value="pendente_banco" {{ 'selected' if status == 'pendente_banco' }}>Pendentes no banco</option>
-    <option value="duplicidade" {{ 'selected' if status == 'duplicidade' }}>Possíveis duplicidades</option>
-    <option value="fora_resultado" {{ 'selected' if status == 'fora_resultado' }}>Fora do resultado</option>
-    <option value="somente_conciliacao" {{ 'selected' if status == 'somente_conciliacao' }}>Somente conciliação</option>
-    <option value="substituido" {{ 'selected' if status == 'substituido' }}>Substituídos por outro</option>
-    <option value="rateio_incompleto" {{ 'selected' if status == 'rateio_incompleto' }}>Rateio incompleto</option>
-  </select>
-  {% if pode_manual %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% endif %}
-  <div class="visao-lancamentos" aria-label="Recorte dos lançamentos">
-    <a href="#" class="ativo" aria-current="page">Por período</a>
-    <a href="/lancamentos/fatura?recorte=fatura">Por fatura</a>
-  </div>
-</div>
-{% else %}
-<div class="fatura-filtros">
-  <label>Cartão</label>
-  <select id="faturaConta" data-pdm-native>
-    {% for aid, curto, completo, _, _ in contas_credito %}<option value="{{ aid }}" {{ 'selected' if aid==account_id }}>{{ completo }}</option>{% endfor %}
-  </select>
+  {% if faturas_da_origem %}
   <label>Fatura</label>
-  <select id="faturaSelecionada" data-pdm-native>
-    {% for item in faturas %}<option value="{{ item.id }}" {{ 'selected' if item.id==fatura.id }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{% if item.previsto %} · Previsto{% elif item.em_andamento %} · Em andamento{% endif %}</option>{% endfor %}
+  <select id="filtroFatura" data-pdm-native aria-label="Fatura" onchange="irParaFatura(this)"
+          data-tip="Escolher uma fatura recorta a tela pelo ciclo dela. Só aparece para cartão com fatura importada.">
+    <option value="{{ url_do_periodo }}" {{ 'selected' if modo_periodo }}>Período inteiro</option>
+    {% for item in faturas_da_origem %}<option value="{{ item.url }}" {{ 'selected' if item.selecionada }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{% if item.previsto %} · Previsto{% elif item.em_andamento %} · Em andamento{% endif %}</option>{% endfor %}
   </select>
+  {% endif %}
   <label>Status</label>
-  <select id="faturaStatus" data-pdm-native>
-    <option value="todas" {{ 'selected' if status=='todas' }}>Todas as linhas</option>
-    <option value="pendente_classificacao" {{ 'selected' if status=='pendente_classificacao' }}>Pendentes de classificação</option>
-    {% if not fatura.em_andamento %}<option value="pendente_ok" {{ 'selected' if status=='pendente_ok' }}>Pendentes de OK</option>{% endif %}
-    <option value="dre" {{ 'selected' if status=='dre' }}>Despesas no DRE</option>
-    <option value="fora" {{ 'selected' if status=='fora' }}>Fora do DRE</option>
-    {# Mesmos nomes do recorte por periodo: o mesmo filtro nao pode ter dois
-       nomes nas duas metades da mesma tela. #}
-    <option value="conferida" {{ 'selected' if status=='conferida' }}>Conferidas</option>
-    <option value="pendente_banco" {{ 'selected' if status=='pendente_banco' }}>Pendentes no banco</option>
-    {% if not fatura.em_andamento %}<option value="rateio_incompleto" {{ 'selected' if status=='rateio_incompleto' }}>Rateio incompleto</option>{% endif %}
-    {% if not fatura.em_andamento %}<option value="sem_vinculo" {{ 'selected' if status=='sem_vinculo' }}>Sem lançamento vinculado</option>
-    <option value="requer_validacao" {{ 'selected' if status=='requer_validacao' }}>Requer validação</option>
-    <option value="multiplos" {{ 'selected' if status=='multiplos' }}>Com registros agregados</option>{% endif %}
+  <select id="periodoStatus" data-pdm-native onchange="aplicarFiltroStatus()">
+    {% for valor, rotulo in status_opcoes %}<option value="{{ valor }}" {{ 'selected' if status == valor }}>{{ rotulo }}</option>{% endfor %}
   </select>
-  {% if pode_manual %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}
+  {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
   <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
     <a href="{{ url_resumida }}">Resumida</a>
-    <a href="/lancamentos/fatura?{% if fatura.em_andamento %}andamento=1&amp;account_id={{ account_id }}{% else %}fatura_id={{ fatura.id }}{% endif %}" class="ativo" aria-current="page">Detalhada</a>
-  </div>
-  <div class="visao-lancamentos" aria-label="Recorte dos lançamentos">
-    <a href="/lancamentos/fatura?recorte=periodo">Por período</a>
-    <a href="#" class="ativo" aria-current="page">Por fatura</a>
+    <a href="#" class="ativo" aria-current="page">Detalhada</a>
   </div>
 </div>
-{% endif %}
 
 {# O formulario manual fica de fora da fatura de proposito: um lancamento
    manual nao pertence a fatura nenhuma, e cria-lo aqui sem ve-lo aparecer
@@ -456,15 +423,14 @@
 </div>
 <script type="application/json" data-config-fatura>{{ config_json|safe }}</script>
 {% else %}
-<div class="fatura-filtros">
-  <label for="faturaConta">Cartão</label>
-  <select id="faturaConta" data-pdm-native>
-    {% for aid, curto, completo, _, _ in contas_credito %}<option value="{{ aid }}" {{ 'selected' if aid==account_id }}>{{ completo }}</option>{% endfor %}
-  </select>
-</div>
+{# Sem fatura importada nao ha o que filtrar por fatura. O caminho de volta e o
+   recorte por periodo, que alcanca este cartao do mesmo jeito - o seletor de
+   Cartao que ficava aqui perdeu o handler quando a Origem virou chip, e um
+   seletor que nao navega e pior que nenhum. #}
 <div class="aviso-erro">{{ erro }}</div>
-<p><a href="/relatorios/conciliar-fatura">Importar ou abrir uma fatura conciliada</a></p>
+<p><a href="/lancamentos/fatura?recorte=periodo{% if account_id %}&amp;origem={{ account_id }}{% endif %}">Ver os lançamentos deste cartão por período</a>
+ · <a href="/relatorios/conciliar-fatura">Importar ou abrir uma fatura conciliada</a></p>
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260909-5"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-1"></script>{% endblock %}

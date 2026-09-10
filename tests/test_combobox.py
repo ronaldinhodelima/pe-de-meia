@@ -64,11 +64,17 @@ def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():
 
 
 def test_filtros_de_navegacao_da_fatura_permanecem_nativos():
+    """Seletor de navegacao continua nativo - nunca combobox pesquisavel.
+
+    Os dois seletores de navegacao da Detalhada sao a Fatura e o Status; o
+    Cartao deixou de existir em 10/09/2026, quando a Origem em chip passou a
+    fazer esse papel nos dois recortes.
+    """
     tela = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
 
-    assert '<select id="faturaConta" data-pdm-native>' in tela
-    assert '<select id="faturaSelecionada" data-pdm-native>' in tela
-    assert '<select id="faturaStatus" data-pdm-native>' in tela
+    assert '<select id="filtroFatura" data-pdm-native' in tela
+    assert '<select id="periodoStatus" data-pdm-native' in tela
+    assert 'id="faturaConta"' not in tela, "o seletor de Cartao virou o chip de Origem"
 
 
 def test_filtro_status_resumido_nao_repete_rotulo_visual():
@@ -100,8 +106,11 @@ def test_fatura_em_andamento_bloqueia_ok_e_preserva_edicao():
     assert "Esta fatura ainda não foi importada" not in tela
     assert "OK liberado somente após a fatura ser conciliada" in tela
     assert "not pode_conferir or fatura.em_andamento" in tela
-    assert "fatura.value === 'andamento'" in js
-    assert "andamento=1&amp;account_id={{ account_id }}" in tela
+    # A URL de cada ciclo vem pronta do servidor (`_url_da_fatura` e o ponto
+    # unico); montada tambem no JS, ela discordaria da que as setas usam.
+    assert "window.irParaFatura = function" in js
+    assert "seletor.value" in js
+    assert "andamento=1&amp;account_id=" in view or "andamento=1" in view
     assert "'andamento=1&amp;account_id=' ~ account_id" not in tela
 
 

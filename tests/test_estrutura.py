@@ -212,7 +212,11 @@ def test_cards_da_fatura_explicam_valores_e_filtram_divergencias():
     ):
         assert rotulo in template
     assert 'data-filtro="requer_validacao"' in template
-    assert 'value="requer_validacao"' in template
+    # As opcoes de Status sao montadas pela rota (`opcoes_de_status`), porque a
+    # lista cresce e encolhe conforme o recorte. Escrita no template, ela dava
+    # nomes diferentes ao mesmo filtro nas duas metades da tela.
+    assert '"requer_validacao": "Requer validação"' in view
+    assert '"requer_validacao"' in view.split("STATUS_COM_FATURA = (", 1)[1][:400]
     assert 'status == "requer_validacao" and l["requer_validacao"]' in view
     assert 'linha["ambigua"]' in view
     assert 'linha["diferenca_valor"]' in view
@@ -415,7 +419,10 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert "Revisar parcelamentos" in template
     assert template.index('class="tabela-scroll"') < template.index('class="rodape-fatura"')
-    filtros = _bloco_com(template, '<div class="fatura-filtros">', "faturaSelecionada")
+    # A barra de filtros e UMA so desde 10/09/2026, e por isso nao ha mais bloco
+    # a escolher: o alternador "Por periodo | Por fatura" deixou de existir e
+    # escolher a fatura virou um filtro.
+    filtros = _bloco_com(template, '<div class="fatura-filtros"', "filtroFatura")
     assert 'class="visao-lancamentos"' in filtros
     cabecalho = _bloco_com(template, '<div class="fatura-cabecalho">', "fatura_antiga")
     assert "Ciclo" in cabecalho
@@ -901,8 +908,12 @@ def test_cartao_padrao_da_fatura_prefere_conta_com_fatura_importada():
     assert "def _conta_credito_padrao(" in view
     assert "contas_credito[0][0]" not in view
     assert view.count("account_id = _conta_credito_padrao(cur, contas_credito)") == 2
-    # o seletor de cartao tem que existir tambem no estado de erro
-    assert template.count('id="faturaConta"') == 2
+    # O estado de erro precisa de SAIDA. Ela deixou de ser um seletor de cartao
+    # em 10/09/2026: a Origem virou chip e o seletor ficou sem handler nenhum -
+    # um seletor que nao navega e pior que nenhum. Hoje a saida e o link para o
+    # recorte por periodo, que alcanca o mesmo cartao.
+    assert 'id="faturaConta"' not in template
+    assert "Ver os lançamentos deste cartão por período" in template
 
 
 def test_marca_de_agregado_tem_caminho_de_volta():
@@ -2792,9 +2803,16 @@ def test_a_detalhada_abre_por_periodo_e_so_vai_para_a_fatura_quando_pedem():
         ("templates/conciliar_fatura.html", "/lancamentos/fatura?fatura_id="),
     ):
         assert marca in (RAIZ / arquivo).read_text(encoding="utf-8"), arquivo
-    # e o alternador pede a fatura por nome, senao apontaria para o periodo
+    # O alternador "Por periodo | Por fatura" deixou de existir em 10/09/2026:
+    # escolher a fatura virou um FILTRO, que so aparece quando a origem
+    # selecionada e um cartao com fatura importada. Sair da fatura leva ao
+    # PERIODO DELA, e nao ao mes corrente.
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    assert '/lancamentos/fatura?recorte=fatura' in detalhada
+    assert '/lancamentos/fatura?recorte=fatura' not in detalhada
+    assert "Por fatura</a>" not in detalhada
+    assert 'id="filtroFatura"' in detalhada
+    assert "def faturas_para_o_filtro(" in view
+    assert 'recorte=periodo&periodo=intervalo' in view
 
 
 def test_o_que_vive_dentro_da_tabela_e_ligado_por_delegacao():

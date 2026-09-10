@@ -983,9 +983,44 @@ quarta cópia da mesma regra:
 template e agora sai do construtor, dentro de `procedencia`. Continua fora do tooltip do avatar, que
 é uma lista de identificação (titular · cartão · banco).
 
-**Ainda pendente desta frente:** os filtros ainda não se autogerenciam (fatura/ciclo deveria aparecer
-só quando a origem é cartão com fatura importada) e o alternador "Por período | Por fatura" ainda
-existe.
+### Os filtros se autogerenciam; o alternador acabou (10/09/2026)
+
+**Decisão do usuário.** Os botões "Por período | Por fatura" **deixaram de existir**. Escolher a
+fatura virou um **filtro**, e a barra é **uma só** nos dois recortes: Origem em chip, **Fatura** (só
+quando cabe), **Status** e `+ manual`.
+
+- **O filtro Fatura só aparece quando UMA origem está selecionada e ela é cartão de crédito com fatura
+  importada** (`faturas_para_o_filtro()`) — o liga/desliga pedido. Com várias origens não existe "a
+  fatura"; em conta corrente e dinheiro, fatura não existe. A primeira opção é **"Período inteiro"**.
+- **A lista de Status cresce e encolhe pela rota** (`opcoes_de_status()`): 12 no período, 11 com
+  fatura em foco, 8 no ciclo em andamento. Com fatura em foco somem os que falam de lançamento que o
+  documento nem mostra como linha (duplicidades, substituídos, somente conciliação) e entram os do
+  **documento** (sem vínculo, requer validação, com agregados); no ciclo em andamento esses três
+  também saem, porque não há documento. Escritas à mão em dois `<select>`, as listas davam nomes
+  diferentes ao mesmo filtro.
+- **O seletor de Cartão saiu** — a Origem em chip faz esse papel nos dois recortes. No estado de erro
+  (cartão sem fatura importada) ele ficou sem handler nenhum e virou um link para o recorte por
+  período: um seletor que não navega é pior que nenhum.
+- **`lista_de_faturas()` é o ponto único** da lista de ciclos (previstos, em andamento, oficiais) que
+  alimenta o filtro, o seletor e as setas. Estava escrita duas vezes, já divergindo nas colunas.
+
+**Sair da fatura leva ao período DELA, não ao mês corrente.** A barra carrega o ciclo em `data-*`, e
+trocar a origem com uma fatura em foco cai no intervalo daquele ciclo — quem olhava julho continua em
+julho. Pelo mesmo motivo, "Período inteiro" traz a URL do ciclo.
+
+**Filtrar no mesmo recorte troca no lugar; trocar de recorte recarrega.** `pdmTrocarPorAjax` pareia
+os blocos **pelo índice**: a fatura tem dois grupos de cards e o período um, então sair dela por AJAX
+deixaria o segundo grupo na tela sob a lista do período, e o cabeçalho continuaria dizendo "Fatura
+Agosto". O Status, que antes recarregava na fatura enquanto o período trocava no lugar, agora troca no
+lugar nos dois — **e o card de filtro passa pelo mesmo caminho do seletor**.
+
+**Seletor dentro de bloco trocado por AJAX usa `onchange` no próprio elemento**, não
+`addEventListener`: a barra inteira é substituída, e o listener morreria junto com o elemento antigo —
+a mesma lição da delegação na tabela (§7.1).
+
+**Os cards continuam sendo os de cada recorte, e isso é decisão.** Um card de "falta vincular" não
+significa nada num período com três cartões e a conta corrente misturados (§7.1-A); um de "Receitas"
+numa fatura de cartão seria sempre zero.
 
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 

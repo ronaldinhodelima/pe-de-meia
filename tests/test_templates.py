@@ -7,6 +7,8 @@ depois, mas a licao fica: testar com dado inventado nao pega esse tipo de erro -
 formato usado aqui tem que espelhar o que a view realmente entrega.
 """
 from pathlib import Path
+
+from views.lancamentos import opcoes_de_status
 from datetime import date
 
 import re
@@ -606,7 +608,12 @@ def test_seletor_de_fatura_oferece_meses_futuros_com_dados():
     assert "mes civil" in fn or "MES CIVIL" in fn
     assert "· Previsto" in template
     assert "fatura.previsto" in template
-    assert "fatura.value.startsWith('futuro-')" in js
+    # O ciclo previsto aparece no filtro Fatura como qualquer outro, com a URL
+    # ja montada no servidor: `_url_da_fatura` e o ponto unico dela, e monta-la
+    # tambem no JS faria a navegacao discordar de si mesma.
+    assert "item.previsto" in template
+    assert "window.irParaFatura = function" in js
+    assert "startsWith('futuro-')" not in js
 
 
 def test_setas_da_detalhada_seguem_a_mesma_ordem_do_seletor():
@@ -671,6 +678,8 @@ class TestDetalhadaPorPeriodo:
             "origem_filtro_html": '<div class="chipfilter"></div>',
             "por_categoria": [{"nome": "Água", "total": 212.35}],
             "filtros_situacao": [{"rotulo": "Conferido", "url": "?status=conferida"}],
+            "status_opcoes": opcoes_de_status(),
+            "faturas_da_origem": [], "url_do_periodo": "",
             "receita_mes": 0, "gasto_real": 212.35, "resultado_mes": -212.35,
             "total_reais": 1, "total_recebidos": 1, "total_fora": 0, "conf_reais": 0,
             "pendente_classificacao": 0, "classificados_reais": 1, "pendentes_ok": 1,
@@ -1169,10 +1178,27 @@ class TestFiltrarSemRecarregar:
             assert "DOMParser" not in trecho, tela + ": segunda copia da troca"
 
     def test_a_detalhada_nao_recarrega_ao_filtrar(self):
+        """Filtrar troca a lista NO LUGAR nos dois recortes, e a troca de blocos
+        e uma so. Ate 10/09/2026 o Status da fatura recarregava a pagina inteira
+        enquanto o seletor ao lado trocava no lugar - dois comportamentos para a
+        mesma acao."""
         js = self.js("lancamentos_fatura.js")
-        trecho = js.split("window.aplicarFiltrosPeriodo = function", 1)[1].split("};", 1)[0]
-        assert "location.assign" not in trecho
-        assert "pdmTrocarPorAjax" in trecho
+        status = js.split("window.aplicarFiltroStatus = function", 1)[1].split("\n  };", 1)[0]
+        assert "location.assign" not in status
+        assert "trocarBlocos(" in status
+        # Periodo e origem trocam no lugar DENTRO do recorte por periodo. Sair de
+        # uma fatura troca o recorte - cabecalho, cards e formulario sao outros -
+        # e a troca por AJAX e pareada pelo indice: o segundo grupo de cards da
+        # fatura ficaria na tela sob a lista do periodo. So ai recarrega.
+        periodo = js.split("window.aplicarFiltrosPeriodo = function", 1)[1].split("\n  };", 1)[0]
+        assert "trocarBlocos(url)" in periodo
+        antes_do_assign = periodo.split("location.assign", 1)[0]
+        assert "if (!mesInput)" in antes_do_assign, "recarregar so ao sair da fatura"
+        assert js.count("pdmTrocarPorAjax(") == 1, "a troca de blocos e uma so"
+        # a barra INTEIRA e trocada: o filtro Fatura aparece e some conforme a
+        # origem, e as opcoes de Status crescem e encolhem junto
+        blocos = js.split("function trocarBlocos(", 1)[1].split("}\n", 1)[0]
+        assert "'.fatura-filtros'" in blocos
 
     def test_a_tabela_trocada_volta_a_ter_alcas_e_ordenacao(self):
         """replaceWith descarta o elemento antigo com TUDO que estava anexado
