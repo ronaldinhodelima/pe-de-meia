@@ -39,8 +39,7 @@
   .quem{display:flex;align-items:center;gap:7px}
   .avatar-titular{width:21px;height:21px;border-radius:50%;background:var(--selo-neutro);color:var(--sobre-cor);display:grid;place-items:center;font-size:var(--fonte-xxs);font-weight:var(--peso-forte);flex:none;letter-spacing:.02em}
 
-  .vinculos-detalhe{background:var(--bg)}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}.vinculo-grid{display:grid;grid-template-columns:minmax(260px,1.6fr) 150px 130px minmax(180px,1fr);gap:8px;align-items:center;padding:8px 10px;border-radius:var(--radius-xs);transition:background-color .12s}
-  .vinculo-grid.principal{background:var(--good-soft)}.vinculo-grid.tecnico{color:var(--ink-soft)}.vinculo-grid.tecnico:hover{background:var(--bg)}.vinculo-grid small{display:block;color:var(--ink-faint)}
+  .vinculos-detalhe{background:var(--bg)}.vinculos-detalhe>td{padding:12px 18px 16px 54px!important}.vinculo-bloco{border-top:1px solid var(--line)}
 
 
   .fonte-badge{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;font-size:var(--fonte-xs);font-weight:var(--peso-medio);background:var(--accent-soft);color:var(--accent-strong);border:1px solid transparent;cursor:default;transition:transform .12s}
@@ -53,11 +52,24 @@
   .transacao-info{margin:0 10px 10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}.detalhes-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;font-size:var(--fonte-sm)}.detalhes-grid b{display:block;color:var(--ink-faint);font-size:var(--fonte-xxs);text-transform: none}.detalhe-id{grid-column:span 2}.detalhe-id span{display:block;overflow-wrap:anywhere;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.nota-sistema{grid-column:1/-1;background:var(--raise);border-radius:var(--radius-xs);padding:8px;color:var(--ink-soft)}
   .classificacao-faltando{border-color:var(--bad)!important;background:var(--bad-soft)!important}
   .ajuda-fatura{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.45;margin:8px 0}
-  .acoes-lancamento{margin:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}
-  .acoes-lancamento-titulo{font-size:var(--fonte-xxs);color:var(--ink-faint);letter-spacing:.03em;margin-bottom:4px}
-  .acoes-lancamento .modal-rateio{border-top:0;padding-top:0}
-  .acoes-lancamento-perigo{display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
-  .acoes-lancamento-perigo .ajuda-fatura{margin:0}
+  /* Uma faixa por vinculo, com as acoes do lancamento na do principal. O
+     desenho anterior aninhava tres caixas - a celula, o bloco e a grade - e
+     cada uma somava o proprio padding: 307px de painel para uma linha de
+     informacao. Aqui a faixa e a unica caixa. */
+  .vinculo-faixa{display:flex;align-items:center;gap:14px;padding:7px 10px;border-radius:var(--radius-xs)}
+  .vinculo-faixa.principal{background:var(--good-soft)}
+  .vinculo-faixa.tecnico{color:var(--ink-soft)}
+  .vinculo-faixa .fonte-badge{margin-right:0;flex:0 0 auto}
+  .vinculo-quem{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+  .vinculo-quem b{font-weight:var(--peso-forte);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vinculo-quem small{color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+  .vinculo-quando{color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums;flex:0 0 auto}
+  .vinculo-valor{flex:0 0 auto;white-space:nowrap}
+  .vinculo-acoes{display:flex;gap:6px;flex:0 0 auto}
+  .vinculo-estado{flex:0 0 auto;white-space:nowrap}
+  .quadro-rateio{margin:8px 0 2px}
+  @media(max-width:1100px){.vinculo-faixa{gap:10px}.vinculo-estado{display:none}}
+  @media(max-width:760px){.vinculo-faixa{flex-wrap:wrap;gap:8px}.vinculo-quem{flex:1 1 100%}}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
   .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:var(--icone-sm)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
@@ -90,10 +102,10 @@
   .status-inline.erro{color:var(--bad)}
 
   /* ---- painel de detalhes: agora e leitura, nao formulario ---- */
-  .vinculos-detalhe>td{background:var(--bg);padding:14px 16px!important}
-  .vinculo-bloco{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow-1)}
-  .vinculo-bloco:last-of-type{margin-bottom:10px}
-  @media(max-width:1100px){.vinculo-grid,.detalhes-grid{grid-template-columns:1fr}.detalhe-id{grid-column:auto}.vinculos-detalhe>td{padding-left:12px!important}}
+  .vinculos-detalhe>td{background:var(--bg);padding:8px 16px 10px 54px!important}
+  .vinculo-bloco{margin-bottom:4px;border-top:0}
+  .vinculo-bloco:last-of-type{margin-bottom:0}
+  @media(max-width:1100px){.detalhes-grid{grid-template-columns:1fr}.detalhe-id{grid-column:auto}.vinculos-detalhe>td{padding-left:12px!important}}
 </style>
 {% endblock %}
 
@@ -348,11 +360,25 @@
   <tr class="vinculos-detalhe" id="vinculos-{{ linha.id }}" hidden><td colspan="{{ 7 + colunas_extra + dimensoes|length + (1 if pode_regras else 0) }}">
     {% for v in linha.vinculos %}
       <div class="vinculo-bloco">
-      <div class="vinculo-grid {{ 'principal' if v.principal else 'tecnico' }}">
-        <div><span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span><b style="display:inline">{{ v.descricao }}</b><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button><small>{% if modo_periodo %}{{ linha.origem_completa }}{% else %}{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% elif linha.cartao_aguardando %} · cartão pendente (o Pluggy ainda não confirmou){% endif %}{% endif %}</small></div>
-        <div>{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</div>
-        <div class="valor">{{ v.valor|moeda }}</div>
-        <div>{% if v.principal %}<span class="estado ok">contabilizado e editável</span>{% else %}<span class="estado">registro técnico · somente leitura</span>{% endif %}</div>
+      {# UMA faixa por vinculo, com as acoes do lancamento na do principal
+         (decisao do usuario, 09/09/2026). Antes eram tres caixas aninhadas -
+         a celula, o bloco e a grade, cada uma com o proprio padding - e o
+         painel levava 307px para mostrar uma linha de informacao. #}
+      <div class="vinculo-faixa {{ 'principal' if v.principal else 'tecnico' }}">
+        <span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span>
+        <span class="vinculo-quem"><b>{{ v.descricao }}</b><small>{% if v.principal %}{% if modo_periodo %}{{ linha.origem_completa }}{% else %}{{ linha.titular or 'Titular não informado' }}{% if linha.cartao_nome %} · {{ linha.cartao_nome }}{% elif linha.cartao_aguardando %} · cartão pendente (o Pluggy ainda não confirmou){% endif %}{% endif %}{% else %}registro técnico{% endif %}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
+        <span class="vinculo-quando">{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</span>
+        <span class="valor vinculo-valor">{{ v.valor|moeda }}</span>
+        <span class="estado {{ 'ok' if v.principal else '' }} vinculo-estado">{{ 'contabilizado e editável' if v.principal else 'somente leitura' }}</span>
+        {% if v.principal and modo_periodo and pode_editar and linha.principal and not linha.pagamento %}
+        <span class="vinculo-acoes">
+          <button type="button" class="ver-btn" data-abrir-rateio="{{ linha.principal.transacao_id }}">{{ 'Rateio' if linha.rateios else 'Ratear' }}</button>
+          {% if pode_manual and linha.principal.pode_excluir %}
+          <button type="button" class="btn-perigo leve" data-excluir-lancamento="{{ linha.principal.transacao_id }}"
+                  data-tip="Só lançamentos manuais ou importados de arquivo podem ser excluídos.">Excluir</button>
+          {% endif %}
+        </span>
+        {% endif %}
       </div>
       <div class="transacao-info" id="info-{{ linha.id }}-{{ loop.index }}" hidden><div class="detalhes-grid">
         <div><b>Fonte</b>{{ v.fonte_nome }}</div><div class="detalhe-id"><b>ID</b><span>{{ v.transacao_id }}</span></div>
@@ -375,17 +401,11 @@
        ACOES sobre o lancamento - raras, e sem lugar numa linha que ja tem dez
        colunas (decisao do usuario, 09/09/2026). #}
     {% if modo_periodo and pode_editar and linha.principal and not linha.pagamento %}
-    <div class="acoes-lancamento">
-      <div class="acoes-lancamento-titulo">Ações do lançamento</div>
-      <div class="modal-rateio" data-rateio-quadro="{{ linha.principal.transacao_id }}"
-           data-rateio-total="{{ linha.valor_rateio }}"></div>
-      {% if pode_manual and linha.principal.pode_excluir %}
-      <div class="acoes-lancamento-perigo">
-        <button type="button" class="btn-perigo leve" data-excluir-lancamento="{{ linha.principal.transacao_id }}">Excluir lançamento</button>
-        <span class="ajuda-fatura">Só lançamentos manuais ou importados de arquivo podem ser excluídos.</span>
-      </div>
-      {% endif %}
-    </div>
+    {# O quadro so aparece quando alguem clica em Ratear: ele traz um select de
+       categoria e um por dimensao, e deixa-lo aberto sempre custava 111px em
+       todo lancamento, para uma acao rara. #}
+    <div class="modal-rateio quadro-rateio" data-rateio-quadro="{{ linha.principal.transacao_id }}"
+         data-rateio-total="{{ linha.valor_rateio }}" hidden></div>
     {% endif %}
   </td></tr>
 {% else %}<tr><td colspan="{{ 7 + colunas_extra + dimensoes|length + (1 if pode_regras else 0) }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}

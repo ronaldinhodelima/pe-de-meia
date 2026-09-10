@@ -123,7 +123,22 @@
     });
   }
 
+  // "Ratear" abre o quadro; ele nao nasce montado porque traz um select de
+  // categoria e um por dimensao, e deixa-lo aberto sempre custava 111px em
+  // todo lancamento, para uma acao rara.
   document.addEventListener('click', function (e) {
+    const abrir = e.target.closest && e.target.closest('[data-abrir-rateio]');
+    if (abrir) {
+      e.stopPropagation();
+      const painel = abrir.closest('.vinculos-detalhe');
+      const quadro = painel && painel.querySelector(
+        '[data-rateio-quadro="' + CSS.escape(abrir.dataset.abrirRateio) + '"]');
+      if (!quadro) return;
+      quadro.hidden = !quadro.hidden;
+      abrir.classList.toggle('ativo', !quadro.hidden);
+      if (!quadro.hidden) montarQuadroDeRateio(quadro);
+      return;
+    }
     const excluir = e.target.closest && e.target.closest('[data-excluir-lancamento]');
     if (!excluir) return;
     e.stopPropagation();
@@ -457,9 +472,6 @@
     const detalhe = document.getElementById('vinculos-' + id);
     if (!detalhe) return;
     detalhe.hidden = !detalhe.hidden;
-    if (!detalhe.hidden) {
-      detalhe.querySelectorAll('[data-rateio-quadro]').forEach(montarQuadroDeRateio);
-    }
     if (botao) {
       botao.textContent = detalhe.hidden ? '+' : '−';
       botao.setAttribute('aria-expanded', detalhe.hidden ? 'false' : 'true');

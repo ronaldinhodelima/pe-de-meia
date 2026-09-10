@@ -180,7 +180,7 @@ def test_visao_por_fatura_reutiliza_ok_do_lancamento_e_mantem_agregados():
     assert 'data-expande="{{ linha.id }}"' in template
     assert "Lançamentos agregados a esta linha" not in template
     assert "contabilizado e editável" in template
-    assert "registro técnico · somente leitura" in template
+    assert "registro técnico" in template and "somente leitura" in template
     assert "data-ok-lancamento" in template
     assert "data-toggle-linha" in template
     assert "/api/transacao/" in js

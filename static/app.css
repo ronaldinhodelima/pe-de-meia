@@ -211,7 +211,7 @@
   }
   .tema-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
-  .wrap { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
+  .wrap { max-width: 1320px; margin: 24px auto; padding: 0 20px; }
 
   /* ---------- filters bar ---------- */
   .filters {

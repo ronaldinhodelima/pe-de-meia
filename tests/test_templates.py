@@ -926,15 +926,26 @@ class TestAcoesDoLancamento:
             base["linhas"][0]["principal"][chave] = valor
         return base
 
-    def test_o_quadro_de_rateio_fica_no_rodape_do_painel(self, ctx):
+    def test_as_acoes_ficam_na_faixa_do_vinculo_principal(self, ctx):
+        """Modelo A (decisao do usuario, 09/09/2026): procedência e ações na
+        MESMA linha. O quadro de rateio nasce fechado - ele traz um select de
+        categoria e um por dimensão, e deixa-lo aberto custava 111px em todo
+        lançamento, para uma ação rara."""
         html = render_template("lancamentos_fatura.html", **self.contexto())
-        assert 'class="acoes-lancamento"' in html
+        assert 'class="vinculo-faixa principal"' in html
+        assert "data-abrir-rateio=" in html
         assert 'data-rateio-quadro="11111111-1111-1111-1111-111111111111"' in html
         assert 'data-rateio-total="212.35"' in html
+        quadro = html.split("data-rateio-quadro", 1)[1].split(">", 1)[0]
+        assert "hidden" in quadro, "o quadro nasce fechado"
+        # a cor nao e a unica explicacao de estado (secao 7.6)
+        assert "contabilizado e editável" in html
         # o painel continua sendo auditoria: os campos nao voltaram para dentro
         painel = html.split('class="vinculos-detalhe"', 1)[1]
         assert 'data-campo="categoria"' not in painel
         assert 'data-campo="observacao"' not in painel
+        # e nao ha mais tres caixas aninhadas
+        assert "acoes-lancamento" not in html and "vinculo-grid" not in html
 
     def test_so_manual_e_importado_oferecem_excluir(self, ctx):
         """Lancamento do Pluggy nunca se apaga: a origem fica para auditoria
