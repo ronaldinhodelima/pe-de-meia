@@ -7,9 +7,11 @@ from urllib.parse import urlencode
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, session, jsonify, render_template
+from flask import Blueprint, request, session, jsonify, render_template, redirect
 
 from core import (
+    URL_LANCAMENTOS,
+    URL_RESUMIDA,
     valor_pt,
     EXIGE_DIMENSOES_SQL,
     exige_dimensoes,
@@ -153,6 +155,23 @@ def _estado_rateios(cur, transacao_id):
 
 
 @bp.route("/")
+def raiz():
+    """A raiz leva a tela de Lancamentos do sistema, que e a Detalhada.
+
+    Enquanto a Resumida morava aqui, quem abria o endereco do sistema - favorito,
+    historico, digitar o dominio - caia nela, e nao adiantava o menu, a marca e o
+    login apontarem para a Detalhada. A query e preservada porque mes, periodo,
+    origem e status tem os MESMOS nomes nos dois lados: um favorito antigo
+    continua abrindo o mesmo recorte, so que na tela certa.
+
+    Sem `@requer` de proposito: aqui nao se le dado nenhum, so se redireciona -
+    quem cobra a permissao e o destino.
+    """
+    query = request.query_string.decode()
+    return redirect(URL_LANCAMENTOS + ("?" + query if query else ""))
+
+
+@bp.route(URL_RESUMIDA)
 @requer("lancamentos_ver")
 def index():
     mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes = janela_do_periodo()
@@ -1322,7 +1341,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id, m
         contagens={"linhas": len(linhas), "vinculadas": len(linhas), "classificadas": classificadas, "conferidas": 0, "multiplos": 0, "pendente_classificacao": len(linhas)-classificadas, "pendente_ok": 0, "divergencias": 0},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
         por_categoria=por_categoria, filtros_situacao=filtros_situacao,
-        url_resumida=f"/?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
+        url_resumida=f"{URL_RESUMIDA}?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
@@ -1694,7 +1713,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         pct_conferidos=_pct(resumo["conferidos_reais"] or 0, total_reais),
         totais={}, contagens={},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
-        url_resumida="/?mes=" + mes + "&periodo=" + periodo + "&status=" + status,
+        url_resumida=URL_RESUMIDA + "?mes=" + mes + "&periodo=" + periodo + "&status=" + status,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
@@ -2183,13 +2202,13 @@ def lancamentos_por_fatura():
     conn.close()
     if fatura.get("periodo_inicio") and fatura.get("periodo_fim"):
         url_resumida = (
-            "/?periodo=intervalo&data_inicio=" + fatura["periodo_inicio"].isoformat()
+            URL_RESUMIDA + "?periodo=intervalo&data_inicio=" + fatura["periodo_inicio"].isoformat()
             + "&data_fim=" + fatura["periodo_fim"].isoformat()
             + "&origem=" + account_id + "&status=todas"
         )
     else:
         url_resumida = (
-            f"/?mes={fatura['ano_referencia']}-{fatura['mes_referencia']:02d}"
+            f"{URL_RESUMIDA}?mes={fatura['ano_referencia']}-{fatura['mes_referencia']:02d}"
             f"&periodo=mes&origem={account_id}&status=todas"
         )
     return render_template(

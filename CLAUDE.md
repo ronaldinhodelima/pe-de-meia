@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 414 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 416 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -957,7 +957,18 @@ ainda existe.
 **Lançamentos** do menu, a marca do topbar e o destino do login apontam para ela. A URL mora num
 ponto único — `core.URL_LANCAMENTOS` — porque aparece nesses três lugares; escrita nos três,
 divergiria no dia em que um fosse esquecido, e quando a Resumida sair muda só ali. **A Resumida
-continua respondendo em `/`**, alcançável pelo botão, como rede de segurança até ser removida.
+continua existindo** como rede de segurança até ser removida, alcançável pelo botão — mas **saiu da
+raiz em 10/09/2026** e responde em `core.URL_RESUMIDA` (`/lancamentos/resumida`). Enquanto ela morava
+em `/`, quem abria o endereço do sistema — favorito, histórico, digitar o domínio — caía nela, e o
+menu, a marca e o login apontarem para a Detalhada não adiantava nada. **A raiz redireciona,
+preservando a query**: `mes`, `periodo`, `origem` e `status` têm os mesmos nomes nos dois lados,
+então um favorito antigo abre o mesmo recorte, só que na tela certa. O redirecionamento não tem
+`@requer`: ali não se lê dado nenhum, e quem cobra a permissão é o destino.
+
+**A URL que um filtro monta sai do `pathname` atual, nunca escrita à mão.** A Resumida montava
+`'/?' + params`; com ela fora da raiz isso passaria a redirecionar para a Detalhada, e o AJAX do
+filtro traria o HTML da **outra tela**, em silêncio.
+`test_nenhuma_tela_monta_a_propria_url_a_partir_da_raiz` varre todo `static/*.js`.
 
 **O recorte por período é o PADRÃO da tela** (decisão do usuário, 09/09/2026, ao perguntar como
 via as outras origens). Abrindo por fatura, o seletor lista **só cartões de crédito** — conta
@@ -1967,7 +1978,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**414 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**416 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

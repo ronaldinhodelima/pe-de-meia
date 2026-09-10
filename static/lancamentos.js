@@ -279,7 +279,11 @@ function aplicarFiltros(recarregarPagina) {
   marcarCardAtivo();
   const params = coletarQuery();
   atualizarBotaoDetalhado();
-  const novaUrl = '/?' + params.toString();
+  // A URL sai do PATHNAME atual, nunca escrita a mao: escrita, ela prende a
+  // tela ao endereco em que a rota morava. Quando a Resumida saiu da raiz
+  // (10/09/2026), '/?...' passou a redirecionar para a Detalhada - e o AJAX
+  // do filtro traria o HTML da OUTRA tela, em silencio.
+  const novaUrl = window.location.pathname + '?' + params.toString();
   if (recarregarPagina) {
     guardarPosicaoAtual();
     window.location.assign(novaUrl);

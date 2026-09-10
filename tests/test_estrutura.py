@@ -136,7 +136,7 @@ def test_todas_as_rotas_continuam_registradas():
 
     rotas = {str(r) for r in app.app.url_map.iter_rules() if r.endpoint != "static"}
     esperadas = {
-        "/", "/login", "/logout", "/health", "/favicon.ico",
+        "/", "/lancamentos/resumida", "/login", "/logout", "/health", "/favicon.ico",
         "/api/sync-status", "/api/sync-agora", "/api/transacao/<transacao_id>",
         "/api/transacao/<transacao_id>/rateios",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",
@@ -2810,3 +2810,37 @@ def test_o_que_vive_dentro_da_tabela_e_ligado_por_delegacao():
     # o estado da linha (pintura e pilula) e refeito na tabela nova
     assert "window.pdmPrepararLinhas" in js
     assert js.count("pdmPrepararLinhas(tabela)") == 1
+
+
+def test_a_raiz_leva_a_tela_de_lancamentos_do_sistema():
+    """Enquanto a Resumida morava em "/", quem abria o endereco do sistema
+    (favorito, historico, digitar o dominio) caia nela - e o menu, a marca e o
+    login apontarem para a Detalhada nao adiantava nada. A raiz redireciona, e
+    preserva a query: mes, periodo, origem e status tem os MESMOS nomes nos dois
+    lados, entao um favorito antigo abre o mesmo recorte na tela certa.
+    """
+    import app
+    import core
+
+    cliente = app.app.test_client()
+    resposta = cliente.get("/")
+    assert resposta.status_code in (301, 302)
+    assert resposta.headers["Location"] == core.URL_LANCAMENTOS
+
+    resposta = cliente.get("/?mes=2026-08&periodo=mes&status=pendente")
+    assert resposta.headers["Location"] == (
+        core.URL_LANCAMENTOS + "?mes=2026-08&periodo=mes&status=pendente")
+
+
+def test_nenhuma_tela_monta_a_propria_url_a_partir_da_raiz():
+    """A URL que um filtro monta sai do `pathname` atual, nunca escrita a mao.
+
+    Escrita, ela prende a tela ao endereco em que a rota morava: com a Resumida
+    fora da raiz, um `'/?' + params` passaria a redirecionar para a Detalhada, e
+    o AJAX do filtro traria o HTML da OUTRA tela - sem erro nenhum.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    for arquivo in sorted((raiz / "static").glob("*.js")):
+        texto = arquivo.read_text(encoding="utf-8")
+        assert "'/?'" not in texto and '"/?"' not in texto, arquivo.name

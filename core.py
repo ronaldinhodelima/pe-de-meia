@@ -5429,9 +5429,15 @@ recarregar_categorias_db()
 
 # Qual e a tela de Lancamentos do sistema. E a Detalhada desde 09/09/2026
 # (decisao do usuario): so ela alcanca conta corrente, dinheiro e lancamento
-# manual no mesmo lugar. A Resumida continua respondendo em "/" como rede de
-# seguranca ate ser removida - quando isso acontecer, muda so aqui.
+# manual no mesmo lugar.
 URL_LANCAMENTOS = "/lancamentos/fatura"
+
+# A Resumida continua existindo como rede de seguranca ate ser removida, mas
+# saiu da RAIZ em 10/09/2026: enquanto ela morava em "/", quem abria o endereco
+# do sistema - favorito, historico, digitar o dominio - caia nela, e o menu, a
+# marca e o login apontarem para a Detalhada nao adiantava nada. A raiz agora
+# redireciona, preservando a query. Quando a Resumida sair, muda so aqui.
+URL_RESUMIDA = "/lancamentos/resumida"
 
 
 def topbar_html(titulo, ativo=None):
