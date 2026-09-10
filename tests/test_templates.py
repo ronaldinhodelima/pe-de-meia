@@ -315,28 +315,88 @@ class TestEdicaoEmLote:
         assert html.count('data-col="sel"') == 3, "cabecalho, linha e parte de rateio"
 
 
-def test_descricao_do_manual_se_edita_na_linha(ctx):
-    """A descricao do lancamento MANUAL e do usuario e se edita na propria linha.
+def test_descricao_do_manual_se_edita_no_painel_por_um_botao(ctx):
+    """A descricao do lancamento MANUAL se edita no painel, atras de um botao.
 
-    Isso morava so no modal da Resumida - o unico recurso que ela ainda tinha e
-    a Detalhada nao - e veio antes de ela sair (10/09/2026). A de um lancamento
-    do banco pertence ao banco (secao 4.6): nao vira campo, e o servidor recusa
+    Nunca na linha (decisao do usuario, 10/09/2026): a linha e para ler e
+    classificar, e um campo aberto ali se alterava sem querer. A de um lancamento
+    do banco pertence ao banco (secao 4.6): nao ganha botao, e o servidor recusa
     no proprio UPDATE mesmo que alguem chame a API direto.
     """
     import pathlib
     raiz = pathlib.Path(__file__).resolve().parent.parent
-    for editavel, pode, esperado in ((True, True, True), (False, True, False), (True, False, False)):
+    casos = (
+        ("manual", True, True, False, True),
+        ("banco", False, True, False, False),
+        ("sem permissao", True, False, False, False),
+        ("manual rateado", True, True, True, False),
+    )
+    for rotulo, editavel, pode, rateado, esperado in casos:
         ctxt = TestDetalhadaPorPeriodo().contexto(pode_editar=pode)
         ctxt["linhas"][0]["descricao_editavel"] = editavel
+        ctxt["linhas"][0]["principal"]["rateado"] = rateado
         html = render_template("lancamentos_fatura.html", **ctxt)
-        assert ('data-campo="descricao"' in html) is esperado, (editavel, pode)
+        linha = html.split('<td class="desc" data-col="desc">', 1)[1].split("</td>", 1)[0]
+        assert 'data-campo="descricao"' not in linha, rotulo + ": a linha voltou a editar"
+        assert ("data-editar-descricao" in html) is esperado, rotulo
+        if esperado:
+            painel = html.split('class="vinculo-quem"', 1)[1].split("</span>", 1)[0]
+            assert 'data-campo="descricao"' in painel and " hidden>" in painel, (
+                "o campo nasce escondido e so o botao o libera")
 
     view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
     assert '"descricao_editavel": str(row["account_id"]) == CONTA_MANUAL_ID' in view
     assert "escopo = \" AND account_id = %s\" if \"descricao\" in data" in view
-    # grava pelo MESMO caminho da observacao: espera curta e ao sair do campo
     js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-    assert "input[data-campo=\"descricao\"]" in js.split("const SELETOR_TEXTO", 1)[1].split(";", 1)[0]
+    # a gravacao automatica da linha nao alcanca mais a descricao
+    assert "descricao" not in js.split("const SELETOR_TEXTO", 1)[1].split(";", 1)[0]
+    # e o botao grava pelo MESMO salvarEditor - nao ha segundo caminho
+    fluxo = js.split("async function concluirDescricao(", 1)[1].split("\n  }\n", 1)[0]
+    assert "await salvarEditor(linha, campo)" in fluxo
+    assert "fetch(" not in fluxo, "segundo caminho de gravacao"
+    # so troca o texto na tela se o servidor aceitou
+    assert "classList.contains('erro')" in fluxo
+
+
+def test_lancamento_manual_nao_se_diz_do_pluggy(ctx):
+    """Tres procedencias, e nao duas (10/09/2026).
+
+    Com F/P so, o manual caia no "resto" e o painel dizia que ele veio do Pluggy
+    - falso justamente sobre a origem do dado, que e o que o painel existe para
+    mostrar.
+    """
+    import pathlib
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    ctxt = TestDetalhadaPorPeriodo().contexto()
+    principal = ctxt["linhas"][0]["principal"]
+    principal["fonte"], principal["fonte_nome"] = "M", "Lançamento manual"
+    html = render_template("lancamentos_fatura.html", **ctxt)
+    faixa = html.split('class="vinculo-faixa', 1)[1].split("</span>", 1)[0]
+    assert 'class="fonte-badge manual"' in faixa
+    assert "Lançamento manual" in faixa and "Pluggy" not in faixa
+
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    periodo = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
+    assert 'row["fonte"], row["fonte_nome"] = "M", "Lançamento manual"' in periodo
+    # a CONTA decide, nao `importado` - que e outra coisa (secao 11.3). Olha a
+    # condicao do `if`, e nao o comentario acima dela, que cita a palavra.
+    condicao = periodo.split('row["fonte"], row["fonte_nome"] = "M"', 1)[0].rsplit("\n        if ", 1)[1]
+    assert '.get("tipo") == "MANUAL"' in condicao
+    assert "importado" not in condicao
+
+
+def test_faixa_do_painel_nao_empurra_o_conteudo_para_a_borda():
+    """A descricao ocupa o que PRECISA, nao todo o espaco livre (10/09/2026).
+
+    Com `flex-grow` ela empurrava data, valor e acoes para a borda direita, e com
+    o painel tao largo quanto a tabela o "Excluir" passava do limite visivel.
+    """
+    import pathlib, re
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    html = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    regra = re.search(r"\.vinculo-quem\{([^}]*)\}", html).group(1)
+    assert "flex:0 1 auto" in regra and "max-width:" in regra
+    assert "flex:1 1 auto" not in regra
 
 
 

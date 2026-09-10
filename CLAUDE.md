@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 405 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 407 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1029,11 +1029,26 @@ em produção. Saíram `templates/index.html`, `static/lancamentos.js`, a rota `
 "Resumida" e o `url_resumida` que os construtores montavam para ele.
 
 **Antes de apagar, a comparação do que cada tela gravava achou UM recurso que só a Resumida tinha:
-editar a descrição de um lançamento manual.** Morava no modal de detalhes dela. Veio para a linha
-da Detalhada — um campo `data-campo="descricao"` que só aparece quando `descricao_editavel` (conta
-manual) e há permissão de editar, e que grava pelo **mesmo** caminho da observação: `payloadEditor`
-já era genérico, e o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando
-no próprio `UPDATE` a descrição de qualquer outra origem (§4.6). Natureza **não** era enviada pela
+editar a descrição de um lançamento manual.** Morava no modal de detalhes dela. Veio para o
+**painel de procedência**, atrás de um botão **"Editar"** — e **nunca na linha** (decisão do usuário,
+10/09/2026: a linha é para ler e classificar, e um campo aberto ali se alterava sem querer; ela chegou a
+ficar na linha por algumas horas). O botão só aparece quando `descricao_editavel` (conta manual), há
+permissão de editar e o lançamento **não** é rateado — a linha do rateado não tem editor próprio,
+porque a classificação mora nas partes. Enter ou sair do campo grava; Esc cancela. Grava pelo
+**mesmo** `salvarEditor` da linha — não há segundo caminho de gravação — e o texto na tela só muda se o
+servidor aceitou; o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando no
+próprio `UPDATE` a descrição de qualquer outra origem (§4.6).
+
+**O manual tem procedência própria: `M`, "Lançamento manual".** Com só F/P, ele caía no "resto" e o
+painel dizia **"Fonte: Pluggy"** — falso justamente sobre a origem do dado, que é o que o painel
+existe para mostrar. Quem decide é a **conta** `MANUAL`, não `transacao.importado` (que é outra coisa,
+§11.3, e nenhum código atual grava). Registro antigo com `importado = true` que não nasceu da fatura
+continua saindo como `P`: não há como afirmar de onde veio sem olhar o dado.
+
+**A faixa do painel não empurra mais o conteúdo para a borda.** `.vinculo-quem` tinha `flex-grow` e
+ocupava todo o espaço livre, levando data, valor, estado e ações para a direita — e, com o painel tão
+largo quanto a tabela, o "Excluir" saía cortado. Hoje a descrição ocupa o que precisa (até 55%), e o
+resto vem logo depois dela. Natureza **não** era enviada pela
 Resumida, e "substituído" lá era só uma opção de status — nenhum dos dois ficou para trás.
 
 **"Criado em / Última alteração" vieram depois, a pedido do usuário (10/09/2026).** No lançamento
@@ -2112,7 +2127,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**405 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**407 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

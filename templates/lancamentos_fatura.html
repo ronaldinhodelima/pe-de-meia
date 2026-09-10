@@ -63,7 +63,12 @@
   .vinculo-faixa.principal{background:var(--good-soft)}
   .vinculo-faixa.tecnico{color:var(--ink-soft)}
   .vinculo-faixa .fonte-badge{margin-right:0;flex:0 0 auto}
-  .vinculo-quem{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+  /* A descricao ocupa o que PRECISA, e nao todo o espaco livre: com flex-grow
+     ela empurrava data, valor e acoes para a borda, e com o painel tao largo
+     quanto a tabela o "Excluir" passava do limite visivel. */
+  .vinculo-quem{flex:0 1 auto;max-width:55%;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
+  .vinculo-quem .desc-input{width:28ch;max-width:100%}
+  .fonte-badge.manual{background:var(--raise);color:var(--ink-soft)}
   .vinculo-quem b{font-weight:var(--peso-forte);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .vinculo-quem small{color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
   .vinculo-quando{color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums;flex:0 0 auto}
@@ -72,7 +77,7 @@
   .vinculo-estado{flex:0 0 auto;white-space:nowrap}
   .quadro-rateio{margin:8px 0 2px}
   @media(max-width:1100px){.vinculo-faixa{gap:10px}.vinculo-estado{display:none}}
-  @media(max-width:760px){.vinculo-faixa{flex-wrap:wrap;gap:8px}.vinculo-quem{flex:1 1 100%}}
+  @media(max-width:760px){.vinculo-faixa{flex-wrap:wrap;gap:8px}.vinculo-quem{flex:1 1 100%;max-width:none}}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
   .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:var(--icone-sm)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
@@ -295,7 +300,7 @@
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          {% if linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" value="{{ linha.descricao }}" maxlength="500" aria-label="Descrição" data-tip="Lançamento manual: a descrição é sua e pode ser editada. A de um lançamento do banco não - ela pertence ao banco.">{% else %}<span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% endif %}{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
              pendencia deixava uma linha em branco em todo lancamento que nao
@@ -348,8 +353,13 @@
          a celula, o bloco e a grade, cada uma com o proprio padding - e o
          painel levava 307px para mostrar uma linha de informacao. #}
       <div class="vinculo-faixa {{ 'principal' if v.principal else 'tecnico' }}">
-        <span class="fonte-badge {{ 'fatura' if v.fonte=='F' else 'pluggy' }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span>
-        <span class="vinculo-quem"><b>{{ v.descricao }}</b><small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
+        <span class="fonte-badge {{ {'F': 'fatura', 'M': 'manual'}.get(v.fonte, 'pluggy') }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span>
+        <span class="vinculo-quem"><b class="vinculo-desc">{{ v.descricao }}</b>{#
+          A descricao do MANUAL se edita aqui, por um botao - nunca na linha
+          (decisao do usuario, 10/09/2026): a linha e para ler e classificar, e
+          um campo aberto ali se alterava sem querer. Rateado fica de fora: a
+          linha dele nao tem editor proprio, porque a classificacao mora nas
+          partes. #}{% if v.principal and linha.descricao_editavel and pode_editar and not linha.principal.rateado %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden><button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição deste lançamento manual. A de um lançamento do banco não se edita: ela pertence ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
         <span class="vinculo-quando">{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</span>
         <span class="valor vinculo-valor">{{ v.valor|moeda }}</span>
         <span class="estado {{ 'ok' if v.principal else '' }} vinculo-estado">{{ 'contabilizado e editável' if v.principal else 'somente leitura' }}</span>
@@ -439,4 +449,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-3"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-4"></script>{% endblock %}

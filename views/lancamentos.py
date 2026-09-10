@@ -1263,8 +1263,15 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["sincronizado_local"] = data_hora_local(row.pop("sincronizado_em"))
         row["primeiro_sincronizado_local"] = data_hora_local(row.pop("primeiro_sincronizado_em"))
         row["atualizado_local"] = data_hora_local(row.pop("atualizado_em"))
-        row["fonte"] = "F" if tid in criados_pela_fatura else "P"
-        row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
+        # TRES procedencias, e nao duas. Com F/P so, o lancamento manual caia no
+        # "resto" e o painel dizia que ele veio do Pluggy - uma afirmacao falsa
+        # sobre a origem do dado, que e justamente o que o painel existe para
+        # mostrar. Manual se reconhece pela conta, nao por `importado`.
+        if (contas_by_id.get(str(row["account_id"])) or {}).get("tipo") == "MANUAL":
+            row["fonte"], row["fonte_nome"] = "M", "Lançamento manual"
+        else:
+            row["fonte"] = "F" if tid in criados_pela_fatura else "P"
+            row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
         row["dims"] = dims_por_tx.get(tid, {})
         rateio = rateio_por_tx.get(tid) or []
         row["rateado"] = bool(rateio)

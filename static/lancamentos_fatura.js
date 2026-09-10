@@ -901,11 +901,10 @@
     if (campo.value === '__novo__') cadastrarNovo(campo);
     else salvarEditor(editor, campo);
   });
-  // Observacao e, no lancamento manual, a descricao: os dois sao texto livre e
-  // gravam do mesmo jeito - espera curta enquanto digita e ao sair do campo.
-  // A descricao veio do modal da Resumida, que era o unico lugar onde ela se
-  // editava; sem ela aqui, remover a Resumida tiraria o recurso do sistema.
-  const SELETOR_TEXTO = 'input[data-campo="observacao"],input[data-campo="descricao"]';
+  // A observacao grava sozinha: espera curta enquanto digita e ao sair do campo.
+  // A descricao do manual NAO entra aqui - ela mora no painel, atras de um
+  // botao, e grava pelo fluxo proprio mais abaixo.
+  const SELETOR_TEXTO = 'input[data-campo="observacao"]';
   document.addEventListener('input', evento => {
     const campo = evento.target.closest(SELETOR_TEXTO);
     if (!campo) return;
@@ -922,6 +921,74 @@
     if (!editor) return;
     clearTimeout(temporizadores.get(campo));
     salvarEditor(editor, campo);
+  });
+
+
+  // ---- Descricao do lancamento manual ---------------------------------------
+  // Se edita no PAINEL, por um botao, e nunca na linha (decisao do usuario,
+  // 10/09/2026): a linha e para ler e classificar, e um campo aberto ali se
+  // alterava sem querer. Grava pelo MESMO salvarEditor da linha - nao existe
+  // segundo caminho de gravacao - e o servidor recusa a descricao de qualquer
+  // lancamento que nao seja manual (secao 4.6).
+  document.addEventListener('click', evento => {
+    const botao = evento.target.closest('[data-editar-descricao]');
+    if (!botao) return;
+    evento.stopPropagation();
+    const faixa = botao.closest('.vinculo-quem');
+    const texto = faixa.querySelector('.vinculo-desc');
+    const campo = faixa.querySelector('input[data-campo="descricao"]');
+    if (!texto || !campo) return;
+    campo.value = texto.textContent;
+    texto.hidden = true;
+    botao.hidden = true;
+    campo.hidden = false;
+    campo.focus();
+    campo.select();
+  });
+
+  async function concluirDescricao(campo, gravar) {
+    if (campo.dataset.concluindo) return;
+    campo.dataset.concluindo = '1';
+    const faixa = campo.closest('.vinculo-quem');
+    const texto = faixa.querySelector('.vinculo-desc');
+    const botao = faixa.querySelector('[data-editar-descricao]');
+    const nova = campo.value.trim();
+    const linha = document.querySelector('tr[data-editor="' + CSS.escape(campo.dataset.editorDe) + '"]');
+    try {
+      if (gravar && linha && nova && nova !== texto.textContent) {
+        await salvarEditor(linha, campo);
+        const aviso = linha.querySelector('[data-status]');
+        // so troca o texto na tela se o servidor aceitou: mostrar uma descricao
+        // que nao foi gravada seria a tela mentindo sobre o dado
+        if (!(aviso && aviso.classList.contains('erro'))) {
+          texto.textContent = nova;
+          const loja = linha.querySelector('.desc-loja');
+          if (loja) { loja.textContent = nova; loja.dataset.tip = nova; }
+        }
+      }
+    } finally {
+      campo.hidden = true;
+      texto.hidden = false;
+      if (botao) botao.hidden = false;
+      delete campo.dataset.concluindo;
+    }
+  }
+
+  document.addEventListener('keydown', evento => {
+    const campo = evento.target.closest && evento.target.closest('input[data-campo="descricao"]');
+    if (!campo) return;
+    if (evento.key === 'Enter') { evento.preventDefault(); concluirDescricao(campo, true); }
+    else if (evento.key === 'Escape') {
+      // o Esc e do campo aqui: sem isto, ele tambem fecharia a barra de lote
+      evento.preventDefault();
+      evento.stopPropagation();
+      concluirDescricao(campo, false);
+    }
+  });
+  // `blur` nao borbulha
+  document.addEventListener('focusout', evento => {
+    const campo = evento.target.closest && evento.target.closest('input[data-campo="descricao"]');
+    if (campo && !campo.hidden) concluirDescricao(campo, true);
   });
 
 
