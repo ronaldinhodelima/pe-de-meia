@@ -187,17 +187,27 @@ def test_visao_por_fatura_reutiliza_ok_do_lancamento_e_mantem_agregados():
     assert "dataset.okLancamento" in js
 
 
-def test_visualizacoes_resumida_e_detalhada_sao_escolha_explicita():
+def test_a_resumida_saiu_e_o_endereco_antigo_redireciona():
+    """Decisao do usuario (10/09/2026): a Resumida saiu.
+
+    A Detalhada passou a ter tudo o que ela tinha - o ultimo recurso a vir foi a
+    edicao da descricao do lancamento manual - e duas telas para o mesmo dado
+    divergiam na primeira regra nova. O endereco antigo continua respondendo,
+    redirecionando com a query: favorito e historico abrem o mesmo recorte na
+    tela que existe.
+    """
+    import app
+    import core
+    for arquivo in ("templates/index.html", "static/lancamentos.js"):
+        assert not (RAIZ / arquivo).exists(), arquivo
+    resposta = app.app.test_client().get(core.URL_RESUMIDA + "?mes=2026-08&status=pendente")
+    assert resposta.status_code in (301, 302)
+    assert resposta.headers["Location"] == core.URL_LANCAMENTOS + "?mes=2026-08&status=pendente"
+
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
-    resumo = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     detalhe = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    assert '"origens_credito"' in view
-    assert "/lancamentos/fatura?account_id=" in js
-    assert "abrirVisualizacaoDetalhada" in js
-    assert "abrirVisaoDetalhada" in resumo
-    assert ">Resumida<" in resumo and ">Detalhada<" in resumo
-    assert ">Resumida<" in detalhe and ">Detalhada<" in detalhe
+    assert ">Resumida<" not in detalhe
+    assert "url_resumida" not in view and "url_resumida" not in detalhe
     trecho = view.split('def lancamentos_por_fatura', 1)[1].split('@bp.route("/api/fatura-linha', 1)[0]
     assert "ORDER BY f.ano_referencia DESC, f.mes_referencia DESC" in trecho
     assert "LIMIT 1" in trecho
@@ -247,9 +257,8 @@ def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
     relatorios = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    resumo = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
     assert "if versao_atual < 32:" in core
     assert "if versao_atual < 33:" in core
@@ -257,7 +266,6 @@ def test_observacao_pessoal_fica_separada_das_mensagens_do_sistema():
     assert "observacao=NULL" in core
     assert "observacao_sistema" in relatorios
     assert "t.observacao_sistema" in view
-    assert "modalInfoSistema" in resumo
     assert "Informação interna do sistema" in detalhada
     assert "obsInput.value = DUPLICADA_OBS_PADRAO" not in js
     assert "payload.observacao = tr.querySelector('.obs-input').value" not in js
@@ -423,7 +431,7 @@ def test_parcelamento_total_com_uma_fatura_ja_vira_registro_tecnico():
     # a escolher: o alternador "Por periodo | Por fatura" deixou de existir e
     # escolher a fatura virou um filtro.
     filtros = _bloco_com(template, '<div class="fatura-filtros"', "filtroFatura")
-    assert 'class="visao-lancamentos"' in filtros
+    assert 'id="periodoStatus"' in filtros
     cabecalho = _bloco_com(template, '<div class="fatura-cabecalho">', "fatura_antiga")
     assert "Ciclo" in cabecalho
     assert "PDF oficial</span>" not in cabecalho
@@ -457,9 +465,7 @@ def test_pendente_conciliado_ao_pdf_pode_receber_ok():
 
 
 def test_cadastro_rapido_mantem_listas_alfabeticas():
-    resumo = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
     detalhada = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
-    assert "lista.sort((a, b)" in resumo and "localeCompare" in resumo
     assert "json.nome.localeCompare" in detalhada
 
 
@@ -490,14 +496,15 @@ def test_tojson_nunca_dentro_de_atributo_html():
 def test_nenhum_handler_inline_recebe_id_interpolado():
     """Handlers inline com dado interpolado sao a origem do bug acima.
 
-    Os eventos da tabela de Lancamentos passaram a ser tratados por delegacao,
-    lendo o id do data-id da linha. Isto trava a volta do padrao antigo.
+    Os eventos da tabela de Lancamentos sao tratados por delegacao, lendo o id
+    de um `data-` da linha. Isto trava a volta do padrao antigo.
     """
     import re
 
-    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    suspeitos = re.findall(r'on\w+="[^"]*\{\{[^}]*\br\.id\b[^}]*\}\}[^"]*"', html)
-    assert not suspeitos, f"handler inline com o id da linha: {suspeitos}"
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    suspeitos = re.findall(
+        r'on\w+="[^"]*\{\{[^}]*\b(?:linha|v|parte)\.[^}]*\}\}[^"]*"', html)
+    assert not suspeitos, f"handler inline com dado da linha: {suspeitos}"
 
 
 def test_posicao_da_pagina_e_mantida_em_todas_as_telas():
@@ -524,7 +531,7 @@ def test_filtros_criam_historico_e_botao_voltar_restaura_estado():
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
     assert "history.pushState" in tabelas
     assert "history.replaceState" not in tabelas
-    for arquivo in ("lancamentos.js", "relatorios.js", "lancamentos_fatura.js"):
+    for arquivo in ("relatorios.js", "lancamentos_fatura.js"):
         js = (RAIZ / "static" / arquivo).read_text(encoding="utf-8")
         assert "addEventListener('popstate'" in js, arquivo
         assert "history.replaceState" not in js, arquivo
@@ -593,16 +600,16 @@ def test_filtro_de_tabela_existe_e_e_automatico():
 
 
 def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
-    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    template = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
     for classe in (
         "rateio-valor-inline", "rateio-cat-select", "rateio-dim-select",
         "rateio-obs-inline", "rateio-salvar-inline",
     ):
         assert classe in template
-    # a edicao das partes mora no nucleo compartilhado: a Detalhada faz o mesmo,
-    # e duas implementacoes divergiriam na primeira regra nova (secao 7.1)
+    # a edicao das partes mora no nucleo compartilhado: duas implementacoes
+    # divergiriam na primeira regra nova (secao 7.1)
     nucleo = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
     assert "function ler(id)" in nucleo
     assert "function validar(id)" in nucleo
@@ -611,10 +618,9 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
     assert "function lerRateioInline" not in js, "segunda copia do nucleo"
     # o mesmo clique que salva o conjunto assina o OK do pai (secao 4.4)
     assert "conferir: !!ctx.config().pode_conferir" in nucleo
-    assert "conf.disabled = !window.configLancamentos.pode_conferir || !estado.valido" in js
+    assert "ok.disabled = !config.pode_conferir || !estado.valido" in js
     assert "data-rateio-total" in template
-    assert "{{ r.descricao }} — Parte {{ loop.index }}" in template
-    assert template.index('id="modalConferida"') < template.index('id="modalRateioBox"')
+    assert "{{ linha.descricao }} — Parte {{ loop.index }}" in template
     assert 'class="rateio-salvar-inline"' in template and '>✓</button>' in template
     assert "rateio-parte-titulo" in nucleo
     assert "aviso.textContent = fecha ? ''" in nucleo
@@ -622,16 +628,15 @@ def test_rateio_pode_ser_editado_nas_linhas_e_ok_depende_do_fechamento():
 
 
 def test_registro_substituido_fica_agrupado_sem_heuristica_e_acompanha_ordenacao():
+    """Registro de conciliacao so e recolhido sob a parcela que o substitui quando
+    ha UM destino visivel e inequivoco - nunca por data ou valor parecidos
+    (secao 7.4). Ate 10/09/2026 isso era cobrado da Resumida; a regra mora no
+    recorte por periodo da Detalhada."""
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    js = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
-
-    assert "alvo = linhas_por_id.get(alvo_id)" in view
-    assert 'len(alvos) == 1' in view
-    assert 'linha["substituido_por"] or linha["principal_conciliacao"]' in view
-    assert 'data-tecnico-parent="{{ r.id }}"' in template
-    assert 'class="tecnico-toggle"' in template
-    assert "filha.dataset.tecnicoParent === id" in js
+    periodo = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
+    assert "principal_por_tecnico = {" in periodo
+    assert "if len(alvos) == 1" in periodo
+    assert '"_tecnico_de": principal_por_tecnico.get(tid)' in periodo
 
 
 def test_classificacao_de_parcela_so_preenche_vazios_e_exige_consenso():
@@ -689,16 +694,19 @@ def test_importacao_legada_unicred_preserva_ajustes_da_nova_tela():
 
 
 def test_resumo_conta_transacao_rateada_uma_vez_e_status_tem_filtros_explicitos():
-    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    template = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
+    from views.lancamentos import opcoes_de_status
 
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     assert "COUNT(DISTINCT t.transacao_id) AS total_reais" in view
     assert "total_recebidos" in view
+    # as opcoes de Status sao montadas pela rota, que declara o que cada recorte
+    # entende (10/09/2026)
+    valores = {valor for valor, _ in opcoes_de_status()}
     for status in (
         "pendente_banco", "fora_resultado", "somente_conciliacao",
         "substituido", "rateio_incompleto",
     ):
-        assert f'value="{status}"' in template
+        assert status in valores, status
 
 
 def test_dre_da_fatura_usa_valor_do_pdf_e_classificacao_do_vinculo():
@@ -762,7 +770,7 @@ def test_o_filtro_em_chip_tem_uma_implementacao_so():
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
     assert "function cfToggle" in tabelas and "function cfKeydown" in tabelas
     assert "function menuColunas" in tabelas
-    for arquivo in ("lancamentos.js", "relatorios.js"):
+    for arquivo in ("relatorios.js", "lancamentos_fatura.js"):
         texto = (RAIZ / "static" / arquivo).read_text(encoding="utf-8")
         assert "function cfToggle" not in texto, arquivo + ": segunda copia do chip"
     # aplicar o filtro e do `onchange` que cada tela declara: chamar
@@ -799,7 +807,7 @@ def test_contador_do_chip_nao_vaza_para_o_texto_da_opcao():
     tabelas = (RAIZ / "static" / "tabelas.js").read_text(encoding="utf-8")
     assert "function textoDaOpcao" in tabelas
 
-    for nome in ("lancamentos.js", "relatorios.js"):
+    for nome in ("relatorios.js",):
         js = (RAIZ / "static" / nome).read_text(encoding="utf-8")
         assert "lbl.textContent.trim()" not in js, f"{nome}: chip selecionado leria o numero"
         assert "opt.textContent.toLowerCase()" not in js, f"{nome}: a busca casaria com o numero"
@@ -819,7 +827,7 @@ def test_menu_de_colunas_nao_usa_a_classe_do_filtro():
     assert "caixa.className = 'menu-colunas'" in tabelas
     assert "caixa.className = 'chipfilter'" not in tabelas
 
-    for nome in ("lancamentos.js", "relatorios.js"):
+    for nome in ("relatorios.js",):
         js = (RAIZ / "static" / nome).read_text(encoding="utf-8")
         # so checkbox com name e filtro
         assert "input[type=checkbox]:checked" not in js, f"{nome}: pegaria checkbox sem name"
@@ -829,7 +837,7 @@ def test_menu_de_colunas_nao_usa_a_classe_do_filtro():
 def test_botao_de_filtro_nao_tem_sinal_de_mais():
     """O botao abre um filtro, nao adiciona nada - o '+' confundia."""
     assert "chip-plus" not in (RAIZ / "core.py").read_text(encoding="utf-8")
-    for nome in ("lancamentos.js", "relatorios.js"):
+    for nome in ("relatorios.js", "lancamentos_fatura.js"):
         assert "chip-plus" not in (RAIZ / "static" / nome).read_text(encoding="utf-8")
 
 
@@ -1219,8 +1227,8 @@ def test_marcar_como_duplicada_nao_existe_mais_em_lugar_nenhum():
     duplicados passarem a inclui-los em silencio.
     """
     lanc = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    index = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    index = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
     # nada grava a coluna
     assert 'sets.append("duplicada' not in lanc
@@ -1338,7 +1346,7 @@ def test_titulos_saem_da_escala_e_nao_de_um_valor_cru():
     import re
 
     alvos = ["static/app.css", "templates/login.html", "templates/dre.html",
-             "templates/index.html", "templates/investimentos.html",
+             "templates/investimentos.html",
              "templates/conciliar_fatura.html"]
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
     for token in ("--titulo-sm: 15px", "--titulo-md: 17px", "--titulo-lg: 21px", "--titulo-xl:"):
@@ -1368,7 +1376,7 @@ def test_campo_em_caixa_tem_uma_definicao_so():
         assert hook in corpo, hook
 
     # nenhuma tela redefine o proprio desenho por cima
-    for alvo in ("templates/lancamentos_fatura.html", "templates/index.html"):
+    for alvo in ("templates/lancamentos_fatura.html",):
         texto = (RAIZ / alvo).read_text(encoding="utf-8")
         for proibido in ("input[type=text]{padding", "input{padding"):
             assert proibido not in texto, f"{alvo}: {proibido}"
@@ -1560,7 +1568,7 @@ def test_totais_da_tela_saem_de_um_calculo_so():
     Dois calculos para "o valor da linha" divergiriam no primeiro rateado - o
     pai carrega o total e as partes carregam pedacos dele.
     """
-    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+    for alvo in ("templates/lancamentos_fatura.html",):
         html = (RAIZ / alvo).read_text(encoding="utf-8")
         assert "data-total-rodape" in html, alvo
         assert "data-total-qtd" in html and "data-total-valor" in html, alvo
@@ -1574,7 +1582,7 @@ def test_totais_da_tela_saem_de_um_calculo_so():
     lote = (RAIZ / "static" / "lote.js").read_text(encoding="utf-8")
     assert "function resumoSelecao" in lote
     assert "tr.dataset.valor" in lote
-    for js in ("lancamentos.js", "lancamentos_fatura.js"):
+    for js in ("lancamentos_fatura.js",):
         texto = (RAIZ / "static" / js).read_text(encoding="utf-8")
         assert "pdmLote.resumoSelecao(" in texto, js
 
@@ -1601,8 +1609,8 @@ def test_as_duas_telas_de_lancamentos_usam_a_mesma_barra_de_tabela():
     assert "'↺ Redefinir'" in tabelas, "o botao encurtou"
     assert "table.dataset.buscaExterna" in tabelas
 
-    # a coluna Regra existe nas duas e nasce escondida nas duas
-    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+    # a coluna Regra existe e nasce escondida
+    for alvo in ("templates/lancamentos_fatura.html",):
         texto = (RAIZ / alvo).read_text(encoding="utf-8")
         assert 'data-col="regra" data-oculta-padrao' in texto, alvo
         assert "regra-btn" in texto, alvo
@@ -1614,12 +1622,12 @@ def test_avatar_de_autor_so_existe_em_lancamento_manual():
     Inventar uma inicial ali diria que alguem lancou o que o Pluggy mandou.
     """
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    assert 'if str(r["account_id"]) == CONTA_MANUAL_ID else None' in view
+    assert 'if str(row["account_id"]) == CONTA_MANUAL_ID else None' in view
     assert "criado_por" in view and 'session.get("user")' in view
     assert 'session.get("usuario")' not in view, "a chave da sessao e 'user'"
 
-    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    assert "avatar-autor" in html and "{% if r.autor %}" in html
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "avatar-autor" in html and "{% if linha.autor %}" in html
 
     core = (RAIZ / "core.py").read_text(encoding="utf-8")
     assert "ADD COLUMN IF NOT EXISTS criado_por text" in core
@@ -1633,9 +1641,8 @@ def test_botao_manual_existe_nas_duas_telas_com_o_mesmo_nome():
     o usuario para la por um link, porque copiar o formulario criaria a segunda
     implementacao que diverge na primeira regra nova (secao 7.1).
     """
-    resumida = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    for html in (resumida, detalhada):
+    for html in (detalhada,):
         assert "+ manual" in html
         assert "+ Lançamento manual" not in html
         assert '{% include "_form_manual.html" %}' in html
@@ -1667,29 +1674,29 @@ def test_confirmacao_de_gravacao_usa_um_unico_toast():
     base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
     assert "/static/toast.js" in base, "vale para todas as telas"
 
-    for js in ("lancamentos.js", "lancamentos_fatura.js", "lote.js"):
+    for js in ("lancamentos_fatura.js", "lote.js"):
         texto = (RAIZ / "static" / js).read_text(encoding="utf-8")
         assert "pdmToast" in texto, js
     # o status preso na linha saiu de cena
-    assert "s.textContent = 'ok'" not in (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    assert "s.textContent = 'ok'" not in (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
 
 def test_lancamento_rateado_nao_cobra_classificacao_no_pai():
     """Num rateado a classificacao mora nas PARTES (secao 4.4).
 
-    A trava do servidor ja validava so as partes; a tela e que pintava de
-    vermelho a categoria e as dimensoes do pai - cobrando um preenchimento que
-    ninguem exige e que, se atendido, faria o mesmo dinheiro aparecer duas
-    vezes na visao por dimensao. Mesma classe dos 57 falsos pendentes: quem
-    PINTA tem que ler a mesma regra de quem CALCULA (secao 7.2).
+    Cobrar categoria e dimensoes do pai pediria um preenchimento que ninguem
+    exige e que, se atendido, faria o mesmo dinheiro aparecer duas vezes na
+    visao por dimensao. Mesma classe dos 57 falsos pendentes: quem PINTA tem que
+    ler a mesma regra de quem CALCULA (secao 7.2).
     """
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    assert '"exige_classificacao": not bool(rateios_ui)' in view
+    assert 'faltando = [] if rateio_valido else ["Rateio"]' in view
+    assert 'faltando = [] if valido_do_rateio else ["Rateio"]' in view
 
-    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    assert "r.get('exige_classificacao', True) and not r.categoria" in html
-    assert "r.get('exige_classificacao', True) and r.get('exige_dimensoes', True)" in html
-    assert 'data-exige-classificacao=' in html
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    # o pai rateado nem mostra os campos: a linha diz onde a classificacao mora
+    assert "{% if linha.principal and not linha.principal.rateado %}" in html
+    assert "Rateado — ajuste as partes no detalhe" in html
 
 
 def test_modo_cartao_respeita_linha_escondida():
@@ -1724,19 +1731,14 @@ def test_toda_gravacao_confirma_com_toast():
     Quem recarrega a pagina em seguida usa a versao que atravessa o reload -
     o toast imediato piscaria e sumiria junto com a pagina.
     """
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
+    fatura = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     nucleo_rateio = (RAIZ / "static" / "rateio.js").read_text(encoding="utf-8")
     manual = (RAIZ / "static" / "manual.js").read_text(encoding="utf-8")
-    for gravacao in ("Lançamento salvo", "Lançamento excluído", "Descrição salva", "cadastrado"):
-        assert gravacao in js, gravacao
+    for gravacao in ("Lançamento excluído", "cadastrado"):
+        assert gravacao in fatura, gravacao
     assert "Lançamento criado" in manual
     for gravacao in ("Rateio salvo", "Rateio desfeito"):
         assert gravacao in nucleo_rateio, gravacao
-    # o fluxo que recarrega nao mostra os dois
-    assert "salvar(idAtualModal, selLinha, {semToast: true})" in js
-    assert "!opcoes.semToast && window.pdmToast" in js
-
-    fatura = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     assert "Lançamento conferido" in fatura and "OK retirado" in fatura
 
     # a mensagem diz QUAL campo foi gravado, e o rotulo sai do aria-label - que
@@ -1746,10 +1748,11 @@ def test_toda_gravacao_confirma_com_toast():
     assert "window.pdmToastSalvo" in toast
     assert "'Salvo · ' + rotulo" in toast
     assert "getAttribute('aria-label')" in toast
-    assert "window.pdmToastSalvo(el)" in js, "Resumida"
-    assert "window.pdmToastSalvo(campo)" in fatura, "Detalhada"
-    # o OK nao e "mais um campo": a mensagem diz o que a assinatura fez
-    assert "el.checked ? 'Lançamento conferido' : 'OK retirado'" in js
+    assert "window.pdmToastSalvo(campo)" in fatura
+    # a descricao do manual confirma pelo mesmo caminho: e o aria-label dela que
+    # faz o toast dizer "Salvo · Descricao"
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert 'data-campo="descricao"' in html and 'aria-label="Descrição"' in html
 
 
 def test_celula_de_tabela_nao_vira_flex():
@@ -1765,8 +1768,8 @@ def test_celula_de_tabela_nao_vira_flex():
     assert "td.cel-origem { display: flex" not in css
     assert ".origem-conteudo { display: flex" in css
 
-    html = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-    assert html.count('class="origem-conteudo"') == 2, "linha e registro tecnico"
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert html.count('class="origem-conteudo"') == 1
 
 
 def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
@@ -1798,7 +1801,7 @@ def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
     assert "table.ajustavel { width: auto !important; min-width: 100% !important;" in css
 
     # as duas telas precisam do container que rola
-    for alvo in ("templates/index.html", "templates/lancamentos_fatura.html"):
+    for alvo in ("templates/lancamentos_fatura.html",):
         html = (RAIZ / alvo).read_text(encoding="utf-8")
         assert 'class="tabela-scroll"' in html, alvo
 
@@ -1810,36 +1813,19 @@ def test_arrastar_coluna_empurra_as_de_baixo_e_a_largura_escolhida_persiste():
     assert "min-width:132px" not in fatura, "os minimos estouravam o container"
 
 
-def test_as_duas_telas_nomeiam_e_ordenam_as_colunas_igual():
-    """Mesmos titulos e mesma ordem (decisao do usuario, 08/09/2026).
+def test_as_colunas_tem_os_titulos_combinados():
+    """Titulos decididos pelo usuario (08/09/2026).
 
-    Duas visoes do mesmo dado que chamam a mesma coluna de nomes diferentes -
-    "Obs" x "Observacao", "Descricao" x "Descricao na fatura" - e as colocam em
-    ordens diferentes obrigam a reaprender a tela a cada troca de visao. Os
-    `data-col` tambem sao os mesmos: e por eles que o modo cartao e a ordenacao
-    encontram cada coluna.
+    "Obs" x "Observacao", "Descricao" x "Descricao na fatura": duas grafias para
+    a mesma coluna obrigavam a reaprender a tela. A mesma ordem nos dois recortes
+    e cobrada por `test_a_tabela_e_a_mesma_nos_dois_recortes`.
     """
-    import re
-
-    def colunas(arquivo):
-        html = (RAIZ / "templates" / arquivo).read_text(encoding="utf-8")
-        cabecalho = html.split("<thead>", 1)[1].split("</thead>", 1)[0]
-        return re.findall(r'data-col="([a-z_0-9{}\. ]+)"', cabecalho)
-
-    resumida = colunas("index.html")
-    detalhada = colunas("lancamentos_fatura.html")
-    # Desde que a Detalhada recorta tambem por periodo, ela mistura contas e
-    # tem Origem como a Resumida: as duas telas passam a ter exatamente as
-    # mesmas colunas, na mesma ordem.
-    assert resumida == detalhada, (resumida, detalhada)
-
-    for arquivo in ("index.html", "lancamentos_fatura.html"):
-        html = (RAIZ / "templates" / arquivo).read_text(encoding="utf-8")
-        cabecalho = html.split("<thead>", 1)[1].split("</thead>", 1)[0]
-        assert ">Descrição<" in cabecalho, arquivo
-        assert ">Observação<" in cabecalho, arquivo
-        assert ">Valor<" in cabecalho, arquivo
-        assert ">Descricao<" not in cabecalho and ">Obs<" not in cabecalho, arquivo
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    cabecalho = html.split("<thead>", 1)[1].split("</thead>", 1)[0]
+    assert ">Descrição<" in cabecalho
+    assert ">Observação<" in cabecalho
+    assert ">Valor<" in cabecalho
+    assert ">Descricao<" not in cabecalho and ">Obs<" not in cabecalho
 
 
 def test_toast_nao_atrapalha_quem_esta_preenchendo():
@@ -1887,20 +1873,6 @@ def test_resumo_nunca_sobrescreve_o_campo_que_o_usuario_esta_usando():
     assert "function agendarResumo" in js
     assert "clearTimeout(temporizadorResumo)" in js
 
-
-def test_resumida_nao_troca_a_tabela_debaixo_de_quem_preenche():
-    """Trocar a tabela recria TODOS os campos - e apaga o que esta sendo escrito.
-
-    `'conferida' in d` e verdade em toda resposta de `/api/transacao` (o servidor
-    devolve o estado real sempre), entao a lista era recarregada a cada campo
-    salvo, 450ms depois - bem no meio da tabulacao. Duas correcoes: so recarrega
-    quando o OK realmente MUDOU, e nunca com o usuario dentro da tabela.
-    """
-    js = (RAIZ / "static" / "lancamentos.js").read_text(encoding="utf-8")
-    assert "const mudouOk = detalhe ?" in js
-    assert "if (mudouOk) recarregarListaNoLugar();" in js
-    assert "tabela.contains(document.activeElement)" in js
-    assert "tabela.querySelector('.pdm-combobox.aberto')" in js
 
 
 def test_valores_visuais_fora_do_sistema_nao_aumentam():
@@ -2500,7 +2472,7 @@ def test_pintura_de_pendencia_nunca_decide_obrigatoriedade_sem_a_natureza():
     # 1. Nos templates, toda pintura que olha `obrigatoria` tem que olhar a
     #    natureza junto. A condicao mora numa linha so, entao a checagem e por
     #    trecho ao redor de cada ocorrencia de `classificacao-faltando`.
-    for nome in ("index.html", "lancamentos_fatura.html"):
+    for nome in ("lancamentos_fatura.html",):
         html = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
         for trecho in re.findall(r"\{\{[^{}]*classificacao-faltando[^{}]*\}\}", html):
             if "obrigatoria" not in trecho:
@@ -2528,7 +2500,7 @@ def test_pintura_de_pendencia_nunca_decide_obrigatoriedade_sem_a_natureza():
 
     # 3. A flag tem que chegar as duas telas pelo servidor, senao o JS le
     #    `undefined` e cai no comportamento antigo em silencio.
-    for nome in ("index.html", "lancamentos_fatura.html"):
+    for nome in ("lancamentos_fatura.html",):
         html = (RAIZ / "templates" / nome).read_text(encoding="utf-8")
         assert "data-exige-dimensoes" in html, nome + " nao publica a flag na linha"
 
@@ -2538,8 +2510,8 @@ def test_pintura_de_pendencia_nunca_decide_obrigatoriedade_sem_a_natureza():
     #     senao a excecao nunca chega a tela e ninguem percebe (secao 11.3-A:
     #     coluna ausente num `.get()` desliga a regra sem erro nenhum).
     fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    assert '"exige_dimensoes": exige_dimensoes(' in fonte, (
-        "a Resumida parou de publicar `exige_dimensoes` na linha"
+    assert 'row["exige_dimensoes"] = exige_dimensoes(' in fonte, (
+        "o recorte por periodo parou de publicar `exige_dimensoes` na linha"
     )
     assert 'principal["exige_dimensoes"] = exige' in fonte, (
         "a Detalhada parou de publicar `exige_dimensoes` no lancamento principal"
@@ -2741,7 +2713,7 @@ def test_rotulo_tem_maiuscula_so_na_primeira_letra():
     do banco em caixa baixa. `lowercase` como base destruiria DRE, IOF e PIX.
     """
     for arquivo in ("static/app.css", "templates/lancamentos_fatura.html",
-                    "templates/index.html", "templates/login.html",
+                    "templates/login.html",
                     "templates/contas.html"):
         texto = (RAIZ / arquivo).read_text(encoding="utf-8")
         assert "text-transform: capitalize" not in texto, arquivo
@@ -2799,7 +2771,6 @@ def test_a_detalhada_abre_por_periodo_e_so_vai_para_a_fatura_quando_pedem():
 
     # os links que existem hoje continuam pedindo fatura
     for arquivo, marca in (
-        ("static/lancamentos.js", "/lancamentos/fatura?account_id="),
         ("templates/conciliar_fatura.html", "/lancamentos/fatura?fatura_id="),
     ):
         assert marca in (RAIZ / arquivo).read_text(encoding="utf-8"), arquivo
@@ -2876,3 +2847,31 @@ def test_nenhuma_tela_monta_a_propria_url_a_partir_da_raiz():
     for arquivo in sorted((raiz / "static").glob("*.js")):
         texto = arquivo.read_text(encoding="utf-8")
         assert "'/?'" not in texto and '"/?"' not in texto, arquivo.name
+
+
+def test_todo_status_oferecido_tem_um_filtro_de_verdade_no_recorte():
+    """Cada status que o seletor oferece precisa de um ramo na rota.
+
+    Em 10/09/2026 a lista de Status passou a vir de `opcoes_de_status`, e a rota
+    da fatura continuou com a propria lista escrita a mao: o seletor oferecia
+    `pendente` e a rota so entendia `pendente_ok`. O card "OK dos lancamentos"
+    escolhia um valor que o seletor nao tinha, o navegador o trocava por vazio e
+    a rota caia em "Todas" - a tela filtrada mostrava tudo, sem aviso nenhum.
+    Por isso o conjunto aceito sai da mesma lista, e cada valor tem que ter o
+    proprio ramo de filtro.
+    """
+    from views.lancamentos import opcoes_de_status
+
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    marca = "linhas_visiveis = [l for l in linhas if ("
+    oficial = view.split("def lancamentos_por_fatura", 1)[1].split(marca, 1)[1].split(")]", 1)[0]
+    andamento = view.split("def _render_fatura_em_andamento", 1)[1].split(marca, 1)[1].split(")]", 1)[0]
+    for bloco, opcoes in ((oficial, opcoes_de_status(com_fatura=True)),
+                          (andamento, opcoes_de_status(com_fatura=True, em_andamento=True))):
+        for valor, _ in opcoes:
+            if valor == "todas":
+                continue
+            assert f'status == "{valor}"' in bloco, f"status {valor} oferecido e sem filtro"
+    # e nenhum card aponta para um nome que so a rota antiga entendia
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert 'data-filtro="pendente_ok"' not in html

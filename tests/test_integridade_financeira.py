@@ -59,9 +59,10 @@ def test_regra_automatica_nao_sobrescreve_categoria_manual():
 
 def test_estorno_so_herda_classificacao_quando_o_par_e_unico_e_seguro():
     texto = (Path(__file__).parent.parent / "core.py").read_text(encoding="utf-8")
-    trecho = texto.split("def aplicar_estornos_classificacao", 1)[1].split(
-        "def registrar_e_calcular_crescimento", 1
-    )[0]
+    # delimitado pelo fim da propria funcao, e nao pela funcao que vinha depois:
+    # quando aquela saiu (10/09/2026, junto com a Resumida), o corte passou a
+    # engolir o resto do arquivo e as asercoes viraram ruido
+    trecho = texto.split("def aplicar_estornos_classificacao", 1)[1].split("\ndef ", 1)[0]
     assert "COUNT(DISTINCT o.transacao_id)=1" in trecho
     assert "COALESCE(o.valor_brl,o.valor_original)=-COALESCE(e.valor_brl,e.valor_original)" in trecho
     assert "e.numero_cartao_final=o.numero_cartao_final" in trecho

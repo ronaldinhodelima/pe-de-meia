@@ -17,14 +17,11 @@ def test_componente_pesquisavel_preserva_select_e_fluxo_de_teclado():
 
 def test_piloto_cobre_quatro_campos_nas_duas_visualizacoes():
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
-    resumida = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
     base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
 
     assert '/static/combobox.js?v=' in base
     assert 'data-pdm-combobox data-campo="categoria"' in detalhada
     assert 'data-pdm-combobox data-dimensao=' in detalhada
-    assert 'data-pdm-combobox aria-label="Categoria" class="cat-select' in resumida
-    assert 'data-pdm-combobox aria-label="{{ d.nome }}" class="dim-select' in resumida
 
 
 def test_layout_sombra_flutuante_e_compacto():
@@ -76,12 +73,6 @@ def test_filtros_de_navegacao_da_fatura_permanecem_nativos():
     assert '<select id="periodoStatus" data-pdm-native' in tela
     assert 'id="faturaConta"' not in tela, "o seletor de Cartao virou o chip de Origem"
 
-
-def test_filtro_status_resumido_nao_repete_rotulo_visual():
-    tela = (RAIZ / "templates" / "index.html").read_text(encoding="utf-8")
-
-    assert '<label>Status</label>' not in tela
-    assert '<select id="statusInput" data-pdm-native aria-label="Status"' in tela
 
 
 def test_pendencias_nao_registra_evento_em_formulario_ausente():

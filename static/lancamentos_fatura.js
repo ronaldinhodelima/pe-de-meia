@@ -894,8 +894,13 @@
     if (campo.value === '__novo__') cadastrarNovo(campo);
     else salvarEditor(editor, campo);
   });
+  // Observacao e, no lancamento manual, a descricao: os dois sao texto livre e
+  // gravam do mesmo jeito - espera curta enquanto digita e ao sair do campo.
+  // A descricao veio do modal da Resumida, que era o unico lugar onde ela se
+  // editava; sem ela aqui, remover a Resumida tiraria o recurso do sistema.
+  const SELETOR_TEXTO = 'input[data-campo="observacao"],input[data-campo="descricao"]';
   document.addEventListener('input', evento => {
-    const campo = evento.target.closest('input[data-campo="observacao"]');
+    const campo = evento.target.closest(SELETOR_TEXTO);
     if (!campo) return;
     const editor = campo.closest('[data-editor]');
     if (!editor) return;
@@ -904,7 +909,7 @@
   });
   // `blur` tambem nao borbulha
   document.addEventListener('focusout', evento => {
-    const campo = evento.target.closest('input[data-campo="observacao"]');
+    const campo = evento.target.closest(SELETOR_TEXTO);
     if (!campo) return;
     const editor = campo.closest('[data-editor]');
     if (!editor) return;

@@ -171,10 +171,6 @@
     {% for valor, rotulo in status_opcoes %}<option value="{{ valor }}" {{ 'selected' if status == valor }}>{{ rotulo }}</option>{% endfor %}
   </select>
   {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
-  <div class="visao-lancamentos" aria-label="Visualização dos lançamentos">
-    <a href="{{ url_resumida }}">Resumida</a>
-    <a href="#" class="ativo" aria-current="page">Detalhada</a>
-  </div>
 </div>
 
 {# O formulario manual fica de fora da fatura de proposito: um lancamento
@@ -225,7 +221,7 @@
 </div>
 <div class="cards fatura-cards" style="margin-top:10px">
   <div class="card {{ 'card-ok' if contagens.pendente_classificacao==0 else 'card-aviso' }}" data-filtro="pendente_classificacao"><div class="label">Classificação</div><div class="val">{{ contagens.classificadas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_classificacao }} · {{ totais.pendente|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.classificadas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
-  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">OK dos lançamentos</div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após a fatura ser conciliada</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente_ok"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
+  {% if fatura.em_andamento %}<div class="card card-aviso"><div class="label">OK dos lançamentos</div><div class="val">Bloqueado</div><div class="card-explicacao">liberado após a fatura ser conciliada</div></div>{% else %}<div class="card {{ 'card-ok' if contagens.pendente_ok==0 else 'card-aviso' }}" data-filtro="pendente"><div class="label">OK dos lançamentos</div><div class="val">{{ contagens.conferidas }} / {{ contagens.linhas }}</div><div class="card-explicacao">Faltam {{ contagens.pendente_ok }} · {{ totais.pendente_ok|moeda }}</div><div class="card-progresso"><i style="width:{{ ((contagens.conferidas / contagens.linhas * 100) if contagens.linhas else 0)|round(1) }}%"></i></div></div>
   <div class="card {{ 'card-ok' if contagens.divergencias==0 else 'card-erro' }}" data-filtro="requer_validacao"><div class="label">Divergências</div><div class="val">{{ contagens.divergencias }}</div><div class="card-explicacao">Diferença: {{ totais.divergencia|moeda }}</div></div>
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
 </div>
@@ -299,7 +295,7 @@
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
         <div class="desc-texto">
-          <span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
+          {% if linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" value="{{ linha.descricao }}" maxlength="500" aria-label="Descrição" data-tip="Lançamento manual: a descrição é sua e pode ser editada. A de um lançamento do banco não - ela pertence ao banco.">{% else %}<span class="desc-loja" data-tip="{{ linha.descricao }}">{{ linha.descricao }}</span>{% endif %}{% if linha.fora_do_resultado %} <span class="selo-fora" title="{{ linha.fora_do_resultado }}">fora do resultado</span>{% endif %}{% if linha.rateios %} <button type="button" class="rateio-toggle" data-rateio-id="{{ linha.principal.transacao_id }}" aria-label="Exibir partes do rateio" aria-expanded="false">+</button>{% endif %}
           {% set parcela = rotulo_parcela(linha.descricao, linha.parcela_atual, linha.parcela_total) %}
           {# parcela e pendencia dividem a MESMA linha: reservada embaixo, a
              pendencia deixava uma linha em branco em todo lancamento que nao
@@ -433,4 +429,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260909-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-2"></script>{% endblock %}

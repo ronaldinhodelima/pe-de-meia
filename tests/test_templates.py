@@ -185,199 +185,6 @@ class TestRegras:
         assert "Nenhuma regra cadastrada ainda." in html
 
 
-class TestIndex:
-    """A tela de Lançamentos monta linha por linha a partir de dado do banco e do
-    Pluggy, e ainda entrega dois blocos JSON para o lancamentos.js ler."""
-
-    DIMS = [{"id": 1, "nome": "Responsável", "obrigatoria": True}]
-    VALS = {1: [{"id": 10, "dimensao_id": 1, "nome": "Ronaldo"}]}
-
-    def linha(self, **kw):
-        base = dict(
-            id="tx1", classes="", data_dia="13/08/26", data_hora="00:00",
-            data_full="13/08/2026 00:00", data_sort=1.0, descricao="COMPRA",
-            origem_selo='<span class="selo">UN</span>', origem_texto="Unicred",
-            origem_completa="Unicred · CC", categoria="Fuel", categoria_nome="Combustível",
-            dims={1: 10}, dims_rotulos={1: "Ronaldo"},
-            valor_fmt="- R$ 10.00", valor_sort=-10.0, cor_valor="", observacao="",
-            conferida=False, duplicada=False,
-        )
-        base.update(kw)
-        return base
-
-    def render(self, ctx_linhas, **kw):
-        base = dict(
-            titulo="Lançamentos", topbar="", mes="2026-08", status="todas",
-            hoje_iso="2026-08-21", origem_filtro_html="", pode_editar=True,
-            pode_conferir=True, pode_manual=True,
-            categorias=[{"chave": "Fuel", "nome": "Combustível"}],
-            dimensoes=self.DIMS, valores_por_dim=self.VALS, naturezas=core.NATUREZAS,
-            linhas=ctx_linhas, por_categoria=[], receita_mes=0.0, gasto_real=0.0,
-            resultado_mes=0.0, conf=0, total=0,
-            detalhes_json="{}", config_json="{}",
-        )
-        base.update(kw)
-        return render_template("index.html", **base)
-
-    def test_descricao_e_escapada(self, ctx):
-        # descricao vem do banco (Pluggy ou lancamento manual digitado)
-        html = self.render([self.linha(descricao="<img src=x onerror=alert(1)>")])
-        assert "<img src=x" not in html
-        assert "&lt;img" in html
-
-    def test_apelido_do_cartao_e_escapado_mas_o_selo_nao(self, ctx):
-        # o apelido e digitado pelo usuario em /contas; o selo e HTML do proprio app
-        html = self.render([self.linha(origem_texto='"><script>alert(1)</script>')])
-        assert "<script>alert(1)</script>" not in html
-        assert '<span class="selo">UN</span>' in html
-
-    def test_dimensao_obrigatoria_sem_valor_fica_destacada(self, ctx):
-        html = self.render([self.linha(dims={1: None})])
-        assert "classificacao-faltando" in html
-
-    def test_dimensao_obrigatoria_preenchida_nao_destaca(self, ctx):
-        html = self.render([self.linha(dims={1: 10})])
-        assert "#c23c34;background:#fbeceb" not in html
-
-    def test_cards_separam_recebidos_contabilizados_e_conferidos(self, ctx):
-        html = self.render(
-            [], total_reais=245, total_recebidos=273, conf_reais=185, total_fora=28,
-            pendente_classificacao=60, classificados_reais=185, pendentes_ok=60,
-            pct_classificados=75.5, pct_conferidos=75.5,
-        )
-        assert "Receitas no DRE" in html
-        assert "Despesas no DRE" in html
-        assert "245 / 273" in html
-        assert "contabilizados / recebidos" in html
-        assert "28 fora do resultado" in html
-        # Conferidos e classificados sao trabalho pendente, entao ganharam card
-        # proprio - com o numero, o quanto falta e o clique que leva ate as
-        # linhas. Antes viviam como uma linha de texto que nao levava a lugar
-        # nenhum.
-        assert "185 / 245" in html
-        assert "Faltam 60" in html
-
-    def test_cada_card_que_parece_clicavel_leva_a_um_filtro_real(self, ctx):
-        """Card com `data-filtro` vira porta de entrada para as proprias linhas.
-
-        O atributo e tambem o gatilho do CSS (`.card[data-filtro]`), entao nao
-        existe card com cara de clicavel e sem filtro por tras - nem o contrario.
-        E todo valor que ele aponta precisa ser um status que a rota aceita,
-        senao o clique cai no default `todas` em silencio e a tela mente sobre o
-        recorte que esta mostrando.
-        """
-        import re
-
-        html = self.render([])
-        filtros = set(re.findall(r'data-filtro="([^"]+)"', html))
-        assert filtros, "os cards deixaram de oferecer filtro"
-        opcoes = set(re.findall(r'<option value="([^"]+)"', html))
-        assert filtros <= opcoes, (
-            "card aponta para status que o filtro nao oferece: "
-            + str(sorted(filtros - opcoes))
-        )
-        # "Resultado no DRE" nao filtra de proposito: ele e a conta entre os
-        # dois cards ao lado, nao um recorte de lancamentos.
-        bloco = html.split('class="cards"', 1)[1].split("</div>\n</div>", 1)[0]
-        resultado = bloco.split("Resultado no DRE", 1)[0].rsplit("<div class=", 1)[1]
-        assert "data-filtro" not in resultado
-
-    def test_linha_exibe_todas_as_situacoes_sem_depender_so_da_cor(self, ctx):
-        situacoes = [
-            {"classe": "conferida", "rotulo": "Conferido"},
-            {"classe": "fora", "rotulo": "Fora do resultado"},
-        ]
-        html = self.render([
-            self.linha(situacoes=situacoes, situacoes_texto="Conferido · Fora do resultado")
-        ])
-        # Os pontos no inicio da linha sairam a pedido do usuario (09/09/2026).
-        # A situacao continua nao dependendo so da cor: ela esta por extenso no
-        # tooltip da data e nos atalhos de filtro do rodape (secao 7.6).
-        assert "linha-ponto" not in html
-        assert "Filtrar por situação" in html
-        assert 'data-tip="Conferido · Fora do resultado"' in html
-
-    def test_oferece_filtro_de_possiveis_duplicidades(self, ctx):
-        html = self.render([self.linha()])
-        assert 'value="duplicidade"' in html
-        assert "Possíveis duplicidades" in html
-        assert "Mostrar apenas suspeitas" not in html
-
-    def test_sem_permissao_de_editar_trava_os_campos(self, ctx):
-        html = self.render([self.linha()], pode_editar=False, pode_conferir=False)
-        assert html.count("disabled") >= 3
-
-    def test_sem_lancamentos_mostra_aviso_com_colspan_certo(self, ctx):
-        html = self.render([])
-        # 8 colunas fixas + 1 dimensao + a coluna de selecao para quem edita
-        assert 'colspan="10"' in html
-        assert "Nenhum lançamento neste filtro." in html
-        assert 'colspan="9"' in self.render([], pode_editar=False)
-
-    def test_natureza_fluxo_nao_aparece_no_modal(self, ctx):
-        # 'fluxo' e o padrao (direcao decide), nao faz sentido escolher na mao
-        html = self.render([self.linha()])
-        assert 'value="fluxo"' not in html
-
-    def test_modal_ordena_campos_e_oferece_confirmacoes_sensiveis(self, ctx):
-        html = self.render([self.linha(conferida=True)])
-        ids = [
-            'id="modalCategoria"', 'id="modalDimensoes"', 'id="modalObservacao"',
-            'id="modalConferidaPor"', 'id="modalConferida"',
-        ]
-        posicoes = [html.index(item) for item in ids]
-        assert posicoes == sorted(posicoes)
-        assert '<option value="nao">Não</option>' in html
-        assert 'id="modalConfirmacao"' in html
-        assert 'modalConfirmacaoResumo' not in html
-        assert "cancelarConfirmacaoModal(true)" in html
-        assert "confirmarAcaoModal()" in html
-
-    def test_modal_edita_dimensoes_observacao_e_compacta_campos(self, ctx):
-        html = self.render([self.linha(conferida=True)])
-        js = (Path(__file__).parent.parent / "static" / "lancamentos.js").read_text(encoding="utf-8")
-
-        assert 'class="dim-select modal-dim-select"' in html
-        assert 'onchange="salvarDimensaoModal(this)"' in html
-        assert 'onchange="salvarObservacaoModal()"' in html
-        assert 'id="modalConferidaPor" hidden' in html
-        # 5 e nao 4: a ultima linha tem duas versoes, porque lancamento manual
-        # nunca sincroniza e mostra "Criado em / Ultima alteracao" no lugar
-        assert js.count('class="row row-pareada"') == 5
-        assert "<small>Última alteração</small>" in js
-        assert js.index('<small>Data</small>') < js.index('<small>Valor (R$)</small>')
-        assert js.index('<small>Valor original</small>') < js.index('<small>Parcela</small>')
-        assert js.index('<small>Visto 1ª vez em</small>') < js.index('<small>Última sincronização</small>')
-        assert html.index('id="modalConferidaPor"') < html.index('id="modalConferida"')
-        assert "function salvarDimensaoModal" in js
-        assert "function salvarObservacaoModal" in js
-        assert "conferidaPor.hidden = !d._conferida" in js
-
-    def test_opcoes_da_tabela_sao_carregadas_sob_demanda(self, ctx):
-        categorias = [
-            {"chave": "Fuel", "nome": "Combustível"},
-            {"chave": "Groceries", "nome": "Mercado"},
-            {"chave": "Travel", "nome": "Viagem"},
-        ]
-        html = self.render(
-            [self.linha(), self.linha(id="tx2")],
-            categorias=categorias,
-        )
-        # Cada linha traz somente a selecao atual. A lista completa existe uma
-        # unica vez no modal/configuracao, e o JS a coloca na linha ao clicar.
-        tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
-        assert tabela.count('data-lazy-options="categoria"') == 2
-        assert tabela.count('value="Fuel"') == 2
-        assert 'value="Groceries"' not in tabela
-        assert 'value="Travel"' not in tabela
-
-    def test_sem_categoria_aparece_sem_escolher_opcao_errada(self, ctx):
-        html = self.render([
-            self.linha(categoria=None, categoria_nome="(sem categoria)")
-        ])
-        tabela = html.split('<table class="compacta', 1)[1].split("</table>", 1)[0]
-        assert '<option value="" selected>(sem categoria)</option>' in tabela
-
 
 class TestRelatorios:
     """Ultima tela a sair da f-string. Todo o conteudo chega por AJAX, entao o
@@ -445,10 +252,10 @@ class TestEdicaoEmLote:
     def test_o_nucleo_e_compartilhado_pelas_duas_telas(self):
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        for tela in ("index.html", "lancamentos_fatura.html"):
+        for tela in ("lancamentos_fatura.html",):
             html = (raiz / "templates" / tela).read_text(encoding="utf-8")
             assert "/static/lote.js" in html, tela
-        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+        for js in ("lancamentos_fatura.js",):
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             assert "window.pdmLote.aplicar" in texto, js
 
@@ -456,7 +263,7 @@ class TestEdicaoEmLote:
         """Retirar assinatura exige confirmacao um a um (secao 1.2)."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        for js in ("lote.js", "lancamentos.js", "lancamentos_fatura.js"):
+        for js in ("lote.js", "lancamentos_fatura.js"):
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             trecho = texto.split("Edicao em lote", 1)[-1] if js != "lote.js" else texto
             assert "conferida = false" not in trecho, js
@@ -476,10 +283,10 @@ class TestEdicaoEmLote:
         # caixa de marcacao nao bloqueia o Esc: e onde o foco esta quando a
         # barra acabou de abrir, e Esc nao significa nada dentro dela
         assert "input:not([type=checkbox])" in nucleo
-        for tela in ("index.html", "lancamentos_fatura.html"):
+        for tela in ("lancamentos_fatura.html",):
             html = (raiz / "templates" / tela).read_text(encoding="utf-8")
             assert 'class="barra-lote-fechar"' in html, tela
-        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+        for js in ("lancamentos_fatura.js",):
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             assert "window.pdmLote.ligarFechar" in texto, js
             trecho = texto.split("Edicao em lote", 1)[-1]
@@ -489,7 +296,7 @@ class TestEdicaoEmLote:
         """Com recusa, a selecao e a lista de quem precisa de nova tentativa."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+        for js in ("lancamentos_fatura.js",):
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             trecho = texto.split("Edicao em lote", 1)[-1]
             assert "if (!r.falhas.length) {" in trecho, js
@@ -504,42 +311,33 @@ class TestEdicaoEmLote:
         """tabelas.js indexa por data-col: sem ele a coluna some ao reordenar."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
-        html = (raiz / "templates" / "index.html").read_text(encoding="utf-8")
-        assert html.count('data-col="sel"') == 4, "cabecalho, linha, rateio e tecnica"
+        html = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+        assert html.count('data-col="sel"') == 3, "cabecalho, linha e parte de rateio"
 
 
-def test_descricao_manual_salva_sozinha_e_so_no_modal_do_manual():
-    """Sem botao Salvar: espera curta e ao sair do campo, como a observacao."""
-    import pathlib
-    raiz = pathlib.Path(__file__).resolve().parent.parent
-    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
-    html = (raiz / "templates" / "index.html").read_text(encoding="utf-8")
+def test_descricao_do_manual_se_edita_na_linha(ctx):
+    """A descricao do lancamento MANUAL e do usuario e se edita na propria linha.
 
-    assert "modalSalvarDescricao" not in js and "modalSalvarDescricao" not in html
-    assert "d._manual" in js.split("Descrição", 1)[0][-400:] or "d._manual\n" in js
-    # o campo so e montado para lancamento manual
-    trecho = js.split("'<div class=\"row\"><span>Descrição</span>", 1)[0][-300:]
-    assert "d._manual" in trecho
-    # salvamento automatico nos dois gatilhos
-    assert "setTimeout(() => salvarDescricaoModal(campo), 700)" in js
-    assert "focusout" in js.split("salvarDescricaoModal", 1)[1]
-    # o texto nunca vai por atributo dentro de innerHTML
-    assert "campoDesc.value = d.descricao" in js
-
-
-def test_modal_sincroniza_o_combobox_ao_espelhar_a_categoria():
-    """Atribuir .value nao redesenha o combobox.
-
-    O widget so se atualiza em mudanca de filho (MutationObserver) ou evento
-    `change`; `selCat.value = ...` nao dispara nenhum dos dois, entao o texto
-    visivel ficava em "(sem categoria)" com o select real ja correto. As
-    dimensoes escapavam por usarem replaceChildren.
+    Isso morava so no modal da Resumida - o unico recurso que ela ainda tinha e
+    a Detalhada nao - e veio antes de ela sair (10/09/2026). A de um lancamento
+    do banco pertence ao banco (secao 4.6): nao vira campo, e o servidor recusa
+    no proprio UPDATE mesmo que alguem chame a API direto.
     """
     import pathlib
     raiz = pathlib.Path(__file__).resolve().parent.parent
-    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
-    trecho = js.split("espelha a categoria da linha", 1)[1].split("const emRateio", 1)[0]
-    assert "pdmCombobox.sincronizar(selCat)" in trecho
+    for editavel, pode, esperado in ((True, True, True), (False, True, False), (True, False, False)):
+        ctxt = TestDetalhadaPorPeriodo().contexto(pode_editar=pode)
+        ctxt["linhas"][0]["descricao_editavel"] = editavel
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert ('data-campo="descricao"' in html) is esperado, (editavel, pode)
+
+    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    assert '"descricao_editavel": str(row["account_id"]) == CONTA_MANUAL_ID' in view
+    assert "escopo = \" AND account_id = %s\" if \"descricao\" in data" in view
+    # grava pelo MESMO caminho da observacao: espera curta e ao sair do campo
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    assert "input[data-campo=\"descricao\"]" in js.split("const SELETOR_TEXTO", 1)[1].split(";", 1)[0]
+
 
 
 def test_bloqueio_de_ok_por_falta_de_pdf_tem_mensagem_propria():
@@ -549,7 +347,7 @@ def test_bloqueio_de_ok_por_falta_de_pdf_tem_mensagem_propria():
     mandavam "preencha os campos obrigatorios" mesmo com `faltando` VAZIO - o
     usuario procurava um campo que nao existia enquanto o motivo era outro.
     """
-    for arquivo in ("lancamentos.js", "lancamentos_fatura.js"):
+    for arquivo in ("lancamentos_fatura.js",):
         caminho = Path(__file__).resolve().parents[1] / "static" / arquivo
         js = caminho.read_text(encoding="utf-8")
         assert "sem_pdf_conciliado" in js, f"{arquivo} ignora a trava do PDF"
@@ -558,23 +356,32 @@ def test_bloqueio_de_ok_por_falta_de_pdf_tem_mensagem_propria():
         )
 
 
-def test_setas_andam_por_fatura_so_com_um_cartao_que_tenha_fatura():
-    """Com varias origens nao existe 'a fatura'; sem PDF/OFX o ciclo seria
-    palpite. Nos dois casos as setas continuam andando por mes."""
-    import pathlib
-    raiz = pathlib.Path(__file__).resolve().parent.parent
-    view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+def test_o_filtro_fatura_so_existe_para_um_cartao_com_fatura(monkeypatch):
+    """O liga/desliga que o usuario pediu (10/09/2026).
 
-    bloco = view.split("Ciclos de fatura da origem selecionada", 1)[1].split("config_lancamentos", 1)[0]
-    assert 'len(origem_sel) == 1' in bloco
-    assert '"tipo") == "CREDIT"' in bloco
-    assert "periodo_fim IS NOT NULL" in bloco
-    # a coluna que decide quem manda no ciclo tem que vir junto (secao 11.3-A)
-    assert "ciclo_do_arquivo" in bloco
+    Com varias origens nao existe "a fatura"; em conta corrente e dinheiro,
+    fatura nao existe; num cartao sem fatura importada o ciclo seria palpite. Nos
+    tres casos o filtro some. Era a mesma regra que decidia se as setas da
+    Resumida andavam por ciclo - ela saiu, a regra ficou.
+    """
+    from views import lancamentos as L
+    contas = {"cc": {"tipo": "CHECKING"}, "cartao": {"tipo": "CREDIT"},
+              "sem_fatura": {"tipo": "CREDIT"}}
+    pedidos = []
 
-    # sem ciclos, o comportamento por mes segue intacto
-    assert "if (ciclos.length && !document.getElementById('periodoAno').checked)" in js
+    def lista_falsa(cur, account_id):
+        pedidos.append(account_id)
+        return [] if account_id == "sem_fatura" else [{"id": 3, "url": "/x"}]
+
+    monkeypatch.setattr(L, "lista_de_faturas", lista_falsa)
+    assert L.faturas_para_o_filtro(None, [], contas) == []
+    assert L.faturas_para_o_filtro(None, ["cartao", "cc"], contas) == []
+    assert L.faturas_para_o_filtro(None, ["cc"], contas) == []
+    assert L.faturas_para_o_filtro(None, ["sem_fatura"], contas) == []
+    itens = L.faturas_para_o_filtro(None, ["cartao"], contas, id_em_foco=3)
+    assert itens and itens[0]["selecionada"] is True
+    # so consulta o banco quando pode haver fatura: uma origem, e ela e cartao
+    assert pedidos == ["sem_fatura", "cartao"]
 
 
 def test_busca_da_detalhada_nao_casa_com_opcao_nao_escolhida():
@@ -782,6 +589,65 @@ class TestDetalhadaPorPeriodo:
         assert 'id="formManual"' not in html
 
 
+    def contexto_fatura(self, em_andamento=False):
+        from datetime import date
+        ctxt = self.contexto(
+            modo_periodo=False, pode_conferir=not em_andamento,
+            status_opcoes=opcoes_de_status(com_fatura=True, em_andamento=em_andamento),
+            fatura={"id": "andamento" if em_andamento else 3,
+                    "mes_referencia": 8, "ano_referencia": 2026,
+                    "periodo_inicio": date(2026, 7, 13), "periodo_fim": date(2026, 8, 12),
+                    "vencimento": None if em_andamento else date(2026, 8, 20),
+                    "em_andamento": em_andamento, "previsto": False},
+            contas_credito=[("abc", "Unicred", "Unicred Conjunta", "Unicred", "")],
+            account_id="abc",
+            totais={"pdf": 100, "dre": 100, "fora": 0, "pendente": 0,
+                    "pendente_ok": 0, "sem_vinculo": 0, "divergencia": 0},
+            contagens={"linhas": 1, "vinculadas": 1, "classificadas": 1, "conferidas": 1,
+                       "multiplos": 0, "pendente_classificacao": 0, "pendente_ok": 0,
+                       "divergencias": 0},
+        )
+        ctxt["linhas"][0]["data"] = date(2026, 8, 10)
+        return ctxt
+
+    def test_descricao_e_escapada(self, ctx):
+        """A descricao vem do banco (Pluggy ou lancamento manual digitado)."""
+        ctxt = self.contexto()
+        ctxt["linhas"][0]["descricao"] = "<img src=x onerror=alert(1)>"
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert "<img src=x" not in html
+        assert "&lt;img" in html
+
+    def test_apelido_do_cartao_e_escapado_mas_o_selo_nao(self, ctx):
+        """O apelido e digitado pelo usuario em /contas; o selo e HTML do app."""
+        ctxt = self.contexto()
+        ctxt["linhas"][0]["origem_texto"] = '"><script>alert(1)</script>'
+        html = render_template("lancamentos_fatura.html", **ctxt)
+        assert "<script>alert(1)</script>" not in html
+        assert '<span class="selo">UN</span>' in html
+
+    def test_cada_card_que_parece_clicavel_leva_a_um_filtro_real(self, ctx):
+        """Todo `data-filtro` de card tem que existir no seletor de Status.
+
+        O clique no card escolhe o valor NO SELETOR: um valor que ele nao tem vira
+        vazio no navegador, e a rota cai em "Todas" - a tela diz que filtrou e
+        mostra tudo. Aconteceu na fatura em 10/09/2026, com o card "OK dos
+        lancamentos" apontando para `pendente_ok`. Por isso vale nos TRES
+        estados da tela.
+        """
+        import re
+        for rotulo, ctxt in (("periodo", self.contexto()),
+                             ("fatura", self.contexto_fatura()),
+                             ("em andamento", self.contexto_fatura(em_andamento=True))):
+            html = render_template("lancamentos_fatura.html", **ctxt)
+            filtros = set(re.findall(r'data-filtro="([^"]+)"', html))
+            assert filtros, rotulo + ": os cards deixaram de oferecer filtro"
+            seletor = html.split('id="periodoStatus"', 1)[1].split("</select>", 1)[0]
+            opcoes = set(re.findall(r'<option value="([^"]+)"', seletor))
+            assert filtros <= opcoes, (
+                rotulo + ": card aponta para status que o seletor nao oferece: "
+                + str(sorted(filtros - opcoes)))
+
     def test_a_tabela_e_a_mesma_nos_dois_recortes(self, ctx):
         """Decisao do usuario (10/09/2026): trocar de fatura para periodo nao
         pode mudar COMO os lancamentos sao vistos - o que esses botoes mudam sao
@@ -854,10 +720,10 @@ class TestDetalhadaPorPeriodo:
 
 
 def test_o_rateio_tem_um_construtor_so():
-    """As partes de um rateio sao montadas pelos QUATRO construtores de linha -
-    Resumida, recorte por periodo, fatura oficial e fatura em andamento, que
-    passaram a ratear em 10/09/2026. A consulta estava escrita duas vezes,
-    palavra por palavra, e uma copia nova divergiria na primeira regra nova."""
+    """As partes de um rateio sao montadas pelos TRES construtores de linha -
+    recorte por periodo, fatura oficial e fatura em andamento (a Resumida, o
+    quarto, saiu em 10/09/2026). A consulta estava escrita duas vezes, palavra
+    por palavra, e uma copia nova divergiria na primeira regra nova."""
     import pathlib
     fonte = (pathlib.Path(__file__).resolve().parent.parent
              / "views" / "lancamentos.py").read_text(encoding="utf-8")
@@ -866,9 +732,9 @@ def test_o_rateio_tem_um_construtor_so():
     assert fonte.count('"WHERE r.transacao_id IN %s ORDER BY r.transacao_id') == 1, (
         "a consulta das partes das telas tem que sair de partes_do_rateio()")
     assert fonte.count("def rateio_da_linha(") == 1
-    # a definicao mais uma chamada em cada um dos quatro construtores
-    assert fonte.count("rateio_da_linha(") == 5
-    assert fonte.count("partes_do_rateio(") == 5
+    # a definicao mais uma chamada em cada um dos tres construtores
+    assert fonte.count("rateio_da_linha(") == 4
+    assert fonte.count("partes_do_rateio(") == 4
 
 
 def test_a_origem_da_linha_tem_uma_implementacao_so():
@@ -931,8 +797,8 @@ class TestSemanticaDeLinha:
         raiz = pathlib.Path(__file__).resolve().parent.parent
         view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
         assert view.count("def situacoes_da_linha") == 1
-        # os quatro construtores de linha do sistema
-        assert view.count("situacoes_da_linha(") == 5
+        # os tres construtores de linha do sistema (a Resumida saiu em 10/09/2026)
+        assert view.count("situacoes_da_linha(") == 4
 
     def test_a_situacao_da_linha_aparece_por_extenso_e_no_selo(self, ctx):
         """Os pontos no inicio da linha sairam a pedido do usuario
@@ -1019,10 +885,10 @@ class TestRateioNasDuasTelas:
         raiz = pathlib.Path(__file__).resolve().parent.parent
         nucleo = (raiz / "static" / "rateio.js").read_text(encoding="utf-8")
         assert nucleo.count("fetch(") == 1, "um unico ponto de gravacao"
-        for tela in ("index.html", "lancamentos_fatura.html"):
+        for tela in ("lancamentos_fatura.html",):
             html = (raiz / "templates" / tela).read_text(encoding="utf-8")
             assert "/static/rateio.js" in html, tela
-        for js in ("lancamentos.js", "lancamentos_fatura.js"):
+        for js in ("lancamentos_fatura.js",):
             texto = (raiz / "static" / js).read_text(encoding="utf-8")
             assert "window.pdmRateio.configurar" in texto, js
             assert "/rateios'" not in texto, js + ": segundo caminho de gravacao"
@@ -1102,11 +968,10 @@ class TestAcoesDoLancamento:
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
         nucleo = (raiz / "static" / "rateio.js").read_text(encoding="utf-8")
-        js = (raiz / "static" / "lancamentos.js").read_text(encoding="utf-8")
+        js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
         assert "function montarQuadro(box" in nucleo
         assert "rateio-parte-titulo" in nucleo
         assert "rateio-parte-titulo" not in js, "segunda copia do quadro"
-        assert "window.pdmRateio.montarQuadro" in js
         assert "window.pdmRateio.montarQuadro" in (
             raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
 
@@ -1117,7 +982,7 @@ class TestAcoesDoLancamento:
         raiz = pathlib.Path(__file__).resolve().parent.parent
         tabelas = (raiz / "static" / "tabelas.js").read_text(encoding="utf-8")
         assert "window.pdmMoedaBr = function" in tabelas and "'pt-BR'" in tabelas
-        for arquivo in ("rateio.js", "lancamentos.js", "lancamentos_fatura.js"):
+        for arquivo in ("rateio.js", "lancamentos_fatura.js"):
             texto = (raiz / "static" / arquivo).read_text(encoding="utf-8")
             assert "'Rateado R$ '" not in texto, arquivo
 
@@ -1167,8 +1032,7 @@ class TestFiltrarSemRecarregar:
         tabelas = self.js("tabelas.js")
         assert "window.pdmTrocarPorAjax = function" in tabelas
         assert "history.pushState" in tabelas
-        for tela, funcao in (("lancamentos.js", "function aplicarFiltros("),
-                             ("lancamentos_fatura.js", "window.aplicarFiltrosPeriodo = function")):
+        for tela, funcao in (("lancamentos_fatura.js", "window.aplicarFiltrosPeriodo = function"),):
             texto = self.js(tela)
             assert "pdmTrocarPorAjax(" in texto, tela
             # o filtro nao monta o proprio DOMParser: a troca de blocos e uma so.

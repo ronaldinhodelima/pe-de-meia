@@ -146,7 +146,7 @@
       <a href="/lancamentos/fatura?fatura_id={{ f.id }}" style="font-size:var(--fonte-sm);font-weight:var(--peso-forte)">
         Revisar classificação, DRE e OK desta fatura →
       </a>
-      <a href="/?periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
+      <a href="/lancamentos/fatura?recorte=periodo&amp;periodo=intervalo&amp;data_inicio={{ resultado.periodo_inicio }}&amp;data_fim={{ resultado.periodo_fim }}&amp;origem={{ account_id }}&amp;status=todas"
          style="font-size:var(--fonte-xs);color:var(--ink-faint)">
         Ver registros técnicos do período ({{ resultado.periodo_inicio.strftime('%d/%m/%Y') }} – {{ resultado.periodo_fim.strftime('%d/%m/%Y') }})
       </a>

@@ -21,26 +21,20 @@ from core import (
     CATEGORIA_PT_DB,
     CONTA_MANUAL_ID,
     DATA_LOCAL_SQL,
-    FINANCEIRO_DIM_TABELA,
     FINANCEIRO_TABELA,
     JOIN_NATUREZA,
     NATUREZAS,
     NATUREZA_SQL,
     VAL_DESPESA,
     aplicar_regras,
-    MESES_ABREV,
-    _ciclo_fim,
-    _ciclo_inicio,
     carregar_origens,
     rotulo_valor_dimensao,
-    cat_pt,
     cat_pt_puro,
     cor_banco,
     calcular_totais_dre_fatura,
     chave_alfa,
     chip_filter_html,
     data_hora_local,
-    esc,
     FUSO_LOCAL,
     fechar_recursos_banco,
     get_conn,
@@ -50,7 +44,6 @@ from core import (
     pode,
     propagar_classificacao_familia_parcelas,
     registrar_auditoria,
-    registrar_e_calcular_crescimento,
     registrar_mudanca_auditoria,
     requer,
     topbar_html,
@@ -172,445 +165,17 @@ def raiz():
 
 
 @bp.route(URL_RESUMIDA)
-@requer("lancamentos_ver")
-def index():
-    mes, periodo, data_inicio_str, data_fim_str, inicio_mes, fim_mes = janela_do_periodo()
-    status = request.args.get("status", "todas")
-    if status not in STATUS_LANCAMENTO:
-        status = "todas"
-    origem_sel = request.args.getlist("origem")
+def resumida_removida():
+    """A Resumida saiu em 10/09/2026 (decisao do usuario): a Detalhada passou a
+    ter tudo o que ela tinha, e duas telas para o mesmo dado divergiam na
+    primeira regra nova.
 
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-    regras_resultado = aplicar_regras(cur)
-    conn.commit()
-    if (
-        regras_resultado["lancamentos"] or regras_resultado["dimensoes"]
-        or regras_resultado["erro"] or regras_resultado["duplicatas_ignoradas"]
-    ):
-        registrar_auditoria(
-            "regra_automatica",
-            "classificacao",
-            sucesso=not bool(regras_resultado["erro"]),
-            detalhes=regras_resultado,
-        )
-
-    crescimento = registrar_e_calcular_crescimento(cur)
-    conn.commit()
-
-    contas_by_id, origem_opcoes = carregar_origens(cur)
-
-    # quantos lancamentos cada origem tem NO MES aberto. Nao entra o filtro de
-    # origem aqui de proposito: se entrasse, marcar uma origem zeraria a contagem
-    # das outras e o numero deixaria de servir para comparar.
-    cur.execute(
-        f"SELECT account_id, COUNT(*) AS n FROM cartao.transacao t "
-        "WHERE t.data_transacao >= %s AND t.data_transacao < %s GROUP BY account_id;",
-        (inicio_mes, fim_mes),
-    )
-    qtd_por_origem = {str(r["account_id"]): r["n"] for r in cur.fetchall()}
-
-    # Possiveis duplicidades do mes: mesma conta, mesmo dia e mesmo valor. O Pluggy
-    # ja mandou o mesmo debito duas vezes (Cond Sta Lucia em 21/11/2025), e sem
-    # aviso isso vira despesa dobrada sem ninguem notar. Quem ja foi marcado como
-    # duplicada fica de fora - a decisao ja foi tomada.
-    cur.execute(
-        "SELECT array_agg(t.transacao_id::text) AS ids FROM cartao.transacao t "
-        "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
-        "AND COALESCE(t.duplicada, false) = false "
-        f"GROUP BY t.account_id, ({DATA_LOCAL_SQL})::date, "
-        "COALESCE(t.valor_brl, t.valor_original), t.descricao "
-        "HAVING COUNT(*) > 1;",
-        (inicio_mes, fim_mes),
-    )
-    ids_suspeitos = set()
-    for r in cur.fetchall():
-        ids_suspeitos.update(r["ids"] or [])
-
-    cur.execute(f"SELECT DISTINCT categoria FROM {FINANCEIRO_TABELA} WHERE categoria IS NOT NULL;")
-    categorias_db = {r["categoria"] for r in cur.fetchall()}
-    categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt(c)))
-
-    where = ["t.data_transacao >= %s", "t.data_transacao < %s"]
-    params = [inicio_mes, fim_mes]
-    if origem_sel:
-        where.append("t.account_id IN %s")
-        params.append(tuple(origem_sel))
-    clausulas_status, params_status = where_status_lancamento(status, ids_suspeitos)
-    where.extend(clausulas_status)
-    params.extend(params_status)
-
-    cur.execute(
-        "SELECT t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
-        "COALESCE(t.valor_brl, t.valor_original) AS valor, t.valor_original, t.moeda_original, "
-        "t.status, t.tipo, t.numero_cartao_final, t.parcela_atual, t.parcela_total, "
-        "t.conferida, t.observacao, t.observacao_sistema, t.conferida_por, t.conferida_em, COALESCE(t.duplicada, false) AS duplicada, "
-        "t.substituido_por, COALESCE(t.somente_conciliacao, false) AS somente_conciliacao, "
-        "COALESCE(t.importado, false) AS importado, t.natureza, t.sincronizado_em, "
-        "t.primeiro_sincronizado_em, t.atualizado_em, t.criado_por, "
-        f"{NATUREZA_SQL} AS natureza_efetiva "
-        f"FROM cartao.transacao t {JOIN_NATUREZA} WHERE " + " AND ".join(where) + " ORDER BY t.data_transacao DESC;",
-        params,
-    )
-    rows = cur.fetchall()
-
-    # Resumo do periodo, independente do filtro de Status. "Recebidos" conta
-    # tudo que chegou ao banco; "reais" conta cada transacao financeira uma
-    # vez, mesmo quando o rateio cria varias linhas no DRE.
-    resumo, por_categoria = resumo_do_periodo(cur, inicio_mes, fim_mes, origem_sel, periodo)
-
-    cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome;")
-    nomes_cartao = {r["final4"]: esc(r["prefixo"]) for r in cur.fetchall()}
-
-    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
-    dimensoes = cur.fetchall()
-
-    cur.execute("SELECT id, dimensao_id, nome, icone, portfolio_valor_id FROM cartao.dimensao_valor ORDER BY nome;")
-    valores_por_dim = {}
-    projeto_portfolio_map = {}
-    for v in cur.fetchall():
-        valores_por_dim.setdefault(v["dimensao_id"], []).append(v)
-        if v["portfolio_valor_id"]:
-            projeto_portfolio_map[str(v["id"])] = str(v["portfolio_valor_id"])
-
-    mapa_dim_transacao = {}
-    ids_visiveis = [r["transacao_id"] for r in rows]
-    if ids_visiveis:
-        cur.execute(
-            "SELECT transacao_id, dimensao_id, valor_id FROM cartao.transacao_dimensao WHERE transacao_id IN %s;",
-            (tuple(ids_visiveis),),
-        )
-        for m in cur.fetchall():
-            mapa_dim_transacao[(str(m["transacao_id"]), m["dimensao_id"])] = m["valor_id"]
-
-    rateios_por_transacao = partes_do_rateio(cur, ids_visiveis)
-    principal_por_registro_conciliacao = {}
-    if ids_visiveis:
-        # Uma compra marcada como somente_conciliacao pode estar ligada a uma
-        # ou mais parcelas geradas pela fatura. Recolhe sob a parcela somente
-        # quando ha UM unico destino visivel no filtro atual; em caso ambiguo,
-        # mantem a linha separada para revisao humana.
-        ids_conciliacao = [r["transacao_id"] for r in rows if r["somente_conciliacao"]]
-        if ids_conciliacao:
-            cur.execute(
-                "SELECT DISTINCT fv.transacao_id, fl.transacao_id_criado "
-                "FROM cartao.fatura_vinculo fv "
-                "JOIN cartao.fatura_linha fl ON fl.id=fv.fatura_linha_id "
-                "WHERE fv.transacao_id IN %s AND fl.transacao_id_criado IN %s "
-                "AND fl.transacao_id_criado<>fv.transacao_id;",
-                (tuple(ids_conciliacao), tuple(ids_visiveis)),
-            )
-            destinos = {}
-            for vinculo in cur.fetchall():
-                destinos.setdefault(str(vinculo["transacao_id"]), set()).add(
-                    str(vinculo["transacao_id_criado"])
-                )
-            principal_por_registro_conciliacao = {
-                tecnico_id: next(iter(alvos))
-                for tecnico_id, alvos in destinos.items() if len(alvos) == 1
-            }
-
-    # Ciclos de fatura da origem selecionada, para as setas < > andarem por
-    # fatura em vez de por mes - o mesmo passo da Detalhada.
-    #
-    # So quando ha EXATAMENTE uma origem marcada e ela e cartao COM fatura
-    # importada. Com varias origens nao existe "a fatura"; sem PDF/OFX o ciclo
-    # seria palpite, e o periodo mostrado deixaria de ser o ciclo real.
-    ciclos_fatura = []
-    if len(origem_sel) == 1 and contas_by_id.get(origem_sel[0], {}).get("tipo") == "CREDIT":
-        cur.execute(
-            "SELECT id, ano_referencia, mes_referencia, account_id, "
-            # ciclo_do_arquivo decide quem manda no inicio e no fim (secao 11.3-A):
-            # sem ela na consulta, o .get() devolveria None e o ciclo cairia na
-            # deducao, desligando a regra sem erro nenhum.
-            "periodo_inicio, periodo_fim, ciclo_do_arquivo "
-            "FROM cartao.fatura_importada WHERE account_id = %s "
-            "AND periodo_fim IS NOT NULL "
-            "ORDER BY ano_referencia, mes_referencia;",
-            (origem_sel[0],),
-        )
-        for fatura in cur.fetchall():
-            inicio = _ciclo_inicio(cur, fatura)
-            fim = _ciclo_fim(fatura)
-            if not inicio or not fim:
-                continue
-            ciclos_fatura.append({
-                "id": fatura["id"],
-                "rotulo": f'{MESES_ABREV[fatura["mes_referencia"] - 1]}/{str(fatura["ano_referencia"])[2:]}',
-                "inicio": inicio.strftime("%Y-%m-%d"),
-                "fim": fim.strftime("%Y-%m-%d"),
-            })
-
-    cur.close()
-    conn.close()
-
-    # a tela nao deve oferecer acao que a API vai recusar
-    pode_editar = pode("lancamentos_editar")
-    pode_conferir = pode("lancamentos_conferir")
-    pode_manual = pode("lancamentos_manual")
-
-    def origem_partes(account_id, final4=None):
-        selo, curto, _ = origem_da_linha(
-            contas_by_id.get(str(account_id)), final4, nomes_cartao)
-        return selo, curto
-
-    def origem_completa(account_id, final4=None):
-        return origem_da_linha(
-            contas_by_id.get(str(account_id)), final4, nomes_cartao)[2]
-
-    linhas_tabela = []
-    detalhes_js = {}
-    nomes_por_dim = {
-        d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
-        for d in dimensoes
-    }
-    dimensoes_obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
-    for r in rows:
-        data_local = data_hora_local(r["data_transacao"])
-        data_fmt_full = data_local.strftime("%d/%m/%Y %H:%M")
-        rid = r["transacao_id"]
-        desc = r["descricao"] or ""
-
-        conta_info = contas_by_id.get(str(r["account_id"]))
-        # manual (dinheiro) ou importado de arquivo: pode ser excluido pelo modal
-        eh_manual = bool((conta_info and conta_info["tipo"] == "MANUAL") or r["importado"])
-        eh_nao_credito = conta_info and conta_info["tipo"] != "CREDIT"
-        # cartao de credito: exibicao tradicional (sem sinal). conta corrente/manual: entrada/saida
-        if eh_nao_credito:
-            sinal = "-" if r["tipo"] == "DEBIT" else "+"
-            cor_valor = "color:var(--bad)" if r["tipo"] == "DEBIT" else "color:var(--good)"
-            valor_fmt = f'{sinal} R$ {valor_pt(abs(r["valor"]))}'
-            valor_sort = -abs(r["valor"]) if sinal == "-" else abs(r["valor"])
-        else:
-            cor_valor = ""
-            valor_fmt = f'R$ {valor_pt(r["valor"])}'
-            valor_sort = r["valor"]
-
-        dims_sel = {d["id"]: mapa_dim_transacao.get((str(rid), d["id"])) for d in dimensoes}
-        rateios_ui, rateio_valido = rateio_da_linha(
-            rateios_por_transacao.get(str(rid), []), r["valor"], dimensoes,
-            nomes_por_dim, dimensoes_obrigatorias, com_sinal=bool(eh_nao_credito))
-        selo, origem_texto = origem_partes(r["account_id"], r["numero_cartao_final"])
-        origem_full = origem_completa(r["account_id"], r["numero_cartao_final"])
-
-        pendente_banco = (r["status"] or "").upper() == "PENDING"
-        pendente_bloqueia_ok = _pendente_bloqueia(r["status"], data_local)
-        situacoes = situacoes_da_linha(
-            conferida=r["conferida"], duplicada=r["duplicada"],
-            suspeita=str(rid) in ids_suspeitos, pendente_banco=pendente_banco,
-            substituido=bool(r["substituido_por"]),
-            somente_conciliacao=bool(r["somente_conciliacao"]),
-            rateio_incompleto=bool(rateios_ui) and not rateio_valido,
-        )
-        linhas_tabela.append({
-            "id": str(rid),
-            "substituido_por": str(r["substituido_por"]) if r["substituido_por"] else None,
-            "principal_conciliacao": principal_por_registro_conciliacao.get(str(rid)),
-            # fora_do_resultado: o lancamento existe e continua consultavel, mas
-            # nao entra no DRE. Sem marcar isso na tela, dois lancamentos de
-            # mesmo valor e data aparecem lado a lado sem nenhuma pista de que
-            # so um conta - e quem revisa conclui que ha duplicidade.
-            "classes": " ".join(c for c in [
-                "conferida" if r["conferida"] else "",
-                "duplicada" if r["duplicada"] else "",
-                "fora-resultado" if (r["substituido_por"] or r["somente_conciliacao"]) else "",
-                "pendente-banco" if pendente_banco else "",
-            ] if c),
-            "fora_do_resultado": (
-                "Mesmo evento que outro lançamento — só o outro conta no resultado."
-                if r["substituido_por"] else
-                ("Registro de conciliação (compra parcelada inteira) — as parcelas é que contam."
-                 if r["somente_conciliacao"] else "")
-            ),
-            "pendente_banco": pendente_banco,
-            "pendente_bloqueia_ok": pendente_bloqueia_ok,
-            "data_dia": data_local.strftime("%d/%m/%y"),
-            "data_hora": data_local.strftime("%H:%M"),
-            "data_full": data_fmt_full,
-            "data_sort": data_local.timestamp(),
-            "descricao": desc,
-            "origem_selo": selo,
-            "origem_texto": origem_texto,
-            # So o lancamento MANUAL tem autor: o que veio do banco nao foi
-            # digitado por ninguem, e inventar uma inicial ali diria que
-            # alguem lancou o que o Pluggy mandou.
-            "autor": r["criado_por"] if str(r["account_id"]) == CONTA_MANUAL_ID else None,
-            "origem_completa": origem_full,
-            "categoria": r["categoria"],
-            "categoria_nome": cat_pt_puro(r["categoria"]) if r["categoria"] else "(sem categoria)",
-            "dims": dims_sel,
-            # A obrigatoriedade de dimensao depende da NATUREZA do lancamento,
-            # nao so da dimensao (secao 4.1). Sem este campo a tela pintava de
-            # vermelho o Projeto/Portfolio de um pagamento de fatura - cobrando
-            # um preenchimento que o servidor nao exige e que, se atendido,
-            # faria o mesmo dinheiro aparecer de novo na visao por dimensao.
-            "exige_dimensoes": exige_dimensoes(r["natureza_efetiva"]),
-            # Num RATEADO a classificacao mora nas partes (secao 4.4), e e la
-            # que o servidor valida. Cobrar categoria e dimensao tambem no pai
-            # pintava de vermelho um campo que a trava nao exige - e preencher
-            # faria o mesmo dinheiro aparecer duas vezes na visao por dimensao.
-            "exige_classificacao": not bool(rateios_ui),
-            "dims_rotulos": {
-                d["id"]: nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
-                for d in dimensoes
-            },
-            "valor_fmt": valor_fmt,
-            "valor_sort": valor_sort,
-            "cor_valor": cor_valor,
-            "observacao": r["observacao"] or "",
-            "observacao_sistema": r["observacao_sistema"] or "",
-            "conferida": r["conferida"],
-            "duplicada": r["duplicada"],
-            "suspeita_duplicidade": str(rid) in ids_suspeitos,
-            "rateios": rateios_ui,
-            "rateio_valido": rateio_valido,
-            "valor_rateio": float(abs(Decimal(str(r["valor"] or 0)).quantize(Decimal("0.01")))),
-            "registros_tecnicos": [],
-            "situacoes": situacoes,
-            "situacoes_texto": texto_das_situacoes(situacoes),
-        })
-
-        detalhes = {
-            "data": data_fmt_full,
-            "descricao": desc,
-            "categoria": cat_pt_puro(r["categoria"]),
-            "valor": valor_fmt,
-            "valor_original": f'{valor_pt(r["valor_original"])} {r["moeda_original"] or ""}' if r["valor_original"] is not None else "-",
-            "status": r["status"] or "-",
-            "tipo": r["tipo"] or "-",
-            "origem": origem_full,
-            "parcela": f'{r["parcela_atual"]}/{r["parcela_total"]}' if r["parcela_total"] and r["parcela_total"] > 1 else "À vista",
-            "conferida": "Sim" if r["conferida"] else "Não",
-            "conferida_por": r["conferida_por"] or "-",
-            "observacao": r["observacao"] or "-",
-            "observacao_sistema": r["observacao_sistema"] or "",
-            "sincronizado_em": data_hora_local(r["sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["sincronizado_em"] else "-",
-            # Em lancamento manual "ultima sincronizacao" nao quer dizer nada -
-            # ele nunca sincroniza. O que responde "minha edicao entrou?" e o
-            # atualizado_em, e e ele que a tela mostra nesse caso.
-            "atualizado_em": data_hora_local(r["atualizado_em"]).strftime("%d/%m/%Y %H:%M") if r["atualizado_em"] else "-",
-            "primeiro_sincronizado_em": data_hora_local(r["primeiro_sincronizado_em"]).strftime("%d/%m/%Y %H:%M") if r["primeiro_sincronizado_em"] else "-",
-            "_conferida": bool(r["conferida"]),
-            "_pendente_banco": pendente_banco,
-            "_pendente_bloqueia_ok": pendente_bloqueia_ok,
-            "_duplicada": bool(r["duplicada"]),
-            "_manual": bool(eh_manual),
-            "_natureza": r["natureza"] or "",
-            "_natureza_efetiva": NATUREZAS.get(r["natureza_efetiva"], r["natureza_efetiva"]),
-            "_valor_rateio": float(abs(r["valor"] or 0)),
-            "_rateios": rateios_ui,
-            "_rateio_valido": rateio_valido,
-        }
-        for d in dimensoes:
-            detalhes[d["nome"]] = nomes_por_dim[d["id"]].get(dims_sel[d["id"]], "(nao definido)")
-        detalhes_js[str(rid)] = detalhes
-
-    # Um registro que foi substituido continua disponivel para auditoria, mas
-    # fica recolhido logo abaixo do lancamento que realmente conta. O vinculo
-    # vem do banco (`substituido_por`): nunca agrupamos so porque data,
-    # descricao ou valor parecem iguais.
-    linhas_por_id = {linha["id"]: linha for linha in linhas_tabela}
-    linhas_principais = []
-    for linha in linhas_tabela:
-        alvo_id = linha["substituido_por"] or linha["principal_conciliacao"]
-        alvo = linhas_por_id.get(alvo_id)
-        if alvo is not None and alvo is not linha:
-            alvo["registros_tecnicos"].append(linha)
-        else:
-            linhas_principais.append(linha)
-    for linha in linhas_tabela:
-        linha.pop("substituido_por", None)
-        linha.pop("principal_conciliacao", None)
-    linhas_tabela = linhas_principais
-
-    gasto_real = resumo["gasto_real"] or 0
-    receita_mes = resumo["receita_mes"] or 0
-    categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
-
-    config_lancamentos = {
-        "ciclos_fatura": ciclos_fatura,
-        "pode_editar": pode_editar,
-        "pode_conferir": pode_conferir,
-        "origens_credito": [
-            aid for aid, _curto, _completo, _texto, _selo in origem_opcoes
-            if contas_by_id[aid]["tipo"] == "CREDIT"
-        ],
-        "dimensoes_cadastro_rapido": {
-            str(d["id"]): d["nome"] for d in dimensoes
-            if chave_alfa(d["nome"]) in {"projeto", "portfolio"}
-        },
-        "categorias": categorias_template,
-        "dimensoes": {
-            str(d["id"]): [
-                {"id": v["id"], "rotulo": rotulo_valor_dimensao(v)}
-                for v in valores_por_dim.get(d["id"], [])
-            ]
-            for d in dimensoes
-        },
-        "dimensoes_nomes": {str(d["id"]): d["nome"] for d in dimensoes},
-        "dimensoes_obrigatorias": [str(d["id"]) for d in dimensoes if d["obrigatoria"]],
-        # regra automatica Projeto -> Portfolio (cadastrada em /dimensoes):
-        # ao escolher um Projeto que tem portfolio padrao, o JS preenche o
-        # select de Portfolio sozinho (ver aplicarPortfolioDoProjeto em
-        # lancamentos.js). Continua editavel - e' so um ponto de partida.
-        "dim_id_portfolio": next(
-            (str(d["id"]) for d in dimensoes if chave_alfa(d["nome"]) == "portfolio"), None
-        ),
-        "projeto_portfolio_map": projeto_portfolio_map,
-    }
-
-    return render_template(
-        "index.html",
-        titulo="Lançamentos",
-        topbar=topbar_html("Lançamentos", "inicio"),
-        mes=mes,
-        periodo=periodo,
-        data_inicio=data_inicio_str,
-        data_fim=data_fim_str,
-        periodo_rotulo="do ano" if periodo == "ano" else ("do período" if periodo == "intervalo" else "do mês"),
-        status=status,
-        hoje_iso=datetime.now().strftime("%Y-%m-%d"),
-        origem_filtro_html=chip_filter_html(
-            "origem", "Origem", origem_opcoes, origem_sel,
-            onchange="aplicarFiltros()", contagens=qtd_por_origem,
-        ),
-        pode_editar=pode_editar,
-        pode_conferir=pode_conferir,
-        pode_manual=pode_manual,
-        pode_regras=pode("cadastros"),
-        categorias=categorias_template,
-        dimensoes=dimensoes,
-        valores_por_dim=valores_por_dim,
-        naturezas=NATUREZAS,
-        linhas=linhas_tabela,
-        por_categoria=por_categoria,
-        receita_mes=receita_mes,
-        gasto_real=gasto_real,
-        resultado_mes=receita_mes - gasto_real,
-        conf=resumo["conferidos_reais"] or 0,
-        total=resumo["total_reais"] or 0,
-        conf_reais=resumo["conferidos_reais"] or 0,
-        pendente_classificacao=resumo["pendente_classificacao"] or 0,
-        # Numero derivado se calcula AQUI, nunca no template: aritmetica em
-        # Jinja sobre variavel ausente levanta UndefinedError e derruba a tela
-        # inteira, enquanto imprimir a variavel apenas sai vazio.
-        classificados_reais=max(
-            (resumo["total_reais"] or 0) - (resumo["pendente_classificacao"] or 0), 0
-        ),
-        pendentes_ok=max((resumo["total_reais"] or 0) - (resumo["conferidos_reais"] or 0), 0),
-        pct_classificados=_pct(
-            (resumo["total_reais"] or 0) - (resumo["pendente_classificacao"] or 0),
-            resumo["total_reais"] or 0,
-        ),
-        pct_conferidos=_pct(resumo["conferidos_reais"] or 0, resumo["total_reais"] or 0),
-        total_reais=resumo["total_reais"] or 0,
-        total_recebidos=resumo["total_recebidos"] or 0,
-        total_fora=max((resumo["total_recebidos"] or 0) - (resumo["total_reais"] or 0), 0),
-        crescimento=crescimento,
-        detalhes_json=json_script(detalhes_js),
-        config_json=json_script(config_lancamentos),
-    )
+    O endereco continua respondendo, redirecionando com a query: favorito e
+    historico antigos abrem o mesmo recorte na tela que existe. Os nomes dos
+    parametros sao os mesmos dos dois lados.
+    """
+    query = request.query_string.decode()
+    return redirect(URL_LANCAMENTOS + ("?" + query if query else ""))
 
 
 # Ponto unico: o CARD "Classificacao" e o FILTRO "Pendentes de classificacao"
@@ -1451,6 +1016,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
             "situacoes": situacoes_da_linha(
                 conferida=bool(tx["conferida"]),
                 pendente_banco=(tx["status"] or "").upper() == "PENDING",
+                rateio_incompleto=bool(rateios_ui) and not valido_do_rateio,
             ),
             "classes": " ".join(c for c in [
                 "conferida" if tx["conferida"] else "",
@@ -1470,16 +1036,20 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
     ) if ids_principais else []
 
     status = request.args.get("status", "todas")
-    if status not in {"todas", "pendente_classificacao", "dre", "fora",
-                      "conferida", "pendente_banco"}:
+    # O conjunto aceito sai da MESMA lista que o seletor oferece: o seletor
+    # listava "Pendentes de conferencia" e "Rateio incompleto" e a rota nao os
+    # entendia, caindo em "Todas" sem avisar.
+    if status not in {c for c, _ in opcoes_de_status(com_fatura=True, em_andamento=True)}:
         status = "todas"
     linhas_visiveis = [l for l in linhas if (
         status == "todas" or
         (status == "pendente_classificacao" and not l["classificada"]) or
+        (status == "pendente" and not l["conferida"]) or
         (status == "dre" and l["natureza_estado"] == "dre") or
         (status == "fora" and l["natureza_estado"] == "fora") or
         (status == "conferida" and tem_situacao(l, "conferida")) or
-        (status == "pendente_banco" and tem_situacao(l, "pendente-banco"))
+        (status == "pendente_banco" and tem_situacao(l, "pendente-banco")) or
+        (status == "rateio_incompleto" and tem_situacao(l, "rateio"))
     )]
     # Sem rateio e sem vinculo aqui: o ciclo em andamento nao tem documento,
     # entao essas situacoes nao existem nele - lista-las prometeria um filtro
@@ -1546,7 +1116,6 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         mes=f"{ano}-{mes:02d}", periodo="intervalo",
         data_inicio=inicio.isoformat(), data_fim=fim.isoformat(),
         por_categoria=por_categoria, filtros_situacao=filtros_situacao,
-        url_resumida=f"{URL_RESUMIDA}?periodo=intervalo&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}&origem={account_id}&status=todas",
         pode_editar=pode("lancamentos_editar"), pode_conferir=False,
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
@@ -1740,6 +1309,10 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             # a origem. "Titular nao informado" sugeriria um dado faltando que
             # nem se aplica.
             "procedencia": origem_full,
+            # So o MANUAL tem descricao editavel: a de um lancamento do banco
+            # pertence ao banco (secao 4.6), e o servidor recusa no proprio
+            # UPDATE mesmo que alguem chame a API direto.
+            "descricao_editavel": str(row["account_id"]) == CONTA_MANUAL_ID,
             # So o MANUAL tem autor: o que veio do banco nao foi digitado por
             # ninguem, e inventar uma inicial diria que alguem lancou o que o
             # Pluggy mandou (secao 7.1).
@@ -1865,7 +1438,6 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         pct_conferidos=_pct(resumo["conferidos_reais"] or 0, total_reais),
         totais={}, contagens={},
         config_json=json_script(config), projeto_portfolio_map=projeto_portfolio_map,
-        url_resumida=URL_RESUMIDA + "?mes=" + mes + "&periodo=" + periodo + "&status=" + status,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )
@@ -2323,19 +1895,21 @@ def lancamentos_por_fatura():
     ) if ids_principais else []
 
     status = request.args.get("status", "todas")
-    filtros_validos = {
-        "todas", "pendente_classificacao", "pendente_ok", "dre", "fora",
-        "sem_vinculo", "requer_validacao", "multiplos",
-        # Os mesmos nomes do recorte por periodo: duas visoes do mesmo dado que
-        # chamam o mesmo filtro de nomes diferentes obrigam a reaprender a tela.
-        "conferida", "pendente_banco", "rateio_incompleto",
-    }
-    if status not in filtros_validos:
+    # `pendente_ok` era o nome antigo deste filtro aqui; o periodo sempre o
+    # chamou de `pendente`. Link antigo continua funcionando, e o seletor passa a
+    # mostrar a opcao certa em vez de "Todas" com a lista filtrada.
+    if status == "pendente_ok":
+        status = "pendente"
+    # O conjunto aceito sai da MESMA lista que o seletor oferece. Escritos a
+    # parte, os dois divergiram: o seletor passou a oferecer `pendente` e a rota
+    # so entendia `pendente_ok` - o card "OK dos lancamentos" caia em "Todas"
+    # sem avisar.
+    if status not in STATUS_COM_FATURA:
         status = "todas"
     linhas_visiveis = [l for l in linhas if (
         status == "todas" or
         (status == "pendente_classificacao" and not l["pagamento"] and not l["classificada"]) or
-        (status == "pendente_ok" and not l["pagamento"] and not l["conferida"]) or
+        (status == "pendente" and not l["pagamento"] and not l["conferida"]) or
         (status == "dre" and l.get("natureza_estado") in {"dre", "misto"}) or
         (status == "fora" and l.get("natureza_estado") in {"fora", "misto"}) or
         (status == "sem_vinculo" and l["estado"] == "sem_vinculo") or
@@ -2382,17 +1956,6 @@ def lancamentos_por_fatura():
         onchange="aplicarFiltrosPeriodo()")
     cur.close()
     conn.close()
-    if fatura.get("periodo_inicio") and fatura.get("periodo_fim"):
-        url_resumida = (
-            URL_RESUMIDA + "?periodo=intervalo&data_inicio=" + fatura["periodo_inicio"].isoformat()
-            + "&data_fim=" + fatura["periodo_fim"].isoformat()
-            + "&origem=" + account_id + "&status=todas"
-        )
-    else:
-        url_resumida = (
-            f"{URL_RESUMIDA}?mes={fatura['ano_referencia']}-{fatura['mes_referencia']:02d}"
-            f"&periodo=mes&origem={account_id}&status=todas"
-        )
     return render_template(
         "lancamentos_fatura.html", titulo="Lançamentos por fatura",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
@@ -2415,7 +1978,6 @@ def lancamentos_por_fatura():
         url_do_periodo=url_do_periodo,
         mes=mes_da_fatura, periodo=periodo_da_fatura,
         data_inicio=inicio_da_fatura, data_fim=fim_da_fatura,
-        url_resumida=url_resumida,
         pode_editar=pode("lancamentos_editar"), pode_conferir=pode("lancamentos_conferir"),
         pode_regras=pode("cadastros"), pode_manual=pode("lancamentos_manual"),
     )

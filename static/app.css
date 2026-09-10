@@ -275,7 +275,6 @@
   /* Conferido some da vista; o que FALTA conferir e que fica cinza. A tela
      existe para achar o que falta - destacar o que ja acabou e o contrario. */
   tr.conferida { background: transparent; }
-  #tabela-lancamentos tbody tr[data-id]:not(.conferida):not(.rateio-row):not(.tecnico-row),
   .fatura-tabela tbody tr[data-linha]:not(.conferida) { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
   tbody tr:hover { background: var(--accent-soft); }
@@ -285,7 +284,7 @@
   tr.duplicada:hover { background: var(--warn-soft); }
   /* lancamento ainda PENDING no banco: o Pluggy pode trocar valor/data ou ate
      reemitir com outro id ate a fatura fechar - por isso o OK fica bloqueado
-     enquanto durar (ver checkbox conf-check em index.html) */
+     enquanto durar (ver `pendente_bloqueia_ok` na linha) */
   tr.pendente-banco,tr.pendente-banco:hover { background: transparent; }
   .valor { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: var(--peso-medio); }
 

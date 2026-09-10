@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 418 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 404 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -773,14 +773,17 @@ específico da Unicred continuam como estão: renomeá-los seria churn de schema
 
 # 7. Telas e comportamento de interface
 
-## 7.1 Lançamentos: Resumida e Detalhada
+## 7.1 Lançamentos: uma tela só
 
-São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usuário.
+**A Resumida saiu em 10/09/2026** (decisão do usuário) e a tela de lançamentos é uma só — a que se
+chamava Detalhada, em `/lancamentos/fatura`. O que segue nesta seção sobre "as duas telas" é a
+história de como se chegou nisso, e explica decisões que continuam valendo.
 
-> **A Resumida vai sair; a Detalhada fica** (decisão do usuário, 08/09/2026). A unificação corre por
-> etapas: cada recurso que só existe na Resumida é levado para a Detalhada, publicado e validado
-> antes do seguinte. **Nada é removido da Resumida enquanto a Detalhada não tiver o equivalente
-> funcionando em produção** — a Resumida é a rede de segurança de cada etapa.
+> **Como a Resumida saiu** (decisão de 08/09/2026). A unificação correu por etapas: cada recurso que
+> só existia na Resumida foi levado para a Detalhada, publicado e validado antes do seguinte, e
+> **nada foi removido enquanto a Detalhada não tinha o equivalente funcionando em produção** — a
+> Resumida foi a rede de segurança de cada etapa. Vale como método para a próxima vez que uma tela
+> substituir outra.
 >
 > **O bloqueio que definiu o desenho:** a Detalhada nasceu presa a uma fatura de cartão
 > (`contas_credito`, tipo `CREDIT`), e por isso **conta corrente, dinheiro e lançamento manual nunca
@@ -792,8 +795,8 @@ São **duas visualizações do mesmo dado**, escolhidas explicitamente pelo usu�
 **Etapas, na ordem de dependência** (✓ = em produção): 1 ✓ recorte por período · 2 ✓ coluna Origem ·
 3 ✓ os doze filtros de status · 4 ✓ cards do DRE · 5 ✓ semântica de linha · 6 ✓ rateio · 7 ✓ ações do lançamento
 (rateio, exclusão, confirmação ao retirar o OK) · 8 ✓ lançamento manual · 9 ✓ filtros por AJAX
-com histórico · 10 ✓ gasto por categoria. **As dez etapas estão em produção** — a Resumida só sai
-depois de o uso real confirmar que nada ficou para trás.
+com histórico · 10 ✓ gasto por categoria. Depois delas, a fatura e o período viraram a mesma tabela,
+os filtros passaram a se autogerenciar e a Resumida saiu (§7.1-C).
 
 **Medido em produção em 09/09/2026, comparando as duas telas no mesmo recorte:**
 
@@ -808,21 +811,18 @@ cresce em um, a tabela nova volta com as 12 alças e os 9 cabeçalhos ordenávei
 navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de classificação" trouxe
 **24** linhas — exatamente o "Faltam 24" do card, como a §7.2-B exige.
 
-> **Mudou numa, avalie a outra — no mesmo commit** (decisão do usuário, 07/09/2026). Comportamento
-> novo em uma das telas é candidato à outra por padrão; o commit precisa dizer se foi aplicado nas
-> duas ou por que não. Quando o comportamento é o mesmo, o **código também é o mesmo** (`lote.js`,
-> `combobox.js`, `tabelas.js`) — duas implementações do mesmo comportamento divergem na primeira
-> regra nova, que é literalmente como nasceram os 57 falsos pendentes da §6.5 nº 10. Diferença
-> legítima existe (a Detalhada é por fatura, a Resumida é por período), mas ela é **decisão
-> registrada**, não esquecimento. A Resumida
-privilegia classificação rápida; a Detalhada (`/lancamentos/fatura`) privilegia fatura,
-procedência, registros agregados e auditoria. **Ambas leem e gravam os mesmos campos** — não
-duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tabela própria.
+> **Quando o comportamento é o mesmo, o código também é o mesmo** (`lote.js`, `rateio.js`,
+> `combobox.js`, `tabelas.js`, e na view `situacoes_da_linha`, `rateio_da_linha`, `config_da_tela`,
+> `opcoes_de_status`). Duas implementações do mesmo comportamento divergem na primeira regra nova,
+> que é literalmente como nasceram os 57 falsos pendentes da §6.5 nº 10. A regra nasceu com duas telas
+> ("mudou numa, avalie a outra", 07/09/2026) e continua valendo entre os **três construtores de
+> linha** que sobraram — período, fatura oficial e fatura em andamento. **Todos leem e gravam os
+> mesmos campos** — não duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em
+> tabela própria.
 
 - A detalhada exige uma única origem de cartão e abre a fatura mais recente. Sem `account_id` na
   URL, escolhe **a conta de crédito que tem fatura importada** — antes caía no primeiro cartão da
   lista (Nubank, sem fatura) e a tela abria só com o erro, sem seletor, sem saída.
-- O botão Resumida volta ao intervalo oficial daquela fatura, preservando a origem.
 - Cada linha do PDF pode ter vários registros técnicos agregados, todos preservados. **Apenas o
   lançamento financeiro principal é editável e contabilizado.** Clicar em qualquer área não
   interativa da linha abre/recolhe os detalhes.
@@ -837,16 +837,16 @@ duplicar categoria, Responsável, Projeto, Portfólio, observação ou OK em tab
   rótulo é **nada**: repetir "1/6" ao lado de "1/6" é ruído. O parser é o mesmo do casamento de
   fatura (§11.3-A), que já sabia ler as três grafias; ele subiu de `views/relatorios.py` para o
   `core` porque `views/` não importa de `views/` (§2.1).
-- **Avatar do autor só em lançamento manual** (decisão do usuário, 07/09/2026). Na Resumida, a
-  coluna Origem mostra as iniciais de quem digitou. O que veio do banco **não tem autor** e não
+- **Avatar do autor só em lançamento manual** (decisão do usuário, 07/09/2026). A coluna Origem
+  mostra as iniciais de quem digitou. O que veio do banco **não tem autor** e não
   ganha avatar: inventar uma inicial ali diria que alguém lançou o que o Pluggy mandou.
   `transacao.criado_por` (migração 60) guarda isso; o histórico foi preenchido pelo audit log, que
   já registrava o usuário e o `transacao_id` de cada lançamento manual. No caminho, a gravação da
   assinatura do OK do manual estava usando `session.get("usuario")` — a chave é **`user`**, então
   todo manual criado já conferido ficava com `conferida_por` **nulo**.
-- **`+ manual` existe nas duas telas**, com o mesmo nome. O formulário continua morando só na
-  Resumida; na Detalhada o botão leva para `/?manual=1`, que abre o formulário já rolado até ele —
-  duas cópias do formulário divergiriam na primeira regra nova.
+- **`+ manual`** abre o formulário único (`templates/_form_manual.html` + `static/manual.js`). Ele só
+  existe no recorte por **período**: um lançamento manual não pertence a fatura nenhuma. Com uma
+  fatura em foco, o botão leva ao período com `?manual=1`, que já abre o formulário.
 - **O avatar antes da descrição existe também na fatura em andamento**, e pinta a cor da marca do
   banco (Unicred verde, Nubank roxo) — a mesma tabela `BANCOS_ESTILO` do selo, via `cor_banco()`.
   Duas tabelas de cor divergiriam no primeiro banco novo. Ali o nome impresso do portador **ainda
@@ -870,7 +870,7 @@ O `data-campo="observacao"` é o mesmo de antes, então vale o mesmo salvamento 
 há segundo caminho de gravação.
 
 **As duas telas nomeiam e ordenam as colunas igual** (decisão do usuário): `sel · data · desc ·
-[origem, só na Resumida] · categoria · dimensões · valor · obs · regra · check`, com os títulos
+origem · categoria · dimensões · valor · obs · regra · check`, com os títulos
 `Descrição`, `Observação`, `Valor`, `OK`. Duas visões do mesmo dado que chamam a mesma coluna de
 `Obs` e de `Observação`, em ordens diferentes, obrigam a reaprender a tela a cada troca. **Os
 `data-col` também são os mesmos** — é por eles que o modo cartão e a ordenação encontram cada
@@ -906,7 +906,7 @@ recarrega e não desmonta o grupo.
   juntos. `Esc` limpa.
 - No filtro **Pendentes de OK**, ao marcar, a linha sai da fila **somente depois da confirmação do
   servidor**, preservando filtros e rolagem. Nos demais filtros, marcar OK mantém a linha visível.
-  **Nas duas telas**: na Resumida isso chegou em 07/09/2026 — o OK atualizava só a própria linha, e
+  Na antiga Resumida isso chegou em 07/09/2026 — o OK atualizava só a própria linha, e
   os cards e o filtro só mudavam recarregando a página, o que jogava o usuário para o topo no meio
   da conferência. Agora a atualização é a **mesma do filtro** (AJAX, sem recarregar) e a rolagem
   volta para onde estava; ela espera ~450 ms, então marcar vários OK seguidos faz **uma**
@@ -1022,19 +1022,58 @@ a mesma lição da delegação na tabela (§7.1).
 significa nada num período com três cartões e a conta corrente misturados (§7.1-A); um de "Receitas"
 numa fatura de cartão seria sempre zero.
 
+### 7.1-C A Resumida saiu (10/09/2026)
+
+**Decisão do usuário**, depois de as dez etapas, a tabela única e os filtros autogerenciados estarem
+em produção. Saíram `templates/index.html`, `static/lancamentos.js`, a rota `index()`, o botão
+"Resumida" e o `url_resumida` que os construtores montavam para ele.
+
+**Antes de apagar, a comparação do que cada tela gravava achou UM recurso que só a Resumida tinha:
+editar a descrição de um lançamento manual.** Morava no modal de detalhes dela. Veio para a linha
+da Detalhada — um campo `data-campo="descricao"` que só aparece quando `descricao_editavel` (conta
+manual) e há permissão de editar, e que grava pelo **mesmo** caminho da observação: `payloadEditor`
+já era genérico, e o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando
+no próprio `UPDATE` a descrição de qualquer outra origem (§4.6). Natureza **não** era enviada pela
+Resumida, e "substituído" lá era só uma opção de status — nenhum dos dois ficou para trás.
+
+**O que não veio, e é só informação:** o modal mostrava "Criado em / Última alteração" do
+lançamento manual. O painel de procedência da Detalhada mostra sincronização e assinatura do OK, mas
+não esses dois carimbos. Nada se edita por eles; se fizerem falta, entram no painel.
+
+**Um defeito que a remoção revelou, do commit anterior.** A lista unificada de Status chama o
+filtro de "não conferido" de `pendente`; a rota da fatura, escrita à parte, só entendia `pendente_ok`
+— e o card "OK dos lançamentos" apontava para `pendente_ok`. O clique escolhia um valor que o seletor
+não tinha, o navegador o trocava por vazio e a rota caía em **"Todas": a tela dizia que filtrou e
+mostrava tudo**. No ciclo em andamento, "Pendentes de conferência" e "Rateio incompleto" estavam na
+lista e a rota não os entendia. Quem pegou foi um teste da Resumida portado para a Detalhada
+("todo card leva a um filtro real"). Hoje o conjunto aceito **sai da mesma lista que o seletor
+oferece** (`STATUS_COM_FATURA`, `opcoes_de_status`), `pendente_ok` vira `pendente` na entrada (link
+antigo continua valendo) e `test_todo_status_oferecido_tem_um_filtro_de_verdade_no_recorte` cobra um
+ramo de filtro para cada valor oferecido.
+
+**`registrar_e_calcular_crescimento()` saiu do `core`.** Só a Resumida a chamava, e o crescimento
+que ela calculava já não aparecia em tela nenhuma. Consequência: **`cartao.metrica_diaria` para de
+receber o snapshot diário** — nada mais a lê. A tabela fica: migração não se reescreve (§3).
+
+**Os testes que cobravam regra do sistema PELA Resumida passaram a cobrar pela Detalhada**, em vez
+de sumir junto com ela: escape de descrição e de apelido (XSS), card que filtra só por status que
+existe, pendência que respeita a natureza, fila de gravação por campo, confirmação ao retirar o OK,
+agrupamento de registro técnico sem heurística. Saíram só os que testavam o modal e o comportamento
+próprios da Resumida.
+
 ## 7.1-A A Detalhada recorta por fatura OU por período (08/09/2026)
 
 **A Detalhada é a tela principal do sistema** (decisão do usuário, 09/09/2026): o item
 **Lançamentos** do menu, a marca do topbar e o destino do login apontam para ela. A URL mora num
 ponto único — `core.URL_LANCAMENTOS` — porque aparece nesses três lugares; escrita nos três,
-divergiria no dia em que um fosse esquecido, e quando a Resumida sair muda só ali. **A Resumida
-continua existindo** como rede de segurança até ser removida, alcançável pelo botão — mas **saiu da
-raiz em 10/09/2026** e responde em `core.URL_RESUMIDA` (`/lancamentos/resumida`). Enquanto ela morava
-em `/`, quem abria o endereço do sistema — favorito, histórico, digitar o domínio — caía nela, e o
-menu, a marca e o login apontarem para a Detalhada não adiantava nada. **A raiz redireciona,
-preservando a query**: `mes`, `periodo`, `origem` e `status` têm os mesmos nomes nos dois lados,
-então um favorito antigo abre o mesmo recorte, só que na tela certa. O redirecionamento não tem
-`@requer`: ali não se lê dado nenhum, e quem cobra a permissão é o destino.
+divergiria no dia em que um fosse esquecido.
+
+**Os dois endereços antigos redirecionam, preservando a query:** `/` (onde a Resumida morou até
+10/09/2026 — quem abria o endereço do sistema por favorito ou histórico caía nela, e o menu apontar
+para a Detalhada não adiantava nada) e `core.URL_RESUMIDA` (`/lancamentos/resumida`, onde ela ficou
+nas últimas horas antes de sair). `mes`, `periodo`, `origem` e `status` têm os mesmos nomes dos dois
+lados, então um favorito antigo abre o mesmo recorte, só que na tela que existe. Os redirecionamentos
+não têm `@requer`: ali não se lê dado nenhum, e quem cobra a permissão é o destino.
 
 **A URL que um filtro monta sai do `pathname` atual, nunca escrita à mão.** A Resumida montava
 `'/?' + params`; com ela fora da raiz isso passaria a redirecionar para a Detalhada, e o AJAX do
@@ -1453,11 +1492,11 @@ Corrige-se sozinho quando a fatura seguinte traz a Parc.2/N.
 
 ## 7.4-A Navegação por fatura (05/09/2026)
 
-**Na Resumida**, com **exatamente uma** origem marcada, sendo cartão **com fatura importada**, as
-setas `‹ ›` andam por **ciclo de fatura** e aplicam o período personalizado — o mesmo passo da
-Detalhada. Nos demais casos (nenhuma origem, várias, conta corrente, cartão sem arquivo) continuam
-mês a mês: com várias origens não existe "a fatura", e sem arquivo o ciclo seria palpite. Nas
-pontas volta a andar por mês, em vez de travar.
+**A regra "só com um cartão que tenha fatura"** nasceu nas setas da Resumida (05/09/2026): com
+**exatamente uma** origem marcada, sendo cartão **com fatura importada**, elas andavam por ciclo; nos
+demais casos, por mês — com várias origens não existe "a fatura", e sem arquivo o ciclo seria
+palpite. A Resumida saiu e **a regra mora hoje no filtro Fatura** (`faturas_para_o_filtro()`,
+§7.1), que só aparece nesse mesmo caso.
 
 **Na Detalhada**, o seletor lista também os **meses previstos** — cada mês por vir que já tenha
 lançamento do Pluggy. Parcela futura chega adiantada e, sem isso, não aparecia em tela nenhuma: o
@@ -2068,7 +2107,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**418 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**404 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
