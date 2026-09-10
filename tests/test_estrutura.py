@@ -2781,3 +2781,32 @@ def test_a_detalhada_abre_por_periodo_e_so_vai_para_a_fatura_quando_pedem():
     # e o alternador pede a fatura por nome, senao apontaria para o periodo
     detalhada = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert '/lancamentos/fatura?recorte=fatura' in detalhada
+
+
+def test_o_que_vive_dentro_da_tabela_e_ligado_por_delegacao():
+    """Filtrar troca a tabela inteira, e `replaceWith` descarta o elemento
+    antigo junto com TUDO que estava anexado nele.
+
+    Ligados um a um, o "+", o clique na linha, o checkbox de OK e os campos de
+    classificacao paravam de funcionar depois do primeiro filtro - a tela virava
+    somente leitura sem dizer nada, que e pior do que dar erro, e so voltava
+    recarregando a pagina. Delegacao no `document` nao depende de religar nada.
+    """
+    import re
+
+    js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    dentro_da_tabela = (
+        "data-expande", "data-toggle-linha", "data-ok-lancamento",
+        "data-editor", "data-campo", "data-dimensao",
+    )
+    for marca in dentro_da_tabela:
+        # querySelectorAll(...marca...).forEach(x => x.addEventListener(...))
+        padrao = r"querySelectorAll\([^)]*" + re.escape(marca) + r"[^)]*\)[^;]{0,120}addEventListener"
+        assert not re.search(padrao, js, re.S), (
+            marca + ": listener por elemento dentro da tabela; use delegação"
+        )
+    # focus e blur nao borbulham: a delegacao usa focusin/focusout
+    assert "addEventListener('focusin'" in js and "addEventListener('focusout'" in js
+    # o estado da linha (pintura e pilula) e refeito na tabela nova
+    assert "window.pdmPrepararLinhas" in js
+    assert js.count("pdmPrepararLinhas(tabela)") == 1

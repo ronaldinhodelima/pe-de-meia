@@ -182,6 +182,9 @@
         tabelaFatura = tabela;
         ligarOrdenacao();
         if (window.atualizarTotaisVisiveis) window.atualizarTotaisVisiveis(tabela);
+        // a pintura de pendencia e a pilula "Faltam:" sao estado, nao HTML: o
+        // servidor manda a linha, mas quem a repinta e o cliente
+        if (window.pdmPrepararLinhas) window.pdmPrepararLinhas(tabela);
       }},
       {seletor: '.cards'},
       {seletor: '.chipfilter'},
@@ -463,14 +466,22 @@
     }
   }
 
-  document.querySelectorAll('[data-expande]').forEach(botao => botao.addEventListener('click', evento => {
-    evento.stopPropagation();
-    alternarLinha(botao.dataset.expande);
-  }));
-  document.querySelectorAll('[data-toggle-linha]').forEach(linha => linha.addEventListener('click', evento => {
+  // DELEGACAO, nunca listener por elemento: filtrar troca a tabela inteira
+  // (secao 7.1-A), e `replaceWith` descarta o elemento antigo junto com tudo
+  // que estava anexado nele. Ligado um a um, o "+" parava de abrir depois do
+  // primeiro filtro e so voltava recarregando a pagina.
+  document.addEventListener('click', evento => {
+    const botao = evento.target.closest('[data-expande]');
+    if (botao) {
+      evento.stopPropagation();
+      alternarLinha(botao.dataset.expande);
+      return;
+    }
+    const linha = evento.target.closest('[data-toggle-linha]');
+    if (!linha) return;
     if (evento.target.closest('button,input,select,textarea,a,label')) return;
     alternarLinha(linha.dataset.toggleLinha);
-  }));
+  });
   document.addEventListener('click', evento => {
     const botao = evento.target.closest('[data-info-target]');
     if (!botao) return;
@@ -483,7 +494,9 @@
   });
 
   const filaSalvar = {};
-  document.querySelectorAll('[data-ok-lancamento]').forEach(campo => campo.addEventListener('change', async () => {
+  document.addEventListener('change', async evento => {
+    const campo = evento.target.closest('[data-ok-lancamento]');
+    if (!campo) return;
     const novo = campo.checked;
     let confirmar = false;
     if (!novo) {
@@ -519,7 +532,7 @@
     } catch (e) {
       campo.checked = !novo; campo.disabled = false; alert(e.message);
     }
-  }));
+  });
 
   function payloadEditor(editor, alterado) {
     const payload = {};
@@ -793,26 +806,52 @@
   }
 
   const temporizadores = new WeakMap();
-  document.querySelectorAll('[data-editor]').forEach(editor => {
-    atualizarDestaquesObrigatorios(editor);
-    atualizarAvisoClassificacao(editor);
-    editor.querySelectorAll('select[data-campo],select[data-dimensao]').forEach(campo => {
-      campo.addEventListener('focus', () => { campo.dataset.valorAnterior = campo.value; });
-      campo.addEventListener('change', () => {
-        if (campo.value === '__novo__') cadastrarNovo(campo);
-        else salvarEditor(editor, campo);
-      });
+
+  // A pintura de pendencia e a pilula "Faltam:" sao estado da linha, entao
+  // precisam ser refeitas quando a tabela e trocada por um filtro.
+  function prepararLinhas(raiz) {
+    (raiz || document).querySelectorAll('[data-editor]').forEach(editor => {
+      atualizarDestaquesObrigatorios(editor);
+      atualizarAvisoClassificacao(editor);
     });
-    editor.querySelectorAll('input[data-campo="observacao"]').forEach(campo => {
-      campo.addEventListener('input', () => {
-        clearTimeout(temporizadores.get(campo));
-        temporizadores.set(campo, setTimeout(() => salvarEditor(editor, campo), 650));
-      });
-      campo.addEventListener('blur', () => {
-        clearTimeout(temporizadores.get(campo));
-        salvarEditor(editor, campo);
-      });
-    });
+  }
+  window.pdmPrepararLinhas = prepararLinhas;
+  prepararLinhas();
+
+  // Tudo por DELEGACAO: os campos vivem dentro da tabela, e filtrar troca a
+  // tabela inteira. Ligados um a um, eles paravam de gravar depois do primeiro
+  // filtro - a tela virava somente leitura sem dizer nada, que e pior do que
+  // dar erro.
+  const SELETOR_CLASSIF = 'select[data-campo],select[data-dimensao]';
+  // `focus` nao borbulha; `focusin` e o mesmo evento, borbulhando
+  document.addEventListener('focusin', evento => {
+    const campo = evento.target.closest(SELETOR_CLASSIF);
+    if (campo) campo.dataset.valorAnterior = campo.value;
+  });
+  document.addEventListener('change', evento => {
+    const campo = evento.target.closest(SELETOR_CLASSIF);
+    if (!campo) return;
+    const editor = campo.closest('[data-editor]');
+    if (!editor) return;
+    if (campo.value === '__novo__') cadastrarNovo(campo);
+    else salvarEditor(editor, campo);
+  });
+  document.addEventListener('input', evento => {
+    const campo = evento.target.closest('input[data-campo="observacao"]');
+    if (!campo) return;
+    const editor = campo.closest('[data-editor]');
+    if (!editor) return;
+    clearTimeout(temporizadores.get(campo));
+    temporizadores.set(campo, setTimeout(() => salvarEditor(editor, campo), 650));
+  });
+  // `blur` tambem nao borbulha
+  document.addEventListener('focusout', evento => {
+    const campo = evento.target.closest('input[data-campo="observacao"]');
+    if (!campo) return;
+    const editor = campo.closest('[data-editor]');
+    if (!editor) return;
+    clearTimeout(temporizadores.get(campo));
+    salvarEditor(editor, campo);
   });
 
 
