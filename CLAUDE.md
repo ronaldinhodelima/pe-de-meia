@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 63 · **Testes:** 433 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 63 · **Testes:** 434 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -384,7 +384,14 @@ migração 63 ligou os pares que já existiam, com backup em `pendente_backup_v6
 **O que o critério não alcança, de propósito:** o débito da fatura de 23/03/2026 (R$ 16.509,07)
 chegou pendente como `Fatura Cartão Visa DEB FATURA- CARTAO V` e confirmado como
 `cartao de credito DEBITO DE COBRANCA`, em `Loans and financing`. Descrição diferente não é prova de
-mesmo evento; ficou para o usuário.
+mesmo evento; ficou para o usuário, que confirmou em 11/09/2026: o pendente foi ligado ao confirmado
+pela via manual (`/api/duplicidades/marcar`) e o confirmado passou para **Pagamento de Fatura**. O DRE
+não mudou — `Loans and financing` já tinha natureza `transferencia`.
+
+**A "possível duplicidade" deixou de contar par já resolvido** (11/09/2026). A consulta agrupava por
+conta, dia, valor e descrição e só excluía `duplicada`: com o pendente recolhido, o lançamento que sobrou
+continuava marcado como suspeito. Agora exclui também `substituido_por` e `somente_conciliacao` — o
+defeito que a §11.3 já registrava.
 
 Antes de gravar qualquer `substituido_por`, validar conta, proximidade de data, estabelecimento e
 valor. Compras positivas exigem **pelo menos dois termos significativos** do estabelecimento em
@@ -2307,7 +2314,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**433 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**434 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

@@ -62,6 +62,13 @@ def test_hora_embaixo_da_data_sem_hora_inventada():
     assert "!= 'F'" in celula  # criado pela fatura tem hora padrao
 
 
+def test_suspeita_de_duplicidade_ignora_par_ja_resolvido():
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    consulta = view.split("SELECT array_agg(t.transacao_id::text) AS ids", 1)[1].split("HAVING", 1)[0]
+    assert "t.substituido_por IS NULL" in consulta
+    assert "somente_conciliacao" in consulta
+
+
 def test_ordenacao_por_data_le_a_hora_sem_colar_no_ano():
     js = (RAIZ / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     trecho = js.split("if (chave === 'data') {", 1)[1].split("if (chave === 'valor')", 1)[0]

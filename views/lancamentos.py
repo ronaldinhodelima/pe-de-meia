@@ -1181,6 +1181,10 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         "SELECT array_agg(t.transacao_id::text) AS ids FROM cartao.transacao t "
         "WHERE t.data_transacao >= %s AND t.data_transacao < %s "
         "AND COALESCE(t.duplicada, false) = false "
+        # par ja resolvido nao e suspeita: o substituido e o registro de
+        # conciliacao estao fora do resultado, e contar com eles marcava o
+        # lancamento que sobrou como "possivel duplicidade" (secao 11.3)
+        "AND t.substituido_por IS NULL AND NOT COALESCE(t.somente_conciliacao, false) "
         f"GROUP BY t.account_id, ({DATA_LOCAL_SQL})::date, "
         "COALESCE(t.valor_brl, t.valor_original), t.descricao "
         "HAVING COUNT(*) > 1;",
