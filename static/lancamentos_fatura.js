@@ -449,6 +449,9 @@
   let previaParcelamentos = null;
   async function carregarPreviaParcelamentos() {
     if (!revisarParcelamentos) return null;
+    // So um id de fatura de verdade chega ao servidor. O recorte por periodo
+    // passava o id falso `periodo`, e a tela abria com um 400 no console.
+    if (!/^\d+$/.test(revisarParcelamentos.dataset.faturaId || '')) return null;
     revisarParcelamentos.disabled = true;
     try {
       const url = '/api/faturas/sincronizar-parcelas?fatura_id=' +

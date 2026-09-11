@@ -1292,3 +1292,28 @@ def test_a_linha_nasce_so_com_a_opcao_escolhida(ctx):
     cadastro = js.split("async function cadastrarNovo(select)", 1)[1].split("\n  }\n", 1)[0]
     assert "listaDaDimensao.push(" in cadastro
     assert "window.hidratarSelect = hidratarSelect" in js
+
+
+def test_revisao_de_parcelamentos_so_existe_com_fatura_oficial(ctx):
+    """No recorte por periodo o id da "fatura" e o falso `periodo`.
+
+    O bloco "Revisar parcelamentos" aparecia ali mesmo assim, e o JS pedia a
+    previa com esse id em TODA abertura da tela principal: um 400 no console
+    desde que o periodo virou o recorte padrao (09/09/2026). Achado testando em
+    producao pelo navegador em 10/09/2026. Duas travas: o bloco so existe com
+    uma fatura oficial, e o JS so manda id numerico.
+    """
+    import pathlib
+    from datetime import date
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    periodo = render_template("lancamentos_fatura.html", **TestDetalhadaPorPeriodo().contexto())
+    assert 'id="revisarParcelamentos"' not in periodo
+    fatura = TestDetalhadaPorPeriodo().contexto_fatura()
+    html = render_template("lancamentos_fatura.html", **fatura)
+    assert 'id="revisarParcelamentos" data-fatura-id="3"' in html
+    em_andamento = render_template("lancamentos_fatura.html",
+                                   **TestDetalhadaPorPeriodo().contexto_fatura(em_andamento=True))
+    assert 'id="revisarParcelamentos"' not in em_andamento
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    previa = js.split("async function carregarPreviaParcelamentos() {", 1)[1].split("fetch(", 1)[0]
+    assert "/^\\d+$/.test(revisarParcelamentos.dataset.faturaId" in previa

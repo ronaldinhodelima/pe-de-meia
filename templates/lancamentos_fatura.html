@@ -442,7 +442,11 @@
 {% endif %}
 <div class="rodape-fatura">
   <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
-  {% if pode_editar and not fatura.em_andamento %}<div class="revisao-parcelas">
+  {# So com uma fatura OFICIAL em foco: a revisao de parcelamentos e sobre as
+     linhas de um documento. No recorte por periodo o id da "fatura" e o falso
+     `periodo`, e o JS pedia a previa com ele em toda abertura da tela - um 400
+     no console desde que o periodo virou o recorte padrao (09/09/2026). #}
+  {% if pode_editar and not fatura.em_andamento and not modo_periodo %}<div class="revisao-parcelas">
     <button type="button" class="ver-btn" id="revisarParcelamentos" data-fatura-id="{{ fatura.id }}" aria-label="Revisar parcelamentos" title="Analisa primeiro e só corrige após confirmação" disabled>Verificando parcelamentos…</button>
     <span id="revisarParcelamentosStatus" style="font-size:var(--fonte-sm);color:var(--ink-faint)" aria-live="polite"></span>
   </div>{% endif %}
@@ -459,4 +463,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-7"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-8"></script>{% endblock %}

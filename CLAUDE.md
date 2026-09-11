@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 62 · **Testes:** 411 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 62 · **Testes:** 412 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1100,6 +1100,17 @@ Menção histórica ("isto veio da Resumida") ficou: explica decisão. No caminh
 vizinho é a **última parte**; o aviso de classificação ainda reescrevia a própria busca. Hoje há uma
 só, pelo id do painel (`vinculos-<linha>`).
 
+**Testado em produção pelo navegador logado (10/09/2026), só leitura** — nada foi gravado, conferido
+na rede: a migração 62 registrou "Tabela metrica_diaria removida" com **15 linhas** e o backup; o
+diagnóstico de importados deu **total 0** (o selo `I` está certo, mas não há registro dessa origem no
+banco); no mês corrente (46 linhas) a tabela nasce com 184 seletores sob demanda e **369 `<option>`,
+contra ~5.750 sem a carga sob demanda**, e a caixa de Categoria abre com as **82 opções** do config.
+
+**E o teste achou um defeito que existia desde 09/09:** o bloco "Revisar parcelamentos" do rodapé
+aparecia também no recorte por **período**, onde o id da "fatura" é o falso `periodo`, e o JS pedia a
+prévia com ele em **toda abertura da tela principal** — um `400` no console a cada carga. Agora o bloco
+só existe com uma fatura oficial em foco, e o JS só manda id numérico.
+
 **As opções sob demanda, que só a Resumida tinha, vieram para a Detalhada no mesmo dia** (pedido do
 usuário): o HTML de um mês cheio caiu 54% — ver §7.7. O teste de volume
 (`test_tela_suporta_dez_vezes_o_volume_atual`, que só roda com Postgres) cobra o tempo de abertura.
@@ -2165,7 +2176,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**411 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**412 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
