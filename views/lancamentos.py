@@ -519,6 +519,30 @@ def rateio_da_linha(partes, valor_pai, dimensoes, nomes_por_dim, obrigatorias,
     return ui, valido
 
 
+def procedencia_do_registro(conta, importado=False, criado_pela_fatura=False):
+    """(letra, nome) de onde o registro veio - o selo F/P/M/I do painel.
+
+    Ponto unico dos tres construtores de linha. Eram duas letras so (F/P), e
+    tudo o que nao nascia da fatura caia em "Pluggy": o lancamento manual e o
+    que veio do importador de arquivo antigo diziam uma origem falsa - no
+    painel que existe justamente para mostrar a origem.
+
+    - M: conta MANUAL (dinheiro, digitado por alguem);
+    - F: criado pela fatura (`fatura_linha.transacao_id_criado`, secao 11.3);
+    - I: `transacao.importado` - o importador de OFX/CSV que existiu de 18 a
+      21/08/2026 (commits 5361fad e 78c0d32; removido no 4cc22e3). Nenhum
+      codigo atual grava essa marca;
+    - P: o resto, que e o que o Pluggy sincronizou.
+    """
+    if (conta or {}).get("tipo") == "MANUAL":
+        return "M", "Lançamento manual"
+    if criado_pela_fatura:
+        return "F", "Fatura importada"
+    if importado:
+        return "I", "Importado de arquivo"
+    return "P", "Pluggy"
+
+
 def origem_da_linha(conta, final4=None, nomes_cartao=None):
     """(selo em HTML, texto curto, texto completo) da origem de um lancamento.
 
@@ -944,7 +968,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         tx["sincronizado_local"] = data_hora_local(tx.pop("sincronizado_em"))
         tx["primeiro_sincronizado_local"] = data_hora_local(tx.pop("primeiro_sincronizado_em"))
         tx["elegivel"] = True
-        tx["principal"], tx["tecnico"], tx["fonte"], tx["fonte_nome"] = True, False, "P", "Pluggy"
+        tx["principal"], tx["tecnico"] = True, False
+        tx["fonte"], tx["fonte_nome"] = procedencia_do_registro(conta_da_fatura, tx.get("importado"))
         tx["dims"] = dims_por_tx.get(tid, {})
         partes = partes_por_tx.get(tid, [])
         tx["rateado"] = bool(partes)
@@ -1265,15 +1290,9 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         row["sincronizado_local"] = data_hora_local(row.pop("sincronizado_em"))
         row["primeiro_sincronizado_local"] = data_hora_local(row.pop("primeiro_sincronizado_em"))
         row["atualizado_local"] = data_hora_local(row.pop("atualizado_em"))
-        # TRES procedencias, e nao duas. Com F/P so, o lancamento manual caia no
-        # "resto" e o painel dizia que ele veio do Pluggy - uma afirmacao falsa
-        # sobre a origem do dado, que e justamente o que o painel existe para
-        # mostrar. Manual se reconhece pela conta, nao por `importado`.
-        if (contas_by_id.get(str(row["account_id"])) or {}).get("tipo") == "MANUAL":
-            row["fonte"], row["fonte_nome"] = "M", "Lançamento manual"
-        else:
-            row["fonte"] = "F" if tid in criados_pela_fatura else "P"
-            row["fonte_nome"] = "Fatura importada" if row["fonte"] == "F" else "Pluggy"
+        row["fonte"], row["fonte_nome"] = procedencia_do_registro(
+            contas_by_id.get(str(row["account_id"])), row["importado"],
+            tid in criados_pela_fatura)
         row["dims"] = dims_por_tx.get(tid, {})
         rateio = rateio_por_tx.get(tid) or []
         row["rateado"] = bool(rateio)
@@ -1731,8 +1750,8 @@ def lancamentos_por_fatura():
         for v in vinculos:
             v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
             v["tecnico"] = not v["principal"]
-            v["fonte"] = "F" if v["transacao_id"] == criado else "P"
-            v["fonte_nome"] = "Fatura importada" if v["fonte"] == "F" else "Pluggy"
+            v["fonte"], v["fonte_nome"] = procedencia_do_registro(
+                conta_da_fatura, v.get("importado"), v["transacao_id"] == criado)
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1

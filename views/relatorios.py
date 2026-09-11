@@ -3782,3 +3782,64 @@ def api_diagnostico_casamento(fatura_id):
         cur.close()
         conn.close()
         return jsonify({"ok": False, "erro": f"Falhou: {exc}"}), 400
+
+
+@bp.route("/api/diagnostico/importados")
+@requer("cadastros")
+def api_diagnostico_importados():
+    """Lancamentos marcados `importado` - somente leitura.
+
+    `transacao.importado` e a marca do importador de OFX/CSV que existiu de 18 a
+    21/08/2026 (commits 5361fad e 78c0d32; removido no 4cc22e3). Nenhum codigo
+    atual grava essa marca. Desde 10/09/2026 o painel mostra esses registros
+    com o selo "I - Importado de arquivo", e nao mais como "Pluggy".
+
+    Existe para o usuario ver QUANTOS sao e quais, antes de decidir qualquer
+    coisa sobre eles: nao altera nada, nao marca duplicidade (secao 1.3) e nao
+    encosta no OK (secao 1.2).
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    contas_by_id, _ = carregar_origens(cur)
+    cur.execute(
+        "SELECT t.transacao_id::text AS transacao_id, t.account_id::text AS account_id, "
+        "t.data_transacao, t.descricao, COALESCE(t.valor_brl,t.valor_original) AS valor, "
+        "t.conferida, COALESCE(t.duplicada,false) AS duplicada, t.substituido_por, "
+        "COALESCE(t.somente_conciliacao,false) AS somente_conciliacao, "
+        "EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
+        "        WHERE fl.transacao_id_criado=t.transacao_id) AS criado_pela_fatura "
+        "FROM cartao.transacao t WHERE COALESCE(t.importado,false) "
+        "ORDER BY t.data_transacao;"
+    )
+    linhas = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    por_conta = {}
+    itens = []
+    for r in linhas:
+        conta = contas_by_id.get(r["account_id"]) or {}
+        rotulo = conta.get("label") or r["account_id"]
+        fora = bool(r["duplicada"] or r["substituido_por"] or r["somente_conciliacao"])
+        grupo = por_conta.setdefault(rotulo, {"total": 0, "conferidos": 0, "fora_do_resultado": 0,
+                                              "criados_pela_fatura": 0})
+        grupo["total"] += 1
+        grupo["conferidos"] += int(bool(r["conferida"]))
+        grupo["fora_do_resultado"] += int(fora)
+        grupo["criados_pela_fatura"] += int(bool(r["criado_pela_fatura"]))
+        itens.append({
+            "transacao_id": r["transacao_id"], "origem": rotulo,
+            "data": data_hora_local(r["data_transacao"]).strftime("%d/%m/%Y") if r["data_transacao"] else None,
+            "descricao": r["descricao"], "valor": float(r["valor"] or 0),
+            "conferido": bool(r["conferida"]), "fora_do_resultado": fora,
+            # se algum nascer da fatura, o selo e F, e nao I (a fatura manda)
+            "criado_pela_fatura": bool(r["criado_pela_fatura"]),
+        })
+    return jsonify({
+        "total": len(itens),
+        "por_origem": por_conta,
+        "primeira_data": itens[0]["data"] if itens else None,
+        "ultima_data": itens[-1]["data"] if itens else None,
+        "lancamentos": itens[:200],
+        "mostrando": min(len(itens), 200),
+    })

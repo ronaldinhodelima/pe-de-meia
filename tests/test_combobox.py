@@ -20,8 +20,13 @@ def test_piloto_cobre_quatro_campos_nas_duas_visualizacoes():
     base = (RAIZ / "templates" / "base.html").read_text(encoding="utf-8")
 
     assert '/static/combobox.js?v=' in base
-    assert 'data-pdm-combobox data-campo="categoria"' in detalhada
-    assert 'data-pdm-combobox data-dimensao=' in detalhada
+    # a ordem dos atributos nao e a regra; a regra e o seletor de categoria da
+    # linha ser combobox (e, desde 10/09/2026, carregar as opcoes sob demanda)
+    import re
+    categoria = re.search(r'<select[^>]*data-campo="categoria"[^>]*>', detalhada).group(0)
+    assert "data-pdm-combobox" in categoria and 'data-lazy-options="categoria"' in categoria
+    dimensao = re.search(r'<select[^>]*data-dimensao="\{\{ d.id \}\}"[^>]*>', detalhada).group(0)
+    assert "data-pdm-combobox" in dimensao and 'data-lazy-options="dimensao"' in dimensao
 
 
 def test_layout_sombra_flutuante_e_compacto():
@@ -53,14 +58,10 @@ def test_layout_sombra_flutuante_e_compacto():
 def test_componente_se_expande_para_listas_pesquisaveis_do_projeto():
     js = (RAIZ / "static" / "combobox.js").read_text(encoding="utf-8")
 
-    # `data-lazy-options` e o gancho `hidratarSelect` eram da Resumida (opcoes
-    # carregadas sob demanda) e sairam com ela em 10/09/2026 - nenhuma tela os
-    # emite, e codigo que ninguem aciona so confunde quem le
-    import re
-    # olha o CODIGO, nao o comentario - que cita os dois nomes para explicar a saida
-    codigo = re.sub(r"//[^\n]*", "", js)
-    assert "data-lazy-options" not in codigo
-    assert "hidratarSelect" not in codigo
+    # O gancho das opcoes sob demanda: o combobox o chama ANTES de ler as opcoes
+    # do <select>, senao a caixa abriria so com a opcao escolhida (10/09/2026).
+    renderizar = js.split("function renderizar(consulta) {", 1)[1].split("\n    }", 1)[0]
+    assert renderizar.index("hidratarSeNecessario(select)") < renderizar.index("opcoesDo(select)")
     assert "select.matches('[data-pdm-native], [multiple]')" in js
     assert "escopo.querySelectorAll('select')" in js
     assert "new MutationObserver(function (mudancas)" in js

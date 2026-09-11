@@ -69,6 +69,7 @@
   .vinculo-quem{flex:0 1 auto;max-width:55%;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
   .vinculo-quem .desc-input{width:28ch;max-width:100%}
   .fonte-badge.manual{background:var(--raise);color:var(--ink-soft)}
+  .fonte-badge.arquivo{background:var(--selecao-suave);color:var(--selecao-simbolo)}
   .vinculo-quem b{font-weight:var(--peso-forte);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .vinculo-quem small{color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
   .vinculo-quando{color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums;flex:0 0 auto}
@@ -120,6 +121,14 @@
 {% block conteudo %}
 {% if fatura %}
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
+{# Opcoes sob demanda (pedido do usuario, 10/09/2026, "como era na Resumida"):
+   cada seletor da linha nasce SO com a opcao escolhida, e a lista completa
+   entra quando ele e aberto - ela ja mora uma vez no config da pagina. Com ~84
+   categorias e ate 321 linhas por mes, repetir a lista em cada linha
+   multiplicava o HTML e o tempo de montar a tela. Os nomes da opcao escolhida
+   saem destes dois dicionarios, montados uma vez aqui. #}
+{% set nome_da_categoria = {} %}{% for c in categorias %}{% set _ = nome_da_categoria.update({c.chave: c.nome}) %}{% endfor %}
+{% set rotulo_do_valor = {} %}{% for lista in valores_por_dim.values() %}{% for val in lista %}{% set _ = rotulo_do_valor.update({val.id: rotulo_dim(val)}) %}{% endfor %}{% endfor %}
 {# A coluna Origem existe nos dois recortes: a tabela dos lancamentos e a
    mesma, e o que muda entre fatura e periodo sao os FILTROS (decisao do
    usuario, 10/09/2026). Numa fatura ela nao e redundante: um cartao de credito
@@ -316,8 +325,8 @@
     <td class="cel-origem" data-col="origem" data-tip="{{ linha.origem_completa }}{% if linha.autor %} · lançado por {{ linha.autor }}{% endif %}"><span class="origem-conteudo">{{ linha.origem_selo|safe }}{% if linha.autor %}<span class="avatar-autor" data-tip="Lançado manualmente por {{ linha.autor }}">{{ linha.autor[:2]|upper }}</span>{% endif %}<span class="origem-texto">{{ linha.origem_texto }}</span></span></td>
     {% if linha.principal and not linha.principal.rateado %}
       {% set v = linha.principal %}
-      <td class="cel-classif" data-col="categoria"><select data-pdm-combobox data-campo="categoria" aria-label="Categoria" class="{{ 'classificacao-faltando' if not v.categoria }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for c in categorias %}<option value="{{ c.chave }}" {{ 'selected' if c.chave==v.categoria }}>{{ c.nome }}</option>{% endfor %}</select></td>
-      {% for d in dimensoes %}<td class="cel-classif" data-col="dim_{{ d.id }}"><select data-pdm-combobox data-dimensao="{{ d.id }}" data-dimensao-nome="{{ d.nome }}" aria-label="{{ d.nome }}" class="{{ 'classificacao-faltando' if d.obrigatoria and v.get('exige_dimensoes', True) and not v.get('dims', {}).get(d.id) }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}" {{ 'selected' if v.get('dims', {}).get(d.id)==val.id }}>{{ rotulo_dim(val) }}</option>{% endfor %}{% if d.nome|lower in ['projeto','portfólio','portfolio'] %}<option value="__novo__">+ Cadastrar novo...</option>{% endif %}</select></td>{% endfor %}
+      <td class="cel-classif" data-col="categoria"><select data-pdm-combobox data-lazy-options="categoria" data-campo="categoria" aria-label="Categoria" class="{{ 'classificacao-faltando' if not v.categoria }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% if v.categoria %}<option value="{{ v.categoria }}" selected>{{ nome_da_categoria.get(v.categoria, v.categoria) }}</option>{% endif %}</select></td>
+      {% for d in dimensoes %}<td class="cel-classif" data-col="dim_{{ d.id }}">{% set atual = v.get('dims', {}).get(d.id) %}<select data-pdm-combobox data-lazy-options="dimensao" data-dimensao="{{ d.id }}" data-dimensao-nome="{{ d.nome }}" aria-label="{{ d.nome }}" {% if d.nome|lower in ['projeto','portfólio','portfolio'] %}data-cadastro-rapido="1"{% endif %} class="{{ 'classificacao-faltando' if d.obrigatoria and v.get('exige_dimensoes', True) and not atual }}" {{ 'disabled' if not pode_editar }}><option value="">(não definido)</option>{% if atual %}<option value="{{ atual }}" selected>{{ rotulo_do_valor.get(atual, atual) }}</option>{% endif %}</select></td>{% endfor %}
     {% else %}
       {# rateado ou sem lancamento principal: a classificacao mora nas partes,
          e edita-la aqui quebraria a soma do rateio #}
@@ -353,7 +362,7 @@
          a celula, o bloco e a grade, cada uma com o proprio padding - e o
          painel levava 307px para mostrar uma linha de informacao. #}
       <div class="vinculo-faixa {{ 'principal' if v.principal else 'tecnico' }}">
-        <span class="fonte-badge {{ {'F': 'fatura', 'M': 'manual'}.get(v.fonte, 'pluggy') }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span>
+        <span class="fonte-badge {{ {'F': 'fatura', 'M': 'manual', 'I': 'arquivo'}.get(v.fonte, 'pluggy') }}" data-tip="{{ v.fonte_nome }}" aria-label="{{ v.fonte_nome }}" tabindex="0">{{ v.fonte }}</span>
         <span class="vinculo-quem"><b class="vinculo-desc">{{ v.descricao }}</b>{#
           A descricao do MANUAL se edita aqui, por um botao - nunca na linha
           (decisao do usuario, 10/09/2026): a linha e para ler e classificar, e
@@ -450,4 +459,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-6"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-7"></script>{% endblock %}

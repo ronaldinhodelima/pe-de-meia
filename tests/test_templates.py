@@ -402,14 +402,18 @@ def test_lancamento_manual_nao_se_diz_do_pluggy(ctx):
     assert 'class="fonte-badge manual"' in faixa
     assert "Lançamento manual" in faixa and "Pluggy" not in faixa
 
+    from views.lancamentos import procedencia_do_registro
+    assert procedencia_do_registro({"tipo": "MANUAL"}) == ("M", "Lançamento manual")
+    # manual pela CONTA: mesmo marcado `importado`, continua manual
+    assert procedencia_do_registro({"tipo": "MANUAL"}, importado=True)[0] == "M"
+    assert procedencia_do_registro({"tipo": "CREDIT"}, criado_pela_fatura=True)[0] == "F"
+    # o importador de arquivo antigo (18-21/08/2026) tem selo proprio
+    assert procedencia_do_registro({"tipo": "CHECKING"}, importado=True) == ("I", "Importado de arquivo")
+    assert procedencia_do_registro({"tipo": "CREDIT"}) == ("P", "Pluggy")
+    # os TRES construtores de linha usam o mesmo ponto
     view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
-    periodo = view.split("def _render_periodo", 1)[1].split("\ndef ", 1)[0]
-    assert 'row["fonte"], row["fonte_nome"] = "M", "Lançamento manual"' in periodo
-    # a CONTA decide, nao `importado` - que e outra coisa (secao 11.3). Olha a
-    # condicao do `if`, e nao o comentario acima dela, que cita a palavra.
-    condicao = periodo.split('row["fonte"], row["fonte_nome"] = "M"', 1)[0].rsplit("\n        if ", 1)[1]
-    assert '.get("tipo") == "MANUAL"' in condicao
-    assert "importado" not in condicao
+    assert view.count("procedencia_do_registro(") == 4, "a definicao e uma chamada por construtor"
+    assert '"P", "Pluggy"' not in view.split("def procedencia_do_registro", 1)[0]
 
 
 def test_faixa_do_painel_nao_empurra_o_conteudo_para_a_borda():
@@ -1249,3 +1253,42 @@ def test_a_linha_de_um_painel_e_achada_pelo_id_e_nao_pelo_vizinho():
     html = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert 'class="vinculos-detalhe" id="vinculos-{{ linha.id }}"' in html
     assert 'data-linha="{{ linha.id }}"' in html
+
+
+def test_a_linha_nasce_so_com_a_opcao_escolhida(ctx):
+    """Opcoes sob demanda, como era na Resumida (pedido do usuario, 10/09/2026).
+
+    Com ~84 categorias e ate 321 linhas por mes, a lista inteira em cada linha
+    multiplicava o HTML e o tempo de montar a tela. A lista mora UMA vez no
+    config da pagina e entra no seletor quando ele e aberto.
+    """
+    import pathlib, re
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    ctxt = TestDetalhadaPorPeriodo().contexto()
+    ctxt["categorias"] = [{"chave": f"C{i}", "nome": f"Categoria {i}"} for i in range(84)] + [
+        {"chave": "Water", "nome": "Água"}]
+    html = render_template("lancamentos_fatura.html", **ctxt)
+    linha = html.split("<tbody>", 1)[1].split("</tr>", 1)[0]
+    categoria = re.search(r'<select[^>]*data-campo="categoria"[^>]*>(.*?)</select>', linha, re.S)
+    assert 'data-lazy-options="categoria"' in categoria.group(0)
+    assert re.findall(r"<option", categoria.group(1)) == ["<option", "<option"], "vazio + a escolhida"
+    assert '<option value="Water" selected>Água</option>' in categoria.group(1)
+    dimensao = re.search(r'<select[^>]*data-dimensao="1"[^>]*>(.*?)</select>', linha, re.S)
+    assert 'data-lazy-options="dimensao"' in dimensao.group(0)
+    assert '<option value="7" selected>Família</option>' in dimensao.group(1)
+
+    js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
+    hidratar = js.split("function hidratarSelect(select) {", 1)[1].split("\n  }\n", 1)[0]
+    assert "config.categorias" in hidratar and "config.dimensoes" in hidratar
+    # o valor gravado que nao esta na lista nao vira "(nao definido)"
+    assert "!itens.some(item => item.valor === atual)" in hidratar
+    assert "'__novo__'" in hidratar and "cadastroRapido" in hidratar
+    # TODO lugar que grava valor por codigo hidrata antes - senao o value some
+    antes_do_portfolio = js.split("destino.value = String(portfolio)", 1)[0][-80:]
+    assert "hidratarSelect(destino)" in antes_do_portfolio
+    antes_do_resumo = js.split("campo.value = campoNovo.value", 1)[0][-80:]
+    assert "hidratarSelect(campo)" in antes_do_resumo
+    # o cadastro rapido entra no config, de onde a proxima hidratacao le
+    cadastro = js.split("async function cadastrarNovo(select)", 1)[1].split("\n  }\n", 1)[0]
+    assert "listaDaDimensao.push(" in cadastro
+    assert "window.hidratarSelect = hidratarSelect" in js

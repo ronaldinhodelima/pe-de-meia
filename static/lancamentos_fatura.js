@@ -592,6 +592,41 @@
     }
   });
 
+  // ---- Opcoes sob demanda -------------------------------------------------
+  // Cada seletor da linha nasce SO com a opcao escolhida (`data-lazy-options`),
+  // e a lista completa entra aqui, a partir do config da pagina - onde ela mora
+  // uma vez so. Pedido do usuario (10/09/2026): era assim na Resumida, e a
+  // lista inteira em cada linha multiplicava o HTML da tela.
+  //
+  // TODO lugar que grava um valor por codigo tem que hidratar antes: `value` num
+  // select que nao tem aquela opcao vira "" em silencio, e a tela mostraria
+  // "(nao definido)" com o dado certo gravado no banco.
+  function hidratarSelect(select) {
+    if (!select || select.dataset.hidratado === '1' || !select.dataset.lazyOptions) return;
+    const atual = select.value;
+    const rotuloAtual = select.selectedIndex >= 0 ? select.options[select.selectedIndex].textContent : '';
+    let itens = [];
+    if (select.dataset.lazyOptions === 'categoria') {
+      itens = (config.categorias || []).map(c => ({valor: String(c.chave), rotulo: String(c.nome)}));
+    } else if (select.dataset.lazyOptions === 'dimensao') {
+      itens = ((config.dimensoes || {})[select.dataset.dimensao] || [])
+        .map(v => ({valor: String(v.id), rotulo: String(v.rotulo)}));
+    } else {
+      return;
+    }
+    const opcoes = [new Option('(não definido)', '')];
+    itens.forEach(item => opcoes.push(new Option(item.rotulo, item.valor)));
+    // o valor gravado que nao esta na lista (categoria oculta, por exemplo)
+    // continua como opcao: some-lo trocaria o dado por "(nao definido)" na tela
+    if (atual && !itens.some(item => item.valor === atual)) opcoes.splice(1, 0, new Option(rotuloAtual || atual, atual));
+    if (select.dataset.cadastroRapido === '1') opcoes.push(new Option('+ Cadastrar novo...', '__novo__'));
+    select.replaceChildren(...opcoes);
+    select.value = atual;
+    select.dataset.hidratado = '1';
+  }
+  // o combobox chama este gancho antes de montar a lista que aparece na tela
+  window.hidratarSelect = hidratarSelect;
+
   function payloadEditor(editor, alterado) {
     const payload = {};
     if (alterado.dataset.campo) payload[alterado.dataset.campo] = alterado.value;
@@ -602,6 +637,7 @@
         if (portfolio && config.dim_id_portfolio) {
           const destino = editor.querySelector('[data-dimensao="' + CSS.escape(config.dim_id_portfolio) + '"]');
           if (destino) {
+            hidratarSelect(destino);
             destino.value = String(portfolio);
             if (window.pdmCombobox) window.pdmCombobox.sincronizar(destino);
           }
@@ -776,6 +812,7 @@
         // so quando mudou de verdade: reescrever o mesmo valor faz o combobox
         // se re-sincronizar e mover o destaque debaixo do usuario (secao 7.7)
         if (!campoNovo || campo.value === campoNovo.value) return;
+        hidratarSelect(campo);
         campo.value = campoNovo.value;
         if (window.pdmCombobox) window.pdmCombobox.sincronizar(campo);
       });
@@ -866,6 +903,13 @@
       const json = await resp.json();
       if (!resp.ok || !json.ok) throw new Error(json.erro || 'Não foi possível cadastrar.');
       if (window.pdmToast) window.pdmToast(json.nome + ' cadastrado');
+      // entra no config tambem: e dele que a proxima hidratacao monta a lista
+      const listaDaDimensao = ((config.dimensoes = config.dimensoes || {})[select.dataset.dimensao] =
+        (config.dimensoes[select.dataset.dimensao] || []));
+      if (!listaDaDimensao.some(v => String(v.id) === String(json.id))) {
+        listaDaDimensao.push({id: json.id, rotulo: json.nome});
+        listaDaDimensao.sort((a, b) => String(a.rotulo).localeCompare(String(b.rotulo), 'pt-BR', {sensitivity: 'base'}));
+      }
       document.querySelectorAll('[data-dimensao="' + CSS.escape(select.dataset.dimensao) + '"]').forEach(outro => {
         if (!Array.from(outro.options).some(o => o.value === String(json.id))) {
           const opcao = new Option(json.nome, String(json.id));

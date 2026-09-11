@@ -149,6 +149,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/diagnostico/eco-3h",
         "/api/diagnostico/classificacao-ok",
         "/api/diagnostico/suspeitas-duplicidade",
+        "/api/diagnostico/importados",
         "/api/faturas/recalcular-ciclo-do-arquivo",
         "/api/diagnostico/casamento/<int:fatura_id>",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",
@@ -297,7 +298,10 @@ def test_detalhada_salva_sozinha_e_reutiliza_regras_da_resumida():
     # criar regra saiu do painel e virou COLUNA, oculta por padrao
     assert 'data-col="regra" data-oculta-padrao' in template
     assert "regra-btn" in template
-    assert "+ Cadastrar novo..." in template
+    # o "+ Cadastrar novo..." entra pelo JS quando a lista e montada sob demanda
+    # (10/09/2026); o template so marca quais seletores oferecem cadastro rapido
+    assert 'data-cadastro-rapido="1"' in template
+    assert "+ Cadastrar novo..." in js
     corpo_salvar = js.split("function salvarEditor(", 1)[1].split("\n  function ", 1)[0]
     assert "window.location.reload()" not in corpo_salvar, "gravar um campo nao recarrega"
     for trecho in js.split("window.location.reload()")[:-1]:
@@ -344,7 +348,9 @@ def test_detalhada_exibe_fontes_e_informacoes_tecnicas_com_cabecalho_compacto():
     assert "destino.replaceChildren(aviso)" in js
     assert "await (filaSalvar[campo.dataset.okLancamento]" in js
     assert "cursor:default" in template
-    assert 'v["fonte"] = "F"' in view
+    # a procedencia (F/P/M/I) sai de um ponto unico nos tres construtores
+    assert "procedencia_do_registro(" in view
+    assert '"F", "Fatura importada"' in view.split("def procedencia_do_registro", 1)[1].split("\ndef ", 1)[0]
     assert 'v["fonte_nome"]' in view
     assert "atualizarResumoPagina(novo && status && status.value === 'pendente_ok')" in js
     assert "if (ocultarAusentes)" in js

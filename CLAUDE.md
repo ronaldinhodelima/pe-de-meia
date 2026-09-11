@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 409 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 410 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1046,11 +1046,17 @@ descrição e observação não mudam pendência nenhuma. Enter ou sair do campo
 servidor aceitou; o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando no
 próprio `UPDATE` a descrição de qualquer outra origem (§4.6).
 
+**Procedência tem quatro letras, num ponto único (`procedencia_do_registro`).** `M` lançamento manual
+(pela conta), `F` criado pela fatura, **`I` "Importado de arquivo"** e `P` Pluggy. O `I` é
+`transacao.importado`: a marca do importador de OFX/CSV que existiu de 18 a 21/08/2026 (commits
+`5361fad`/`78c0d32`, removido no `4cc22e3`) — nenhum código atual a grava. Esses registros apareciam
+como "Pluggy". `GET /api/diagnostico/importados` (somente leitura) mostra quantos são, por origem.
+
 **O manual tem procedência própria: `M`, "Lançamento manual".** Com só F/P, ele caía no "resto" e o
 painel dizia **"Fonte: Pluggy"** — falso justamente sobre a origem do dado, que é o que o painel
 existe para mostrar. Quem decide é a **conta** `MANUAL`, não `transacao.importado` (que é outra coisa,
-§11.3, e nenhum código atual grava). Registro antigo com `importado = true` que não nasceu da fatura
-continua saindo como `P`: não há como afirmar de onde veio sem olhar o dado.
+§11.3, e nenhum código atual grava). Registro antigo com `importado = true` saía como `P`; hoje é `I`
+(acima).
 
 **A faixa do painel não empurra mais o conteúdo para a borda.** `.vinculo-quem` tinha `flex-grow` e
 ocupava todo o espaço livre, levando data, valor, estado e ações para a direita — e, com o painel tão
@@ -1091,13 +1097,9 @@ Menção histórica ("isto veio da Resumida") ficou: explica decisão. No caminh
 vizinho é a **última parte**; o aviso de classificação ainda reescrevia a própria busca. Hoje há uma
 só, pelo id do painel (`vinculos-<linha>`).
 
-**Uma coisa que a Resumida fazia e a Detalhada NÃO faz: carregar as opções sob demanda.** Na Resumida
-cada caixa trazia só a opção escolhida, e a lista completa entrava ao abrir; na Detalhada cada linha
-traz **todas** as categorias e todos os valores de cada dimensão. Com ~84 categorias e 190–321 linhas
-por mês, isso multiplica o HTML. O teste de volume (`test_tela_suporta_dez_vezes_o_volume_atual`, que
-só roda com Postgres) cobrava justamente a versão sob demanda; passou a medir a Detalhada e a cobrar
-**o tempo de abertura**, que é o que o usuário sente. **Se a tela ficar lenta, é por aqui que se
-começa** — não medido ainda com o volume real.
+**As opções sob demanda, que só a Resumida tinha, vieram para a Detalhada no mesmo dia** (pedido do
+usuário): o HTML de um mês cheio caiu 54% — ver §7.7. O teste de volume
+(`test_tela_suporta_dez_vezes_o_volume_atual`, que só roda com Postgres) cobra o tempo de abertura.
 
 **Os testes que cobravam regra do sistema PELA Resumida passaram a cobrar pela Detalhada**, em vez
 de sumir junto com ela: escape de descrição e de apelido (XSS), card que filtra só por status que
@@ -1614,8 +1616,16 @@ permissões, validações e salvamento automático.
 - O campo nativo fica oculto **também da árvore de acessibilidade** — leitores de tela encontram
   só o combobox, sem controles duplicados.
 - Aplica-se a qualquer `select` com `data-pdm-combobox`, inclusive inseridos dinamicamente.
-  (`data-lazy-options` e o gancho `hidratarSelect`, que carregavam as opções sob demanda, eram da
-  Resumida e saíram com ela em 10/09/2026.) **Nunca usar quantidade de opções como critério automático** — quebrou o
+- **Opções sob demanda (`data-lazy-options`).** Os seletores de categoria e de dimensão da linha
+  nascem **só com a opção escolhida**; a lista completa mora uma vez no `config` e entra quando o
+  combobox abre — ele chama `window.hidratarSelect` antes de ler as opções. Era assim na Resumida, e
+  voltou na Detalhada a pedido do usuário (10/09/2026): num mês cheio (321 linhas, 85 categorias,
+  3 dimensões) o HTML caiu de **3.251 KB para 1.501 KB** e as `<option>` de **48.783 para 2.880**.
+  **Todo lugar que grava um valor por código hidrata antes** — Portfólio preenchido pelo Projeto,
+  sincronização do resumo parcial, cadastro rápido: `value` num `<select>` sem aquela opção vira `""`
+  em silêncio, e a tela mostraria "(não definido)" com o dado certo no banco. O valor gravado que não
+  está na lista (categoria oculta) continua como opção. O cadastro rápido entra também no `config`,
+  de onde a próxima hidratação lê; o "+ Cadastrar novo..." vem do JS, pelo `data-cadastro-rapido`. **Nunca usar quantidade de opções como critério automático** — quebrou o
   alinhamento dos filtros Fatura e Status. Seletores de navegação (cartão, fatura, status, ano,
   tipo) continuam nativos, protegidos com `data-pdm-native`.
 ### Tabular por um campo não pode editá-lo (07/09/2026)
@@ -2152,7 +2162,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**409 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**410 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

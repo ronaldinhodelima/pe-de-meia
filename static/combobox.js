@@ -14,10 +14,17 @@
     });
   }
 
+  // Gancho das opcoes sob demanda: a tela que tem seletores com
+  // `data-lazy-options` define `window.hidratarSelect`, que monta a lista
+  // completa a partir do proprio config. Chamado antes de a lista aparecer,
+  // porque `opcoesDo` le as opcoes do <select> - sem isto, a caixa abriria so
+  // com a opcao escolhida.
+  function hidratarSeNecessario(select) {
+    if (typeof window.hidratarSelect === 'function') window.hidratarSelect(select);
+  }
+
   function deveMelhorar(select) {
     if (!select || select.matches('[data-pdm-native], [multiple]')) return false;
-    // `data-lazy-options` (opcoes carregadas sob demanda) era da Resumida, que
-    // saiu em 10/09/2026 - nenhuma tela o emite mais
     return select.hasAttribute('data-pdm-combobox');
   }
 
@@ -115,6 +122,7 @@
     }
 
     function renderizar(consulta) {
+      hidratarSeNecessario(select);
       var termo = normalizar(consulta);
       filtradas = opcoesDo(select).filter(function (item) {
         return !item.disabled && (!termo || normalizar(item.label).includes(termo));
