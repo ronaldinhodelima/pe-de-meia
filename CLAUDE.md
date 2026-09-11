@@ -926,7 +926,9 @@ navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de clas
 - **A hora fica embaixo da data** (pedido do usuário, 11/09/2026), lida do lançamento — a linha da
   fatura só tem o dia. Não aparece quando não há hora real: `00:00` é "sem hora" (§4.6) e o
   lançamento criado pela fatura (`F`) recebe hora padrão inventada. A ordenação por data lê data e
-  hora pelo formato, não por `split('/')`, que colaria o ano com a hora.
+  hora pelo formato, não por `split('/')`, que colaria o ano com a hora. **A Conta Corrente Unicred
+  não tem hora nenhuma** (o Pluggy entrega 00:00 em todas): filtrar só por ela e ver a hora "sumir"
+  não é defeito — conferido em 11/09/2026, 0 de 119 linhas, contra 136 de 304 com todas as origens.
 
 ### Tudo o que se edita mora na linha; o painel é auditoria (08/09/2026)
 
@@ -2277,6 +2279,15 @@ do consórcio.
 **Regra:** pelo **código do contrato**, `I0240/492/0056386796 DEB PORTO SEGURO`, só na Conta
 Corrente Unicred, sem filtro de valor (a parcela reajusta). "PORTO SEGURO" sozinho não serve: a
 mesma empresa vende seguro de carro. O boleto avulso ficou sem regra pelo mesmo motivo.
+
+**Lote Sta Lúcia — padronizado em 11/09/2026.** O boleto mensal de R$ 2.359,61
+(`cond sta lucia DEBITO DE COBRANCA` e grafias parecidas) na Conta Corrente Unicred **não é
+condomínio**: é a parcela de aquisição do terreno, que o usuário quitou em 19/08/2026 (R$ 8.840,00
+de quitação + R$ 81.498,00 em dinheiro). Padrão: **Imóveis / Terrenos / Família / Lote Sta Lucia /
+Imóveis**, o mesmo que ele conferiu em jul/2026. 10 parcelas estavam em `Transfers` (fluxo — saída
+vira despesa) ou `Condomínio` (despesa); a despesa caiu R$ 11.798,05 em 2025 (292.988,49 →
+281.190,44) e R$ 11.798,05 em 2026 (446.829,71 → 435.031,66). **Sem regra**: o financiamento acabou.
+Maio/2026 não aparece na conta — se foi pago, foi por outro meio.
 
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
