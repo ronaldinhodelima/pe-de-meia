@@ -2312,6 +2312,13 @@ outra derrubou `/relatorios` em produção. O que funciona:
    na versão anterior** e o laço acusou "no ar" na primeira tentativa, com o container velho ainda
    respondendo. **A sonda tem que ser algo que só existe depois DESTE commit**; não havendo, esperar
    e conferir a tela logado — e nunca concluir pelo laço.
+
+   **E a sonda tem que casar no arquivo LOCAL antes de ir para o laço.** Em 10/09/2026 a sonda
+   `grep -c "replace(/^vinculos-/"` deu 0 de 3 em doze rodadas com o deploy já no ar: o grep do macOS
+   leu o padrão como expressão regular, e ele não casava **nem no arquivo local**. Sonda que não
+   casa nunca confirma nada — e quase virou "o deploy falhou". Buscar marca de código com
+   **`grep -F`** (texto literal), e rodar a sonda uma vez contra `static/...` antes. Quando o laço
+   não confirma, a prova definitiva é comparar o **hash** do arquivo servido com o local.
 13. **Conferir asset em produção durante a troca de container dá resposta velha.** Em 05/09/2026
    uma de três requisições ao `app.css` devolveu o arquivo anterior, com a nova já publicada: o
    container antigo ainda respondia. Uma leitura só teria concluído "o deploy falhou". **Repetir a
@@ -2319,9 +2326,6 @@ outra derrubou `/relatorios` em produção. O que funciona:
 14. **Registro técnico não é lançamento a classificar.** Ao medir completude, excluir
    `somente_conciliacao`, `substituido_por` e `duplicada` — eles estão fora do resultado por
    construção e nunca vão ter classificação completa.
-
----
-
 15. **Teste que procura palavra no código-fonte confunde comentário com código.** Aconteceu TRÊS
    vezes em 10/09/2026, sempre do mesmo jeito: o código tinha saído, e o comentário que explicava a saída
    citava o nome — `importado`, `data-lazy-options`, `previousElementSibling`. O teste lia o comentário
@@ -2329,6 +2333,9 @@ outra derrubou `/relatorios` em produção. O que funciona:
    (a condição do `if`, a chamada), ou tirar os comentários antes de procurar
    (`re.sub(r"//[^\n]*", "", js)` no JS, e o AST no Python). E o contrário também vale: teste que
    exige que uma palavra **exista** pode passar só porque ela está num comentário.
+
+---
+
 
 # 11. Estado atual e pendências
 
