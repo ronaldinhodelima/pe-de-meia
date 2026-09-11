@@ -130,6 +130,7 @@
      descricao; o titular vira o avatar, com o nome no tooltip. ---- */
   .fatura-tabela th.col-abre,.fatura-tabela td.cel-sel-fatura{width:34px}
   .fatura-tabela th.col-data,.fatura-tabela td.cel-data-fatura{width:82px;white-space:nowrap;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .data-hora{display:block;font-size:var(--fonte-xxs);color:var(--ink-faint)}
   .fatura-tabela th.col-valor,.fatura-tabela td.cel-valor-fatura{width:104px;white-space:nowrap;font-variant-numeric:tabular-nums}
 
   .fatura-tabela td.cel-classif{padding-top:5px;padding-bottom:5px}
@@ -377,7 +378,12 @@
       {% if linha.rateios %}data-id="{{ linha.principal.transacao_id }}" data-rateio-total="{{ linha.valor_rateio }}" data-rateio-valido="{{ '1' if linha.rateio_valido else '0' }}"{% endif %}
       {% if linha.principal and not linha.principal.rateado %}data-editor="{{ linha.principal.transacao_id }}"{% endif %}>
     <td class="cel-sel-fatura" data-col="sel">{% if pode_editar and linha.principal %}<input type="checkbox" class="sel-fatura" data-sel-lancamento="{{ linha.principal.transacao_id }}" aria-label="Selecionar lançamento">{% endif %}</td>
-    <td class="cel-data-fatura" data-col="data" data-tip="{{ linha.situacoes_texto }}">{{ linha.data.strftime('%d/%m/%Y') }}</td>
+    {# A hora embaixo da data ajuda a classificar (pedido do usuario,
+       11/09/2026). Vem do lancamento, nao da linha da fatura, que so tem o dia.
+       Fica de fora quando nao ha hora real: 00:00 e "sem hora" (secao 4.6) e o
+       lancamento criado pela fatura (F) recebe uma hora padrao inventada. #}
+    {% set quando = linha.principal.get('data_local') if linha.principal else none %}
+    <td class="cel-data-fatura" data-col="data" data-tip="{{ linha.situacoes_texto }}">{{ linha.data.strftime('%d/%m/%Y') }}{% if quando and quando.hour is defined and (quando.hour or quando.minute) and linha.principal.get('fonte') != 'F' %}<span class="data-hora">{{ quando.strftime('%H:%M') }}</span>{% endif %}</td>
     <td class="desc" data-col="desc">
       <div class="quem">
         {% if linha.titular %}<span class="avatar-titular" style="background:{{ avatar_banco[0] if avatar_banco else 'var(--selo-neutro)' }};color:{{ avatar_banco[1] if avatar_banco else 'var(--sobre-cor)' }}" data-tip="{{ linha.titular }}{% if linha.cartao_nome and linha.cartao_nome != linha.titular %} · cartão {{ linha.cartao_nome }}{% endif %}{% if conta and conta.banco %} · {{ conta.banco }}{% endif %}{% if linha.titular_fonte == 'pluggy' %} · pelo Pluggy; a fatura confirma ao ser importada{% endif %}">{{ linha.titular[:2]|upper }}</span>{% endif %}
@@ -553,4 +559,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260911-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260911-3"></script>{% endblock %}

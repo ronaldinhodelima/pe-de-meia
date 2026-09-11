@@ -3,9 +3,12 @@ from flask import Blueprint, jsonify
 
 from core import (
     disparar_sincronizacao,
+    fechar_recursos_banco,
+    get_conn,
     get_ultima_sincronizacao,
     login_required,
     requer,
+    vincular_pendentes_confirmados,
 )
 
 bp = Blueprint("sistema", __name__)
@@ -29,6 +32,18 @@ def api_sync_agora():
     ok, _erro = disparar_sincronizacao()
     if not ok:
         return jsonify({"executado_em": None, "status": "erro"}), 502
+    # o que acabou de chegar pode ser a confirmacao de um pendente (secao 4.3)
+    conn = cur = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        vincular_pendentes_confirmados(cur)
+        conn.commit()
+    except Exception:
+        fechar_recursos_banco(conn, cur, rollback=True)
+        conn = cur = None
+    finally:
+        fechar_recursos_banco(conn, cur)
     return jsonify(_status_publico_sincronizacao(get_ultima_sincronizacao()))
 
 

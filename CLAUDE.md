@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 427 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 63 · **Testes:** 433 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -361,6 +361,30 @@ bloco "cobranças repetidas na própria fatura", que tem o "conferido" para regi
 **Todo estado que tira lançamento do resultado precisa do caminho de volta desde o início.** Um
 estado que só se aplica e nunca se retira vira dado perdido silencioso — ver §6.6, onde isso
 custou R$ 1.167,38 sumidos do DRE.
+
+### Pendente e confirmado do mesmo débito (11/09/2026)
+
+O banco registra o débito primeiro como `PENDING` e depois o confirma com **outro id**, sem retirar o
+primeiro — e o worker grava por id e nunca apaga (§9.3). Os dois contavam no DRE: o IPVA do Jeep
+(R$ 821,90, 10/09/2026) aparecia duas vezes, e o extrato do banco tinha um só.
+
+**Decisão do usuário:** o mesmo evento vira **um lançamento só**, com o pendente recolhido embaixo como
+registro técnico, sem classificação nem OK. É `substituido_por`, que já recolhe o registro sob o que
+conta (§7.1-A) — não foi preciso tela nova. `vincular_pendentes_confirmados()` no `core` faz isso
+**sozinho**, e é a única exceção à §1.3, aprovada por ele. Por isso o critério é estreito: mesma conta,
+mesmo valor ao centavo, mesma descrição (sem diferença de caixa ou espaço), até 3 dias, **um**
+candidato de cada lado. Pendente com OK, rateio ou vínculo de fatura fica para revisão humana. A
+classificação que o pendente tinha passa para o confirmado só onde ele está vazio e sem OK. Cada par
+grava na auditoria (`pendente_confirmado`) o SQL que desfaz.
+
+Roda na abertura da tela de Lançamentos, junto com as regras, e depois de "Atualizar agora". A
+migração 63 ligou os pares que já existiam, com backup em `pendente_backup_v63` e
+`pendente_dim_backup_v63`.
+
+**O que o critério não alcança, de propósito:** o débito da fatura de 23/03/2026 (R$ 16.509,07)
+chegou pendente como `Fatura Cartão Visa DEB FATURA- CARTAO V` e confirmado como
+`cartao de credito DEBITO DE COBRANCA`, em `Loans and financing`. Descrição diferente não é prova de
+mesmo evento; ficou para o usuário.
 
 Antes de gravar qualquer `substituido_por`, validar conta, proximidade de data, estabelecimento e
 valor. Compras positivas exigem **pelo menos dois termos significativos** do estabelecimento em
@@ -892,6 +916,10 @@ navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de clas
   entra ali**: essa explicação, com o motivo, mora no painel de detalhes.
 - **Titular/cartão** identifica quem realizou a compra e é separado da dimensão financeira
   **Responsável**.
+- **A hora fica embaixo da data** (pedido do usuário, 11/09/2026), lida do lançamento — a linha da
+  fatura só tem o dia. Não aparece quando não há hora real: `00:00` é "sem hora" (§4.6) e o
+  lançamento criado pela fatura (`F`) recebe hora padrão inventada. A ordenação por data lê data e
+  hora pelo formato, não por `split('/')`, que colaria o ano com a hora.
 
 ### Tudo o que se edita mora na linha; o painel é auditoria (08/09/2026)
 
@@ -2279,7 +2307,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**418 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**433 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2828,3 +2856,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 60 | `transacao.criado_por`: quem digitou o lançamento manual; preenche o histórico pelo audit log |
 | 61 | autor dos 3 manuais antigos = `ronaldo`, informado pelo usuário; `autor_backup_v61` |
 | 62 | apaga `metrica_diaria` (ninguém lia; decisão do usuário), só se o backup tiver as mesmas linhas; `metrica_diaria_backup_v62` |
+| 63 | pendente ligado ao confirmado do mesmo débito (§4.3); `pendente_backup_v63` + `pendente_dim_backup_v63` |

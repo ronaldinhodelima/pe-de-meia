@@ -27,6 +27,7 @@ from core import (
     NATUREZA_SQL,
     VAL_DESPESA,
     aplicar_regras,
+    vincular_pendentes_confirmados,
     carregar_origens,
     rotulo_valor_dimensao,
     cat_pt_puro,
@@ -1517,6 +1518,17 @@ def lancamentos_por_fatura():
         registrar_auditoria(
             "regra_automatica", "classificacao",
             sucesso=not bool(regras_resultado["erro"]), detalhes=regras_resultado,
+        )
+    # Pendente que o banco ja confirmou com outro id vira registro tecnico do
+    # confirmado (secao 4.3): sem isto o mesmo debito conta duas vezes no DRE.
+    # Roda aqui pelo mesmo motivo das regras: o worker so grava, e e a proxima
+    # abertura que organiza o que ele trouxe.
+    pendentes_resultado = vincular_pendentes_confirmados(cur)
+    conn.commit()
+    if pendentes_resultado["erro"]:
+        registrar_auditoria(
+            "pendente_confirmado", "classificacao", sucesso=False,
+            detalhes=pendentes_resultado,
         )
     contas_by_id, origem_opcoes = carregar_origens(cur)
     contas_credito = [o for o in origem_opcoes if contas_by_id[o[0]]["tipo"] == "CREDIT"]

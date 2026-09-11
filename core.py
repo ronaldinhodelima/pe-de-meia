@@ -5161,10 +5161,137 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (62);")
             conn.commit()
 
+        if versao_atual < 63:
+            # Pendente e confirmado do mesmo evento (11/09/2026): liga os pares que
+            # ja existem. Backup das duas pontas e das dimensoes do confirmado
+            # antes, como toda alteracao de dado em lote (secao 9.3).
+            previa = vincular_pendentes_confirmados(cur, preview=True)
+            if previa["erro"]:
+                raise RuntimeError("pendente/confirmado: " + previa["erro"])
+            ids = [i for p in previa["pares"] for i in (p["pendente"], p["confirmado"])]
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.pendente_backup_v63 AS "
+                "SELECT * FROM cartao.transacao WHERE transacao_id::text = ANY(%s);",
+                (ids,),
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.pendente_dim_backup_v63 AS "
+                "SELECT * FROM cartao.transacao_dimensao WHERE transacao_id::text = ANY(%s);",
+                (ids,),
+            )
+            feito = vincular_pendentes_confirmados(cur)
+            if feito["erro"]:
+                raise RuntimeError("pendente/confirmado: " + feito["erro"])
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Pendente ligado ao confirmado do mesmo evento',"
+                "jsonb_build_object('versao',63,'fonte','decisao do usuario','pares',%s,"
+                "'backup','cartao.pendente_backup_v63'));",
+                (len(feito["pares"]),),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (63);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
         print("Aviso: falha ao rodar migracao:", e)
+
+
+# Pendente e confirmado do MESMO evento (decisao do usuario, 11/09/2026). O banco
+# registra o debito primeiro como PENDING e depois confirma com OUTRO id, sem
+# retirar o primeiro - e o worker grava por id, nunca apaga (secao 9.3). Os dois
+# ficavam contando no DRE: o IPVA do Jeep de R$ 821,90 aparecia duas vezes.
+# O criterio e estreito de proposito, porque aqui o sistema decide sozinho o que
+# a secao 1.3 reserva ao usuario: mesma conta, mesmo valor ao centavo, mesma
+# descricao (sem diferenca de caixa ou espaco), ate 3 dias, UM candidato de cada
+# lado. Pendente com OK, rateio ou vinculo de fatura fica para revisao humana.
+PARES_PENDENTE_CONFIRMADO_SQL = (
+    "WITH cand AS ("
+    " SELECT p.transacao_id::text AS pendente, c.transacao_id::text AS confirmado"
+    " FROM cartao.transacao p JOIN cartao.transacao c"
+    "  ON c.account_id = p.account_id AND c.transacao_id <> p.transacao_id"
+    "  AND upper(COALESCE(c.status,'')) = 'POSTED'"
+    "  AND COALESCE(c.valor_brl, c.valor_original) = COALESCE(p.valor_brl, p.valor_original)"
+    "  AND upper(regexp_replace(trim(COALESCE(c.descricao,'')), '[[:space:]]+', ' ', 'g'))"
+    "    = upper(regexp_replace(trim(COALESCE(p.descricao,'')), '[[:space:]]+', ' ', 'g'))"
+    "  AND abs(extract(epoch FROM c.data_transacao - p.data_transacao)) <= 3*86400"
+    "  AND c.substituido_por IS NULL AND NOT COALESCE(c.somente_conciliacao,false)"
+    "  AND NOT COALESCE(c.duplicada,false)"
+    " WHERE upper(COALESCE(p.status,'')) = 'PENDING'"
+    "  AND p.substituido_por IS NULL AND NOT COALESCE(p.somente_conciliacao,false)"
+    "  AND NOT COALESCE(p.duplicada,false) AND NOT COALESCE(p.conferida,false)"
+    "  AND NOT EXISTS (SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id = p.transacao_id)"
+    "  AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = p.transacao_id)"
+    "), unicos AS ("
+    " SELECT pendente, min(confirmado) AS confirmado FROM cand"
+    " GROUP BY pendente HAVING count(*) = 1"
+    ") SELECT u.pendente, u.confirmado FROM unicos u"
+    " WHERE (SELECT count(*) FROM unicos u2 WHERE u2.confirmado = u.confirmado) = 1"
+    " ORDER BY u.pendente;"
+)
+
+
+def vincular_pendentes_confirmados(cur, preview=False):
+    """Marca o PENDING como `substituido_por` o POSTED do mesmo evento.
+
+    Nada e apagado: o pendente continua consultavel, recolhido sob o confirmado
+    como registro tecnico, e desfazer e zerar `substituido_por`. A classificacao
+    que o usuario deu ao pendente passa para o confirmado SO onde ele esta vazio e
+    sem OK - nunca sobrescreve, nunca toca em `conferida`. `preview=True` devolve
+    os pares sem gravar (rollback do savepoint)."""
+    resultado = {"pares": [], "erro": None}
+    cur.execute("SAVEPOINT pendentes_confirmados")
+    try:
+        cur.execute(PARES_PENDENTE_CONFIRMADO_SQL)
+        pares = [(_campo(r, "pendente", 0), _campo(r, "confirmado", 1)) for r in cur.fetchall()]
+        for pend, conf in pares:
+            cur.execute(
+                "UPDATE cartao.transacao c SET categoria = p.categoria, categoria_manual = true, "
+                "atualizado_em = now() FROM cartao.transacao p "
+                "WHERE c.transacao_id = %s::uuid AND p.transacao_id = %s::uuid "
+                "AND NOT COALESCE(c.conferida,false) AND COALESCE(p.categoria_manual,false) "
+                "AND NOT COALESCE(c.categoria_manual,false) AND p.categoria IS NOT NULL;",
+                (conf, pend),
+            )
+            cur.execute(
+                "UPDATE cartao.transacao c SET observacao = p.observacao, atualizado_em = now() "
+                "FROM cartao.transacao p WHERE c.transacao_id = %s::uuid AND p.transacao_id = %s::uuid "
+                "AND NOT COALESCE(c.conferida,false) AND COALESCE(c.observacao,'') = '' "
+                "AND COALESCE(p.observacao,'') <> '';",
+                (conf, pend),
+            )
+            cur.execute(
+                "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
+                "SELECT %s, td.dimensao_id, td.valor_id FROM cartao.transacao_dimensao td "
+                "WHERE td.transacao_id = %s AND td.valor_id IS NOT NULL "
+                "AND EXISTS (SELECT 1 FROM cartao.transacao c WHERE c.transacao_id = %s::uuid "
+                "AND NOT COALESCE(c.conferida,false)) "
+                "ON CONFLICT (transacao_id, dimensao_id) DO UPDATE SET valor_id = EXCLUDED.valor_id "
+                "WHERE cartao.transacao_dimensao.valor_id IS NULL;",
+                (conf, pend, conf),
+            )
+            cur.execute(
+                "UPDATE cartao.transacao SET substituido_por = %s::uuid, atualizado_em = now() "
+                "WHERE transacao_id = %s::uuid AND substituido_por IS NULL;",
+                (conf, pend),
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario, acao, recurso, recurso_id, sucesso, detalhes) "
+                "VALUES ('sistema', 'pendente_confirmado', 'transacao', %s, true, "
+                "jsonb_build_object('substituido_por', %s::text, 'desfazer', "
+                "'UPDATE cartao.transacao SET substituido_por = NULL WHERE transacao_id = ''' || %s || ''''));",
+                (pend, conf, pend),
+            )
+            resultado["pares"].append({"pendente": pend, "confirmado": conf})
+        if preview:
+            cur.execute("ROLLBACK TO SAVEPOINT pendentes_confirmados")
+        cur.execute("RELEASE SAVEPOINT pendentes_confirmados")
+    except Exception as e:
+        cur.execute("ROLLBACK TO SAVEPOINT pendentes_confirmados")
+        cur.execute("RELEASE SAVEPOINT pendentes_confirmados")
+        resultado["erro"] = str(e)
+    return resultado
 
 
 def aplicar_regras(cur, account_id=None):

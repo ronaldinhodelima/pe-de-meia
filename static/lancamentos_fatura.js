@@ -624,8 +624,13 @@
     // silencio - a coluna certa passa a ser lida da errada.
     const celula = linha.querySelector('[data-col="' + chave + '"]');
     if (chave === 'data') {
-      const partes = (celula?.textContent || '').trim().split('/').map(Number);
-      return partes.length === 3 ? new Date(partes[2], partes[1] - 1, partes[0]).getTime() : 0;
+      // a celula traz a hora embaixo da data: le as duas pelo formato, nao por
+      // split('/'), que colaria o ano com a hora
+      const texto = celula?.textContent || '';
+      const d = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (!d) return 0;
+      const h = texto.match(/(\d{2}):(\d{2})/);
+      return new Date(+d[3], d[2] - 1, +d[1], h ? +h[1] : 0, h ? +h[2] : 0).getTime();
     }
     if (chave === 'valor') {
       // mesma conta do tabelas.js: lida aqui de novo, ela apagava a virgula
