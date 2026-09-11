@@ -2630,6 +2630,15 @@ Não muda o total de receita: `Transfer - PIX` é natureza `fluxo` e, sendo cré
 receita. O que muda é a composição — R$ 11.760,00 saíram de `Transfer - PIX` para `Aluguel
 Recebido` em 2026.
 
+**A regra para os próximos só foi criada em 11/09/2026.** Em 07/09 os 13 recebimentos foram
+classificados, mas a regra ficou para trás, e o de 08/09/2026 chegou só com a categoria que o usuário
+pôs à mão. Hoje: `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX`, só na Conta Corrente Unicred, →
+Aluguel Recebido / Família / Casa / Imóveis. **Sem filtro de valor**, porque o aluguel reajusta
+todo ano (1.600 → 1.680), e a descrição exata só alcança o aluguel: o único outro lançamento da
+BRDrive na conta é `DEB PAGTO PIX TEF` (−R$ 1,00), que ela não pega. A observação
+`Aluguel escritório BRDrive Videira` a regra não grava — regra não escreve observação (§7.3).
+**Lição:** padronizar os antigos e criar a regra dos novos são duas entregas; conferir as duas.
+
 **Ainda em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
 
 **Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
