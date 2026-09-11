@@ -207,9 +207,18 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     caixa.previousElementSibling.classList.contains('barra-colunas')
       ? caixa.previousElementSibling : null;
   let filtroAnterior = '';
+  // A busca externa e da TELA, com os listeners dela: quando a tabela e trocada
+  // por AJAX, os mesmos elementos passam para a barra nova. Antes o bloco de
+  // origem ja tinha sido removido na primeira carga, e a barra recriada nascia
+  // com a busca generica - que esconde linha solta em vez do grupo inteiro.
+  let esqExterna = null;
   if (barraAtual && barraAtual.__tabela !== table) {
-    const campoAntigo = barraAtual.querySelector('.filtro-tabela');
-    if (campoAntigo) filtroAnterior = campoAntigo.value;   // nao perde o que foi digitado
+    if (barraAtual.__externa) {
+      esqExterna = barraAtual.querySelector('.barra-colunas-esq');
+    } else {
+      const campoAntigo = barraAtual.querySelector('.filtro-tabela');
+      if (campoAntigo) filtroAnterior = campoAntigo.value;   // nao perde o que foi digitado
+    }
     barraAtual.remove();
   }
 
@@ -222,8 +231,15 @@ function ativarTabelaAjustavel(table, chave, opcoes) {
     const externa = table.dataset.buscaExterna
       ? document.querySelector(table.dataset.buscaExterna) : null;
     let busca = null, contador = null;
-    if (externa) {
-      externa.querySelectorAll('input, span').forEach(function (el) { esq.appendChild(el); });
+    if (esqExterna) {
+      while (esqExterna.firstChild) esq.appendChild(esqExterna.firstChild);
+      barra.__externa = true;
+    } else if (externa) {
+      // os FILHOS diretos, com o que houver neles (botao de filtros, + manual):
+      // `querySelectorAll('input, span')` pegava tambem o span de dentro de um
+      // botao e o arrancava de la
+      Array.from(externa.children).forEach(function (el) { esq.appendChild(el); });
+      barra.__externa = true;
       const campo = esq.querySelector('input');
       if (campo) {
         campo.classList.add('filtro-tabela', 'campo-caixa');

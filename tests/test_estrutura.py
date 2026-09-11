@@ -2912,3 +2912,85 @@ def test_migracao_62_so_apaga_a_metrica_diaria_com_o_backup_completo():
             assert "metrica_diaria" not in arquivo.read_text(encoding="utf-8"), arquivo
     fora_das_migracoes = core.split("if versao_atual < 17:", 1)[0] + core.split("def aplicar_regras", 1)[1]
     assert "metrica_diaria" not in fora_das_migracoes
+
+
+def _js_sem_comentarios(nome):
+    # secao 10.4 n.15: teste que procura palavra no fonte confunde comentario com codigo
+    return re.sub(r"//[^\n]*", "", (RAIZ / "static" / nome).read_text(encoding="utf-8"))
+
+
+def test_paginacao_tem_os_tamanhos_pedidos_e_50_por_padrao():
+    """Pedido do usuario (11/09/2026): 10, 50, 100, 500, 1000, 5000 e 10000
+    por pagina, com 50 como padrao, e o rodape "N de T resultados" com
+    "Pagina X de Y" e os quatro botoes."""
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "{% for n in (10, 50, 100, 500, 1000, 5000, 10000) %}" in html
+    assert "'selected' if n == 50" in html
+    for acao in ("primeira", "anterior", "proxima", "ultima"):
+        assert f'data-pag-ir="{acao}"' in html, acao
+    # a paginacao fica FORA da tabela: a tabela e trocada por AJAX a cada filtro
+    assert html.index('<nav class="paginacao"') > html.index("</tfoot></table></div>")
+    assert ".fatura-tabela tr.pag-fora{display:none!important}" in html
+    js = _js_sem_comentarios("lancamentos_fatura.js")
+    assert "' resultados'" in js and "'Página '" in js
+
+
+def test_pagina_nao_e_filtro():
+    """A pagina e uma classe propria. `hidden` e `style.display` ja significam
+    "fora do filtro" para o rodape e para o lote - se a paginacao usasse um
+    deles, o rodape passaria a somar so a pagina e o "Selecionar tudo do filtro"
+    deixaria de alcancar as outras."""
+    js = _js_sem_comentarios("lancamentos_fatura.js")
+    paginar = js.split("function paginar()", 1)[1].split("\n  }\n", 1)[0]
+    assert "classList.toggle('pag-fora'" in paginar
+    assert ".hidden =" not in paginar.replace("nav.hidden =", "")
+    assert "style.display =" not in paginar
+    # o grupo inteiro anda junto, com as partes do rateio achadas pelo pai
+    assert "data-rateio-parent" in paginar and "'vinculos-'" in paginar
+    lote = js.split("function selecionaveis()", 1)[1].split("\n    }\n", 1)[0]
+    assert "pag-fora" not in lote
+    tabelas = _js_sem_comentarios("tabelas.js")
+    totais = tabelas.split("function atualizarTotaisVisiveis(table)", 1)[1].split("\n}\n", 1)[0]
+    assert "pag-fora" not in totais
+    # filtro, pesquisa e ordenacao novos voltam a primeira pagina
+    assert js.count("paginaAtual = 1;") >= 4
+
+
+def test_ordenar_leva_as_partes_do_rateio_junto_com_o_pai():
+    js = _js_sem_comentarios("lancamentos_fatura.js")
+    ordenar = js.split("function ordenarFatura(cabecalho)", 1)[1].split("\n  }\n", 1)[0]
+    assert "tr[data-rateio-parent]" in ordenar
+    assert ordenar.index("corpo.appendChild(item.linha)") < ordenar.index("corpo.appendChild(parte)") \
+        < ordenar.index("corpo.appendChild(item.detalhe)")
+
+
+def test_filtros_moram_numa_gaveta_a_direita():
+    """Pedido do usuario (11/09/2026): o botao "Filtros" fica ao lado da
+    pesquisa e abre uma gaveta a direita, com cada filtro empilhado e "Limpar
+    todos os filtros" no pe. A gaveta e o MESMO bloco que o filtro troca por
+    AJAX - se ela fosse outro, a troca deixaria a barra velha na tela."""
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    gaveta = _bloco_com(html, '<div class="fatura-filtros"', "filtroFatura")
+    assert 'role="dialog"' in gaveta and 'aria-modal="true"' in gaveta
+    assert "data-limpar-filtros" in gaveta and "data-fechar-filtros" in gaveta
+    busca = _bloco_com(html, '<div class="busca-fatura">', "buscaFatura")
+    assert "data-abrir-filtros" in busca and 'aria-controls="gavetaFiltros"' in busca
+    js = _js_sem_comentarios("lancamentos_fatura.js")
+    troca = js.split("function trocarBlocos(url)", 1)[1].split("\n  }\n", 1)[0]
+    assert "seletor: '.fatura-filtros', aoTrocar" in troca
+    assert "if (filtrosAbertos)" in troca and "atualizarResumoFiltros()" in troca
+    # quem navega com a gaveta aberta volta com ela aberta
+    assert js.count("lembrarGavetaAoNavegar();") >= 2
+    # o Esc da gaveta vem antes do Esc da barra de lote
+    assert js.index("evento.key !== 'Escape' || !filtrosAbertos") < js.index("window.pdmLote.ligarFechar")
+
+
+def test_busca_externa_sobrevive_a_troca_da_tabela():
+    """A pesquisa da tela de lancamentos e dela, e esconde o grupo inteiro.
+    Quando a tabela era trocada por AJAX, a barra era recriada sem o bloco de
+    origem (ja removido na primeira carga) e nascia com a busca GENERICA, que
+    esconde linha solta - e o botao Filtros teria sumido junto."""
+    tabelas = _js_sem_comentarios("tabelas.js")
+    assert "barraAtual.__externa" in tabelas and "barra.__externa = true" in tabelas
+    assert "while (esqExterna.firstChild) esq.appendChild(esqExterna.firstChild)" in tabelas
+    assert "externa.querySelectorAll('input, span')" not in tabelas

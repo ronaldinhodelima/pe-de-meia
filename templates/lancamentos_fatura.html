@@ -12,8 +12,49 @@
   .fatura-cabecalho button.nav{cursor:pointer;background:var(--surface);line-height:1}
   .fatura-conciliacao{margin-left:auto}
   .fatura-conciliacao.ver-btn{transition:transform .12s}.fatura-conciliacao.ver-btn:hover{transform:translateX(1px)}
-  .fatura-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.fatura-filtros select{max-width:300px}.fatura-filtros .visao-lancamentos{margin-left:auto;margin-bottom:0}
-  .fatura-filtros label{font-size:var(--fonte-sm);color:var(--ink-faint);text-transform: none;letter-spacing:.03em;font-weight:var(--peso-normal)}
+  /* ---- Filtros numa gaveta a direita (pedido do usuario, 11/09/2026) ----
+     Continua sendo o bloco `.fatura-filtros` que o filtro troca por AJAX: so
+     mudou de lugar na tela. Fechada, ela sai do fluxo de foco (visibility). */
+  .fatura-filtros{position:fixed;top:0;right:0;bottom:0;z-index:1000;width:min(380px,100vw);display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow-2);transform:translateX(100%);visibility:hidden;transition:transform .22s ease,visibility 0s linear .22s}
+  .fatura-filtros.aberta{transform:none;visibility:visible;transition:transform .22s ease}
+  .gaveta-fundo{position:fixed;inset:0;z-index:999;background:var(--modal-fundo);opacity:0;transition:opacity .22s ease}
+  .gaveta-fundo.visivel{opacity:1}
+  .gaveta-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 12px}
+  .gaveta-topo h3{margin:0;font-size:var(--titulo-sm);font-weight:var(--peso-forte)}
+  .gaveta-topo p{margin:4px 0 0;font-size:var(--fonte-sm);color:var(--ink-faint)}
+  .gaveta-fechar{flex:none;width:28px;height:28px;border:0;border-radius:var(--radius-xs);background:transparent;color:var(--ink-faint);font-size:var(--icone-md);cursor:pointer}
+  .gaveta-fechar:hover,.gaveta-fechar:focus-visible{background:var(--raise);color:var(--ink)}
+  .gaveta-corpo{flex:1;overflow-y:auto;padding:0 20px}
+  .gaveta-campo{display:flex;flex-direction:column;gap:7px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .gaveta-campo:first-child{padding-top:6px}
+  .gaveta-campo .gaveta-rotulo{font-size:var(--fonte-md);font-weight:var(--peso-medio);color:var(--ink);text-transform:none;letter-spacing:normal}
+  .gaveta-nota{font-size:var(--fonte-xs);color:var(--ink-faint);line-height:1.4}
+  .gaveta-campo select{width:100%}
+  .gaveta-campo .chipfilter{display:block;position:relative}
+  .gaveta-campo .chip-btn{width:100%;justify-content:space-between;border-radius:var(--radius-sm)}
+  .gaveta-campo .chip-panel{width:100%}
+  .gaveta-rodape{padding:14px 20px;border-top:1px solid var(--line)}
+  .gaveta-limpar{width:100%;justify-content:center}
+  .btn-filtros{display:inline-flex;align-items:center;gap:6px}
+  .btn-filtros svg{width:var(--icone-md);height:var(--icone-md)}
+  .btn-filtros.ativo{border-color:var(--accent);color:var(--accent)}
+  .filtros-qtd{min-width:18px;padding:0 5px;border-radius:var(--radius-pill);background:var(--accent);color:var(--sobre-cor);font-size:var(--fonte-xxs);font-weight:var(--peso-forte);line-height:18px;text-align:center}
+  .filtros-resumo{max-width:42ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fonte-sm);color:var(--ink-soft)}
+
+  /* ---- Paginacao (pedido do usuario, 11/09/2026) ---- */
+  .fatura-tabela tr.pag-fora{display:none!important}
+  .paginacao{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;padding:10px 2px 2px;font-size:var(--fonte-sm);color:var(--ink-soft)}
+  .paginacao-total{margin-right:auto;font-variant-numeric:tabular-nums}
+  .paginacao b{color:var(--accent);font-weight:var(--peso-medio)}
+  .paginacao .paginacao-tamanho{display:flex;align-items:center;gap:8px;font-size:var(--fonte-sm);color:var(--ink-soft);font-weight:var(--peso-normal);text-transform:none;letter-spacing:normal}
+  .paginacao-tamanho select{width:auto;min-width:84px}
+  .paginacao-pagina{font-variant-numeric:tabular-nums}
+  .paginacao-botoes{display:flex;gap:6px}
+  .paginacao-botoes button{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--ink);font-size:var(--icone-lg);line-height:1;cursor:pointer;transition:background-color .12s,border-color .12s}
+  .paginacao-botoes button:hover:not(:disabled){background:var(--raise);border-color:var(--ink-faint)}
+  .paginacao-botoes button:disabled{color:var(--ink-faint);opacity:.55;cursor:default}
+  @media(max-width:760px){.paginacao-total{flex-basis:100%}}
+  @media (prefers-reduced-motion:reduce){.fatura-filtros,.fatura-filtros.aberta,.gaveta-fundo{transition:none}}
 
   /* o desenho dos cards de status mora no app.css (.card-filtra, .card-ok,
      .card-progresso): as duas telas usam os mesmos, e uma segunda definicao
@@ -169,22 +210,47 @@
    "a fatura"; numa conta corrente, fatura nao existe. O Status cresce e encolhe
    junto, pela rota - listar filtro que nao traria linha nenhuma e prometer o
    que a tela nao cumpre. #}
-<div class="fatura-filtros" data-mes="{{ mes }}" data-periodo="{{ periodo }}"
+{# Desde 11/09/2026 a barra mora numa GAVETA a direita, aberta pelo botao
+   "Filtros" ao lado da pesquisa (pedido do usuario). Continua sendo o mesmo
+   bloco `.fatura-filtros` que o filtro troca por AJAX - ele so mudou de lugar.
+   Cada escolha vale na hora; a gaveta fica aberta ate o usuario fechar. #}
+<div class="gaveta-fundo" data-fechar-filtros hidden></div>
+<div class="fatura-filtros" id="gavetaFiltros" role="dialog" aria-modal="true" aria-labelledby="gavetaFiltrosTitulo"
+     data-mes="{{ mes }}" data-periodo="{{ periodo }}"
      data-inicio="{{ data_inicio }}" data-fim="{{ data_fim }}">
-  {{ origem_filtro_html|safe }}
-  {% if faturas_da_origem %}
-  <label>Fatura</label>
-  <select id="filtroFatura" data-pdm-native aria-label="Fatura" onchange="irParaFatura(this)"
-          data-tip="Escolher uma fatura recorta a tela pelo ciclo dela. Só aparece para cartão com fatura importada.">
-    <option value="{{ url_do_periodo }}" {{ 'selected' if modo_periodo }}>Período inteiro</option>
-    {% for item in faturas_da_origem %}<option value="{{ item.url }}" {{ 'selected' if item.selecionada }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{% if item.previsto %} · Previsto{% elif item.em_andamento %} · Em andamento{% endif %}</option>{% endfor %}
-  </select>
-  {% endif %}
-  <label>Status</label>
-  <select id="periodoStatus" data-pdm-native onchange="aplicarFiltroStatus()">
-    {% for valor, rotulo in status_opcoes %}<option value="{{ valor }}" {{ 'selected' if status == valor }}>{{ rotulo }}</option>{% endfor %}
-  </select>
-  {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
+  <div class="gaveta-topo">
+    <div><h3 id="gavetaFiltrosTitulo">Filtros</h3><p>Refine os lançamentos. Cada escolha vale na hora.</p></div>
+    <button type="button" class="gaveta-fechar" data-fechar-filtros aria-label="Fechar os filtros">&times;</button>
+  </div>
+  <div class="gaveta-corpo">
+    <div class="gaveta-campo">
+      <span class="gaveta-rotulo">Origem</span>
+      {{ origem_filtro_html|safe }}
+    </div>
+    <div class="gaveta-campo">
+      <label class="gaveta-rotulo" for="{{ 'filtroFatura' if faturas_da_origem else 'periodoStatus' }}">Fatura</label>
+      {% if faturas_da_origem %}
+      <select id="filtroFatura" data-pdm-native class="campo-caixa" aria-label="Fatura" onchange="irParaFatura(this)">
+        <option value="{{ url_do_periodo }}" {{ 'selected' if modo_periodo }}>Período inteiro</option>
+        {% for item in faturas_da_origem %}<option value="{{ item.url }}" {{ 'selected' if item.selecionada }}>{{ meses[item.mes_referencia-1] }} de {{ item.ano_referencia }}{% if item.previsto %} · Previsto{% elif item.em_andamento %} · Em andamento{% endif %}</option>{% endfor %}
+      </select>
+      <span class="gaveta-nota">Escolher uma fatura recorta a tela pelo ciclo dela.</span>
+      {% else %}
+      {# O filtro nao some sem explicacao: dizer quando ele aparece e o que
+         evita o usuario procurar por ele. #}
+      <span class="gaveta-nota">Escolha um único cartão de crédito com fatura importada em Origem para filtrar por fatura.</span>
+      {% endif %}
+    </div>
+    <div class="gaveta-campo">
+      <label class="gaveta-rotulo" for="periodoStatus">Status</label>
+      <select id="periodoStatus" data-pdm-native class="campo-caixa" onchange="aplicarFiltroStatus()">
+        {% for valor, rotulo in status_opcoes %}<option value="{{ valor }}" {{ 'selected' if status == valor }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="gaveta-rodape">
+    <button type="button" class="ver-btn gaveta-limpar" data-limpar-filtros>&times; Limpar todos os filtros</button>
+  </div>
 </div>
 
 {# O formulario manual fica de fora da fatura de proposito: um lancamento
@@ -240,9 +306,14 @@
   <div class="card" data-filtro="multiplos"><div class="label">Com agregados</div><div class="val">{{ contagens.multiplos }}</div><div class="card-explicacao">abra no sinal +</div></div>{% endif %}
 </div>
 {% endif %}
+{# Pesquisa, Filtros e "+ manual" sobem juntos para a barra da tabela
+   (`data-busca-externa`): a mesma linha onde ficam Colunas e Redefinir. #}
 <div class="busca-fatura">
   <input type="search" id="buscaFatura" placeholder="Filtrar lançamentos desta fatura" aria-label="Filtrar lançamentos desta fatura" autocomplete="off">
   <span id="buscaFaturaContador" aria-live="polite"></span>
+  <button type="button" class="ver-btn btn-filtros" data-abrir-filtros aria-controls="gavetaFiltros" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7M2 8h3M9 8h5"/><circle cx="11" cy="4" r="1.7"/><circle cx="5" cy="12" r="1.7"/><circle cx="7" cy="8" r="1.7"/></svg>Filtros<span class="filtros-qtd" data-filtros-qtd hidden></span></button>
+  <span class="filtros-resumo" data-filtros-resumo></span>
+  {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
 </div>
 <div class="tabela-scroll">
 {% if pode_editar %}
@@ -424,10 +495,27 @@
 {% else %}<tr><td colspan="{{ 7 + colunas_extra + dimensoes|length + (1 if pode_regras else 0) }}" style="text-align:center;color:var(--ink-faint);padding:24px">Nenhuma linha neste filtro.</td></tr>{% endfor %}
 </tbody>
 <tfoot data-total-rodape><tr>
-  <td class="total-rodape-rotulo" colspan="{{ 4 + colunas_extra + dimensoes|length }}"><span data-total-qtd>—</span> à vista</td>
+  <td class="total-rodape-rotulo" colspan="{{ 4 + colunas_extra + dimensoes|length }}"><span data-total-qtd>—</span> no filtro</td>
   <td class="cel-valor-fatura" data-total-valor>—</td>
   <td colspan="{{ 2 + (1 if pode_regras else 0) }}"></td>
 </tr></tfoot></table></div>
+{# Paginacao no CLIENTE, de proposito: a pesquisa, a ordenacao, o rodape e o
+   "Selecionar tudo do filtro" continuam valendo sobre o recorte inteiro, e nao
+   so sobre a pagina. Um grupo (linha, partes do rateio, painel) nunca e partido
+   entre duas paginas. Fica fora da tabela, que e trocada por AJAX. #}
+<nav class="paginacao" data-paginacao aria-label="Paginação dos lançamentos" hidden>
+  <span class="paginacao-total" data-pag-total aria-live="polite"></span>
+  <label class="paginacao-tamanho">Resultados por página
+    <select data-pdm-native data-pag-tamanho class="campo-caixa" aria-label="Resultados por página">{% for n in (10, 50, 100, 500, 1000, 5000, 10000) %}<option value="{{ n }}" {{ 'selected' if n == 50 }}>{{ n }}</option>{% endfor %}</select>
+  </label>
+  <span class="paginacao-pagina" data-pag-pagina></span>
+  <div class="paginacao-botoes">
+    <button type="button" data-pag-ir="primeira" aria-label="Primeira página" title="Primeira página">&laquo;</button>
+    <button type="button" data-pag-ir="anterior" aria-label="Página anterior" title="Página anterior">&lsaquo;</button>
+    <button type="button" data-pag-ir="proxima" aria-label="Próxima página" title="Próxima página">&rsaquo;</button>
+    <button type="button" data-pag-ir="ultima" aria-label="Última página" title="Última página">&raquo;</button>
+  </div>
+</nav>
 {# Os atalhos vem da ROTA, nao escritos aqui: cada recorte declara as situacoes
    que ele de fato tem, e a URL preserva o recorte atual. Escritos no template,
    eles prendiam o bloco ao periodo e mandariam a fatura para outra tela. #}
@@ -463,4 +551,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260910-8"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260911-1"></script>{% endblock %}

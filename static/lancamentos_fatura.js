@@ -13,6 +13,7 @@
   window.irParaFatura = function (seletor) {
     if (!seletor || !seletor.value) return;
     if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+    lembrarGavetaAoNavegar();
     window.location.assign(seletor.value);
   };
 
@@ -216,6 +217,11 @@
   // muda os MESMOS pedacos da tela. Escrita duas vezes, a segunda esqueceria um
   // bloco e a tela ficaria meio atualizada, sem erro nenhum.
   function trocarBlocos(url) {
+    // A gaveta de filtros e trocada junto com a barra: quem acabou de escolher
+    // uma opcao nela continua com ela aberta e com o foco no mesmo campo.
+    const foco = document.activeElement;
+    const focoId = foco && foco.id;
+    const focoNoChip = !!(foco && foco.closest && foco.closest('.fatura-filtros .chipfilter'));
     return window.pdmTrocarPorAjax(url, [
       {seletor: 'table.compacta', aoTrocar: function (tabela) {
         // a tabela nova veio do servidor sem os listeners nem as alcas de
@@ -231,7 +237,15 @@
       {seletor: '.cards'},
       // a barra inteira, e nao so o chip: o filtro Fatura aparece e some
       // conforme a origem, e o Status cresce e encolhe junto
-      {seletor: '.fatura-filtros'},
+      {seletor: '.fatura-filtros', aoTrocar: function (gaveta) {
+        if (filtrosAbertos) {
+          gaveta.classList.add('aberta');
+          const alvo = (focoId && gaveta.querySelector('#' + CSS.escape(focoId)))
+            || (focoNoChip && gaveta.querySelector('.chip-btn'));
+          if (alvo) alvo.focus({preventScroll: true});
+        }
+        atualizarResumoFiltros();
+      }},
       {seletor: 'details.cat-breakdown', preservarAberto: true},
       {seletor: 'details.legenda-lancamentos', preservarAberto: true},
     ], function (doc) {
@@ -239,6 +253,8 @@
       if (configNovo) {
         try { config = JSON.parse(configNovo.textContent); } catch (e) {}
       }
+      // filtro novo, lista nova: comeca da primeira pagina
+      paginaAtual = 1;
       aplicarBuscaFatura();
     });
   }
@@ -257,6 +273,7 @@
     // cabecalho continuaria dizendo "Fatura Agosto". Ai recarrega.
     if (!mesInput) {
       if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+      lembrarGavetaAoNavegar();
       window.location.assign(url);
       return;
     }
@@ -337,10 +354,237 @@
 
 
 
+  function lerGuardado(armazem, chave) {
+    try { return armazem.getItem(chave); } catch (e) { return null; }
+  }
+  function guardar(armazem, chave, valor) {
+    try { armazem.setItem(chave, valor); } catch (e) { /* so perde a lembranca */ }
+  }
+
+  // ---- paginacao (pedido do usuario, 11/09/2026) ---------------------------
+  // No CLIENTE, de proposito: a pesquisa, a ordenacao, o rodape e o
+  // "Selecionar tudo do filtro" continuam valendo sobre o recorte inteiro, e
+  // nao so sobre a pagina. A pagina e uma classe propria (`pag-fora`), e nao
+  // `hidden` nem `style.display`: esses dois ja significam "fora do filtro"
+  // para o rodape e para o lote, e a pagina nao e um filtro.
+  const PAG_TAMANHO_CHAVE = 'pedemeia_pagina_tamanho';
+  const seletorTamanho = document.querySelector('[data-pag-tamanho]');
+  if (seletorTamanho) {
+    const salvo = lerGuardado(localStorage, PAG_TAMANHO_CHAVE);
+    if (salvo && Array.from(seletorTamanho.options).some(o => o.value === salvo)) seletorTamanho.value = salvo;
+  }
+  function tamanhoPagina() { return parseInt(seletorTamanho && seletorTamanho.value, 10) || 50; }
+  // A pagina e lembrada por URL: o Voltar do navegador e o recarregar depois de
+  // salvar um rateio devolvem o usuario a pagina em que ele estava - sem isso a
+  // rolagem guardada cairia numa pagina 1 que nao e a dele.
+  function chavePagina() { return 'pedemeia_pagina:' + location.pathname + location.search; }
+  let paginaAtual = parseInt(lerGuardado(sessionStorage, chavePagina()), 10) || 1;
+  let totalPaginas = 1;
+  let tamanhoAnterior = tamanhoPagina();
+
+  function comNumeros(el, partes) {
+    el.replaceChildren(...partes.map(p => {
+      if (typeof p !== 'number') return document.createTextNode(p);
+      const b = document.createElement('b');
+      b.textContent = p.toLocaleString('pt-BR');
+      return b;
+    }));
+  }
+
+  function paginar() {
+    const linhas = Array.from(document.querySelectorAll('.fatura-tabela tbody tr[data-linha]'));
+    // O grupo anda inteiro e nunca e partido entre duas paginas: a linha, as
+    // partes do rateio (achadas pelo id do pai, nao pela vizinhanca) e o painel.
+    const partes = new Map();
+    document.querySelectorAll('.fatura-tabela tbody tr[data-rateio-parent]').forEach(p => {
+      const pai = p.dataset.rateioParent;
+      if (!partes.has(pai)) partes.set(pai, []);
+      partes.get(pai).push(p);
+    });
+    const tamanho = tamanhoPagina();
+    const filtradas = linhas.filter(l => l.style.display !== 'none');
+    totalPaginas = Math.max(1, Math.ceil(filtradas.length / tamanho));
+    paginaAtual = Math.min(Math.max(1, paginaAtual), totalPaginas);
+    const naPagina = new Set(filtradas.slice((paginaAtual - 1) * tamanho, paginaAtual * tamanho));
+    linhas.forEach(linha => {
+      const fora = !naPagina.has(linha);
+      linha.classList.toggle('pag-fora', fora);
+      (partes.get(linha.dataset.id) || []).forEach(p => p.classList.toggle('pag-fora', fora));
+      const detalhe = document.getElementById('vinculos-' + linha.dataset.linha);
+      if (detalhe) detalhe.classList.toggle('pag-fora', fora);
+    });
+    guardar(sessionStorage, chavePagina(), String(paginaAtual));
+
+    const nav = document.querySelector('[data-paginacao]');
+    if (!nav) return;
+    nav.hidden = linhas.length === 0;
+    comNumeros(nav.querySelector('[data-pag-total]'),
+      [filtradas.length, ' de ', linhas.length, linhas.length === 1 ? ' resultado' : ' resultados']);
+    comNumeros(nav.querySelector('[data-pag-pagina]'), ['Página ', paginaAtual, ' de ', totalPaginas]);
+    nav.querySelectorAll('[data-pag-ir]').forEach(botao => {
+      const volta = botao.dataset.pagIr === 'primeira' || botao.dataset.pagIr === 'anterior';
+      botao.disabled = volta ? paginaAtual <= 1 : paginaAtual >= totalPaginas;
+    });
+  }
+
+  function irParaPagina(nova) {
+    const antes = paginaAtual;
+    paginaAtual = nova;
+    paginar();
+    if (paginaAtual === antes) return;
+    // quem trocou de pagina no rodape tem que ver o comeco dela
+    const topo = document.querySelector('.barra-colunas') || document.querySelector('.tabela-scroll');
+    if (topo && topo.getBoundingClientRect().top < 0) {
+      const suave = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      topo.scrollIntoView({block: 'start', behavior: suave ? 'smooth' : 'auto'});
+    }
+  }
+  document.addEventListener('click', evento => {
+    const botao = evento.target.closest && evento.target.closest('[data-pag-ir]');
+    if (!botao || botao.disabled) return;
+    const acao = botao.dataset.pagIr;
+    irParaPagina(acao === 'primeira' ? 1 : acao === 'anterior' ? paginaAtual - 1
+      : acao === 'proxima' ? paginaAtual + 1 : totalPaginas);
+  });
+  if (seletorTamanho) seletorTamanho.addEventListener('change', () => {
+    const novo = tamanhoPagina();
+    // continua mostrando o mesmo primeiro lancamento, em vez de voltar ao topo
+    paginaAtual = Math.floor(((paginaAtual - 1) * tamanhoAnterior) / novo) + 1;
+    tamanhoAnterior = novo;
+    guardar(localStorage, PAG_TAMANHO_CHAVE, String(novo));
+    paginar();
+  });
+
+  // ---- gaveta de filtros (pedido do usuario, 11/09/2026) ------------------
+  const GAVETA_CHAVE = 'pedemeia_filtros_abertos';
+  let filtrosAbertos = false;
+  let focoAntesDaGaveta = null;
+  function gavetaFiltros() { return document.getElementById('gavetaFiltros'); }
+  function abrirFiltros(focar) {
+    const gaveta = gavetaFiltros();
+    if (!gaveta) return;
+    filtrosAbertos = true;
+    gaveta.classList.add('aberta');
+    const fundo = document.querySelector('.gaveta-fundo');
+    if (fundo) {
+      fundo.hidden = false;
+      requestAnimationFrame(() => fundo.classList.add('visivel'));
+    }
+    document.querySelectorAll('[data-abrir-filtros]').forEach(b => b.setAttribute('aria-expanded', 'true'));
+    if (focar) {
+      focoAntesDaGaveta = document.activeElement;
+      const alvo = gaveta.querySelector('.chip-btn, select, button');
+      if (alvo) alvo.focus({preventScroll: true});
+    }
+  }
+  function fecharFiltros() {
+    if (!filtrosAbertos) return;
+    filtrosAbertos = false;
+    const gaveta = gavetaFiltros();
+    if (gaveta) {
+      gaveta.classList.remove('aberta');
+      gaveta.querySelectorAll('.chip-panel.show').forEach(p => p.classList.remove('show'));
+    }
+    const fundo = document.querySelector('.gaveta-fundo');
+    if (fundo) {
+      fundo.classList.remove('visivel');
+      setTimeout(() => { if (!filtrosAbertos) fundo.hidden = true; }, 220);
+    }
+    document.querySelectorAll('[data-abrir-filtros]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+    // o `body` nao conta como lugar de volta: e onde o foco fica quando ninguem
+    // o tem, e devolver a ele deixaria o foco preso no X da gaveta ja escondida
+    const lugarDeVolta = focoAntesDaGaveta && focoAntesDaGaveta !== document.body
+      && document.contains(focoAntesDaGaveta);
+    const volta = lugarDeVolta ? focoAntesDaGaveta : document.querySelector('[data-abrir-filtros]');
+    if (volta) volta.focus({preventScroll: true});
+  }
+  // Escolher uma fatura (ou sair dela) recarrega a tela, porque troca o
+  // recorte. A gaveta volta aberta do outro lado: o usuario estava no meio de
+  // filtrar, e ela sumir a cada escolha obrigaria a reabrir.
+  function lembrarGavetaAoNavegar() {
+    if (filtrosAbertos) guardar(sessionStorage, GAVETA_CHAVE, '1');
+  }
+  // "Limpar todos" volta ao recorte por periodo, todas as origens e todos os
+  // status. A fatura tambem e um filtro, entao sai junto.
+  function limparFiltros() {
+    document.querySelectorAll('.fatura-filtros .chipfilter input[type=checkbox][name]')
+      .forEach(cb => { cb.checked = false; });
+    const status = document.getElementById('periodoStatus');
+    if (status) status.value = 'todas';
+    window.aplicarFiltrosPeriodo();
+  }
+  // O que esta ativo fica a vista ao lado do botao: com a barra dentro da
+  // gaveta, sem isto a tela nao diria que esta filtrada.
+  function atualizarResumoFiltros() {
+    const partes = [];
+    let ativos = 0;
+    const origens = Array.from(document.querySelectorAll('.fatura-filtros .chip-opt'))
+      .filter(opcao => opcao.querySelector('input:checked'))
+      .map(opcao => (typeof textoDaOpcao === 'function' ? textoDaOpcao(opcao) : opcao.textContent).trim());
+    if (origens.length) {
+      ativos++;
+      partes.push(origens.length > 2 ? origens.length + ' origens' : origens.join(', '));
+    }
+    const fatura = document.getElementById('filtroFatura');
+    if (fatura && fatura.selectedIndex > 0) {
+      ativos++;
+      partes.push('Fatura ' + fatura.options[fatura.selectedIndex].text);
+    }
+    const status = document.getElementById('periodoStatus');
+    if (status && status.value && status.value !== 'todas') {
+      ativos++;
+      partes.push(status.options[status.selectedIndex].text);
+    }
+    document.querySelectorAll('[data-filtros-qtd]').forEach(el => {
+      el.textContent = ativos;
+      el.hidden = !ativos;
+    });
+    document.querySelectorAll('[data-abrir-filtros]').forEach(botao => {
+      botao.classList.toggle('ativo', ativos > 0);
+      botao.setAttribute('aria-label', ativos ? 'Filtros, ' + ativos + (ativos === 1 ? ' ativo' : ' ativos') : 'Filtros');
+    });
+    document.querySelectorAll('[data-filtros-resumo]').forEach(el => {
+      el.textContent = partes.join(' · ');
+      el.title = partes.join(' · ');
+    });
+  }
+  document.addEventListener('click', evento => {
+    if (!evento.target.closest) return;
+    if (evento.target.closest('[data-abrir-filtros]')) {
+      if (filtrosAbertos) fecharFiltros(); else abrirFiltros(true);
+    } else if (evento.target.closest('[data-fechar-filtros]')) {
+      fecharFiltros();
+    } else if (evento.target.closest('[data-limpar-filtros]')) {
+      limparFiltros();
+    }
+  });
+  // Registrado ANTES do Esc da barra de lote, e com preventDefault: a tecla e
+  // da gaveta enquanto ela esta aberta, e o lote so age quando ninguem tratou.
+  document.addEventListener('keydown', evento => {
+    if (evento.key !== 'Escape' || !filtrosAbertos) return;
+    evento.preventDefault();
+    const gaveta = gavetaFiltros();
+    const painel = gaveta && gaveta.querySelector('.chip-panel.show');
+    // Esc dentro da lista de origens fecha so a lista (o cfKeydown ja fechou)
+    if (painel || (evento.target.closest && evento.target.closest('.chip-panel'))) {
+      if (painel) painel.classList.remove('show');
+      return;
+    }
+    fecharFiltros();
+  });
+  atualizarResumoFiltros();
+  // primeira carga: a tabela ja nasce na pagina certa, antes de a rolagem
+  // guardada ser restaurada (DOMContentLoaded, no tabelas.js)
+  paginar();
+  if (lerGuardado(sessionStorage, GAVETA_CHAVE)) {
+    try { sessionStorage.removeItem(GAVETA_CHAVE); } catch (e) {}
+    abrirFiltros(false);
+  }
+
   const buscaFatura = document.getElementById('buscaFatura');
   const contadorBusca = document.getElementById('buscaFaturaContador');
   function aplicarBuscaFatura() {
-    if (!buscaFatura) return;
+    if (!buscaFatura) { paginar(); return; }
     const termo = normalizarBusca(buscaFatura.value).trim();
     const linhas = Array.from(document.querySelectorAll('tr[data-linha]'));
     let visiveis = 0;
@@ -356,12 +600,15 @@
     if (window.atualizarTotaisVisiveis) {
       window.atualizarTotaisVisiveis(document.querySelector('.fatura-tabela'));
     }
+    paginar();
   }
   if (buscaFatura) {
-    buscaFatura.addEventListener('input', aplicarBuscaFatura);
+    // pesquisa nova, resultado novo: comeca da primeira pagina
+    buscaFatura.addEventListener('input', () => { paginaAtual = 1; aplicarBuscaFatura(); });
     buscaFatura.addEventListener('keydown', evento => {
       if (evento.key === 'Escape') {
         buscaFatura.value = '';
+        paginaAtual = 1;
         aplicarBuscaFatura();
         evento.stopPropagation();
       }
@@ -412,10 +659,20 @@
       if (!comparacao) comparacao = a.indice - b.indice;
       return direcao === 'ascending' ? comparacao : -comparacao;
     });
+    // as partes do rateio andam com o pai: antes ficavam para tras, no lugar
+    // antigo, e a lista ordenada as mostrava sob o lancamento errado
+    const partesPorPai = new Map();
+    corpo.querySelectorAll('tr[data-rateio-parent]').forEach(parte => {
+      const pai = parte.dataset.rateioParent;
+      if (!partesPorPai.has(pai)) partesPorPai.set(pai, []);
+      partesPorPai.get(pai).push(parte);
+    });
     linhas.forEach(item => {
       corpo.appendChild(item.linha);
+      (partesPorPai.get(item.linha.dataset.id) || []).forEach(parte => corpo.appendChild(parte));
       if (item.detalhe) corpo.appendChild(item.detalhe);
     });
+    paginaAtual = 1;
     aplicarBuscaFatura();
   }
 
@@ -1069,7 +1326,9 @@
 
     function selecionaveis() {
       // Respeita a pesquisa local: a busca esconde o grupo inteiro, e o lote
-      // nunca pode alcancar linha que o usuario nao esta vendo.
+      // nunca pode alcancar linha que o filtro tirou. A PAGINA nao tira nada
+      // (`pag-fora` nao entra aqui): "tudo do filtro" alcanca as outras paginas,
+      // e o botao diz quantas linhas sao antes do clique.
       return [...document.querySelectorAll('tr[data-linha] .sel-fatura')]
         .filter(cb => {
           const tr = cb.closest('tr');
@@ -1115,10 +1374,11 @@
     function atualizarBotaoSelecao() {
       if (!btnSelecao) return;
       const limpar = tudoMarcado();
-      btnSelecao.textContent = limpar ? 'Limpar seleção' : 'Selecionar tudo do filtro';
+      btnSelecao.textContent = limpar ? 'Limpar seleção'
+        : 'Selecionar tudo do filtro (' + selecionaveis().length + ')';
       btnSelecao.dataset.tip = limpar
         ? 'Desmarca todas as linhas selecionadas'
-        : 'Marca todas as linhas que a pesquisa atual está mostrando';
+        : 'Marca todas as linhas do filtro e da pesquisa atuais, inclusive as das outras páginas';
     }
     if (btnSelecao) btnSelecao.addEventListener('click', () => {
       const marcar = !tudoMarcado();

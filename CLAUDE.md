@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 62 · **Testes:** 412 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 417 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1021,6 +1021,52 @@ a mesma lição da delegação na tabela (§7.1).
 **Os cards continuam sendo os de cada recorte, e isso é decisão.** Um card de "falta vincular" não
 significa nada num período com três cartões e a conta corrente misturados (§7.1-A); um de "Receitas"
 numa fatura de cartão seria sempre zero.
+
+### Paginação e gaveta de filtros (11/09/2026)
+
+**Pedido do usuário.** A tabela ganhou paginação no rodapé — `N de T resultados`, "Resultados por
+página" (**10, 50, 100, 500, 1000, 5000, 10000; padrão 50**), `Página X de Y` e os botões
+« ‹ › » — e os filtros (Origem, Fatura, Status) foram para uma **gaveta à direita**, aberta pelo
+botão **Filtros** ao lado da pesquisa, com "Limpar todos os filtros" no pé.
+
+**A paginação é no cliente, de propósito.** A pesquisa, a ordenação, o rodapé da tabela e o
+"Selecionar tudo do filtro" continuam valendo sobre o **recorte inteiro**, não só sobre a página;
+paginando no servidor, ordenar por Valor ordenaria só as 50 linhas da vez. O ganho de peso do HTML
+já veio das opções sob demanda (§7.7). **A página é uma classe própria (`pag-fora`)**, e não
+`hidden` nem `style.display`: esses dois já significam "fora do filtro" para o rodapé e para o
+lote. Por isso o rodapé diz **"N lançamentos no filtro"** (era "à vista") e o botão do lote diz
+quantas linhas alcança — `Selecionar tudo do filtro (137)` — inclusive as das outras páginas.
+
+**Um grupo nunca é partido entre duas páginas:** a linha, as partes do rateio (achadas pelo id do
+pai, não pela vizinhança) e o painel andam juntos. No caminho apareceu um defeito antigo: **ordenar
+deixava as partes do rateio para trás**, no lugar antigo, sob o lançamento errado; hoje elas vão
+junto com o pai.
+
+Filtro, pesquisa e ordenação novos voltam à página 1. A página é lembrada **por URL** no
+`sessionStorage` — o Voltar do navegador e o recarregar depois de salvar um rateio devolvem o
+usuário à página dele, senão a rolagem guardada cairia numa página 1 que não é a sua. O tamanho
+escolhido fica no `localStorage`.
+
+**A gaveta é o mesmo bloco `.fatura-filtros` que o filtro troca por AJAX** — só mudou de lugar.
+Cada escolha vale na hora e ela **fica aberta** até o usuário fechar (X, fundo ou Esc), inclusive
+depois de uma escolha que recarrega a tela (entrar ou sair de uma fatura): voltar fechada obrigaria
+a reabrir a cada passo. O que está ativo aparece **ao lado do botão** ("Unicred Visa · Pendentes de
+conferência", com a contagem no botão) — com a barra dentro da gaveta, sem isso a tela não diria
+que está filtrada. Sem um cartão com fatura na Origem, o campo Fatura **explica quando aparece**,
+em vez de sumir sem aviso. "Limpar todos" volta ao período, todas as origens e todos os status; a
+fatura também é um filtro, então sai junto. O Esc da gaveta é registrado **antes** do Esc da barra
+de lote e usa `preventDefault` (§7.2-A).
+
+**Um defeito latente que a mudança revelou, no `tabelas.js`:** quando a tabela era trocada por
+AJAX, a barra de cima era recriada **sem a pesquisa da tela** — o bloco de origem já tinha sido
+removido na primeira carga — e nascia com a busca **genérica**, que esconde linha solta em vez do
+grupo. Hoje os mesmos elementos passam para a barra nova (`barra.__externa`). E a mudança de
+`querySelectorAll('input, span')` para os filhos diretos evitou arrancar o `<span>` de dentro do
+botão Filtros.
+
+**Conferido na bancada** (137 lançamentos renderizados pelo template real): 50 por página, 3
+páginas, a pesquisa "posto" com `23 de 137` e o rodapé acompanhando, a troca para 100 preservando o
+primeiro item visível, o Esc fechando a gaveta, e nenhuma rolagem lateral em 375px.
 
 ### 7.1-C A Resumida saiu (10/09/2026)
 
@@ -2176,7 +2222,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**412 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**417 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
