@@ -231,3 +231,13 @@ def test_importacao_aceita_varios_arquivos_pelo_mesmo_post_em_serie():
     assert "data-importada=" in tpl
     assert "await fetch(form.action || window.location.pathname" in tpl
     assert "Promise.all" not in tpl
+
+
+def test_lancamento_criado_pelo_extrato_e_debito_quando_o_dinheiro_sai():
+    """Extrato guarda o sinal do banco: saida negativa e DEBIT, como o Pluggy
+    grava a conta corrente. A regra da fatura (negativo = credito) aplicada ao
+    extrato rotularia um PIX enviado como credito."""
+    fonte = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    assert 'extrato = linha.get("tipo_documento") == "extrato"' in fonte
+    assert 'tipo = "DEBIT" if valor < Decimal("0") else "CREDIT"' in fonte
+    assert "fi.tipo_documento " in fonte

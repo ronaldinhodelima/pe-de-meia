@@ -2280,6 +2280,20 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
     # Em compra avulsa a data impressa e' a da propria cobranca.
     data_evento = (linha["periodo_fim"] if (linha.get("parcela_total") or 0) >= 2
                    and linha.get("periodo_fim") else linha["data"])
+    # Extrato guarda o sinal do BANCO (saida negativa), como o Pluggy grava a
+    # conta corrente; fatura guarda compra positiva. O DRE decide a direcao pelo
+    # tipo da CONTA (VAL_DESPESA), entao o valor ja vale como esta - o que muda e
+    # o rotulo `tipo` e a nota do sistema, que diriam "credito" e "operadora"
+    # para um PIX que saiu da conta.
+    extrato = linha.get("tipo_documento") == "extrato"
+    if extrato:
+        tipo = "DEBIT" if valor < Decimal("0") else "CREDIT"
+        documento = "do extrato"
+        motivo = "o banco registrou o movimento e o Pluggy não sincronizou."
+    else:
+        tipo = "CREDIT" if valor < Decimal("0") else "DEBIT"
+        documento = "da fatura"
+        motivo = "a operadora cobrou e o Pluggy não sincronizou."
     cur.execute(
         "INSERT INTO cartao.transacao ("
         "transacao_id, account_id, descricao, descricao_bruta, valor_original, "
@@ -2288,10 +2302,9 @@ def _criar_lancamento_da_linha(cur, linha, categoria, usuario):
         "primeiro_sincronizado_em) "
         "VALUES (%s,%s,%s,%s,%s,'BRL',%s,%s,%s,%s,'POSTED',%s,%s, now(), now(), now(), now());",
         (novo_id, linha["account_id"], linha["descricao"], linha["descricao"], valor, valor,
-         f"{data_evento} 12:00:00-03:00", categoria, bool(categoria),
-            "CREDIT" if valor < Decimal("0") else "DEBIT",
-         f"Criado a partir da fatura {linha['mes_referencia']:02d}/{linha['ano_referencia']} — "
-         f"a operadora cobrou e o Pluggy não sincronizou."),
+         f"{data_evento} 12:00:00-03:00", categoria, bool(categoria), tipo,
+         f"Criado a partir {documento} {linha['mes_referencia']:02d}/{linha['ano_referencia']} — "
+         f"{motivo}"),
     )
     cur.execute(
         "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
@@ -2398,7 +2411,8 @@ def criar_cobrancas_sem_pluggy():
         nao_lancaveis = " AND ".join(["fl.descricao NOT ILIKE %s"] * len(LINHAS_NAO_LANCAVEIS))
         cur.execute(
             "SELECT fl.id, fl.data, fl.descricao, fl.valor, fl.parcela_total, "
-            "fi.account_id, fi.mes_referencia, fi.ano_referencia, fi.periodo_fim "
+            "fi.account_id, fi.mes_referencia, fi.ano_referencia, fi.periodo_fim, "
+            "fi.tipo_documento "
             "FROM cartao.fatura_linha fl "
             "JOIN cartao.fatura_importada fi ON fi.id = fl.fatura_id "
             "WHERE fl.transacao_id_criado IS NULL "
