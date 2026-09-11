@@ -414,6 +414,8 @@
       if (detalhe) detalhe.classList.toggle('pag-fora', fora);
     });
     guardar(sessionStorage, chavePagina(), String(paginaAtual));
+    // a caixa "selecionar a pagina" do cabecalho acompanha a pagina nova
+    document.dispatchEvent(new CustomEvent('pdm:paginou'));
 
     const nav = document.querySelector('[data-paginacao]');
     if (!nav) return;
@@ -1336,7 +1338,34 @@
         });
     }
     function marcados() { return selecionaveis().filter(cb => cb.checked); }
+    // A caixa do cabecalho (existia na Resumida e nao veio junto quando ela
+    // saiu) marca a PAGINA, que e o que o usuario esta vendo. As outras paginas
+    // ficam para o "Selecionar tudo do filtro (N)" da barra, que diz quantas
+    // linhas alcanca antes do clique.
+    function naPagina() {
+      return selecionaveis().filter(cb => !cb.closest('tr').classList.contains('pag-fora'));
+    }
+    function sincronizarTodos() {
+      const todos = document.getElementById('loteTodos');
+      if (!todos) return;
+      const pagina = naPagina();
+      const n = pagina.filter(cb => cb.checked).length;
+      todos.checked = pagina.length > 0 && n === pagina.length;
+      todos.indeterminate = n > 0 && n < pagina.length;
+      todos.disabled = pagina.length === 0;
+    }
+    // delegado: o cabecalho vem junto com a tabela trocada por AJAX
+    document.addEventListener('change', evento => {
+      if (evento.target.id !== 'loteTodos') return;
+      const marcar = evento.target.checked;
+      naPagina().forEach(cb => { cb.checked = marcar; });
+      barra.dataset.resultado = '';
+      if (!marcar) saida.hidden = true;
+      atualizar();
+    });
+    document.addEventListener('pdm:paginou', () => atualizar());
     function atualizar() {
+      sincronizarTodos();
       atualizarBotaoSelecao();
       const n = marcados().length;
       // Igual a Resumida: a barra sobrevive a limpeza da selecao enquanto

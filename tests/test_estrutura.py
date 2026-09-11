@@ -2956,6 +2956,22 @@ def test_pagina_nao_e_filtro():
     assert js.count("paginaAtual = 1;") >= 4
 
 
+def test_o_cabecalho_tem_a_caixa_de_selecionar_a_pagina():
+    """A caixa "selecionar todos" morava no cabecalho da Resumida (`#loteTodos`)
+    e nao veio junto quando ela saiu (10/09/2026) - o usuario sentiu falta.
+    Ela marca a PAGINA; as outras paginas ficam para o botao da barra."""
+    html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    cabecalho = html.split('<th class="col-abre" data-col="sel"', 1)[1].split("</th>", 1)[0]
+    assert 'id="loteTodos"' in cabecalho and "{% if pode_editar %}" in cabecalho
+    js = _js_sem_comentarios("lancamentos_fatura.js")
+    pagina = js.split("function naPagina()", 1)[1].split("\n    }\n", 1)[0]
+    assert "pag-fora" in pagina
+    assert "todos.indeterminate" in js
+    # o cabecalho vem com a tabela trocada por AJAX: o listener e delegado
+    assert "evento.target.id !== 'loteTodos'" in js
+    assert "new CustomEvent('pdm:paginou')" in js and "addEventListener('pdm:paginou'" in js
+
+
 def test_ordenar_leva_as_partes_do_rateio_junto_com_o_pai():
     js = _js_sem_comentarios("lancamentos_fatura.js")
     ordenar = js.split("function ordenarFatura(cabecalho)", 1)[1].split("\n  }\n", 1)[0]

@@ -53,7 +53,9 @@
   .paginacao-botoes button{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--surface);color:var(--ink);font-size:var(--icone-lg);line-height:1;cursor:pointer;transition:background-color .12s,border-color .12s}
   .paginacao-botoes button:hover:not(:disabled){background:var(--raise);border-color:var(--ink-faint)}
   .paginacao-botoes button:disabled{color:var(--ink-faint);opacity:.55;cursor:default}
-  @media(max-width:760px){.paginacao-total{flex-basis:100%}}
+  /* no celular a selecao em lote nao existe (secao 7.2-B), e a caixa do
+     cabecalho sai junto com as das linhas */
+  @media(max-width:760px){.paginacao-total{flex-basis:100%}#loteTodos{display:none}}
   @media (prefers-reduced-motion:reduce){.fatura-filtros,.fatura-filtros.aberta,.gaveta-fundo{transition:none}}
 
   /* o desenho dos cards de status mora no app.css (.card-filtra, .card-ok,
@@ -366,7 +368,7 @@
    dado que nomeiam as colunas de formas diferentes obrigam o usuario a
    reaprender a tela ao trocar de visao. Os `data-col` tambem sao os mesmos -
    e por eles que o modo cartao e a ordenacao encontram cada coluna. #}
-<thead><tr><th class="col-abre" data-col="sel" data-sem-arrastar></th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0" data-tip="{% if modo_periodo %}Descrição do lançamento{% elif fatura.em_andamento %}Descrição como o Pluggy entregou{% else %}Descrição impressa na fatura{% endif %}">Descrição</th><th class="cel-origem" data-col="origem" data-ordenar="origem" tabindex="0">Origem</th><th class="col-classif" data-col="categoria" data-ordenar="categoria" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{% if modo_periodo %}Valor do lançamento{% elif fatura.em_andamento %}Valor provisório, como o Pluggy entregou{% else %}Valor cobrado na fatura{% endif %}">Valor</th><th class="cel-obs" data-col="obs">Observação</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="check" data-ordenar="check" tabindex="0">OK</th></tr></thead><tbody>
+<thead><tr><th class="col-abre" data-col="sel" data-sem-arrastar>{% if pode_editar %}<input type="checkbox" id="loteTodos" aria-label="Selecionar os lançamentos desta página" data-tip="Seleciona as linhas desta página. Para alcançar as outras páginas, use “Selecionar tudo do filtro” na barra que aparece.">{% endif %}</th><th class="col-data" data-col="data" data-ordenar="data" tabindex="0">Data</th><th data-col="desc" data-ordenar="desc" tabindex="0" data-tip="{% if modo_periodo %}Descrição do lançamento{% elif fatura.em_andamento %}Descrição como o Pluggy entregou{% else %}Descrição impressa na fatura{% endif %}">Descrição</th><th class="cel-origem" data-col="origem" data-ordenar="origem" tabindex="0">Origem</th><th class="col-classif" data-col="categoria" data-ordenar="categoria" tabindex="0">Categoria</th>{% for d in dimensoes %}<th class="col-classif" data-col="dim_{{ d.id }}" data-ordenar="dim_{{ d.id }}" tabindex="0">{{ d.nome }}</th>{% endfor %}<th class="col-valor" data-col="valor" data-ordenar="valor" tabindex="0" data-tip="{% if modo_periodo %}Valor do lançamento{% elif fatura.em_andamento %}Valor provisório, como o Pluggy entregou{% else %}Valor cobrado na fatura{% endif %}">Valor</th><th class="cel-obs" data-col="obs">Observação</th>{% if pode_regras %}<th class="cel-regra" data-col="regra" data-oculta-padrao>Regra</th>{% endif %}<th class="col-ok" data-col="check" data-ordenar="check" tabindex="0">OK</th></tr></thead><tbody>
 {% for linha in linhas %}
   <tr class="{{ linha.classes }}{% if linha.requer_validacao %} fatura-erro{% endif %}"
       data-valor="{{ linha.valor }}"
@@ -551,4 +553,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260911-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260909-1"></script><script src="/static/lancamentos_fatura.js?v=20260911-2"></script>{% endblock %}

@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 417 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 418 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1041,6 +1041,14 @@ quantas linhas alcança — `Selecionar tudo do filtro (137)` — inclusive as d
 pai, não pela vizinhança) e o painel andam juntos. No caminho apareceu um defeito antigo: **ordenar
 deixava as partes do rateio para trás**, no lugar antigo, sob o lançamento errado; hoje elas vão
 junto com o pai.
+
+**A caixa "selecionar todos" do cabeçalho voltou** (`#loteTodos`, 11/09/2026). Ela existia só na
+Resumida e não veio junto quando ela saiu — o usuário sentiu falta. Hoje ela marca **a página**,
+que é o que se vê (fica meio marcada quando só parte da página está selecionada); as outras
+páginas ficam para o `Selecionar tudo do filtro (N)` da barra. O listener é delegado, porque o
+cabeçalho vem com a tabela trocada por AJAX, e a troca de página avisa por `pdm:paginou`.
+**Lição para a próxima remoção de tela:** a comparação "o que só a outra tela tinha" olhou o que
+cada uma **gravava** (§7.1-C) e deixou passar um controle que não grava nada.
 
 Filtro, pesquisa e ordenação novos voltam à página 1. A página é lembrada **por URL** no
 `sessionStorage` — o Voltar do navegador e o recarregar depois de salvar um rateio devolvem o
@@ -2222,7 +2230,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**417 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**418 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
