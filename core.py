@@ -5123,6 +5123,44 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (61);")
             conn.commit()
 
+        if versao_atual < 62:
+            # A metrica_diaria sai por decisao do usuario (10/09/2026). Ninguem a
+            # lia - nem a Resumida, que a alimentava a cada abertura, mostrava o
+            # numero (a migracao 17 previa um "cresceu desde ontem" no card, que
+            # nunca chegou a tela) - e desde que a Resumida saiu ela parou de
+            # receber registro. Backup antes, como toda alteracao de dado em lote:
+            # o historico continua em metrica_diaria_backup_v62 ate alguem decidir
+            # descartar tambem.
+            cur.execute("SELECT to_regclass('cartao.metrica_diaria') IS NOT NULL;")
+            existia = bool(cur.fetchone()[0])
+            linhas_copiadas = 0
+            if existia:
+                cur.execute(
+                    "CREATE TABLE IF NOT EXISTS cartao.metrica_diaria_backup_v62 AS "
+                    "SELECT * FROM cartao.metrica_diaria;"
+                )
+                cur.execute("SELECT COUNT(*) FROM cartao.metrica_diaria;")
+                linhas_originais = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM cartao.metrica_diaria_backup_v62;")
+                linhas_copiadas = cur.fetchone()[0]
+                # APAGAR exige o backup completo: se as contagens nao baterem, a
+                # migracao para aqui e nada e apagado
+                if linhas_copiadas != linhas_originais:
+                    raise RuntimeError(
+                        f"backup incompleto da metrica_diaria: {linhas_copiadas} de "
+                        f"{linhas_originais} linhas - nada foi apagado"
+                    )
+                cur.execute("DROP TABLE cartao.metrica_diaria;")
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Tabela metrica_diaria removida',"
+                "jsonb_build_object('versao',62,'fonte','decisao do usuario',"
+                "'existia',%s,'linhas',%s,'backup','cartao.metrica_diaria_backup_v62'));",
+                (existia, linhas_copiadas),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (62);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

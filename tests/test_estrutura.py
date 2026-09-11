@@ -2881,3 +2881,34 @@ def test_todo_status_oferecido_tem_um_filtro_de_verdade_no_recorte():
     # e nenhum card aponta para um nome que so a rota antiga entendia
     html = (RAIZ / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
     assert 'data-filtro="pendente_ok"' not in html
+
+
+def test_migracao_62_so_apaga_a_metrica_diaria_com_o_backup_completo():
+    """A metrica_diaria sai por decisao do usuario (10/09/2026).
+
+    Ninguem a lia - nem a Resumida, que a alimentava, mostrava o numero. Apagar
+    e irreversivel, entao a regra do projeto (backup antes de alteracao em lote,
+    secoes 3 e 9.3) vale com uma trava a mais: a tabela so e apagada se o backup
+    tiver EXATAMENTE as mesmas linhas. Senao a migracao para e nada sai.
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = _bloco_migracao(core, 62)
+    backup = bloco.index("CREATE TABLE IF NOT EXISTS cartao.metrica_diaria_backup_v62 AS")
+    conferencia = bloco.index("if linhas_copiadas != linhas_originais:")
+    apagar = bloco.index("DROP TABLE cartao.metrica_diaria;")
+    assert backup < conferencia < apagar, "backup, depois a conferencia, so entao o DROP"
+    assert "raise RuntimeError" in bloco[conferencia:apagar], "contagem diferente para tudo"
+    # banco novo ou tabela ja removida: nao quebra
+    assert "to_regclass('cartao.metrica_diaria')" in bloco
+    # apaga UMA tabela, e nenhuma outra
+    assert bloco.count("DROP TABLE") == 1
+    for proibido in ("cartao.transacao", "conferida"):
+        assert proibido not in bloco, proibido
+    assert "'versao',62" in bloco and "Tabela metrica_diaria removida" in bloco
+    assert "INSERT INTO cartao.schema_version (versao) VALUES (62);" in bloco
+    # e ninguem mais le ou grava a tabela - senao apaga-la quebraria alguem
+    for pasta in ("views", "bussola"):
+        for arquivo in (RAIZ / pasta).rglob("*.py"):
+            assert "metrica_diaria" not in arquivo.read_text(encoding="utf-8"), arquivo
+    fora_das_migracoes = core.split("if versao_atual < 17:", 1)[0] + core.split("def aplicar_regras", 1)[1]
+    assert "metrica_diaria" not in fora_das_migracoes

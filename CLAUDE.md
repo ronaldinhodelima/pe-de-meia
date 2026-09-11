@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 10/09/2026 · **Schema:** migração 61 · **Testes:** 410 aprovados, 6 ignorados
+**Última revisão:** 10/09/2026 · **Schema:** migração 62 · **Testes:** 411 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1085,8 +1085,11 @@ antigo continua valendo) e `test_todo_status_oferecido_tem_um_filtro_de_verdade_
 ramo de filtro para cada valor oferecido.
 
 **`registrar_e_calcular_crescimento()` saiu do `core`.** Só a Resumida a chamava, e o crescimento
-que ela calculava já não aparecia em tela nenhuma. Consequência: **`cartao.metrica_diaria` para de
-receber o snapshot diário** — nada mais a lê. A tabela fica: migração não se reescreve (§3).
+que ela calculava nunca apareceu em tela nenhuma — nem na própria Resumida (conferido no template
+antigo: zero ocorrências). **A `cartao.metrica_diaria` foi apagada pela migração 62**, por decisão do
+usuário, com o histórico preservado em `metrica_diaria_backup_v62`. A migração só apaga se o backup
+tiver exatamente as mesmas linhas da original, e registra na auditoria quantas eram. A migração 17,
+que a cria, não foi reescrita: num banco novo ela cria a tabela e a 62 a apaga em seguida.
 
 **O que ela deixou para trás saiu num segundo passo (10/09/2026):** o `window.configLancamentos` no
 `rateio.js`, o gancho `hidratarSelect` e o `data-lazy-options` no `combobox.js`, e comentários que
@@ -2162,7 +2165,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**410 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**411 aprovados e 6 ignorados** (10/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2705,3 +2708,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 59 | `fatura_importada.tipo_documento` e `extrato_compromisso`: extrato de conta corrente (§6.8) |
 | 60 | `transacao.criado_por`: quem digitou o lançamento manual; preenche o histórico pelo audit log |
 | 61 | autor dos 3 manuais antigos = `ronaldo`, informado pelo usuário; `autor_backup_v61` |
+| 62 | apaga `metrica_diaria` (ninguém lia; decisão do usuário), só se o backup tiver as mesmas linhas; `metrica_diaria_backup_v62` |
