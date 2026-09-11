@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 418 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 425 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -764,6 +764,33 @@ R$ 153.048,26 − saídas R$ 148.091,59 = R$ 4.956,67 = saldo final − saldo in
 **O que ainda não se sabe:** como o extrato de setembro se comporta. Ele deve trazer como movimento
 realizado os débitos que hoje são compromissos, e é aí que o vínculo automático será testado de
 verdade.
+
+### Formatos homologados e o extrato OFX do Nubank (11/09/2026)
+
+**Só entra arquivo de layout homologado** (decisão do usuário). A lista mora em
+`fatura_unicred.FORMATOS_HOMOLOGADOS`: fatura Unicred (PDF), extrato Unicred (PDF), fatura Nubank
+(OFX) e extrato de conta corrente Nubank (OFX). Qualquer outro — outro banco no `ORG` do OFX,
+poupança/investimento, PDF que não é da Unicred, CSV, planilha — é recusado com
+**"Arquivo não homologado: …"** e a lista do que é aceito (`ArquivoNaoHomologado`). Ler "do jeito
+que der" não serve: cada layout tem sinal e prova de leitura próprios, e o leitor errado grava
+número errado em silêncio. Homologar um novo = conferir um arquivo real, então incluir na lista e
+em `fatura_ofx.BANCOS_HOMOLOGADOS`.
+
+**Documento e conta têm que concordar:** extrato só em conta `BANK`, fatura só em `CREDIT`. Sem
+isso um extrato num cartão rodaria o regime de caixa de parcelamento sobre ele.
+
+**O OFX de conta corrente do Nubank** (`BANKMSGSRSV1`, `ACCTTYPE=CHECKING`) antes entrava **como
+fatura**: o leitor não olhava o bloco. Hoje vira `tipo_documento='extrato'`, com três diferenças
+em relação ao OFX do cartão:
+
+- **o sinal é o do banco** (entrada positiva), como no extrato Unicred — o cartão inverte;
+- **não lê parcela** — `Conta: 22247-0` no fim do PIX viraria parcela 22/47;
+- **o total é o movimento, não o `BALAMT`.** O arquivo traz só o saldo **final**: no de 08/2025 são
+  R$ 879,82 contra R$ 742,00 de movimento, e usar o saldo acusaria diferença inventada. **Sem saldo
+  inicial não há a prova por saldo** da Unicred; a garantia de leitura é o `FITID` de cada linha.
+
+**O cabeçalho `ENCODING:UTF-8` é respeitado** (`_texto()`): a fatura Nubank vinha em `CHARSET:1252`
+e o extrato vem em UTF-8 — lido como cp1252, saía "TransferÃªncia".
 
 **A interface fala em "fatura", não em "PDF".** O sistema aceita PDF e OFX, e agora extrato — dizer
 PDF na tela virou falso. Nome interno (`pdf_arquivo`, `_pdf_fatura`) e comentário sobre o PDF

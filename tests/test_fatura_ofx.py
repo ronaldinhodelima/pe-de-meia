@@ -131,4 +131,92 @@ def test_arquivo_sem_lancamentos_e_recusado_com_mensagem_util():
     sem_lista = OFX_NUBANK.replace("BANKTRANLIST", "OUTRACOISA")
     with pytest.raises(FaturaInvalida) as exc:
         extrair_fatura(io.BytesIO(sem_lista.encode("cp1252")))
-    assert "extrato" in str(exc.value).lower()
+    assert "lista de lançamentos" in str(exc.value).lower()
+
+
+# Layout REAL do extrato de conta corrente Nubank (BANKMSGSRSV1, CHECKING,
+# ENCODING:UTF-8), com valores e nomes trocados - o arquivo da familia nao
+# entra no repositorio.
+OFX_NUBANK_CONTA = """OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:UTF-8
+CHARSET:NONE
+<OFX>
+<SIGNONMSGSRSV1><SONRS><STATUS><CODE>0</CODE></STATUS>
+<FI><ORG>NU PAGAMENTOS S.A.</ORG><FID>260</FID></FI>
+</SONRS></SIGNONMSGSRSV1>
+<BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF>
+<BANKACCTFROM><BANKID>0260</BANKID><BRANCHID>1</BRANCHID>
+<ACCTID>1234567-8</ACCTID><ACCTTYPE>CHECKING</ACCTTYPE></BANKACCTFROM>
+<BANKTRANLIST>
+<DTSTART>20250801000000[-3:BRT]</DTSTART>
+<DTEND>20250831000000[-3:BRT]</DTEND>
+<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20250807000000[-3:BRT]</DTPOSTED>
+<TRNAMT>-50.00</TRNAMT><FITID>b-1</FITID>
+<MEMO>Transferência enviada pelo Pix - Fulana - NU PAGAMENTOS Agência: 1 Conta: 22247-0</MEMO></STMTTRN>
+<STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20250810000000[-3:BRT]</DTPOSTED>
+<TRNAMT>300.00</TRNAMT><FITID>b-2</FITID><MEMO>Transferência recebida</MEMO></STMTTRN>
+<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20250812000000[-3:BRT]</DTPOSTED>
+<TRNAMT>-1.00</TRNAMT><FITID>b-3</FITID><MEMO>Compra no débito - Loja</MEMO></STMTTRN>
+</BANKTRANLIST>
+<LEDGERBAL><BALAMT>999.99</BALAMT><DTASOF>20250831000000[-3:BRT]</DTASOF></LEDGERBAL>
+</STMTRS></STMTTRNRS></BANKMSGSRSV1>
+</OFX>
+"""
+
+
+def _extrato():
+    return extrair_fatura(io.BytesIO(OFX_NUBANK_CONTA.encode("utf-8")))
+
+
+def test_ofx_de_conta_corrente_vira_extrato_e_nao_fatura():
+    e = _extrato()
+    assert e["extrato"] is True and e["ciclo_do_arquivo"] is True
+    assert e["compromissos"] == []
+    assert e["conta_externa"] == "1234567-8"
+
+
+def test_extrato_ofx_mantem_o_sinal_do_banco_e_nao_le_parcela():
+    """Entrada positiva, como no extrato Unicred - e o que Entradas/Saidas
+    leem. 'Conta: 22247-0' nao pode virar parcela."""
+    valores = [l["valor"] for l in _extrato()["linhas"]]
+    assert [str(v) for v in valores] == ["-50.00", "300.00", "-1.00"]
+    assert all(l["parcela_atual"] is None for l in _extrato()["linhas"])
+
+
+def test_extrato_ofx_total_e_o_movimento_e_nao_o_saldo_final():
+    """O saldo final (999,99) nao e o total do periodo; usa-lo inventaria
+    diferenca na tela."""
+    e = _extrato()
+    assert str(e["total"]) == "249.00"
+    assert str(e["saldo_final"]) == "999.99" and e["saldo_inicial"] is None
+
+
+def test_ofx_em_utf8_nao_quebra_os_acentos():
+    assert _extrato()["linhas"][0]["descricao"].startswith("Transferência enviada")
+
+
+def test_ofx_de_banco_nao_homologado_e_recusado():
+    from fatura_unicred import ArquivoNaoHomologado
+    outro = OFX_NUBANK_CONTA.replace("NU PAGAMENTOS S.A.", "BANCO QUALQUER")
+    with pytest.raises(ArquivoNaoHomologado) as exc:
+        extrair_fatura(io.BytesIO(outro.encode("utf-8")))
+    assert "não homologado" in str(exc.value)
+    assert "extrato da conta corrente Nubank (OFX)" in str(exc.value)
+
+
+def test_ofx_de_poupanca_e_recusado():
+    from fatura_unicred import ArquivoNaoHomologado
+    poupanca = OFX_NUBANK_CONTA.replace("CHECKING", "SAVINGS")
+    with pytest.raises(ArquivoNaoHomologado):
+        extrair_fatura(io.BytesIO(poupanca.encode("utf-8")))
+
+
+def test_importacao_confere_documento_contra_o_tipo_da_conta():
+    """Extrato so em conta corrente, fatura so em cartao, e arquivo que nao e
+    PDF nem OFX recusado como nao homologado."""
+    fonte = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    assert 'tipo_conta != "BANK"' in fonte and 'tipo_conta != "CREDIT"' in fonte
+    assert 'ArquivoNaoHomologado("o arquivo não é PDF nem OFX.")' in fonte

@@ -11,7 +11,7 @@ import psycopg2.extras
 from flask import Blueprint, Response, request, jsonify, render_template, session, redirect
 
 from extrato_unicred import eh_extrato, extrair_extrato
-from fatura_unicred import extrair_fatura, FaturaInvalida
+from fatura_unicred import extrair_fatura, FaturaInvalida, ArquivoNaoHomologado
 from fatura_ofx import (
     extrair_fatura as extrair_fatura_ofx,
     eh_ofx,
@@ -1166,21 +1166,38 @@ def conciliar_fatura():
         elif not account_id or account_id not in contas_by_id:
             erro = (
                 "Reconheci o arquivo como " + (origem_arquivo.get("banco") or "OFX")
-                + ", mas ainda não sei a qual cartão daqui ele pertence. "
-                "Escolha uma vez — nas próximas importações desse cartão eu já sei."
-            ) if formato_ofx else "Selecione a qual cartão essa fatura pertence."
+                + ", mas ainda não sei a qual conta daqui ele pertence. "
+                "Escolha uma vez — nas próximas importações dessa conta eu já sei."
+            ) if formato_ofx else "Selecione a qual conta esse arquivo pertence."
         else:
             try:
                 if formato_ofx:
                     fatura = extrair_fatura_ofx(io.BytesIO(pdf_bytes))
                 elif formato_extrato:
                     fatura = extrair_extrato(io.BytesIO(pdf_bytes))
-                else:
+                elif pdf_bytes[:5] == b"%PDF-":
                     fatura = extrair_fatura(io.BytesIO(pdf_bytes))
+                else:
+                    # Nem OFX nem PDF: CSV, planilha, imagem. Nao ha leitor
+                    # conferido para nenhum deles.
+                    raise ArquivoNaoHomologado("o arquivo não é PDF nem OFX.")
             except FaturaInvalida as exc:
                 erro = str(exc)
             except Exception as exc:
                 erro = f"Não consegui ler esse arquivo: {exc}"
+
+            if not erro:
+                # Documento e conta tem que concordar: extrato so em conta
+                # corrente, fatura so em cartao. Um extrato gravado num cartao
+                # rodaria o regime de caixa de parcelamento sobre ele (secao 6.8).
+                tipo_conta = contas_by_id[account_id]["tipo"]
+                eh_extrato_doc = bool(fatura.get("extrato"))
+                if eh_extrato_doc and tipo_conta != "BANK":
+                    erro = ("Este arquivo é um extrato de conta corrente. "
+                            "Escolha uma conta corrente, não um cartão.")
+                elif not eh_extrato_doc and tipo_conta != "CREDIT":
+                    erro = ("Este arquivo é uma fatura de cartão. "
+                            "Escolha um cartão de crédito, não uma conta corrente.")
 
             if not erro and formato_ofx and origem_arquivo.get("conta_externa"):
                 # Aprende a ligacao depois de o arquivo ter sido lido de fato -

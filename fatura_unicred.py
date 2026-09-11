@@ -28,6 +28,29 @@ class FaturaInvalida(ValueError):
     pass
 
 
+# Os formatos que o sistema conhece e cuja leitura foi conferida contra um
+# arquivo real. Um arquivo fora desta lista NAO e lido "do jeito que der": cada
+# layout tem uma prova de leitura propria (soma = total, saldo inicial + soma =
+# saldo final) e uma regra de sinal propria, e um layout desconhecido cairia no
+# leitor errado e gravaria numero errado em silencio (secao 6.8).
+FORMATOS_HOMOLOGADOS = (
+    "fatura do cartão Unicred (PDF)",
+    "extrato da conta corrente Unicred (PDF)",
+    "fatura do cartão Nubank (OFX)",
+    "extrato da conta corrente Nubank (OFX)",
+)
+
+
+class ArquivoNaoHomologado(FaturaInvalida):
+    """Arquivo que nenhum leitor homologado reconhece."""
+
+    def __init__(self, detalhe):
+        super().__init__(
+            "Arquivo não homologado: " + detalhe + " O sistema aceita: "
+            + "; ".join(FORMATOS_HOMOLOGADOS) + "."
+        )
+
+
 # Datas de fechamento REAIS, conferidas pelo usuario direto no app do Unicred
 # (tela "Melhor dia para compra" = data de fechamento). O PDF da fatura nao
 # imprime essa data, e o intervalo vencimento-fechamento varia mes a mes
@@ -82,9 +105,9 @@ def extrair_fatura(arquivo):
         texto_pag1 = pdf.pages[0].extract_text() or ""
         m = re.search(r"REF\.?:\s*([a-zç]{3})/(\d{4})", texto_pag1, re.IGNORECASE)
         if not m:
-            raise FaturaInvalida(
-                "Não encontrei o mês de referência (REF.: mmm/aaaa) na primeira página. "
-                "Confirme que é uma fatura da Unicred no formato esperado."
+            raise ArquivoNaoHomologado(
+                "este PDF não é uma fatura da Unicred nem um extrato da Unicred "
+                "(não há o mês de referência REF.: mmm/aaaa na primeira página)."
             )
         ref_mes = MESES.get(m.group(1).lower())
         ref_ano = int(m.group(2))

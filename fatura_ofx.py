@@ -22,7 +22,42 @@ import re
 from datetime import date
 from decimal import Decimal
 
-from fatura_unicred import FaturaInvalida
+from fatura_unicred import ArquivoNaoHomologado, FaturaInvalida
+
+# Bancos cujo OFX foi conferido contra arquivo real. O `ORG` e o que o proprio
+# arquivo declara; outro banco pode seguir o padrao com outra regra de sinal ou
+# de ciclo, e por isso fica fora ate alguem conferir um arquivo dele.
+BANCOS_HOMOLOGADOS = {"NU PAGAMENTOS S.A."}
+
+
+def _texto(bruto):
+    """Bytes -> texto respeitando o cabecalho. O Nubank ja mandou CHARSET:1252
+    (fatura) e ENCODING:UTF-8 (extrato); ler UTF-8 como cp1252 escreve
+    "TransferÃªncia" na descricao."""
+    if not isinstance(bruto, bytes):
+        return bruto
+    cabecalho = bruto[:512].upper()
+    if b"UTF-8" in cabecalho or b"UTF8" in cabecalho:
+        try:
+            return bruto.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+    return bruto.decode("cp1252", errors="replace")
+
+
+def tipo_do_ofx(texto):
+    """'fatura' (cartao de credito), 'extrato' (conta corrente) ou None.
+
+    O OFX separa os dois por bloco: `CREDITCARDMSGSRSV1`/`CCACCTFROM` e cartao,
+    `BANKMSGSRSV1`/`BANKACCTFROM` com `ACCTTYPE` CHECKING e conta corrente.
+    Antes o leitor nao olhava isso e gravava extrato como fatura.
+    """
+    texto = _texto(texto).upper()
+    if "<CCACCTFROM>" in texto or "<CREDITCARDMSGSRSV1>" in texto:
+        return "fatura"
+    if "<BANKACCTFROM>" in texto and (_tag(texto, "ACCTTYPE") or "") == "CHECKING":
+        return "extrato"
+    return None
 
 
 def _tag(texto, nome):
@@ -34,6 +69,13 @@ def _tag(texto, nome):
     """
     achado = re.search(r"<" + nome + r">([^<\r\n]*)", texto, re.I)
     return achado.group(1).strip() if achado else None
+
+
+def _decimal(valor):
+    try:
+        return Decimal(valor.replace(",", ".")) if valor else None
+    except Exception:
+        return None
 
 
 def _data_ofx(valor):
@@ -86,8 +128,7 @@ def identificar_origem(conteudo):
     nao e o `account_id` do Pluggy, entao o vinculo entre os dois e aprendido na
     primeira importacao e reusado depois.
     """
-    if isinstance(conteudo, bytes):
-        conteudo = conteudo.decode("cp1252", errors="replace")
+    conteudo = _texto(conteudo)
     return {
         "banco": _tag(conteudo, "ORG"),
         "banco_id": _tag(conteudo, "FID"),
@@ -110,22 +151,28 @@ def extrair_fatura(arquivo):
     else:
         with open(arquivo, "rb") as fh:
             bruto = fh.read()
-    if isinstance(bruto, bytes):
-        # CHARSET:1252 no cabecalho. `replace` para nao explodir num acento
-        # solto - o valor e a data importam mais que um caractere da descricao.
-        texto = bruto.decode("cp1252", errors="replace")
-    else:
-        texto = bruto
+    texto = _texto(bruto)
 
     if not eh_ofx(texto):
         raise FaturaInvalida("O arquivo enviado não é um OFX válido.")
 
+    banco = (_tag(texto, "ORG") or "").upper()
+    if banco not in BANCOS_HOMOLOGADOS:
+        raise ArquivoNaoHomologado(
+            f"o OFX é de \"{_tag(texto, 'ORG') or 'banco não informado'}\", "
+            "que ainda não teve um arquivo conferido."
+        )
+    tipo = tipo_do_ofx(texto)
+    if tipo is None:
+        raise ArquivoNaoHomologado(
+            "o OFX não é de cartão de crédito nem de conta corrente "
+            "(poupança e investimento não são lidos)."
+        )
+    extrato = tipo == "extrato"
+
     bloco = re.search(r"<BANKTRANLIST>(.*?)</BANKTRANLIST>", texto, re.S | re.I)
     if not bloco:
-        raise FaturaInvalida(
-            "Não encontrei a lista de lançamentos neste OFX. "
-            "Confira se o arquivo é o da fatura, e não o do extrato."
-        )
+        raise FaturaInvalida("Não encontrei a lista de lançamentos neste OFX.")
     corpo = bloco.group(1)
 
     periodo_inicio = _data_ofx(_tag(corpo, "DTSTART"))
@@ -147,7 +194,23 @@ def extrair_fatura(arquivo):
         # fatura do app usa o contrario - compra positiva, credito negativo,
         # como o PDF da Unicred - e todas as somas e comparacoes ja dependem
         # disso. A inversao mora aqui, num lugar so.
+        #
+        # Extrato de conta corrente fica com o sinal do banco (entrada positiva),
+        # igual ao extrato da Unicred - e o que os cards Entradas/Saidas leem.
+        # Conta corrente nao tem parcela: "Conta: 22247-0" nao pode virar 22/47.
         memo = " ".join((_tag(trecho, "MEMO") or "").split())
+        if extrato:
+            linhas.append({
+                "data": data_linha,
+                "descricao": memo or "(sem descrição)",
+                "descricao_base": memo or "(sem descrição)",
+                "parcela_atual": None,
+                "parcela_total": None,
+                "valor": valor,
+                "titular": None,
+                "id_externo": _tag(trecho, "FITID"),
+            })
+            continue
         base, parcela_atual, parcela_total = _partir_parcela(memo)
         # Mesma convencao do extrator da Unicred: `descricao` guarda o texto
         # INTEIRO como a operadora imprimiu, e `descricao_base` e a versao sem a
@@ -167,6 +230,30 @@ def extrair_fatura(arquivo):
 
     if not linhas:
         raise FaturaInvalida("Não encontrei nenhum lançamento neste OFX.")
+
+    if extrato:
+        # O OFX do Nubank traz so o saldo FINAL, sem o inicial: a prova
+        # "saldo inicial + soma = saldo final" do extrato Unicred nao existe
+        # aqui. O saldo final NAO e o total do periodo (R$ 879,82 contra
+        # R$ 742,00 de movimento no arquivo de 08/2025) - usa-lo acusaria uma
+        # diferenca inventada. O total e o movimento; a garantia de leitura
+        # completa e o FITID de cada linha, que o proprio banco numera.
+        return {
+            "mes_referencia": periodo_fim.month,
+            "ano_referencia": periodo_fim.year,
+            "total": sum((l["valor"] for l in linhas), Decimal("0")),
+            "cartao_final4": None,
+            "vencimento": None,
+            "periodo_inicio": periodo_inicio,
+            "periodo_fim": periodo_fim,
+            "ciclo_do_arquivo": True,
+            "extrato": True,
+            "saldo_inicial": None,
+            "saldo_final": _decimal(_tag(texto, "BALAMT")),
+            "conta_externa": _tag(texto, "ACCTID"),
+            "compromissos": [],
+            "linhas": linhas,
+        }
 
     saldo = _tag(texto, "BALAMT")
     total = None

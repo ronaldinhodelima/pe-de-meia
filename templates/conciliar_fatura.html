@@ -112,7 +112,7 @@
     <div class="cards" style="margin-top:12px">
       <div class="card"><div class="label" title="Referência da fatura">Referência</div>
         <div class="val">{{ meses_nome[f.mes_referencia - 1] }} de {{ f.ano_referencia }}</div></div>
-      <div class="card"><div class="label" title="{{ 'Movimento líquido do período, conferido contra o saldo inicial e final do extrato' if resumo_extrato else 'SALDO TOTAL impresso na fatura' }}">{{ 'Movimento do período' if resumo_extrato else 'Total impresso na fatura' }}</div>
+      <div class="card"><div class="label" title="{{ 'Movimento líquido do período: entradas menos saídas do extrato' if resumo_extrato else 'SALDO TOTAL impresso na fatura' }}">{{ 'Movimento do período' if resumo_extrato else 'Total impresso na fatura' }}</div>
         <div class="val">{{ f.total|moeda }}</div></div>
       <div class="card"><div class="label" title="Soma das linhas que o sistema leu da fatura (sem o Pagamento Recebido, que a operadora também não inclui no saldo). Serve para provar que a leitura da fatura está correta: tem que ser igual ao total impresso. Não tem relação com o Pluggy.">Soma das linhas lidas</div>
         <div class="val" style="color:{{ 'var(--good)' if (resultado.soma_fatura - f.total)|abs < 0.01 else 'var(--bad)' }}">{{ resultado.soma_fatura|moeda }}</div></div>
