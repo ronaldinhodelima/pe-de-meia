@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 425 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 62 · **Testes:** 426 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -791,6 +791,13 @@ em relação ao OFX do cartão:
 
 **O cabeçalho `ENCODING:UTF-8` é respeitado** (`_texto()`): a fatura Nubank vinha em `CHARSET:1252`
 e o extrato vem em UTF-8 — lido como cp1252, saía "TransferÃªncia".
+
+**Vários arquivos de uma vez** (pedido do usuário, 11/09/2026). O campo aceita `multiple`; com dois
+ou mais, o JS da tela envia **um de cada vez, na ordem escolhida, pelo mesmo POST** do envio único
+— não existe rota de lote (§7.2-A), e em série porque o vínculo automático depende dos vínculos
+das faturas anteriores (§6.1): **escolha os arquivos do mais antigo para o mais novo**. Cada
+arquivo ganha uma linha de resultado (importado com link, ou a mensagem de recusa do servidor).
+A conta escolhida vale para todos; OFX de origem já aprendida vai sozinho para a conta dele.
 
 **A interface fala em "fatura", não em "PDF".** O sistema aceita PDF e OFX, e agora extrato — dizer
 PDF na tela virou falso. Nome interno (`pdf_arquivo`, `_pdf_fatura`) e comentário sobre o PDF

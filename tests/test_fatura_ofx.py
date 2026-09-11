@@ -220,3 +220,14 @@ def test_importacao_confere_documento_contra_o_tipo_da_conta():
     fonte = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
     assert 'tipo_conta != "BANK"' in fonte and 'tipo_conta != "CREDIT"' in fonte
     assert 'ArquivoNaoHomologado("o arquivo não é PDF nem OFX.")' in fonte
+
+
+def test_importacao_aceita_varios_arquivos_pelo_mesmo_post_em_serie():
+    """Varios arquivos passam, um a um, pelo MESMO POST do envio unico - sem
+    rota de lote (secao 7.2-A) e em serie, porque o vinculo automatico depende
+    dos vinculos das faturas anteriores (secao 6.1)."""
+    tpl = (RAIZ / "templates" / "conciliar_fatura.html").read_text(encoding="utf-8")
+    assert 'name="fatura" multiple' in tpl
+    assert "data-importada=" in tpl
+    assert "await fetch(form.action || window.location.pathname" in tpl
+    assert "Promise.all" not in tpl

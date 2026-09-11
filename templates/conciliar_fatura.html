@@ -14,7 +14,7 @@
 <div class="cat-breakdown">
   <h3>Nova conciliação</h3>
   {% if pode_editar_conciliacao %}
-  <form method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+  <form id="form-importar" method="post" enctype="multipart/form-data" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
       <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Conta ou cartão (origem)</label>
       <select name="account_id" required style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);min-width:260px">
@@ -25,8 +25,8 @@
       </select>
     </div>
     <div>
-      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivo da fatura ou do extrato</label>
-      <input type="file" name="fatura" accept=".pdf,.ofx,application/pdf,application/x-ofx" required
+      <label style="font-size:var(--fonte-sm);color:var(--ink-faint);display:block">Arquivos da fatura ou do extrato (um ou vários)</label>
+      <input type="file" name="fatura" multiple accept=".pdf,.ofx,application/pdf,application/x-ofx" required
              style="padding:6px 0;font-size:var(--fonte-md)">
     </div>
     <button type="submit" class="btn-primario">
@@ -39,6 +39,8 @@
     </div>
   {% endif %}
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
+  {% if resultado and fatura_id %}<span hidden data-importada="{{ fatura_id }}"></span>{% endif %}
+  <ul id="lote-importacao" hidden style="margin:10px 0 0;padding-left:18px;font-size:var(--fonte-sm)"></ul>
 </div>
 
 {% if historico %}
@@ -384,6 +386,67 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Varios arquivos de uma vez. Cada um passa pelo MESMO POST de um envio unico,
+// um de cada vez e na ordem escolhida: nao ha rota de lote, pelo mesmo motivo
+// do lote.js (secao 7.2-A) - um segundo caminho de importacao divergiria na
+// primeira regra nova. Em serie, e nao em paralelo: o vinculo automatico
+// depende dos vinculos das faturas anteriores (secao 6.1).
+(function () {
+  const form = document.getElementById('form-importar');
+  if (!form) return;
+  const campo = form.querySelector('input[type=file][name=fatura]');
+  const lista = document.getElementById('lote-importacao');
+  form.addEventListener('submit', async function (e) {
+    const arquivos = Array.from(campo.files || []);
+    if (arquivos.length < 2) return;           // um arquivo: envio normal
+    e.preventDefault();
+    const botao = form.querySelector('button[type=submit]');
+    botao.disabled = true;
+    lista.hidden = false;
+    lista.innerHTML = '';
+    const conta = form.querySelector('[name=account_id]').value;
+    let ok = 0;
+    for (let i = 0; i < arquivos.length; i++) {
+      const arq = arquivos[i];
+      const item = document.createElement('li');
+      item.textContent = arq.name + ' — importando (' + (i + 1) + ' de ' + arquivos.length + ')…';
+      lista.appendChild(item);
+      const dados = new FormData();
+      dados.append('account_id', conta);
+      dados.append('fatura', arq, arq.name);
+      try {
+        const resp = await fetch(form.action || window.location.pathname, {
+          method: 'POST', body: dados, credentials: 'same-origin',
+        });
+        const doc = new DOMParser().parseFromString(await resp.text(), 'text/html');
+        const erro = doc.querySelector('.cat-breakdown .err');
+        const importada = doc.querySelector('[data-importada]');
+        if (resp.ok && importada && !erro) {
+          ok++;
+          item.textContent = arq.name + ' — importado. ';
+          const link = document.createElement('a');
+          link.href = '/relatorios/conciliar-fatura?fatura_id=' + encodeURIComponent(importada.dataset.importada);
+          link.textContent = 'Abrir';
+          item.appendChild(link);
+        } else {
+          item.className = 'err';
+          item.textContent = arq.name + ' — ' + (erro ? erro.textContent.trim()
+            : 'não consegui importar (resposta ' + resp.status + ').');
+        }
+      } catch (err) {
+        item.className = 'err';
+        item.textContent = arq.name + ' — falha de rede; nada foi confirmado para este arquivo.';
+      }
+    }
+    botao.disabled = false;
+    if (window.pdmToast) {
+      pdmToast(ok + ' de ' + arquivos.length + ' arquivos importados',
+               ok === arquivos.length ? 'sucesso' : 'aviso');
+    }
+  });
+})();
+</script>
 <script>
 // Trocar de mes recarrega a pagina; sem isto a leitura volta para o topo e
 // perde-se o ponto em que se estava conferindo. Guarda a posicao no clique e
