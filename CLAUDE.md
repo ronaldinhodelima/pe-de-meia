@@ -2754,6 +2754,11 @@ tem uma linha sem contraparte — `Andreabressandeli`, R$ 1,00, com **zero candi
 cobrança antiga que o Pluggy nunca sincronizou, e o usuário decidiu ignorar. O ciclo largo dela
 (16/01 a 16/08/2025) **não é defeito**: é a primeira fatura do cartão e o próprio `DTSTART` diz
 isso. Se um dia aparecer contraparte, ela casa sozinha no próximo vínculo automático.
+**Em 11/09/2026 entrou a fatura 11/2025** (16/10 a 15/11/2025, total R$ 0,00), só para vincular o
+`Pagamento recebido` de R$ 107,54 de 16/10/2025: ele quita a fatura de outubro, mas cai um dia
+depois do fechamento dela, e sem fatura cobrindo o dia a trava do OK de cartão (§7.5) o recusava.
+Vinculado automaticamente e conferido. **Pagamento feito no dia seguinte ao fechamento pertence ao
+ciclo seguinte** — se o OK de um pagamento for recusado, procurar a fatura do mês de depois.
 
 **Coluna ausente num `.get()` desliga a regra sem erro nenhum — aconteceu TRÊS vezes em 04/09/2026.**
 `account_id` fora do item de órfão desligava a trava dos 409; `ciclo_do_arquivo` fora da consulta do
