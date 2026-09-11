@@ -2176,6 +2176,21 @@ transferência para a Amanda, inclusive da conta da Andrea. **Os 2 da conta da A
 R$ 10,00, maio/2026) ficaram como estavam, por decisão do usuário** — seguem em Mesada / Amanda sem
 projeto nem portfólio, e as regras novas não os alcançam mais.
 
+**Reembolso — natureza `transferencia` desde 11/09/2026** (decisão do usuário). A categoria
+`Reembolso de Despesa` (chave interna mantida) foi renomeada para **Reembolso** e saiu de `fluxo`:
+dinheiro adiantado por outro e devolvido não é receita nem despesa. Eram 30 lançamentos, todos com
+OK — saídas no cartão pagas por terceiros (diesel do gerador, correio BRDrive, conserto da cafeteira)
+e entradas de amigos e da ACIAV (jantas, AGO). DRE: 2025 receita −951,46 e despesa −186,67
+(resultado 110.183,99 → 109.419,20); 2026 receita −2.953,58 e despesa −1.132,04 (−28.236,72 →
+−30.058,26), batendo centavo a centavo com a soma prévia.
+
+**Pendente:** a despesa original paga pela família (a janta inteira no cartão) continua integral no
+DRE, enquanto a parte devolvida saiu dele. O certo é **ratear o lançamento original**: a parte da
+família na categoria real e a dos outros em Reembolso. Assim os dois lados se anulam fora do
+resultado. Também falta conferir o `DEP EM ESPÉCIE` de R$ 1.495,81 (17/08/2026) e se as saídas
+da BRDrive já foram devolvidas. Reembolso de despesa **da própria família** (plano de saúde,
+cashback) não vai para esta categoria: o crédito vai para a categoria da despesa (§8.3).
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
