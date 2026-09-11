@@ -2260,6 +2260,24 @@ integral na categoria real, e a devolução fica fora do DRE. É escolha conscie
 despesa da família levemente maior do que a parte dela. Reembolso de despesa **da própria família** (plano de saúde,
 cashback) não vai para esta categoria: o crédito vai para a categoria da despesa (§8.3).
 
+**Consórcio do Apto Fiorentina — padronizado em 11/09/2026.** O débito mensal
+`I0240/492/0056386796 DEB PORTO SEGURO CO` na Conta Corrente Unicred é a parcela do consórcio da
+Porto Seguro que comprou o Apto Fiorentina: **Consorcio parcela / Família / Apto Fiorentina /
+Imóveis**, o padrão que o usuário já tinha conferido em jul e ago/2026. Estavam em **Seguros**
+(despesa) os 11 débitos de ago/2025 a jun/2026 e o boleto `porto seguro LIQ TIT - IB` de
+25/06/2026 (R$ 2.918,67, confirmado pelo usuário como consórcio). A parcela subiu de R$ 1.607 para
+R$ 2.240 (dez/2025) e R$ 2.366 (mar/2026).
+
+**DRE:** `Consorcio parcela` tem natureza `bem` — a parcela forma o patrimônio do imóvel, não é
+despesa. Despesa de 2025 caiu R$ 8.668,42 (301.656,91 → 292.988,49) e a de 2026, R$ 16.868,57
+(463.698,28 → 446.829,71), batendo com a soma prévia. **Simplificação consciente:** a parcela
+também carrega taxa de administração e seguro, que a rigor são despesa; separar exigiria o extrato
+do consórcio.
+
+**Regra:** pelo **código do contrato**, `I0240/492/0056386796 DEB PORTO SEGURO`, só na Conta
+Corrente Unicred, sem filtro de valor (a parcela reajusta). "PORTO SEGURO" sozinho não serve: a
+mesma empresa vende seguro de carro. O boleto avulso ficou sem regra pelo mesmo motivo.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
