@@ -2184,11 +2184,11 @@ e entradas de amigos e da ACIAV (jantas, AGO). DRE: 2025 receita −951,46 e des
 (resultado 110.183,99 → 109.419,20); 2026 receita −2.953,58 e despesa −1.132,04 (−28.236,72 →
 −30.058,26), batendo centavo a centavo com a soma prévia.
 
-**Pendente:** a despesa original paga pela família (a janta inteira no cartão) continua integral no
-DRE, enquanto a parte devolvida saiu dele. O certo é **ratear o lançamento original**: a parte da
-família na categoria real e a dos outros em Reembolso. Assim os dois lados se anulam fora do
-resultado. Também falta conferir o `DEP EM ESPÉCIE` de R$ 1.495,81 (17/08/2026) e se as saídas
-da BRDrive já foram devolvidas. Reembolso de despesa **da própria família** (plano de saúde,
+**Decidido pelo usuário em 11/09/2026:** o `DEP EM ESPÉCIE` de R$ 1.495,81 (17/08/2026) é
+reembolso, e as saídas pagas pela BRDrive (diesel, correio, cafeteira) já foram devolvidas — os
+dois ficam em Reembolso. **Não ratear** a despesa original das jantas e da AGO: ela continua
+integral na categoria real, e a devolução fica fora do DRE. É escolha consciente do usuário, com a
+despesa da família levemente maior do que a parte dela. Reembolso de despesa **da própria família** (plano de saúde,
 cashback) não vai para esta categoria: o crédito vai para a categoria da despesa (§8.3).
 
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
