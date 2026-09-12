@@ -7,7 +7,21 @@
   .fatura-cabecalho .nav{font-size:var(--titulo-sm);text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);color:var(--ink);transition:background-color .12s,border-color .12s}
   .fatura-cabecalho .nav:hover{background:var(--bg);border-color:var(--ink-faint)}
   .fatura-ciclo{font-size:var(--fonte-sm);color:var(--ink-faint);white-space:nowrap}
-  .fatura-cabecalho .periodo-opt{display:flex;align-items:center;gap:6px;font-size:var(--fonte-md);color:var(--ink-soft);white-space:nowrap}
+  {# Setas do mes: fantasma (sem borda, transparentes ate o hover) - so no
+     recorte por periodo. As da fatura (.nav acima) navegam entre documentos e
+     ficam como estavam, ninguem pediu mudar aquelas. #}
+  .fatura-cabecalho .nav-ghost{border:none;background:none;color:var(--ink-soft);font-size:var(--titulo-sm);width:28px;height:28px;border-radius:var(--radius-pill);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background-color .12s,color .12s}
+  .fatura-cabecalho .nav-ghost:hover{background:var(--raise);color:var(--ink)}
+  {# "Ano inteiro" / "Periodo customizado": checkbox continua sendo o dado (o
+     JS le .checked sem mudar nada), mas so o label aparece - vira um chip que
+     acende quando marcado, em vez de caixa + texto. O input some por
+     opacity/tamanho, nunca por display:none, para continuar focavel por
+     teclado. Nao e uma segunda definicao visual de checkbox (o teste da
+     secao 2.2 cobra isso): aqui a caixa nao tem desenho nenhum, ela some. #}
+  .fatura-cabecalho .periodo-toggle{position:relative;display:inline-flex;align-items:center;font-size:var(--fonte-sm);color:var(--ink-soft);white-space:nowrap;cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:var(--radius-pill);padding:5px 12px;transition:border-color .12s,color .12s,background-color .12s}
+  .fatura-cabecalho .periodo-toggle:hover{border-color:var(--ink-faint)}
+  .fatura-cabecalho .periodo-toggle:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:var(--peso-medio)}
+  .fatura-cabecalho .periodo-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;pointer-events:none}
   .fatura-cabecalho .periodo-intervalo{display:flex;align-items:center;gap:6px}
   .fatura-cabecalho button.nav{cursor:pointer;background:var(--surface);line-height:1}
   .fatura-conciliacao{margin-left:auto}
@@ -185,11 +199,11 @@
 {% set colunas_extra = 1 %}
 {% if modo_periodo %}
 <div class="fatura-cabecalho">
-  <button type="button" onclick="mudarMesPeriodo(-1)" class="nav" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}">‹</button>
+  <button type="button" onclick="mudarMesPeriodo(-1)" class="nav-ghost" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}">‹</button>
   <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltrosPeriodo()" aria-label="Mês">
-  <button type="button" onclick="mudarMesPeriodo(1)" class="nav" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
-  <label class="periodo-opt"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano inteiro</label>
-  <label class="periodo-opt"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"> Período customizado</label>
+  <button type="button" onclick="mudarMesPeriodo(1)" class="nav-ghost" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
+  <label class="periodo-toggle"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano inteiro</label>
+  <label class="periodo-toggle"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"> Período customizado</label>
   <span id="intervaloWrap" class="periodo-intervalo" style="display:{{ 'flex' if periodo == 'intervalo' else 'none' }}">
     <input type="date" id="dataInicioInput" value="{{ data_inicio }}" onchange="aplicarFiltrosPeriodo()" aria-label="Data inicial">
     <span class="fatura-ciclo">até</span>
