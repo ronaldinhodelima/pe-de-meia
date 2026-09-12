@@ -830,6 +830,25 @@ das faturas anteriores (§6.1): **escolha os arquivos do mais antigo para o mais
 arquivo ganha uma linha de resultado (importado com link, ou a mensagem de recusa do servidor).
 A conta escolhida vale para todos; OFX de origem já aprendida vai sozinho para a conta dele.
 
+**Primeira importação: Conta Corrente Nubank · Ronaldo (11/09/2026).** 13 extratos OFX, de 08/2025
+a 09/2026, enviados de uma vez; **todos fecham 100%**. Só o de 08/2025 tinha 5 linhas sem
+contraparte (R$ 181,00, de 01 a 14/08): o diagnóstico de casamento mostrou **zero candidatos** — o
+Pluggy só começou a sincronizar essa conta por volta de **19/08/2025**. Por decisão do usuário
+viraram lançamentos pela rota `criar-cobrancas-sem-pluggy` (§5), com `account_id` + `ano=2025` +
+`ate_mes=8` e prévia antes; a trava de órfãos não acusou nada. **O lançamento criado pelo extrato
+leva o sinal do banco**: saída é `DEBIT` e a nota diz "Criado a partir do extrato" (`ee7a691` — a
+regra da fatura, negativo = crédito, rotulava PIX enviado como crédito). Nasceram sem OK; os dois PIX
+da Amanda foram classificados como mesada (§8.4) e o resto pelo usuário.
+
+**A regra da mesada não pega a grafia do extrato:** o OFX escreve `Transferência enviada pelo Pix -
+Amanda Bressan de Lima - …` e a regra procura a do Pluggy (`Transferência enviada|Amanda Bressan`).
+Lançamento que entrar pelo extrato nasce sem categoria. Segunda regra oferecida, **aguardando o
+usuário**.
+
+**O centavo da fatura 08/2025 do cartão Nubank Ronaldo não fecha, e não se inventa:** o arquivo traz
+uma compra de R$ 1,00 e saldo R$ 0,99, sem linha de R$ 0,01 (§1.4). O R$ 1,00 já existia, criado pela
+fatura em 04/09 e conferido — não foi criado de novo.
+
 **A interface fala em "fatura", não em "PDF".** O sistema aceita PDF e OFX, e agora extrato — dizer
 PDF na tela virou falso. Nome interno (`pdf_arquivo`, `_pdf_fatura`) e comentário sobre o PDF
 específico da Unicred continuam como estão: renomeá-los seria churn de schema sem ganho.
