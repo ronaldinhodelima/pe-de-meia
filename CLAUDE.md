@@ -2287,7 +2287,11 @@ de quitação + R$ 81.498,00 em dinheiro). Padrão: **Imóveis / Terrenos / Fam�
 Imóveis**, o mesmo que ele conferiu em jul/2026. 10 parcelas estavam em `Transfers` (fluxo — saída
 vira despesa) ou `Condomínio` (despesa); a despesa caiu R$ 11.798,05 em 2025 (292.988,49 →
 281.190,44) e R$ 11.798,05 em 2026 (446.829,71 → 435.031,66). **Sem regra**: o financiamento acabou.
-Maio/2026 não aparece na conta — se foi pago, foi por outro meio.
+**Maio/2026 existia e escapou da primeira busca**: a descrição veio cortada (`boleto cond sta luci
+DEBITO DE COBRANCA`). O critério certo, dado pelo usuário, é **`DEBITO DE COBRANCA` + R$ 2.359,61**,
+valor que nunca mudou — não o nome, que o banco grafa de seis jeitos. Ajustado no mesmo dia (despesa
+de 2026 −R$ 2.359,61). **Buscar por nome de estabelecimento na conta corrente perde grafia; quando
+o valor é fixo, procurar pelo valor.**
 
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
