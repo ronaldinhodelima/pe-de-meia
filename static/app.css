@@ -505,12 +505,18 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   /* O numero ocupa o card: escala com a LARGURA DO PROPRIO CARD (container
-     query, nao viewport), nunca menor que hoje e nunca maior que ~1,8x - um
-     card estreito no celular ainda ganha alguma coisa, um card largo no
-     desktop nao vira cartaz. O chao e o teto vem de --titulo-lg (calc, nao
-     nova entrada na escala): --titulo-xl e reservado ao herói do login. */
+     query, nao viewport) - um card estreito no celular ainda ganha alguma
+     coisa, um card largo no desktop nao vira cartaz. O chao e o teto vem de
+     --titulo-lg (calc, nao nova entrada na escala): --titulo-xl e reservado
+     ao herói do login.
+     Isto sozinho nao basta: container query conhece a LARGURA do card, nao
+     o COMPRIMENTO do valor - um total anual de 6 digitos ainda estourava em
+     card estreito, cortado por reticencias (dado financeiro escondido, o
+     pior defeito possivel aqui). `ajustarNumerosDosCards()` no topbar.js
+     encolhe por cima disto, so quando o texto realmente nao cabe - o CSS da
+     o tamanho ideal, o JS e a rede de seguranca que NUNCA deixa truncar. */
   .card .val {
-    font-size: clamp(calc(var(--titulo-lg) * 1.3), 15cqi, calc(var(--titulo-lg) * 1.8));
+    font-size: clamp(calc(var(--titulo-lg) * 1.15), 12cqi, calc(var(--titulo-lg) * 1.55));
     font-weight: var(--peso-medio); margin-top: 5px; letter-spacing: -0.015em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   }

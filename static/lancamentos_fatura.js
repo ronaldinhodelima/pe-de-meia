@@ -234,7 +234,11 @@
         // servidor manda a linha, mas quem a repinta e o cliente
         if (window.pdmPrepararLinhas) window.pdmPrepararLinhas(tabela);
       }},
-      {seletor: '.cards'},
+      {seletor: '.cards', aoTrocar: function (bloco) {
+        // o numero novo vem do servidor no tamanho de base (CSS); sem isto o
+        // ajuste dinamico so rodaria de novo no F5
+        if (window.ajustarNumerosDosCards) window.ajustarNumerosDosCards(bloco);
+      }},
       // a barra inteira, e nao so o chip: o filtro Fatura aparece e some
       // conforme a origem, e o Status cresce e encolhe junto
       {seletor: '.fatura-filtros', aoTrocar: function (gaveta) {

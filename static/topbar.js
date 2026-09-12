@@ -1,3 +1,35 @@
+// ---- numero do card: encolhe SO se o texto nao couber, nunca corta ----
+// O tamanho de base vem do CSS (container query, .card .val em app.css) -
+// ja responsivo a largura do card. Isto e so a rede de seguranca para o que
+// o CSS nao enxerga: o COMPRIMENTO do valor. Um total anual de 6 digitos
+// num card estreito estourava e cortava com reticencias - dado financeiro
+// escondido, o pior defeito possivel aqui (secao 1.1: numeros tem que ser
+// reais e visiveis). O piso e --titulo-lg: nunca menor que o tamanho
+// original, de antes desta tela ganhar o numero maior.
+window.ajustarNumerosDosCards = function(escopo) {
+  // 0.8x, nao 1x: o piso "nunca menor que hoje" cobre o caso comum, mas um
+  // total anual de 6 digitos num card de 140px (o minimo do grid mobile,
+  // secao 7.8-B) ainda estourava mesmo no piso cheio - preferir a fonte um
+  // pouco menor a esconder parte de um valor financeiro real (secao 1.1).
+  const piso = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--titulo-lg')) || 21) * 0.8;
+  (escopo || document).querySelectorAll('.card .val').forEach(function(el) {
+    el.style.fontSize = '';
+    let tamanho = parseFloat(getComputedStyle(el).fontSize);
+    if (!tamanho) return;
+    let tentativas = 0;
+    while (el.scrollWidth > el.clientWidth + 1 && tamanho > piso && tentativas < 24) {
+      tamanho -= 1;
+      el.style.fontSize = tamanho + 'px';
+      tentativas++;
+    }
+  });
+};
+window.ajustarNumerosDosCards();
+window.addEventListener('resize', function() {
+  clearTimeout(window._pdmCardsResizeT);
+  window._pdmCardsResizeT = setTimeout(window.ajustarNumerosDosCards, 150);
+});
+
 // ---- tooltip proprio: o balao nativo do navegador so aparece depois de ~1s ----
 (function() {
   let el = null, timer = null;
