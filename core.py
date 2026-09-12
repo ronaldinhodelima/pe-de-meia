@@ -555,11 +555,16 @@ def icone_tipo_html(tipo):
     )
 
 
-def nome_curto_origem(tipo, nome_curto=None, titular=None):
+def nome_curto_origem(tipo, nome_curto=None, titular=None, banco=None):
     """O texto curto da origem: o nome que o usuario deu a conta, senao o titular
-    da conexao, senao o proprio tipo. Ponto unico - a tabela, o filtro e as
-    configuracoes mostram o mesmo."""
-    for valor in (nome_curto, titular):
+    da conexao, senao o banco, senao o proprio tipo. Ponto unico - a tabela, o
+    filtro e as configuracoes mostram o mesmo.
+
+    O banco vem antes do tipo porque o tipo ja e o icone: a conexao Unicred, sem
+    titular, saia "Cartão de crédito" ao lado do icone de cartao, e o nome
+    completo repetia o tipo ("Cartão de crédito · Unicred · Cartão de crédito").
+    """
+    for valor in (nome_curto, titular, banco):
         if valor and str(valor).strip():
             return str(valor).strip()
     return ROTULO_TIPO_CONTA.get(tipo, "Outra origem")
@@ -579,7 +584,8 @@ def origem_label(tipo, connector_name, nome_conta, nome=None):
     if tipo not in ROTULO_TIPO_CONTA:
         return " · ".join(p for p in (nome_conta or "Outra origem", nome) if p)
     banco = detectar_banco(nome_conta, connector_name)
-    return " · ".join(p for p in (ROTULO_TIPO_CONTA[tipo], banco, nome) if p)
+    # sem titular o nome curto E o banco: escrever duas vezes nao diz nada
+    return " · ".join(p for p in (ROTULO_TIPO_CONTA[tipo], banco, nome if nome != banco else None) if p)
 
 
 def origem_label_curto(tipo, connector_name, nome_conta, titular=None):
@@ -625,17 +631,24 @@ def carregar_origens(cur):
     opcoes = []
     # cartoes, depois contas correntes, depois dinheiro: e a ordem dos grupos do
     # filtro, e dentro de cada um o banco e o nome
+    def banco_da_conta(c):
+        # o dinheiro nao tem banco: o nome padrao dele e "Dinheiro"
+        if c["tipo"] == "MANUAL":
+            return None
+        return detectar_banco(c["nome"], banco_por_item.get(c["item_id"], c["connector_name"]))
+
     def ordem(c):
-        banco = banco_por_item.get(c["item_id"], c["connector_name"]) or ""
-        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), c["titular"])
+        banco = banco_da_conta(c) or ""
+        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), c["titular"], banco_da_conta(c))
         return (_ORDEM_TIPO_CONTA.get(c["tipo"], 9), banco.lower(), nome.lower())
 
     for c in sorted(contas, key=ordem):
         banco = banco_por_item.get(c["item_id"], c["connector_name"])
         titular = c["titular"]
-        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), titular)
-        completo = origem_label(c["tipo"], banco, c["nome"], nome)
         banco_detectado = detectar_banco(c["nome"], banco)
+        nome_padrao = nome_curto_origem(c["tipo"], None, titular, banco_da_conta(c))
+        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), titular, banco_da_conta(c))
+        completo = origem_label(c["tipo"], banco, c["nome"], nome)
         # o selo leva o icone do tipo junto: todo lugar que ja mostrava o selo do
         # banco passa a dizer tambem se e cartao, conta ou dinheiro
         marca = icone_tipo_html(c["tipo"]) + selo_banco_html(banco_detectado, c["tipo"])
@@ -643,10 +656,11 @@ def carregar_origens(cur):
         contas_by_id[aid] = {
             **c, "banco": banco, "label": completo, "label_curto": nome, "selo": marca,
             "titular": titular, "grupo": GRUPO_TIPO_CONTA.get(c["tipo"], "Outras"),
+            "nome_padrao": nome_padrao,
         }
         # no filtro o item mora dentro do grupo do tipo, entao o texto e
         # "Banco · Nome": o selo sozinho e pequeno demais para dizer o banco
-        texto = nome if c["tipo"] == "MANUAL" else f"{banco_detectado} · {nome}"
+        texto = nome if c["tipo"] == "MANUAL" or nome == banco_detectado else f"{banco_detectado} · {nome}"
         # (valor, texto puro, titulo do tooltip, texto curto, selo em HTML)
         # o selo vai separado porque e HTML do proprio app: junto com o texto ele
         # seria escapado e o usuario veria a marcacao crua no filtro

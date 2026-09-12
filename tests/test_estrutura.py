@@ -3021,6 +3021,10 @@ def test_nome_da_origem_tem_tipo_no_icone_banco_no_selo_e_texto_so_de_quem_e():
     assert core.nome_curto_origem("CREDIT", "Casal", "Ronaldo") == "Casal"
     assert core.nome_curto_origem("CREDIT", "  ", None) == "Cartão de crédito"
     assert core.nome_curto_origem("MANUAL") == "Dinheiro"
+    # sem titular, o banco - e nao o tipo, que o icone ja diz (a conexao Unicred
+    # saia "Cartão de crédito · Unicred · Cartão de crédito" em producao)
+    assert core.nome_curto_origem("CREDIT", None, None, "Unicred") == "Unicred"
+    assert core.origem_label("CREDIT", "Unicred", "Unicred", "Unicred") == "Cartão de crédito · Unicred"
     assert core.origem_label("CREDIT", "Nubank", "Nubank", "Ronaldo") == "Cartão de crédito · Nubank · Ronaldo"
     assert core.origem_label("BANK", "Unicred", "Unicred", "Conjunta") == "Conta corrente · Unicred · Conjunta"
     assert core.origem_label("MANUAL", None, None, "Dinheiro") == "Dinheiro · lançamento manual"
@@ -3033,7 +3037,8 @@ def test_nome_da_origem_tem_tipo_no_icone_banco_no_selo_e_texto_so_de_quem_e():
     carregar = fonte.split("def carregar_origens(cur):", 1)[1].split("\ndef ", 1)[0]
     # o selo de toda tela passa a levar o icone do tipo junto
     assert 'marca = icone_tipo_html(c["tipo"]) + selo_banco_html(' in carregar
-    assert "c.nome_curto" in carregar and 'nome_curto_origem(c["tipo"], c.get("nome_curto"), titular)' in carregar
+    assert "c.nome_curto" in carregar
+    assert 'nome_curto_origem(c["tipo"], c.get("nome_curto"), titular, banco_da_conta(c))' in carregar
 
 
 def test_filtro_de_origem_e_um_so_e_agrupado_por_tipo():

@@ -1006,7 +1006,8 @@ def contas_view():
             "rotulo": ROTULO_TIPO_CONTA.get(r["tipo"], r["tipo"]),
             "icone": icone_tipo_html(r["tipo"]),
             "nome_curto": origem.get("nome_curto"),
-            "padrao": r["titular"] or ROTULO_TIPO_CONTA.get(r["tipo"], ""),
+            # o que a tela usa com o campo em branco (titular, senao o banco)
+            "padrao": origem.get("nome_padrao") or ROTULO_TIPO_CONTA.get(r["tipo"], ""),
             "efetivo": origem.get("label_curto", ""),
             "completo": origem.get("label", ""),
             "marca": origem.get("selo", ""),

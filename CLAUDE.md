@@ -1176,6 +1176,14 @@ faturas, gráfico).
 Conferido na bancada (template real, contas montadas pelas mesmas funções do `core`): a coluna
 Origem caiu para 168px, os três grupos no filtro, o tooltip com o nome completo.
 
+**Sem titular, o nome curto é o banco — não o tipo.** Testado em produção logo depois (só leitura):
+a conexão Unicred não tem titular, e o nome caía no próprio tipo — "Cartão de crédito" ao lado do
+ícone de cartão, "Unicred · Cartão de crédito" no filtro e **"Cartão de crédito · Unicred · Cartão
+de crédito"** no tooltip. Hoje a ordem é nome curto → titular → banco → tipo, e o nome completo não
+repete o banco quando ele é o próprio nome. O mesmo teste confirmou o resto: 66 linhas, todas com
+ícone; os 3 grupos no filtro de Lançamentos e de Relatórios; as 7 origens em Configurações com a
+prévia; console sem erro.
+
 ### 7.1-C A Resumida saiu (10/09/2026)
 
 **Decisão do usuário**, depois de as dez etapas, a tabela única e os filtros autogerenciados estarem
