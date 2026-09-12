@@ -31,7 +31,9 @@ from core import (
     detectar_banco,
     esc,
     get_conn,
+    icone_tipo_html,
     levantar_pendencias,
+    ROTULO_TIPO_CONTA,
     marcar_falha_auditoria,
     recarregar_categorias_db,
     registrar_mudanca_auditoria,
@@ -905,6 +907,29 @@ def contas_view():
                             prefixo,
                         )
                         aviso = f'Cartão final {final4} salvo como "{prefixo}".'
+            elif acao == "nome_curto":
+                # o nome que aparece ao lado do icone e do selo; vazio volta a
+                # usar o titular da conexao
+                account_id = request.form.get("account_id") or ""
+                nome_curto = (request.form.get("nome_curto") or "").strip()[:40]
+                cur.execute(
+                    "SELECT nome_curto FROM cartao.conta WHERE account_id::text = %s;",
+                    (account_id,),
+                )
+                antes = cur.fetchone()
+                if not antes:
+                    erro = "Conta não encontrada."
+                else:
+                    cur.execute(
+                        "UPDATE cartao.conta SET nome_curto = %s WHERE account_id::text = %s;",
+                        (nome_curto or None, account_id),
+                    )
+                    conn.commit()
+                    registrar_mudanca_auditoria(
+                        "Nome curto da origem", antes["nome_curto"], nome_curto or None
+                    )
+                    aviso = (f'Nome curto salvo: "{nome_curto}".' if nome_curto
+                             else "Nome curto removido; a origem volta a usar o titular.")
             else:
                 item_id = request.form.get("item_id")
                 titular = (request.form.get("titular") or "").strip()
@@ -957,6 +982,9 @@ def contas_view():
 
     cur.execute("SELECT final4, prefixo FROM cartao.cartao_nome ORDER BY prefixo;")
     cartoes_nome = cur.fetchall()
+    # o mesmo nome, icone e selo que as outras telas mostram - a previa ao lado
+    # de cada campo sai daqui, e nao de uma segunda regra
+    contas_by_id, _ = carregar_origens(cur)
     cur.close()
     conn.close()
 
@@ -972,6 +1000,17 @@ def contas_view():
         tipo_pt = {"CREDIT": "Cartão de crédito", "BANK": "Conta corrente",
                    "MANUAL": "Dinheiro (manual)"}.get(r["tipo"], r["tipo"])
         info["contas"].append(tipo_pt)
+        origem = contas_by_id.get(str(r["account_id"])) or {}
+        info.setdefault("origens", []).append({
+            "account_id": str(r["account_id"]),
+            "rotulo": ROTULO_TIPO_CONTA.get(r["tipo"], r["tipo"]),
+            "icone": icone_tipo_html(r["tipo"]),
+            "nome_curto": origem.get("nome_curto"),
+            "padrao": r["titular"] or ROTULO_TIPO_CONTA.get(r["tipo"], ""),
+            "efetivo": origem.get("label_curto", ""),
+            "completo": origem.get("label", ""),
+            "marca": origem.get("selo", ""),
+        })
         if r["tipo"] == "CREDIT":
             info["credito"].append(r)
 
@@ -1389,7 +1428,7 @@ def faturas_pdf_view():
     for r in cur.fetchall():
         conta = contas_by_id.get(str(r["account_id"]))
         faturas.append({
-            **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
+            **r, "conta_label": conta["label"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
         })
     cur.close()

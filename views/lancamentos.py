@@ -29,6 +29,7 @@ from core import (
     aplicar_regras,
     vincular_pendentes_confirmados,
     carregar_origens,
+    chip_origem_html,
     rotulo_valor_dimensao,
     cat_pt_puro,
     cor_banco,
@@ -564,7 +565,7 @@ def origem_da_linha(conta, final4=None, nomes_cartao=None):
     apelido = nomes_cartao.get(final4) if final4 else None
     if conta.get("tipo") == "CREDIT" and final4:
         curto = apelido or conta.get("label_curto") or "-"
-        completa = f'{conta.get("label", "-")} - ' + (apelido or f"final {final4}")
+        completa = f'{conta.get("label", "-")} · ' + (apelido or f"final {final4}")
     else:
         curto = conta.get("label_curto") or "-"
         completa = conta.get("label", "-")
@@ -1133,8 +1134,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         # Origem em chip, o filtro Fatura so quando a origem selecionada e um
         # cartao com fatura, e o Status crescendo junto. O alternador fixo
         # "Por periodo | Por fatura" deixou de existir (decisao do usuario).
-        origem_filtro_html=chip_filter_html(
-            "origem", "Origem", origem_opcoes, [account_id],
+        origem_filtro_html=chip_origem_html(
+            contas_by_id, origem_opcoes, [account_id],
             onchange="aplicarFiltrosPeriodo()"),
         faturas_da_origem=faturas_para_o_filtro(
             cur, [account_id], contas_by_id, fatura["id"]),
@@ -1458,8 +1459,8 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
         mes=mes, periodo=periodo, data_inicio=data_inicio_str, data_fim=data_fim_str,
         # o formulario de lancamento manual nasce com a data de hoje
         hoje_iso=datetime.now().strftime("%Y-%m-%d"),
-        origem_filtro_html=chip_filter_html(
-            "origem", "Origem", origem_opcoes, origem_sel,
+        origem_filtro_html=chip_origem_html(
+            contas_by_id, origem_opcoes, origem_sel,
             onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,
         ),
         por_categoria=por_categoria,
@@ -2001,8 +2002,8 @@ def lancamentos_por_fatura():
         + "&origem=" + account_id + "&status=todas"
     )
     faturas_da_origem = faturas_para_o_filtro(cur, [account_id], contas_by_id, fatura_id)
-    filtro_origem = chip_filter_html(
-        "origem", "Origem", origem_opcoes, [account_id],
+    filtro_origem = chip_origem_html(
+        contas_by_id, origem_opcoes, [account_id],
         onchange="aplicarFiltrosPeriodo()")
     cur.close()
     conn.close()
@@ -2205,7 +2206,7 @@ def detalhes_transacao(transacao_id):
         origem = "-"
     elif conta["tipo"] == "CREDIT" and r["numero_cartao_final"]:
         apelido = nomes_cartao.get(r["numero_cartao_final"]) or f'final {r["numero_cartao_final"]}'
-        origem = f'{conta["label"]} - {apelido}'
+        origem = f'{conta["label"]} · {apelido}'
     else:
         origem = conta["label"]
 

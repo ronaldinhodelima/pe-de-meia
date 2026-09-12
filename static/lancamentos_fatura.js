@@ -522,7 +522,9 @@
     let ativos = 0;
     const origens = Array.from(document.querySelectorAll('.fatura-filtros .chip-opt'))
       .filter(opcao => opcao.querySelector('input:checked'))
-      .map(opcao => (typeof textoDaOpcao === 'function' ? textoDaOpcao(opcao) : opcao.textContent).trim());
+      // o nome completo ("Cartão de crédito · Nubank · Ronaldo"): fora da lista,
+      // sem o grupo em volta, "Nubank · Ronaldo" nao diria se e cartao ou conta
+      .map(opcao => (opcao.dataset.tip || textoDaOpcao(opcao)).trim());
     if (origens.length) {
       ativos++;
       partes.push(origens.length > 2 ? origens.length + ' origens' : origens.join(', '));

@@ -526,18 +526,60 @@ def selo_banco_html(banco, tipo=None):
     return f'<span class="selo" style="background:{cor};color:{cor_texto}">{sigla}</span>'
 
 
-def origem_label(tipo, connector_name, nome_conta, titular=None):
-    """Rotulo amigavel (completo) de origem a partir do tipo da conta + nome do banco detectado."""
+# O nome de uma origem tem tres partes, e cada uma tem o seu lugar na tela
+# (decisao do usuario, 11/09/2026): o TIPO vira icone, o BANCO e o selo colorido,
+# e o texto diz so DE QUEM e - "Ronaldo", "Andrea", "Conjunta". O nome completo,
+# com as tres por extenso, fica no tooltip e onde nao ha icone nem selo ao lado.
+ROTULO_TIPO_CONTA = {"CREDIT": "Cartão de crédito", "BANK": "Conta corrente", "MANUAL": "Dinheiro"}
+GRUPO_TIPO_CONTA = {"CREDIT": "Cartões de crédito", "BANK": "Contas correntes", "MANUAL": "Manual"}
+_ORDEM_TIPO_CONTA = {"CREDIT": 0, "BANK": 1, "MANUAL": 2}
+
+# Desenho em SVG no proprio HTML: o CSP nao deixa carregar biblioteca de icone, e
+# `currentColor` faz o icone seguir a cor do texto nos dois temas.
+_ICONES_TIPO_CONTA = {
+    "CREDIT": '<rect x="2" y="4" width="12" height="9" rx="1.5"/><path d="M2 7h12M4.5 10.5h3"/>',
+    "BANK": '<path d="M2 6.5 8 3l6 3.5M3 13h10M4 8v3.5M6.7 8v3.5M9.3 8v3.5M12 8v3.5"/>',
+    "MANUAL": '<rect x="1.5" y="4.5" width="13" height="7" rx="1"/><circle cx="8" cy="8" r="1.8"/>',
+}
+
+
+def icone_tipo_html(tipo):
+    """Icone do tipo da origem (cartao, conta corrente, dinheiro), ou "" se desconhecido."""
+    desenho = _ICONES_TIPO_CONTA.get(tipo)
+    if not desenho:
+        return ""
+    return (
+        '<svg class="origem-icone" viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+        'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" role="img" '
+        f'aria-label="{ROTULO_TIPO_CONTA[tipo]}">{desenho}</svg>'
+    )
+
+
+def nome_curto_origem(tipo, nome_curto=None, titular=None):
+    """O texto curto da origem: o nome que o usuario deu a conta, senao o titular
+    da conexao, senao o proprio tipo. Ponto unico - a tabela, o filtro e as
+    configuracoes mostram o mesmo."""
+    for valor in (nome_curto, titular):
+        if valor and str(valor).strip():
+            return str(valor).strip()
+    return ROTULO_TIPO_CONTA.get(tipo, "Outra origem")
+
+
+def origem_label(tipo, connector_name, nome_conta, nome=None):
+    """Nome completo: "Cartão de crédito · Nubank · Ronaldo".
+
+    Vai no tooltip e em todo lugar sem icone nem selo ao lado (lista de regras,
+    importacao de fatura, grafico) - ali o tipo e o banco precisam estar escritos.
+    """
+    if tipo == "MANUAL":
+        partes = ["Dinheiro", "lançamento manual"]
+        if nome and nome != "Dinheiro":
+            partes.append(nome)
+        return " · ".join(partes)
+    if tipo not in ROTULO_TIPO_CONTA:
+        return " · ".join(p for p in (nome_conta or "Outra origem", nome) if p)
     banco = detectar_banco(nome_conta, connector_name)
-    if tipo == "CREDIT":
-        base = f"Cartão de Crédito {banco}"
-    elif tipo == "BANK":
-        base = f"Conta Corrente {banco}"
-    elif tipo == "MANUAL":
-        base = "Dinheiro (manual)"
-    else:
-        base = nome_conta or "Outra origem"
-    return f"{base} · {titular}" if titular else base
+    return " · ".join(p for p in (ROTULO_TIPO_CONTA[tipo], banco, nome) if p)
 
 
 def origem_label_curto(tipo, connector_name, nome_conta, titular=None):
@@ -551,19 +593,10 @@ def origem_label_curto(tipo, connector_name, nome_conta, titular=None):
     O rotulo completo (origem_label) continua trazendo o banco: ele aparece no
     tooltip e no rotulo do grafico, onde nao ha selo ao lado.
     """
-    banco = detectar_banco(nome_conta, connector_name)
-    tem_selo = banco in BANCOS_ESTILO
-    if tipo == "CREDIT":
-        base = "Cartão" if tem_selo else f"Cartão {banco}"
-    elif tipo == "BANK":
-        base = "Conta Corrente" if tem_selo else f"Conta Corrente {banco}"
-    elif tipo == "MANUAL":
-        base = "Dinheiro"
-    else:
-        base = nome_conta or "Outra"
-    # sem parentese e sem separador: o rotulo aparece em lista estreita (filtro de
-    # origem) e le melhor como uma frase so - "Conta Corrente Andrea"
-    return f"{base} {titular}" if titular else base
+    # Desde 11/09/2026 o texto curto e so o nome (de quem e): o tipo virou icone
+    # e o banco e o selo, e os dois andam sempre junto dele. "Conta Corrente
+    # Ronaldo" cortava na coluna e repetia o que o icone ja diz.
+    return nome_curto_origem(tipo, None, titular)
 
 
 def carregar_origens(cur):
@@ -574,7 +607,8 @@ def carregar_origens(cur):
     detectamos o banco olhando todas as contas da conexao (item_id) e aplicamos para todas.
     """
     cur.execute(
-        "SELECT c.account_id, c.item_id, c.tipo, c.nome, c.numero_final, p.connector_name, it.titular "
+        "SELECT c.account_id, c.item_id, c.tipo, c.nome, c.numero_final, c.nome_curto, "
+        "p.connector_name, it.titular "
         "FROM cartao.conta c JOIN cartao.pluggy_item p ON p.item_id = c.item_id "
         "LEFT JOIN cartao.item_titular it ON it.item_id = c.item_id "
         "ORDER BY c.tipo, p.connector_name;"
@@ -589,27 +623,50 @@ def carregar_origens(cur):
 
     contas_by_id = {}
     opcoes = []
-    for c in contas:
+    # cartoes, depois contas correntes, depois dinheiro: e a ordem dos grupos do
+    # filtro, e dentro de cada um o banco e o nome
+    def ordem(c):
+        banco = banco_por_item.get(c["item_id"], c["connector_name"]) or ""
+        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), c["titular"])
+        return (_ORDEM_TIPO_CONTA.get(c["tipo"], 9), banco.lower(), nome.lower())
+
+    for c in sorted(contas, key=ordem):
         banco = banco_por_item.get(c["item_id"], c["connector_name"])
         titular = c["titular"]
-        completo = origem_label(c["tipo"], banco, c["nome"], titular)
-        curto = origem_label_curto(c["tipo"], banco, c["nome"], titular)
-        selo = selo_banco_html(detectar_banco(c["nome"], banco), c["tipo"])
+        nome = nome_curto_origem(c["tipo"], c.get("nome_curto"), titular)
+        completo = origem_label(c["tipo"], banco, c["nome"], nome)
+        banco_detectado = detectar_banco(c["nome"], banco)
+        # o selo leva o icone do tipo junto: todo lugar que ja mostrava o selo do
+        # banco passa a dizer tambem se e cartao, conta ou dinheiro
+        marca = icone_tipo_html(c["tipo"]) + selo_banco_html(banco_detectado, c["tipo"])
         aid = str(c["account_id"])
         contas_by_id[aid] = {
-            **c, "banco": banco, "label": completo, "label_curto": curto, "selo": selo, "titular": titular,
+            **c, "banco": banco, "label": completo, "label_curto": nome, "selo": marca,
+            "titular": titular, "grupo": GRUPO_TIPO_CONTA.get(c["tipo"], "Outras"),
         }
+        # no filtro o item mora dentro do grupo do tipo, entao o texto e
+        # "Banco · Nome": o selo sozinho e pequeno demais para dizer o banco
+        texto = nome if c["tipo"] == "MANUAL" else f"{banco_detectado} · {nome}"
         # (valor, texto puro, titulo do tooltip, texto curto, selo em HTML)
         # o selo vai separado porque e HTML do proprio app: junto com o texto ele
         # seria escapado e o usuario veria a marcacao crua no filtro
-        opcoes.append((aid, curto, completo, curto, selo))
+        opcoes.append((aid, texto, completo, nome, marca))
     return contas_by_id, opcoes
+
+
+def chip_origem_html(contas_by_id, opcoes, selecionados, onchange="aplicarFiltros()", contagens=None):
+    """O filtro de Origem, agrupado por tipo. Ponto unico das telas que filtram
+    por origem - lancamentos e relatorios mostram a mesma lista, do mesmo jeito."""
+    grupos = {aid: c.get("grupo") for aid, c in contas_by_id.items()}
+    return chip_filter_html("origem", "Origem", opcoes, selecionados,
+                            onchange=onchange, contagens=contagens, grupos=grupos)
 
 
 IMPORT_NAMESPACE = uuid.UUID("6f1c2a52-0000-4000-8000-000000000042")
 
 
-def chip_filter_html(nome, label, opcoes, selecionados, onchange="aplicarFiltros()", contagens=None):
+def chip_filter_html(nome, label, opcoes, selecionados, onchange="aplicarFiltros()", contagens=None,
+                     grupos=None):
     """Filtro em chip com dropdown, busca e multi-selecao.
 
     opcoes: (valor, texto) e, opcionalmente, mais (titulo, texto_curto, selo_html).
@@ -623,10 +680,17 @@ def chip_filter_html(nome, label, opcoes, selecionados, onchange="aplicarFiltros
     movimento do mes sem precisar filtrar um a um.
     """
     contagens = contagens or {}
+    grupos = grupos or {}
     n_sel = len(selecionados)
     partes = []
+    grupo_atual = None
     for opt in opcoes:
         val, texto = opt[0], opt[1]
+        # grupos: {valor: nome do grupo}, na ordem em que as opcoes ja vem
+        grupo = grupos.get(str(val))
+        if grupo and grupo != grupo_atual:
+            partes.append(f'<div class="chip-grupo">{esc(grupo)}</div>')
+            grupo_atual = grupo
         titulo = opt[2] if len(opt) > 2 else texto
         curto = opt[3] if len(opt) > 3 else None
         selo = opt[4] if len(opt) > 4 else ""
@@ -5190,6 +5254,14 @@ def migrate():
                 (len(feito["pares"]),),
             )
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (63);")
+            conn.commit()
+
+        # Nome curto de cada origem (decisao do usuario, 11/09/2026): vazio, a
+        # tela usa o titular da conexao. Coluna nova, nenhum dado muda - a
+        # sincronizacao do Pluggy so atualiza as colunas que ela lista, e esta nao.
+        if versao_atual < 64:
+            cur.execute("ALTER TABLE cartao.conta ADD COLUMN IF NOT EXISTS nome_curto TEXT;")
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (64);")
             conn.commit()
 
         cur.close()

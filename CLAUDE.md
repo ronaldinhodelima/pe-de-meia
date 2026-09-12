@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 63 · **Testes:** 434 aprovados, 6 ignorados
+**Última revisão:** 11/09/2026 · **Schema:** migração 64 · **Testes:** 438 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1146,6 +1146,35 @@ botão Filtros.
 **Conferido na bancada** (137 lançamentos renderizados pelo template real): 50 por página, 3
 páginas, a pesquisa "posto" com `23 de 137` e o rodapé acompanhando, a troca para 100 preservando o
 primeiro item visível, o Esc fechando a gaveta, e nenhuma rolagem lateral em 375px.
+
+### 7.1-D Nomes e ícones das origens (11/09/2026)
+
+**Decisão do usuário.** Os nomes eram montados por fórmula — "Conta Corrente Ronaldo", "Cartão
+Andrea" — cortavam na coluna ("Conta Corrente Ronal…") e não diziam o banco sem o selo. Hoje cada
+origem tem **três partes, cada uma no seu lugar**: o **tipo** é um ícone (cartão, conta corrente,
+dinheiro), o **banco** é o selo colorido, e o **texto diz só de quem é** — "Ronaldo", "Andrea",
+"Conjunta". O **nome completo** ("Cartão de crédito · Nubank · Ronaldo · final 4821") fica no
+tooltip e em toda lista sem ícone nem selo ao lado (regras, importação de fatura, histórico de
+faturas, gráfico).
+
+- **O nome curto é o titular da conexão, editável por conta** em Configurações > Contas
+  (`conta.nome_curto`, migração 64), com a prévia de como aparece. Em branco, volta ao titular.
+  A sincronização do Pluggy só atualiza as colunas que ela lista, e esta não está entre elas.
+- **Linha de cartão com apelido do cartão físico mostra o apelido** ("Visa Platinum"), como antes
+  — é ele que diz quem gastou dentro da mesma fatura (decisão do usuário). O nome completo
+  acrescenta o apelido ou o final.
+- **Ponto único:** `nome_curto_origem()`, `origem_label()` e `icone_tipo_html()` no `core`, usados
+  por `carregar_origens()`. O `selo` que ela devolve já leva o ícone junto, então toda tela que
+  mostrava o selo passou a mostrar o tipo sem mudar de código. O filtro de Origem de Lançamentos e
+  de Relatórios é um só, `chip_origem_html()`, **agrupado por tipo** (Cartões de crédito, Contas
+  correntes, Manual), com o item escrito "Banco · Nome" — o selo sozinho é pequeno demais para
+  dizer o banco numa lista.
+- **Defeito que isso corrigiu:** `textoDaOpcao()` lia o texto do selo junto e o resumo da gaveta
+  de filtros escrevia **"NuConta Corrente Ronaldo"**. O resumo agora usa o nome completo, porque
+  fora da lista, sem o grupo em volta, "Nubank · Ronaldo" não diria se é cartão ou conta.
+
+Conferido na bancada (template real, contas montadas pelas mesmas funções do `core`): a coluna
+Origem caiu para 168px, os três grupos no filtro, o tooltip com o nome completo.
 
 ### 7.1-C A Resumida saiu (10/09/2026)
 
@@ -2347,7 +2376,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**434 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**438 aprovados e 6 ignorados** (11/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -2906,3 +2935,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 61 | autor dos 3 manuais antigos = `ronaldo`, informado pelo usuário; `autor_backup_v61` |
 | 62 | apaga `metrica_diaria` (ninguém lia; decisão do usuário), só se o backup tiver as mesmas linhas; `metrica_diaria_backup_v62` |
 | 63 | pendente ligado ao confirmado do mesmo débito (§4.3); `pendente_backup_v63` + `pendente_dim_backup_v63` |
+| 64 | `conta.nome_curto`: o nome curto de cada origem (§7.1-D); só a coluna, nenhum dado muda |

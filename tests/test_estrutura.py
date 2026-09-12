@@ -3010,3 +3010,77 @@ def test_busca_externa_sobrevive_a_troca_da_tabela():
     assert "barraAtual.__externa" in tabelas and "barra.__externa = true" in tabelas
     assert "while (esqExterna.firstChild) esq.appendChild(esqExterna.firstChild)" in tabelas
     assert "externa.querySelectorAll('input, span')" not in tabelas
+
+
+def test_nome_da_origem_tem_tipo_no_icone_banco_no_selo_e_texto_so_de_quem_e():
+    """Decisao do usuario (11/09/2026): "Conta Corrente Ronaldo" cortava na coluna
+    e repetia o que o icone ja diz. O curto e o nome (dado pelo usuario, senao o
+    titular); o completo diz tipo, banco e nome, e mora no tooltip."""
+    import core
+    assert core.nome_curto_origem("CREDIT", None, "Ronaldo") == "Ronaldo"
+    assert core.nome_curto_origem("CREDIT", "Casal", "Ronaldo") == "Casal"
+    assert core.nome_curto_origem("CREDIT", "  ", None) == "Cartão de crédito"
+    assert core.nome_curto_origem("MANUAL") == "Dinheiro"
+    assert core.origem_label("CREDIT", "Nubank", "Nubank", "Ronaldo") == "Cartão de crédito · Nubank · Ronaldo"
+    assert core.origem_label("BANK", "Unicred", "Unicred", "Conjunta") == "Conta corrente · Unicred · Conjunta"
+    assert core.origem_label("MANUAL", None, None, "Dinheiro") == "Dinheiro · lançamento manual"
+    for tipo in ("CREDIT", "BANK", "MANUAL"):
+        icone = core.icone_tipo_html(tipo)
+        assert 'class="origem-icone"' in icone and "currentColor" in icone, tipo
+        assert f'aria-label="{core.ROTULO_TIPO_CONTA[tipo]}"' in icone
+    assert core.icone_tipo_html("OUTRO") == ""
+    fonte = (RAIZ / "core.py").read_text(encoding="utf-8")
+    carregar = fonte.split("def carregar_origens(cur):", 1)[1].split("\ndef ", 1)[0]
+    # o selo de toda tela passa a levar o icone do tipo junto
+    assert 'marca = icone_tipo_html(c["tipo"]) + selo_banco_html(' in carregar
+    assert "c.nome_curto" in carregar and 'nome_curto_origem(c["tipo"], c.get("nome_curto"), titular)' in carregar
+
+
+def test_filtro_de_origem_e_um_so_e_agrupado_por_tipo():
+    """Lancamentos e relatorios filtram origem pelo MESMO chip_origem_html: duas
+    listas de origem divergiriam no primeiro banco novo."""
+    import app  # noqa: F401
+    import core
+    contas = {"a": {"grupo": "Cartões de crédito"}, "b": {"grupo": "Cartões de crédito"},
+              "c": {"grupo": "Contas correntes"}}
+    opcoes = [("a", "Nubank · Ronaldo", "t", "Ronaldo", ""), ("b", "Unicred · Conjunta", "t", "Conjunta", ""),
+              ("c", "Nubank · Ronaldo", "t", "Ronaldo", "")]
+    with app.app.test_request_context("/"):
+        html = core.chip_origem_html(contas, opcoes, [])
+    assert html.count('class="chip-grupo"') == 2, "um titulo por tipo, nao por item"
+    assert html.index("Cartões de crédito") < html.index("Unicred · Conjunta") < html.index("Contas correntes")
+    for arquivo in ("views/lancamentos.py", "views/relatorios.py"):
+        texto = (RAIZ / arquivo).read_text(encoding="utf-8")
+        assert 'chip_filter_html("origem"' not in texto and "chip_origem_html(" in texto, arquivo
+        assert not re.search(r'chip_filter_html\(\s*"origem"', texto), arquivo
+    # a sigla do selo nao gruda mais no nome ("NuConta Corrente Ronaldo")
+    tabelas = _js_sem_comentarios("tabelas.js")
+    corpo = tabelas.split("function textoDaOpcao(label)", 1)[1].split("\n}\n", 1)[0]
+    assert ".selo" in corpo and ".origem-icone" in corpo
+    assert "chip-grupo" in tabelas.split("function cfFiltrar(input)", 1)[1].split("\n}\n", 1)[0]
+
+
+def test_migracao_64_so_acrescenta_o_nome_curto():
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = _bloco_migracao(core, 64)
+    assert "ALTER TABLE cartao.conta ADD COLUMN IF NOT EXISTS nome_curto TEXT;" in bloco
+    assert "INSERT INTO cartao.schema_version (versao) VALUES (64);" in bloco
+    for proibido in ("UPDATE ", "DELETE ", "conferida"):
+        assert proibido not in bloco, proibido
+    # a sincronizacao do Pluggy nao pode apagar o nome que o usuario deu
+    bussola = (RAIZ / "bussola" / "app.py").read_text(encoding="utf-8")
+    upsert = bussola.split("INSERT INTO cartao.conta (", 1)[1].split('"""', 1)[0]
+    assert "nome_curto" not in upsert
+
+
+def test_configuracoes_editam_o_nome_curto_de_cada_origem():
+    view = (RAIZ / "views" / "cadastros.py").read_text(encoding="utf-8")
+    # o `else:` do ramo de titular, no nivel do `elif` - o do proprio ramo tem
+    # mais recuo, e casar so pelo texto cortaria o ramo no meio
+    ramo = view.split('elif acao == "nome_curto":', 1)[1].split("\n            else:\n", 1)[0]
+    assert "account_id::text = %s" in ramo, "conta.account_id comparado como texto (secao 10.4 n.6)"
+    assert "registrar_mudanca_auditoria(" in ramo and "nome_curto or None" in ramo
+    html = (RAIZ / "templates" / "contas.html").read_text(encoding="utf-8")
+    assert 'name="acao" value="nome_curto"' in html
+    assert 'placeholder="{{ o.padrao }}"' in html, "em branco, a tela mostra que vale o titular"
+    assert "{{ o.marca|safe }}" in html, "a previa usa o mesmo icone e selo das outras telas"

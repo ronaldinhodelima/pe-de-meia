@@ -642,7 +642,9 @@ document.addEventListener('DOMContentLoaded', manterPosicaoAoSalvar);
 // nao pode vazar para o chip pequeno de selecionado nem para a busca do painel.
 function textoDaOpcao(label) {
   const clone = label.cloneNode(true);
-  clone.querySelectorAll('.chip-qtd').forEach(function (q) { q.remove(); });
+  // o selo e o icone tambem saem: a sigla do selo grudava no nome e o resumo
+  // do filtro escrevia "NuConta Corrente Ronaldo"
+  clone.querySelectorAll('.chip-qtd, .selo, .origem-icone').forEach(function (q) { q.remove(); });
   return clone.textContent.trim();
 }
 
@@ -816,6 +818,16 @@ function cfFiltrar(input) {
   panel.querySelectorAll('.chip-opt').forEach(opt => {
     // sem o contador: buscar "13" nao pode casar com a conta que tem 13 lancamentos
     opt.style.display = textoDaOpcao(opt).toLowerCase().includes(q) ? 'flex' : 'none';
+  });
+  // o titulo do grupo (Cartões de crédito, Contas correntes) some junto quando a
+  // busca nao deixa nenhum item dele
+  panel.querySelectorAll('.chip-grupo').forEach(grupo => {
+    let el = grupo.nextElementSibling, algum = false;
+    while (el && !el.classList.contains('chip-grupo')) {
+      if (el.style.display !== 'none') algum = true;
+      el = el.nextElementSibling;
+    }
+    grupo.style.display = algum ? '' : 'none';
   });
   panel.querySelectorAll('.chip-hover').forEach(o => o.classList.remove('chip-hover'));
 }

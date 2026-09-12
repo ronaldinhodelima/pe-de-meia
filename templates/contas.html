@@ -3,8 +3,11 @@
 
 <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
   Tudo que descreve a <strong>origem do dinheiro</strong> fica aqui.
-  O <strong>titular</strong> diz de quem é cada conexão bancária e aparece junto do nome do
-  banco nos lançamentos e relatórios. O <strong>nome de cada cartão</strong> (físico, virtual,
+  Cada origem aparece nas telas como <strong>ícone do tipo + selo do banco + nome curto</strong>
+  — o ícone diz se é cartão, conta corrente ou dinheiro, o selo diz o banco, e o nome diz de
+  quem é. O <strong>titular</strong> vale para a conexão inteira e é o nome curto padrão; dê um
+  <strong>nome curto</strong> próprio a uma conta quando o titular não bastar. O nome completo
+  aparece ao passar o mouse. O <strong>nome de cada cartão</strong> (físico, virtual,
   adicional) identifica quem gastou dentro da mesma fatura — um cartão de crédito pode ter
   vários, e cada um aparece pelos 4 últimos dígitos.
   As <strong>datas de fatura vêm do banco</strong> pela sincronização e não são editáveis.
@@ -44,6 +47,24 @@
              style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius-xs);width:220px">
       <button type="submit" class="ver-btn">Salvar</button>
     </form>
+  </div>
+
+  {# Um nome curto por conta, com a previa de como ele aparece na tabela e no
+     filtro. Em branco, vale o titular da conexao (placeholder). #}
+  <div style="margin-top:12px;padding-top:6px;border-top:1px solid var(--line)">
+    {% for o in info.origens %}
+    <form method="post" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0">
+      <input type="hidden" name="acao" value="nome_curto">
+      <input type="hidden" name="account_id" value="{{ o.account_id }}">
+      <span style="display:flex;align-items:center;gap:6px;min-width:150px;font-size:var(--fonte-sm);color:var(--ink-soft)">{{ o.icone|safe }}{{ o.rotulo }}</span>
+      <input name="nome_curto" class="campo-caixa" value="{{ o.nome_curto or '' }}" placeholder="{{ o.padrao }}"
+             maxlength="40" aria-label="Nome curto de {{ o.rotulo }}" style="width:200px">
+      <button type="submit" class="ver-btn">Salvar</button>
+      <span class="origem-conteudo" data-tip="{{ o.completo }}" style="font-size:var(--fonte-sm)">
+        <span style="color:var(--ink-faint)">na tela:</span>{{ o.marca|safe }}<span class="origem-texto">{{ o.efetivo }}</span>
+      </span>
+    </form>
+    {% endfor %}
   </div>
 
   {% for c in info.credito %}

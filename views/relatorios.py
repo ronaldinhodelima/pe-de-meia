@@ -34,6 +34,7 @@ from core import (
     _montar_filtro_relatorio,
     aplicar_regras,
     carregar_origens,
+    chip_origem_html,
     marcar_ok_automatico_da_fatura,
     rotulo_valor_dimensao,
     cat_pt_puro,
@@ -314,7 +315,7 @@ def relatorios():
     # cada filtro de chip ja vem como HTML pronto de chip_filter_html(); o template
     # so injeta na ordem, marcando |safe
     filtros_chip = [
-        chip_filter_html("origem", "Origem", origem_opcoes, cfg["origens_sel"]),
+        chip_origem_html(contas_by_id, origem_opcoes, cfg["origens_sel"]),
         chip_filter_html("categoria", "Categoria",
                          [(c, cat_pt_puro(c)) for c in todas_categorias], cfg["categorias_sel"]),
         chip_filter_html("cartao", "Cartão", cartao_opcoes, cfg["cartoes_sel"]),
@@ -498,7 +499,7 @@ def relatorios_lancamentos():
         apelido = nomes_cartao.get(r["numero_cartao_final"])
         # se for cartao de credito e tiver apelido cadastrado, o apelido e mais informativo
         if c["tipo"] == "CREDIT" and r["numero_cartao_final"] and apelido:
-            return c["selo"], apelido, f'{c["label"]} - {nome_cartao_curto(r["numero_cartao_final"])}'
+            return c["selo"], apelido, f'{c["label"]} · {nome_cartao_curto(r["numero_cartao_final"])}'
         return c["selo"], c["label_curto"], c["label"]
 
     lancamentos = []
@@ -1456,7 +1457,7 @@ def conciliar_fatura():
     for r in linhas_historico:
         conta = contas_by_id.get(str(r["account_id"]))
         historico.append({
-            **r, "conta_label": conta["label_curto"] if conta else "(conta removida)",
+            **r, "conta_label": conta["label"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
             "periodo_inicio": _ciclo_inicio(cur, r),
             "fecha_100": not r["linhas_sem_vinculo"] and not r["orfaos"],

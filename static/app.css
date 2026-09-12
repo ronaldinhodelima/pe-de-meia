@@ -440,6 +440,12 @@
   td.cel-origem { vertical-align: middle; }
   .origem-conteudo { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .origem-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* icone do tipo da origem (cartao, conta corrente, dinheiro), sempre antes do
+     selo do banco - o texto ao lado diz so de quem e (secao 7.1-D) */
+  .origem-icone { width: var(--icone-md); height: var(--icone-md); flex: none; color: var(--ink-faint); vertical-align: middle; margin-right: 4px; }
+  .origem-conteudo .origem-icone, .origem-conteudo .selo { margin-right: 0; }
+  .chip-grupo { padding: 8px 9px 3px; font-size: var(--fonte-xs); font-weight: var(--peso-medio); color: var(--ink-faint); }
+  .chip-grupo ~ .chip-grupo { border-top: 1px solid var(--line-soft); margin-top: 4px; }
 
   /* ---------- usuarios e permissoes ---------- */
   .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
