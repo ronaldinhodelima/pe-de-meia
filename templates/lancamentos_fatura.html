@@ -12,6 +12,9 @@
      ficam como estavam, ninguem pediu mudar aquelas. #}
   .fatura-cabecalho .nav-ghost{border:none;background:none;color:var(--ink-soft);font-size:var(--titulo-sm);width:28px;height:28px;border-radius:var(--radius-pill);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;line-height:1;transition:background-color .12s,color .12s}
   .fatura-cabecalho .nav-ghost:hover{background:var(--raise);color:var(--ink)}
+  {# As setas ficam coladas no campo de mes - grupo proprio, com gap menor que
+     o resto do cabecalho, em vez do mesmo espaco que separa dos chips. #}
+  .fatura-cabecalho .periodo-mes-nav{display:inline-flex;align-items:center;gap:2px}
   {# "Ano inteiro" / "Periodo customizado": checkbox continua sendo o dado (o
      JS le .checked sem mudar nada), mas so o label aparece - o desenho e o
      MESMO campo em caixa do resto do site (.campo-caixa, secao 7.8-A:
@@ -201,9 +204,11 @@
 {% set colunas_extra = 1 %}
 {% if modo_periodo %}
 <div class="fatura-cabecalho">
-  <button type="button" onclick="mudarMesPeriodo(-1)" class="nav-ghost" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}">‹</button>
-  <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltrosPeriodo()" aria-label="Mês">
-  <button type="button" onclick="mudarMesPeriodo(1)" class="nav-ghost" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
+  <span class="periodo-mes-nav">
+    <button type="button" onclick="mudarMesPeriodo(-1)" class="nav-ghost" title="{{ 'Ano anterior' if periodo == 'ano' else 'Mês anterior' }}">‹</button>
+    <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltrosPeriodo()" aria-label="Mês">
+    <button type="button" onclick="mudarMesPeriodo(1)" class="nav-ghost" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
+  </span>
   <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano inteiro</label>
   <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"> Período customizado</label>
   <span id="intervaloWrap" class="periodo-intervalo" style="display:{{ 'flex' if periodo == 'intervalo' else 'none' }}">
