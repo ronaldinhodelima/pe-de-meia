@@ -24,7 +24,12 @@ window.ajustarNumerosDosCards = function(escopo) {
     }
   });
 };
-window.ajustarNumerosDosCards();
+// O topbar (e este script) vem ANTES do conteudo da pagina no HTML - core.py
+// injeta {{ topbar|safe }} antes do bloco `corpo` (base.html). Chamando aqui
+// direto, na primeira vez, os cards da pagina ainda nem existem no DOM: o
+// querySelectorAll nao acha nada e nenhum numero encolhe. DOMContentLoaded
+// espera o parser terminar o documento inteiro.
+document.addEventListener('DOMContentLoaded', window.ajustarNumerosDosCards);
 window.addEventListener('resize', function() {
   clearTimeout(window._pdmCardsResizeT);
   window._pdmCardsResizeT = setTimeout(window.ajustarNumerosDosCards, 150);
