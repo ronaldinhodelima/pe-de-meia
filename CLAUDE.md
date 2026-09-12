@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 11/09/2026 · **Schema:** migração 64 · **Testes:** 438 aprovados, 6 ignorados
+**Última revisão:** 12/09/2026 · **Schema:** migração 64 · **Testes:** 438 aprovados, 6 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1058,7 +1058,9 @@ template e agora sai do construtor, dentro de `procedencia`. Continua fora do to
 
 **Decisão do usuário.** Os botões "Por período | Por fatura" **deixaram de existir**. Escolher a
 fatura virou um **filtro**, e a barra é **uma só** nos dois recortes: Origem em chip, **Fatura** (só
-quando cabe), **Status** e `+ manual`.
+quando cabe), **Status** e `+ manual`. Desde 11/09/2026 ela mora na **gaveta de filtros** à direita,
+aberta pelo botão Filtros ao lado da pesquisa, e o `+ manual` foi para a barra da tabela (ver
+"Paginação e gaveta de filtros", abaixo).
 
 - **O filtro Fatura só aparece quando UMA origem está selecionada e ela é cartão de crédito com fatura
   importada** (`faturas_para_o_filtro()`) — o liga/desliga pedido. Com várias origens não existe "a
