@@ -497,13 +497,23 @@
   .card {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 15px;
     min-width: 0; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    container-type: inline-size;
   }
   .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--selecao); }
   .card .label {
     font-size: var(--fonte-xxs); color: var(--ink-faint); text-transform: none; letter-spacing: .03em; font-weight: var(--peso-normal);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .card .val { font-size: var(--titulo-lg); font-weight: var(--peso-medio); margin-top: 5px; letter-spacing: -0.015em; white-space: nowrap; }
+  /* O numero ocupa o card: escala com a LARGURA DO PROPRIO CARD (container
+     query, nao viewport), nunca menor que hoje e nunca maior que ~1,5x - um
+     card estreito no celular ainda ganha alguma coisa, um card largo no
+     desktop nao vira cartaz. O chao e o teto vem de --titulo-lg (calc, nao
+     nova entrada na escala): --titulo-xl e reservado ao herói do login. */
+  .card .val {
+    font-size: clamp(calc(var(--titulo-lg) * 1.1), 12cqi, calc(var(--titulo-lg) * 1.5));
+    font-weight: var(--peso-medio); margin-top: 5px; letter-spacing: -0.015em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
   .card .sub { font-size: var(--fonte-xs); color: var(--ink-faint); margin-top: 3px; white-space: nowrap; }
   /* Card que FILTRA a tabela. O cursor e o realce dizem que ele e uma porta de
      entrada, nao so um numero - card que parece clicavel e nao leva a lugar
