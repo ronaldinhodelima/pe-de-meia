@@ -16,8 +16,12 @@ window.ajustarNumerosDosCards = function(escopo) {
     el.style.fontSize = '';
     let tamanho = parseFloat(getComputedStyle(el).fontSize);
     if (!tamanho) return;
+    // >= , nao > +1: um empate exato entre scrollWidth e clientWidth (os
+    // dois arredondados pelo navegador da mesma forma) ainda cortava por
+    // sub-pixel na tela real - visto em producao com "R$ 437.830,10".
+    // Exigir folga de verdade evita o limite exato.
     let tentativas = 0;
-    while (el.scrollWidth > el.clientWidth + 1 && tamanho > piso && tentativas < 24) {
+    while (el.scrollWidth >= el.clientWidth && tamanho > piso && tentativas < 24) {
       tamanho -= 1;
       el.style.fontSize = tamanho + 'px';
       tentativas++;
