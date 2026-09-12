@@ -5687,7 +5687,7 @@ def topbar_html(titulo, ativo=None):
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js?v=20260912-3"></script>
+      <script src="/static/topbar.js?v=20260912-4"></script>
     """
 
 

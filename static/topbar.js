@@ -12,20 +12,28 @@ window.ajustarNumerosDosCards = function(escopo) {
   // secao 7.8-B) ainda estourava mesmo no piso cheio - preferir a fonte um
   // pouco menor a esconder parte de um valor financeiro real (secao 1.1).
   const piso = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--titulo-lg')) || 21) * 0.8;
+  // Medir com scrollWidth do proprio elemento nao funciona aqui: .val e um
+  // <div> em bloco, width:auto preenche o card (clientWidth) e nao encolhe
+  // para o conteudo - scrollWidth saia travado no MESMO valor de
+  // clientWidth em todo tamanho de fonte testado, nunca refletindo o texto
+  // de verdade. Canvas mede o texto puro, sem depender do box do elemento.
+  const tela = ajustarNumerosDosCards._tela || (ajustarNumerosDosCards._tela = document.createElement('canvas'));
+  const ctx = tela.getContext('2d');
   (escopo || document).querySelectorAll('.card .val').forEach(function(el) {
     el.style.fontSize = '';
-    let tamanho = parseFloat(getComputedStyle(el).fontSize);
+    const estilo = getComputedStyle(el);
+    let tamanho = parseFloat(estilo.fontSize);
     if (!tamanho) return;
-    // >= , nao > +1: um empate exato entre scrollWidth e clientWidth (os
-    // dois arredondados pelo navegador da mesma forma) ainda cortava por
-    // sub-pixel na tela real - visto em producao com "R$ 437.830,10".
-    // Exigir folga de verdade evita o limite exato.
+    const disponivel = el.clientWidth;
+    const fonte = estilo.fontWeight + ' ' + tamanho + 'px ' + estilo.fontFamily;
+    ctx.font = fonte;
     let tentativas = 0;
-    while (el.scrollWidth >= el.clientWidth && tamanho > piso && tentativas < 24) {
+    while (ctx.measureText(el.textContent).width >= disponivel && tamanho > piso && tentativas < 24) {
       tamanho -= 1;
-      el.style.fontSize = tamanho + 'px';
+      ctx.font = estilo.fontWeight + ' ' + tamanho + 'px ' + estilo.fontFamily;
       tentativas++;
     }
+    el.style.fontSize = tamanho + 'px';
   });
 };
 // O topbar (e este script) vem ANTES do conteudo da pagina no HTML - core.py
@@ -33,10 +41,26 @@ window.ajustarNumerosDosCards = function(escopo) {
 // direto, na primeira vez, os cards da pagina ainda nem existem no DOM: o
 // querySelectorAll nao acha nada e nenhum numero encolhe. DOMContentLoaded
 // espera o parser terminar o documento inteiro.
-document.addEventListener('DOMContentLoaded', window.ajustarNumerosDosCards);
+//
+// A causa raiz do bug real (achada com o console, nao por teoria): passar
+// `window.ajustarNumerosDosCards` DIRETO como listener faz o navegador
+// chama-la com o Event como primeiro argumento - e a funcao usa esse
+// primeiro argumento como `escopo`. Um Event nao tem `.querySelectorAll`,
+// entao toda chamada automatica (DOMContentLoaded, 'load') lancava
+// TypeError e nunca chegava a encolher nada; parecia que "nada rodava"
+// porque o erro ficava so no console, silencioso na tela. So funcionava
+// quando eu chamava na mao, sem argumento nenhum. Por isso o wrapper: cada
+// gatilho chama sem repassar o Event adiante.
+function pdmAjustarNumerosDosCards() { window.ajustarNumerosDosCards(); }
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', pdmAjustarNumerosDosCards);
+} else {
+  pdmAjustarNumerosDosCards();
+}
+window.addEventListener('load', pdmAjustarNumerosDosCards);
 window.addEventListener('resize', function() {
   clearTimeout(window._pdmCardsResizeT);
-  window._pdmCardsResizeT = setTimeout(window.ajustarNumerosDosCards, 150);
+  window._pdmCardsResizeT = setTimeout(pdmAjustarNumerosDosCards, 150);
 });
 
 // ---- tooltip proprio: o balao nativo do navegador so aparece depois de ~1s ----
