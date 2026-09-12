@@ -14,11 +14,19 @@
     if (!f) return;
     f.style.display = 'block';
     f.scrollIntoView({block: 'center'});
+    focarData();
   });
+
+  function focarData() {
+    const d = document.getElementById('manualData');
+    if (d) d.focus();
+  }
 
   window.toggleFormManual = function () {
     const f = document.getElementById('formManual');
-    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    const abrindo = f.style.display === 'none';
+    f.style.display = abrindo ? 'block' : 'none';
+    if (abrindo) focarData();
   };
   window.salvarManual = function (e) {
     e.preventDefault();
