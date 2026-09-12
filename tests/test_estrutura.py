@@ -37,16 +37,15 @@ def test_containers_rodam_sem_usuario_root_e_dependencias_estao_fixadas():
 
 
 def test_o_que_falta_conferir_e_que_fica_cinza():
-    """Decisao do usuario (07/09/2026): conferido some, pendente aparece.
+    """Decisao do usuario (12/09/2026): invertido - conferido fica cinza.
 
-    A tela existe para achar o que FALTA. Destacar o que ja acabou era o
-    contrario disso - e ainda deixava a tela inteira cinza no fim do mes.
+    Ate 11/09/2026 era o contrario (pendente cinza, conferido transparente).
     Verde continua proibido: despesa normal nao pode parecer erro nem sucesso
     (secao 7.6).
     """
     css = (RAIZ / "static" / "app.css").read_text(encoding="utf-8")
-    assert "tr.conferida { background: transparent; }" in css
-    assert ":not(.conferida)" in css and "background: var(--raise)" in css
+    assert "tr.conferida { background: var(--raise); }" in css
+    assert ":not(.conferida)" in css and "background: transparent;" in css
     assert "tr.conferida { background: var(--good-soft); }" not in css
 
 

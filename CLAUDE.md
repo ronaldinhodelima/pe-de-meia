@@ -1784,11 +1784,10 @@ de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde
   data, e o rodapé — que era "Legenda das linhas" e mostrava as bolinhas — virou **"Filtrar por
   situação"**, que é o que ele de fato faz. Exibir ali um símbolo que não existe mais na tabela
   seria referência a coisa nenhuma. Não reintroduzir sem ele pedir.
-- **O que FALTA conferir é que fica cinza; linha com OK é transparente** (decisão do usuário,
-  07/09/2026). A tela existe para achar o que falta — destacar o que já acabou é o contrário disso,
-  e no fim do mês deixava a tela inteira cinza. Verde continua proibido aqui: despesa normal não
-  pode parecer erro nem sucesso. Pendente no banco **não** colore o fundo (bloqueia o OK e aparece
-  na legenda/dica).
+- **Linha com OK fica cinza; o que FALTA conferir é transparente** (invertido em 12/09/2026,
+  pedido do usuário — até 11/09/2026 era o contrário: cinza no pendente, para destacar "o que
+  falta"). Verde continua proibido aqui: despesa normal não pode parecer erro nem sucesso.
+  Pendente no banco **não** colore o fundo (bloqueia o OK e aparece na legenda/dica).
 - **Os botões `+`/`−` de rateio e de registros técnicos ficam DEPOIS da descrição.** Antes dela,
   empurravam o texto e as linhas com e sem botão começavam em colunas diferentes.
 - **A legenda das linhas fica no fim da tela**, abaixo da tabela: é referência, não filtro

@@ -272,10 +272,17 @@
   table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
   th { text-align: left; background: var(--bg); padding: 11px 12px; font-size: var(--fonte-xs); text-transform: none; letter-spacing: .04em; color: var(--ink-faint); font-weight: var(--peso-medio); border-bottom: 1px solid var(--line); }
   td { padding: 10px 12px; border-top: 1px solid var(--line-soft); font-size: var(--fonte-md); vertical-align: middle; }
-  /* Conferido some da vista; o que FALTA conferir e que fica cinza. A tela
-     existe para achar o que falta - destacar o que ja acabou e o contrario. */
-  tr.conferida { background: transparent; }
-  .fatura-tabela tbody tr[data-linha]:not(.conferida) { background: var(--raise); }
+  /* Invertido a pedido do usuario (12/09/2026): conferido fica CINZA
+     (destacado, "resolvido"), o que falta conferir fica transparente. */
+  tr.conferida { background: var(--raise); }
+  .fatura-tabela tbody tr[data-linha]:not(.conferida) { background: transparent; }
+  /* No modo cartao do celular (abaixo de 760px), `table.compacta > tbody >
+     tr` pinta um fundo proprio (--surface) com especificidade maior que
+     `tr.conferida` sozinho (0,1,1 contra 0,1,2) - o conferido nunca ficava
+     cinza ali, so por acaso branco~transparente parecia igual antes da
+     inversao. Repete o mesmo combinador para igualar a especificidade e
+     vencer. */
+  table.compacta > tbody > tr.conferida { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
   tbody tr:hover { background: var(--accent-soft); }
   tr.conferida:hover { background: var(--selecao-suave); }

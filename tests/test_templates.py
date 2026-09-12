@@ -870,15 +870,14 @@ class TestSemanticaDeLinha:
         return base
 
     def test_o_que_falta_conferir_e_que_fica_cinza(self):
-        """Decisao do usuario (07/09/2026). A Detalhada fazia o CONTRARIO -
-        `.fatura-ok` pintava o conferido - e no fim do mes a tela inteira ficava
-        cinza justamente ao contrario do que se procura."""
+        """Decisao do usuario (12/09/2026): invertido - conferido fica cinza,
+        pendente fica transparente. Ate 11/09/2026 era o contrario."""
         import pathlib
         raiz = pathlib.Path(__file__).resolve().parent.parent
         css = (raiz / "static" / "app.css").read_text(encoding="utf-8")
         template = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
         assert ".fatura-tabela tbody tr[data-linha]:not(.conferida)" in css
-        assert "tr.conferida { background: transparent; }" in css
+        assert "tr.conferida { background: var(--raise); }" in css
         # a regra nao pode voltar a depender do id de UMA das telas
         assert "tr.fatura-ok" not in css and "tr.fatura-ok" not in template
         assert "fatura-pendente" not in template
