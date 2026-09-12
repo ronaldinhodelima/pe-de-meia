@@ -295,24 +295,23 @@
 
 {% if modo_periodo %}
 <div class="cards fatura-cards">
-  <div class="card" data-filtro="receita" title="Ver só as receitas deste período"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
-  <div class="card" data-filtro="despesa" title="Ver só as despesas deste período; investimentos continuam fora"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div><div class="card-explicacao">clique para filtrar</div></div>
+  <div class="card" data-filtro="receita" data-tip="Ver só as receitas deste período · clique para filtrar"><div class="label">Receitas no DRE</div><div class="val" style="color:var(--good)">{{ receita_mes|moeda }}</div></div>
+  <div class="card" data-filtro="despesa" data-tip="Ver só as despesas deste período; investimentos continuam fora · clique para filtrar"><div class="label">Despesas no DRE</div><div class="val" style="color:var(--bad)">{{ gasto_real|moeda }}</div></div>
   {# Resultado nao filtra: ele e a conta entre os dois cards ao lado, nao um
      recorte de lancamentos. #}
-  <div class="card"><div class="label" title="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ 'var(--good)' if resultado_mes >= 0 else 'var(--bad)' }}">{{ resultado_mes|moeda }}</div></div>
-  <div class="card {{ 'card-ok' if pendente_classificacao == 0 else 'card-aviso' }}" data-filtro="pendente_classificacao" title="Ver os lançamentos que ainda faltam classificar">
+  <div class="card"><div class="label" data-tip="Receitas menos despesas contabilizadas no DRE">Resultado no DRE</div><div class="val" style="color:{{ 'var(--good)' if resultado_mes >= 0 else 'var(--bad)' }}">{{ resultado_mes|moeda }}</div></div>
+  <div class="card {{ 'card-ok' if pendente_classificacao == 0 else 'card-aviso' }}" data-filtro="pendente_classificacao" data-tip="Ver os lançamentos que ainda faltam classificar">
     <div class="label">Classificação</div><div class="val">{{ classificados_reais }} / {{ total_reais }}</div>
     <div class="card-explicacao">Faltam {{ pendente_classificacao }}</div>
     <div class="card-progresso"><i style="width:{{ pct_classificados }}%"></i></div>
   </div>
-  <div class="card {{ 'card-ok' if conf_reais == total_reais else 'card-aviso' }}" data-filtro="pendente" title="Ver os lançamentos que ainda não foram conferidos">
+  <div class="card {{ 'card-ok' if conf_reais == total_reais else 'card-aviso' }}" data-filtro="pendente" data-tip="Ver os lançamentos que ainda não foram conferidos">
     <div class="label">Conferência</div><div class="val">{{ conf_reais }} / {{ total_reais }}</div>
     <div class="card-explicacao">Faltam {{ pendentes_ok }}</div>
     <div class="card-progresso"><i style="width:{{ pct_conferidos }}%"></i></div>
   </div>
-  <div class="card" data-filtro="todas" title="Ver todos os lançamentos do período">
+  <div class="card" data-filtro="todas" data-tip="Ver todos os lançamentos do período">
     <div class="label">Lançamentos</div><div class="val">{{ total_reais }} / {{ total_recebidos }}</div>
-    <div class="card-explicacao">contabilizados / recebidos</div>
     <div class="card-explicacao">{{ total_fora }} fora do resultado</div>
   </div>
 </div>
