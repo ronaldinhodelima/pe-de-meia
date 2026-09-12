@@ -911,7 +911,9 @@ navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de clas
   todo manual criado já conferido ficava com `conferida_por` **nulo**.
 - **`+ manual`** abre o formulário único (`templates/_form_manual.html` + `static/manual.js`). Ele só
   existe no recorte por **período**: um lançamento manual não pertence a fatura nenhuma. Com uma
-  fatura em foco, o botão leva ao período com `?manual=1`, que já abre o formulário.
+  fatura em foco, o botão leva ao período com `?manual=1`, que já abre o formulário. **Ao abrir, o
+  cursor já está na Data** (pedido do usuário, 12/09/2026), pelos dois caminhos — o botão e o
+  `?manual=1`: é por ela que se começa a digitar.
 - **O avatar antes da descrição existe também na fatura em andamento**, e pinta a cor da marca do
   banco (Unicred verde, Nubank roxo) — a mesma tabela `BANCOS_ESTILO` do selo, via `cor_banco()`.
   Duas tabelas de cor divergiriam no primeiro banco novo. Ali o nome impresso do portador **ainda
