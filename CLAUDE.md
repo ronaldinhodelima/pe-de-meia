@@ -99,11 +99,8 @@ levantamento** — conferir contra um caso conhecido antes de confiar.
 - Interface do sistema em português.
 - Ao classificar lançamento, **avaliar a melhor forma de distribuir e organizar** — categoria,
   natureza, dimensão e projeto — em vez de só encaixar no que já existe.
-- **Silencioso durante o trabalho, resumo de uma linha no fim** (decisão de 12/09/2026). Não narrar
-  cada etapa de teste/bancada/deploy conforme acontece — fazer tudo normalmente (suíte, bancada
-  Docker, conferência em produção), mas só reportar durante o trabalho se algo der errado. Ao
-  terminar, uma linha com o que mudou e o commit, não um parágrafo explicando o raciocínio. Detalhe
-  completo só quando ele perguntar.
+- **Respostas curtas, só o resultado final** (decisão de 12/09/2026) — sem narrar passo a passo de
+  teste/deploy.
 
 ## 1.6 Regra permanente de publicação
 
