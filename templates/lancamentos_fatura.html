@@ -89,8 +89,8 @@
   .fatura-tabela thead th{position:sticky;top:0;background:var(--surface);z-index:1;box-shadow:0 1px 0 var(--line)}
   .fatura-tabela tr.fatura-erro{box-shadow:inset 4px 0 var(--bad)}
   .fatura-tabela tr[data-toggle-linha]{cursor:pointer;transition:background-color .1s}
-  .fatura-tabela tr[data-toggle-linha]:hover{background:var(--accent-soft)}
-  .fatura-tabela tr.conferida[data-toggle-linha]:hover{background:var(--selecao-suave)}
+  .fatura-tabela tr[data-toggle-linha]:hover,
+  .fatura-tabela tr.conferida[data-toggle-linha]:hover{background:var(--linha-hover)}
 
   /* Sem caixa: o glifo acompanha os +/- de rateio e de registro tecnico, que
      ja moravam depois da descricao (secao 7.6). Com borda e fundo proprios ele
