@@ -5,11 +5,12 @@
     --bg: #f4f5fa;
     --surface: #ffffff;
     --raise: #eef0f7;
-    --ink: #16203a;
-    --ink-soft: #5d6b85;
-    --ink-faint: #97a2b8;
-    --line: #e4e7f0;
-    --line-soft: #eef0f7;
+    --ink: #0d1526;
+    --ink-soft: #4a5670;
+    --ink-faint: #78829b;
+    --line: #d9dce8;
+    --line-soft: #e7eaf3;
+    --linha-hover: rgba(13, 21, 38, .055);
     --accent: #0e7490;
     --accent-strong: #0b5b73;
     --accent-soft: #e0f4f6;
@@ -86,11 +87,12 @@
       --bg: #0a0f1e;
       --surface: #111830;
       --raise: #1a2340;
-      --ink: #e7ebf6;
-      --ink-soft: #9aa6c0;
-      --ink-faint: #5f6b88;
-      --line: #242e4e;
-      --line-soft: #1a2340;
+      --ink: #f3f5fb;
+      --ink-soft: #aeb9d3;
+      --ink-faint: #7683a3;
+      --line: #313d64;
+      --line-soft: #202a4a;
+      --linha-hover: rgba(231, 235, 246, .09);
       --accent: #2dd4bf;
       --accent-strong: #5eead4;
       --accent-soft: rgba(45,212,191,.16);
@@ -133,11 +135,12 @@
     --bg: #0a0f1e;
     --surface: #111830;
     --raise: #1a2340;
-    --ink: #e7ebf6;
-    --ink-soft: #9aa6c0;
-    --ink-faint: #5f6b88;
-    --line: #242e4e;
-    --line-soft: #1a2340;
+    --ink: #f3f5fb;
+    --ink-soft: #aeb9d3;
+    --ink-faint: #7683a3;
+    --line: #313d64;
+    --line-soft: #202a4a;
+    --linha-hover: rgba(231, 235, 246, .09);
     --accent: #2dd4bf;
     --accent-strong: #5eead4;
     --accent-soft: rgba(45,212,191,.16);
@@ -284,8 +287,16 @@
      vencer. */
   table.compacta > tbody > tr.conferida { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
-  tbody tr:hover { background: var(--accent-soft); }
-  tr.conferida:hover { background: var(--selecao-suave); }
+  {# Destaque de hover neutro (cinza), igual em qualquer linha - conferida ou
+     nao. Antes so a linha SEM ok ficava colorida (accent-soft) e a conferida
+     ganhava outro tom (selecao-suave); a pedido do usuario (13/09/2026) o
+     destaque passou a ser um so, para indicar "onde estou trabalhando" sem
+     depender do estado da linha. Repete o combinador de table.compacta para
+     vencer a mesma especificidade do fundo da conferida no modo cartao. #}
+  tbody tr:hover { background: var(--linha-hover); }
+  tr.conferida:hover { background: var(--linha-hover); }
+  table.compacta > tbody > tr:hover { background: var(--linha-hover); }
+  table.compacta > tbody > tr.conferida:hover { background: var(--linha-hover); }
   tr.duplicada td { text-decoration: line-through; color: var(--ink-faint); }
   tr.duplicada { background: var(--warn-soft); }
   tr.duplicada:hover { background: var(--warn-soft); }

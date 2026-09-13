@@ -27,6 +27,10 @@
   .fatura-cabecalho .periodo-toggle:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:var(--peso-medio)}
   .fatura-cabecalho .periodo-toggle:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px}
   .fatura-cabecalho .periodo-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;pointer-events:none}
+  {# Versao so-icone do periodo-toggle (Periodo customizado, 13/09/2026): mesmo
+     campo em caixa, com padding quadrado em vez de texto + padding lateral. #}
+  .fatura-cabecalho .periodo-toggle-icone{padding:6px}
+  .fatura-cabecalho .periodo-toggle-icone svg{width:var(--icone-sm);height:var(--icone-sm);display:block}
   .fatura-cabecalho .periodo-intervalo{display:flex;align-items:center;gap:6px}
   .fatura-cabecalho button.nav{cursor:pointer;background:var(--surface);line-height:1}
   .fatura-conciliacao{margin-left:auto}
@@ -143,7 +147,7 @@
   @media(max-width:760px){.vinculo-faixa{flex-wrap:wrap;gap:8px}.vinculo-quem{flex:1 1 100%;max-width:none}}
   .rodape-fatura{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.revisao-parcelas{display:flex;align-items:center;gap:9px;margin-top:9px}
   .busca-fatura{display:flex;align-items:center;gap:9px;margin:0 0 8px}.busca-fatura input{width:min(360px,100%)}.busca-fatura span{font-size:var(--fonte-sm);color:var(--ink-faint)}
-  .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[data-ordenar]::after{content:' ↕';color:var(--ink-faint);font-size:var(--icone-sm)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent)}
+  .fatura-tabela th[data-ordenar]{cursor:pointer;user-select:none;transition:color .12s}.fatura-tabela th[data-ordenar]:hover{color:var(--ink)}.fatura-tabela th[aria-sort="ascending"]::after{content:' ↑';color:var(--accent);font-size:var(--icone-sm)}.fatura-tabela th[aria-sort="descending"]::after{content:' ↓';color:var(--accent);font-size:var(--icone-sm)}
   /* ---- Layout B: uma linha por lancamento, classificacao em colunas largas.
      A largura vem de encolher data/valor e de fundir titular+parcela na
      descricao; o titular vira o avatar, com o nome no tooltip. ---- */
@@ -209,8 +213,8 @@
     <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltrosPeriodo()" aria-label="Mês">
     <button type="button" onclick="mudarMesPeriodo(1)" class="nav-ghost" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
   </span>
-  <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano inteiro</label>
-  <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"> Período customizado</label>
+  <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano todo</label>
+  <label class="periodo-toggle periodo-toggle-icone campo-caixa" data-tip="Período customizado" aria-label="Período customizado"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5"/><path d="M2.25 6.5h11.5M5.25 1.5v3M10.75 1.5v3"/></svg></label>
   <span id="intervaloWrap" class="periodo-intervalo" style="display:{{ 'flex' if periodo == 'intervalo' else 'none' }}">
     <input type="date" id="dataInicioInput" value="{{ data_inicio }}" onchange="aplicarFiltrosPeriodo()" aria-label="Data inicial">
     <span class="fatura-ciclo">até</span>
@@ -336,7 +340,7 @@
   <span id="buscaFaturaContador" aria-live="polite"></span>
   <button type="button" class="ver-btn btn-filtros" data-abrir-filtros aria-controls="gavetaFiltros" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7M2 8h3M9 8h5"/><circle cx="11" cy="4" r="1.7"/><circle cx="5" cy="12" r="1.7"/><circle cx="7" cy="8" r="1.7"/></svg>Filtros<span class="filtros-qtd" data-filtros-qtd hidden></span></button>
   <span class="filtros-resumo" data-filtros-resumo></span>
-  {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
+  {% if pode_manual %}{% if modo_periodo %}<button type="button" class="btn-manual ver-btn" onclick="toggleFormManual()" data-tip="Cria um lançamento que não veio do banco (dinheiro, acerto, ajuste)">+ manual</button>{% else %}<a class="btn-manual ver-btn" href="/lancamentos/fatura?recorte=periodo&amp;manual=1" data-tip="Cria um lançamento que não veio do banco. Abre no recorte por período, que é onde ele aparece.">+ manual</a>{% endif %}{% endif %}
 </div>
 <div class="tabela-scroll">
 {% if pode_editar %}
