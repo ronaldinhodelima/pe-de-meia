@@ -10,7 +10,6 @@
     --ink-faint: #78829b;
     --line: #d9dce8;
     --line-soft: #e7eaf3;
-    --linha-hover: rgba(13, 21, 38, .09);
     --accent: #0e7490;
     --accent-strong: #0b5b73;
     --accent-soft: #e0f4f6;
@@ -92,7 +91,6 @@
       --ink-faint: #7683a3;
       --line: #313d64;
       --line-soft: #202a4a;
-      --linha-hover: rgba(231, 235, 246, .09);
       --accent: #2dd4bf;
       --accent-strong: #5eead4;
       --accent-soft: rgba(45,212,191,.16);
@@ -140,7 +138,6 @@
     --ink-faint: #7683a3;
     --line: #313d64;
     --line-soft: #202a4a;
-    --linha-hover: rgba(231, 235, 246, .09);
     --accent: #2dd4bf;
     --accent-strong: #5eead4;
     --accent-soft: rgba(45,212,191,.16);
@@ -287,16 +284,10 @@
      vencer. */
   table.compacta > tbody > tr.conferida { background: var(--raise); }
   tbody tr { cursor: pointer; transition: background .1s; }
-  {# Destaque de hover neutro (cinza), igual em qualquer linha - conferida ou
-     nao. Antes so a linha SEM ok ficava colorida (accent-soft) e a conferida
-     ganhava outro tom (selecao-suave); a pedido do usuario (13/09/2026) o
-     destaque passou a ser um so, para indicar "onde estou trabalhando" sem
-     depender do estado da linha. Repete o combinador de table.compacta para
-     vencer a mesma especificidade do fundo da conferida no modo cartao. #}
-  tbody tr:hover { background: var(--linha-hover); }
-  tr.conferida:hover { background: var(--linha-hover); }
-  table.compacta > tbody > tr:hover { background: var(--linha-hover); }
-  table.compacta > tbody > tr.conferida:hover { background: var(--linha-hover); }
+  /* Destaque de hover: so o contorno (a sombra logo abaixo), sem fundo -
+     pedido do usuario (13/09/2026). Chegou a existir um fundo cinza para
+     marcar "onde estou trabalhando" em qualquer linha, conferida ou nao,
+     mas o contorno sozinho ja cumpre isso. */
   /* Borda com sombra ao redor da linha em foco, mesmo tratamento do hover dos
      cards (.card:hover). tr nao pinta box-shadow direito com border-collapse,
      entao a sombra vai nas celulas: linha de cima/baixo em toda celula, e a
