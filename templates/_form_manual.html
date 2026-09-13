@@ -6,7 +6,7 @@
   <h3>Novo lançamento manual (dinheiro)</h3>
   <form onsubmit="return salvarManual(event)">
     <div class="editor-manual">
-      <div class="campo-estreito"><label for="manualData">Data</label>
+      <div class="campo-data"><label for="manualData">Data</label>
         <input type="date" id="manualData" required value="{{ hoje_iso }}"></div>
       <div><label for="manualDescricao">Descrição</label>
         <input type="text" id="manualDescricao" placeholder="Descrição" required></div>
@@ -23,21 +23,21 @@
           {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
         </select></div>
       {% for d in dimensoes %}
-      <div><label class="{{ 'obrigatorio' if d.obrigatoria }}">{{ d.nome }}</label>
+      <div class="{{ 'campo-medio' if d.nome in ('Projeto', 'Portfólio') else '' }}"><label class="{{ 'obrigatorio' if d.obrigatoria }}">{{ d.nome }}</label>
         <select data-pdm-combobox class="manual-dim" data-dim="{{ d.id }}" aria-label="{{ d.nome }}">
           <option value="">(não definido)</option>
           {% for val in valores_por_dim.get(d.id, []) %}<option value="{{ val.id }}">{{ rotulo_dim(val) }}</option>{% endfor %}
         </select></div>
       {% endfor %}
-      <div class="campo-largo"><label for="manualObservacao">Observação</label>
+      <div class="campo-medio"><label for="manualObservacao">Observação</label>
         <input type="text" id="manualObservacao" maxlength="500" placeholder="opcional"></div>
       <div class="rodape-manual">
-        <button type="submit" class="btn-primario">Adicionar</button>
         {% if pode_conferir %}
         <label class="manual-ok" data-tip="Marca o OK já na criação. Só é aceito com Categoria, Responsável, Projeto e Portfólio preenchidos.">
           <input type="checkbox" id="manualConferida"> marcar como conferido
         </label>
         {% endif %}
+        <button type="submit" class="btn-primario">Adicionar</button>
         <span id="manualStatus"></span>
       </div>
     </div>

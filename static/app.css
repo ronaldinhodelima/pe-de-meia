@@ -956,30 +956,41 @@ tfoot[data-total-rodape] [data-total-valor] { text-align: right; color: var(--in
 .cel-sel-fatura .sel-fatura { margin-right: 5px; vertical-align: middle; }
 
 /* ---- lancamento manual: mesmo desenho do editor da Detalhada ---- */
+/* Flex, nao grid (13/09/2026): com CSS Grid cada item fica preso a uma
+   coluna do MESMO tamanho que as outras (a trilha inteira), entao encolher
+   um campo (max-width) so deixava um vazio do lado dele - o vizinho nao vinha
+   pra perto. Com flex-wrap cada campo tem a propria largura e o proximo
+   encosta, respeitando so o gap. */
 .editor-manual {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;
+  display: flex; flex-wrap: wrap; gap: 10px;
 }
-.editor-manual .campo-largo { grid-column: span 2; }
-/* Data, Tipo e Valor nao precisam da largura padrao de 170px - encolhidos a
-   pedido do usuario (13/09/2026) para sobrar espaco pros campos que precisam
-   (Descricao, Categoria, dimensoes). */
-.editor-manual .campo-estreito { max-width: 110px; }
+.editor-manual > div { flex: 1 1 170px; min-width: 0; }
+.editor-manual .campo-largo { flex-basis: 350px; }
+/* Data precisa caber o valor inteiro (dd/mm/aaaa + o icone do seletor) sem
+   cortar; Tipo e Valor cabem no texto mais curto que tem. */
+.editor-manual .campo-data { flex: 0 0 150px; }
+.editor-manual .campo-estreito { flex: 0 0 100px; }
+/* Projeto, Portfolio e Observacao nao precisam da largura padrao (170px) -
+   reduzidos a pedido do usuario (13/09/2026). */
+.editor-manual .campo-medio { flex: 1 1 140px; }
 .editor-manual label {
   font-size: var(--fonte-xs); color: var(--ink-faint); display: block; margin-bottom: 4px;
 }
 .editor-manual label.obrigatorio::after { content: ' *'; }
-.editor-manual input, .editor-manual select { width: 100%; box-sizing: border-box; }
+.editor-manual input[type=text], .editor-manual input[type=date],
+.editor-manual input[type=number], .editor-manual select { width: 100%; box-sizing: border-box; }
 
 .editor-manual input:focus {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .editor-manual .classificacao-faltando { border-color: var(--bad) !important; background: var(--bad-soft) !important; }
 /* Adicionar/conferido saiu de rodape proprio (uma linha nova, sozinha, abaixo
-   da grade inteira) para ser mais um item da grade, na mesma linha da
-   Observacao - "uma linha acima" do que era antes (pedido do usuario,
-   13/09/2026). align-self:end alinha a base com os campos com rotulo. */
+   da grade inteira) para ficar ao lado da Observacao - "uma linha acima" do
+   que era antes (pedido do usuario, 13/09/2026). O conferido fica a
+   ESQUERDA do botao (repetido em 13/09/2026, estava perdido do lado de fora).
+   align-self:flex-end alinha a base com os campos que tem rotulo em cima. */
 .rodape-manual {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; align-self: end;
+  display: flex; align-items: center; gap: 10px; flex: 0 0 auto; align-self: flex-end;
 }
 .manual-ok {
   display: flex; align-items: center; gap: 6px;
@@ -987,7 +998,7 @@ tfoot[data-total-rodape] [data-total-valor] { text-align: right; color: var(--in
 }
 #manualStatus { font-size: var(--fonte-sm); color: var(--ink-faint); }
 #manualStatus.erro { color: var(--bad); }
-@media (max-width: 760px) { .editor-manual .campo-largo { grid-column: auto; } }
+@media (max-width: 760px) { .editor-manual > div { flex-basis: 100%; } }
 
 /* Descricao do lancamento manual, editavel na propria linha do modal. */
 /* Desenho: ver o bloco unico de campo do modal, mais acima. Aqui fica so o
@@ -1183,7 +1194,7 @@ tr.compra-feita { opacity: .6; }
 
   /* formulario e filtro em uma coluna: dois campos lado a lado em 390px nao
      cabem sem cortar o rotulo */
-  .barra-lote-campos, .editor-manual, .rel-filtros { grid-template-columns: 1fr; }
+  .barra-lote-campos, .rel-filtros { grid-template-columns: 1fr; }
   .barra-lote-campos { display: grid; }
   .barra-lote-campos > label, .barra-lote-obs input, .barra-lote-campos select,
   .barra-lote-campos input[type=text], .filtro-tabela { width: 100%; min-width: 0; }
