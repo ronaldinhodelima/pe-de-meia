@@ -956,11 +956,14 @@ tfoot[data-total-rodape] [data-total-valor] { text-align: right; color: var(--in
 .cel-sel-fatura .sel-fatura { margin-right: 5px; vertical-align: middle; }
 
 /* ---- lancamento manual: mesmo desenho do editor da Detalhada ---- */
-.ajuda-manual { font-size: var(--fonte-xs); color: var(--ink-faint); line-height: 1.5; margin: 0 0 12px; }
 .editor-manual {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;
 }
 .editor-manual .campo-largo { grid-column: span 2; }
+/* Data, Tipo e Valor nao precisam da largura padrao de 170px - encolhidos a
+   pedido do usuario (13/09/2026) para sobrar espaco pros campos que precisam
+   (Descricao, Categoria, dimensoes). */
+.editor-manual .campo-estreito { max-width: 110px; }
 .editor-manual label {
   font-size: var(--fonte-xs); color: var(--ink-faint); display: block; margin-bottom: 4px;
 }
@@ -971,8 +974,12 @@ tfoot[data-total-rodape] [data-total-valor] { text-align: right; color: var(--in
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .editor-manual .classificacao-faltando { border-color: var(--bad) !important; background: var(--bad-soft) !important; }
+/* Adicionar/conferido saiu de rodape proprio (uma linha nova, sozinha, abaixo
+   da grade inteira) para ser mais um item da grade, na mesma linha da
+   Observacao - "uma linha acima" do que era antes (pedido do usuario,
+   13/09/2026). align-self:end alinha a base com os campos com rotulo. */
 .rodape-manual {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; align-self: end;
 }
 .manual-ok {
   display: flex; align-items: center; gap: 6px;
