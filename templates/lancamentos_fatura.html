@@ -29,8 +29,10 @@
   .fatura-cabecalho .periodo-toggle input{position:absolute;opacity:0;width:1px;height:1px;margin:-1px;pointer-events:none}
   {# Versao so-icone do periodo-toggle (Periodo customizado, 13/09/2026): mesmo
      campo em caixa, com padding quadrado em vez de texto + padding lateral. #}
-  .fatura-cabecalho .periodo-toggle-icone{padding:6px}
-  .fatura-cabecalho .periodo-toggle-icone svg{width:var(--icone-sm);height:var(--icone-sm);display:block}
+  .fatura-cabecalho .periodo-toggle-icone{padding:7px;border-color:transparent}
+  .fatura-cabecalho .periodo-toggle-icone:hover{background:var(--raise)}
+  .fatura-cabecalho .periodo-toggle-icone:has(input:checked){border-color:transparent}
+  .fatura-cabecalho .periodo-toggle-icone svg{width:var(--icone-lg);height:var(--icone-lg);display:block}
   .fatura-cabecalho .periodo-intervalo{display:flex;align-items:center;gap:6px}
   .fatura-cabecalho button.nav{cursor:pointer;background:var(--surface);line-height:1}
   .fatura-conciliacao{margin-left:auto}
@@ -213,7 +215,7 @@
     <input type="month" id="mesInput" value="{{ mes }}" onchange="aplicarFiltrosPeriodo()" aria-label="Mês">
     <button type="button" onclick="mudarMesPeriodo(1)" class="nav-ghost" title="{{ 'Próximo ano' if periodo == 'ano' else 'Próximo mês' }}">›</button>
   </span>
-  <label class="periodo-toggle campo-caixa"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> Ano todo</label>
+  <label class="periodo-toggle campo-caixa" id="labelAnoTodo" data-tip="Ano todo de {{ mes[:4] }}"><input type="checkbox" id="periodoAno" {{ 'checked' if periodo == 'ano' }} onchange="alternarPeriodoAno()"> <span id="anoTodoTexto">{{ mes[:4] }}</span></label>
   <label class="periodo-toggle periodo-toggle-icone campo-caixa" data-tip="Período customizado" aria-label="Período customizado"><input type="checkbox" id="periodoIntervalo" {{ 'checked' if periodo == 'intervalo' }} onchange="alternarPeriodoIntervalo()"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5"/><path d="M2.25 6.5h11.5M5.25 1.5v3M10.75 1.5v3"/></svg></label>
   <span id="intervaloWrap" class="periodo-intervalo" style="display:{{ 'flex' if periodo == 'intervalo' else 'none' }}">
     <input type="date" id="dataInicioInput" value="{{ data_inicio }}" onchange="aplicarFiltrosPeriodo()" aria-label="Data inicial">
@@ -583,4 +585,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260912-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260913-1"></script>{% endblock %}

@@ -265,7 +265,20 @@
   // Filtrar troca a lista NO LUGAR, sem recarregar: recarregar joga quem esta
   // no meio da conferencia de volta ao topo. A URL acompanha, entao o Voltar
   // do navegador retorna ao filtro anterior.
+  // O rotulo "Ano todo" mostra o ANO em foco (pedido do usuario, 13/09/2026),
+  // e o cabecalho nao e um dos blocos trocados por AJAX (so a tabela, os
+  // cards, a gaveta de filtros e os <details>) - sem isto o botao continuaria
+  // com o ano antigo depois de navegar so pelas setas ou pelo campo de mes.
+  function atualizarRotuloAnoTodo() {
+    if (!mesInput) return;
+    const ano = mesInput.value.slice(0, 4);
+    const texto = document.getElementById('anoTodoTexto');
+    const label = document.getElementById('labelAnoTodo');
+    if (texto) texto.textContent = ano;
+    if (label) label.setAttribute('data-tip', 'Ano todo de ' + ano);
+  }
   window.aplicarFiltrosPeriodo = function () {
+    atualizarRotuloAnoTodo();
     // Mexer no periodo ou na origem SAI da fatura, e isso e a regra, nao um
     // efeito colateral: a origem nova pode nem ter fatura, e o ciclo em foco
     // pertence a um cartao so.
