@@ -164,7 +164,8 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/fatura-linha/<int:linha_id>/vincular",
         "/api/fatura-linha/<int:linha_id>/desvincular",
         "/dre", "/investimentos",
-        "/categorias", "/grupos", "/dimensoes", "/regras", "/contas", "/pendencias",
+        "/categorias", "/grupos", "/api/centro-custo",
+        "/dimensoes", "/regras", "/contas", "/pendencias",
         "/configuracoes/faturas-pdf",
         "/usuarios", "/logs",
     }
@@ -3088,3 +3089,73 @@ def test_configuracoes_editam_o_nome_curto_de_cada_origem():
     assert 'name="acao" value="nome_curto"' in html
     assert 'placeholder="{{ o.padrao }}"' in html, "em branco, a tela mostra que vale o titular"
     assert "{{ o.marca|safe }}" in html, "a previa usa o mesmo icone e selo das outras telas"
+
+
+def test_centro_de_custo_tem_um_motor_de_resolucao_so():
+    """A regra vencedora e decidida num lugar so, no core.
+
+    DRE, pendencias e a tela de Centro de Custos respondem a mesma pergunta -
+    "para onde este gasto vai?". Uma segunda consulta escrita a mao em views/
+    divergiria na primeira regra nova, e aqui a divergencia sai como numero
+    errado no DRE, que e o que a secao 1.1 proibe.
+    """
+    core_txt = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "CENTRO_REGRA_RESOLVIDA_SQL" in core_txt
+
+    # A marca da RESOLUCAO e cruzar a regra com as dimensoes DO LANCAMENTO na
+    # MESMA consulta. Consultar centro_regra_dimensao sozinho e outra coisa (a
+    # tela faz isso para nao cadastrar duas regras iguais), e o arquivo inteiro
+    # e um recorte grosseiro demais: `lancamento_financeiro_dimensao` aparece
+    # na tela de dimensoes, que nao tem nada com isto. Por funcao, entao.
+    for arquivo in (RAIZ / "views").glob("*.py"):
+        texto = arquivo.read_text(encoding="utf-8")
+        for no in ast.walk(ast.parse(texto)):
+            if not isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            corpo = ast.get_source_segment(texto, no) or ""
+            assert not ("centro_regra" in corpo and "lancamento_financeiro_dimensao" in corpo), (
+                f"{arquivo.name}::{no.name} escreveu a resolucao da regra por fora do core"
+            )
+
+
+def test_dre_soma_centro_de_custo_por_lancamento_e_nao_por_categoria():
+    """Somar por categoria volta a misturar os centros (migracao 65).
+
+    Com a regra por dimensao, a MESMA categoria pode alimentar subgrupos
+    diferentes conforme o Projeto/Portfolio do lancamento. A soma por
+    categoria daria o total errado sem nenhum erro na tela - exatamente o
+    defeito que a mudanca foi feita para corrigir.
+    """
+    texto = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    dre = texto.split("def dre(", 1)[1].split("\ndef ", 1)[0]
+    assert "totais_por_subgrupo(" in dre
+    assert "anual_por_cat" not in dre, "o DRE voltou a somar centro de custo por categoria"
+
+
+def test_tela_de_centro_de_custo_tem_um_desenho_so():
+    """O template entrega o ESTADO; quem desenha a arvore e o JS.
+
+    Se o Jinja montasse a arvore tambem, as duas versoes divergiriam na
+    primeira regra nova - e so depois de uma edicao, com a tela mostrando uma
+    coisa e o DRE contando outra.
+    """
+    tpl = (RAIZ / "templates" / "grupos.html").read_text(encoding="utf-8")
+    assert "ccEstado" in tpl, "o estado precisa ir para o JS num bloco de dados"
+    assert "{% for" not in tpl, "a arvore nao pode ser montada no Jinja tambem"
+    # Procurar no arquivo inteiro confunde o COMENTARIO que explica a saida com
+    # o proprio caractere de volta (secao 10.4 n.15): o comentario abaixo cita
+    # o glifo justamente para dizer por que ele saiu.
+    sem_comentario = re.sub(r"\{#.*?#\}|/\*.*?\*/", "", tpl, flags=re.S)
+    assert "└" not in sem_comentario, "a arvore voltou a ser desenhada com caractere"
+
+
+def test_toda_escrita_do_centro_de_custo_passa_por_um_ponto_so():
+    """Um caminho de gravacao, como no lote (secao 7.2-A).
+
+    A tela faz nove acoes diferentes; cada uma com seu proprio fetch comecaria
+    igual e divergiria na primeira validacao nova.
+    """
+    js = (RAIZ / "static" / "centro_custos.js").read_text(encoding="utf-8")
+    sem_comentario = re.sub(r"//[^\n]*", "", js)
+    assert sem_comentario.count("fetch(") == 1, "a tela precisa gravar por um caminho so"
+    assert "/api/centro-custo" in sem_comentario

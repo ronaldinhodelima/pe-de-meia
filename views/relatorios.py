@@ -33,6 +33,8 @@ from core import (
     VAL_DESPESA,
     _montar_filtro_relatorio,
     aplicar_regras,
+    arvore_centro_custo,
+    totais_por_subgrupo,
     carregar_origens,
     chip_origem_html,
     marcar_ok_automatico_da_fatura,
@@ -131,14 +133,6 @@ def dre():
 
     base = f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} WHERE COALESCE(t.duplicada, false) = false "
 
-    cur.execute(
-        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total {base} "
-        f"AND t.data_transacao >= %s AND t.data_transacao < %s AND {NATUREZA_SQL} = 'despesa' "
-        "AND t.categoria IS NOT NULL GROUP BY t.categoria;",
-        (inicio_ano, fim_ano),
-    )
-    anual_por_cat = {r["categoria"]: float(r["total"]) for r in cur.fetchall()}
-
     # ---- DRE propriamente dito: receitas, despesas e resultado de cada mes do ano ----
     cur.execute(
         f"SELECT to_char({DATA_LOCAL_SQL},'YYYY-MM') AS mes, {NATUREZA_SQL} AS natureza, "
@@ -157,16 +151,13 @@ def dre():
         elif r["natureza"] in ("investimento", "bem"):
             m[r["natureza"]] += v       # positivo = dinheiro aplicado/investido no bem
 
-    cur.execute(
-        "SELECT g.id AS grupo_id, g.nome AS grupo_nome, "
-        "s.id AS subgrupo_id, s.nome AS subgrupo_nome, "
-        "cs.categoria "
-        "FROM cartao.grupo_custo g "
-        "JOIN cartao.subgrupo_custo s ON s.grupo_id = g.id "
-        "LEFT JOIN cartao.categoria_subgrupo cs ON cs.subgrupo_id = s.id "
-        "ORDER BY g.nome, s.nome;"
+    # Centro de custo agora e resolvido POR LANCAMENTO (migracao 65): a mesma
+    # categoria pode alimentar subgrupos diferentes conforme Projeto/Portfolio,
+    # entao somar por categoria daria numero errado sem avisar.
+    arvore_custo = arvore_centro_custo(cur)
+    totais_subgrupo, _total_solto, categorias_soltas = totais_por_subgrupo(
+        cur, inicio_ano, fim_ano,
     )
-    linhas_map = cur.fetchall()
 
     cur.execute("SELECT id, nome FROM cartao.dimensao ORDER BY ordem, nome;")
     dims = cur.fetchall()
@@ -192,33 +183,15 @@ def dre():
     cur.close()
     conn.close()
 
-    grupos = {}
-    categorias_mapeadas = set()
-    for r in linhas_map:
-        g = grupos.setdefault(r["grupo_id"], {
-            "nome": r["grupo_nome"],
-            "subgrupos": {},
-        })
-        s = g["subgrupos"].setdefault(r["subgrupo_id"], {
-            "nome": r["subgrupo_nome"],
-            "categorias": [],
-        })
-        if r["categoria"]:
-            s["categorias"].append(r["categoria"])
-            categorias_mapeadas.add(r["categoria"])
-
-    nao_classificadas = sorted(set(anual_por_cat) - categorias_mapeadas)
-
     # ---- centro de custo: total do ano por grupo > subgrupo ----
     blocos_grupo = []
-    for g in sorted(grupos.values(), key=lambda x: chave_alfa(x["nome"])):
+    for g in arvore_custo:
         subs = []
-        for s in sorted(g["subgrupos"].values(), key=lambda x: chave_alfa(x["nome"])):
-            s_anual = sum(anual_por_cat.get(c, 0.0) for c in s["categorias"])
+        for s in g["subgrupos"]:
             subs.append({
                 "nome": s["nome"],
-                "total": s_anual,
-                "categorias": ", ".join(cat_pt_puro(c) for c in s["categorias"]) or "sem categorias vinculadas",
+                "total": totais_subgrupo.get(s["id"], 0.0),
+                "categorias": ", ".join(r["rotulo"] for r in s["regras"]) or "sem categorias vinculadas",
             })
         blocos_grupo.append({
             "nome": g["nome"],
@@ -263,8 +236,11 @@ def dre():
         linhas_dre=linhas_dre,
         blocos_dimensao=blocos_dimensao,
         grupos=blocos_grupo,
+        # o que nenhuma regra alcancou - inclusive lancamento de categoria que
+        # TEM regra, mas so com condicao que ele nao satisfaz
         nao_classificadas=[
-            {"nome": cat_pt_puro(c), "total": anual_por_cat[c]} for c in nao_classificadas
+            {"nome": cat_pt_puro(c), "total": v}
+            for c, v in sorted(categorias_soltas.items(), key=lambda kv: -kv[1])
         ],
     )
 

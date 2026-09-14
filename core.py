@@ -372,6 +372,42 @@ def exige_dimensoes(natureza):
     return (natureza or NATUREZA_PADRAO) not in NATUREZAS_NEUTRAS
 
 
+# ---- centro de custo: qual subgrupo cada lancamento alimenta (migracao 65) ----
+#
+# A regra e "categoria + condicoes opcionais de dimensao". Vence a MAIS
+# ESPECIFICA - a que tem mais condicoes satisfeitas - e o desempate e pelo id
+# mais antigo, nunca aleatorio: o DRE nao pode mudar de resposta entre duas
+# leituras do mesmo dado (foi o defeito de arquitetura da secao 6.1).
+#
+# PONTO UNICO: DRE, pendencias e a tela de Centro de Custos leem daqui. Escrita
+# uma segunda vez, a copia diverge na primeira regra nova - e aqui a divergencia
+# sai em forma de numero errado no DRE, que e exatamente o que a secao 1.1
+# proibe.
+#
+# `%(fonte)s` e a tabela/CTE de lancamentos, que precisa expor `linha_id` e
+# `categoria`. Fica parametrizado porque o DRE consulta a view financeira e a
+# tela de cadastro consulta um recorte menor.
+CENTRO_REGRA_RESOLVIDA_SQL = (
+    "SELECT DISTINCT ON (f.linha_id) f.linha_id, r.id AS regra_id, r.subgrupo_id "
+    "FROM %(fonte)s f "
+    "JOIN cartao.centro_regra r ON r.categoria = f.categoria "
+    "WHERE NOT EXISTS ("
+    " SELECT 1 FROM cartao.centro_regra_dimensao rd WHERE rd.regra_id = r.id"
+    " AND NOT EXISTS ("
+    "  SELECT 1 FROM cartao.lancamento_financeiro_dimensao td"
+    "  WHERE td.linha_id = f.linha_id AND td.dimensao_id = rd.dimensao_id"
+    "  AND td.valor_id = rd.valor_id)) "
+    "ORDER BY f.linha_id, ("
+    " SELECT count(*) FROM cartao.centro_regra_dimensao rd2 WHERE rd2.regra_id = r.id"
+    ") DESC, r.id"
+)
+
+
+def especificidade_da_regra(condicoes):
+    """Quantas condicoes a regra exige. Mais condicoes = vence o empate."""
+    return len(condicoes or ())
+
+
 # O banco e o container trabalham em UTC, mas a competencia financeira e a
 # data civil de Sao Paulo. Sem esta conversao, uma compra perto da meia-noite
 # pode cair no dia/mes seguinte no DRE.
@@ -5278,6 +5314,69 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (64);")
             conn.commit()
 
+        if versao_atual < 65:
+            # Centro de custo deixa de ser "uma categoria, um subgrupo" e vira REGRA:
+            # categoria + condicoes OPCIONAIS de dimensao (Projeto, Portfolio,
+            # Responsavel - qualquer uma). Pedido do usuario (14/09/2026): "Seguros"
+            # com Portfolio=Veiculos precisa cair em Transporte e o mesmo "Seguros"
+            # sem isso precisa cair em Protecao, sem inventar uma categoria nova pra
+            # cada combinacao. Vence a MAIS ESPECIFICA (mais condicoes), como no CSS;
+            # regra sem condicao e o padrao daquela categoria.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.centro_regra ("
+                "id serial PRIMARY KEY, categoria text NOT NULL, "
+                "subgrupo_id integer NOT NULL REFERENCES cartao.subgrupo_custo(id) ON DELETE CASCADE, "
+                "criado_em timestamptz NOT NULL DEFAULT now());"
+            )
+            # ON DELETE CASCADE no valor: apagar um valor de dimensao nao pode deixar
+            # a regra com uma condicao apontando pra nada - ela viraria uma regra mais
+            # generica em silencio, mudando o DRE sem ninguem pedir. A regra inteira
+            # cai junto e a categoria volta pro padrao dela.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.centro_regra_dimensao ("
+                "regra_id integer NOT NULL REFERENCES cartao.centro_regra(id) ON DELETE CASCADE, "
+                "dimensao_id integer NOT NULL REFERENCES cartao.dimensao(id) ON DELETE CASCADE, "
+                "valor_id integer NOT NULL REFERENCES cartao.dimensao_valor(id) ON DELETE CASCADE, "
+                "PRIMARY KEY (regra_id, dimensao_id));"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_centro_regra_categoria "
+                "ON cartao.centro_regra(categoria);"
+            )
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.categoria_subgrupo_backup_v65 AS "
+                "SELECT * FROM cartao.categoria_subgrupo;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.centro_regra (categoria, subgrupo_id) "
+                "SELECT cs.categoria, cs.subgrupo_id FROM cartao.categoria_subgrupo cs "
+                "WHERE cs.subgrupo_id IS NOT NULL AND NOT EXISTS ("
+                "SELECT 1 FROM cartao.centro_regra r WHERE r.categoria = cs.categoria);"
+            )
+            migradas = cur.rowcount
+            cur.execute(
+                "SELECT count(*) FROM cartao.categoria_subgrupo WHERE subgrupo_id IS NOT NULL;"
+            )
+            esperadas = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM cartao.categoria_subgrupo_backup_v65;")
+            no_backup = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM cartao.categoria_subgrupo;")
+            no_original = cur.fetchone()[0]
+            # mesma trava da migracao 62: so apaga a tabela antiga com o backup
+            # conferido linha a linha e todo vinculo ja virado regra.
+            pode_apagar = (no_backup == no_original and migradas == esperadas)
+            if pode_apagar:
+                cur.execute("DROP TABLE cartao.categoria_subgrupo;")
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Centro de custo por regra',"
+                "jsonb_build_object('versao',65,'regras_criadas',%s,'vinculos_antigos',%s,"
+                "'backup','categoria_subgrupo_backup_v65','tabela_antiga_removida',%s));",
+                (migradas, esperadas, pode_apagar),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (65);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -5847,6 +5946,149 @@ def _montar_filtro_relatorio(dimensoes):
     }
 
 
+def totais_por_subgrupo(cur, inicio, fim):
+    """Quanto cada subgrupo de custo gastou no periodo, resolvido POR LANCAMENTO.
+
+    Antes da migracao 65 isto era uma soma por categoria: o subgrupo somava os
+    totais das categorias vinculadas a ele. Com a regra por dimensao a mesma
+    categoria pode alimentar subgrupos diferentes conforme o Projeto/Portfolio
+    do lancamento, entao a conta passa a ser por linha - a soma por categoria
+    daria o numero errado sem avisar.
+
+    So despesa entra: centro de custo e analise de gasto (secao 4.1). Devolve
+    (totais_por_id, total_sem_regra, categorias_sem_regra).
+    """
+    fonte = (
+        f"(SELECT t.linha_id, t.categoria FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        "WHERE t.data_transacao >= %(inicio)s AND t.data_transacao < %(fim)s "
+        "AND COALESCE(t.duplicada, false) = false AND t.categoria IS NOT NULL "
+        f"AND {NATUREZA_SQL} = 'despesa')"
+    )
+    resolvida = CENTRO_REGRA_RESOLVIDA_SQL % {"fonte": fonte}
+    cur.execute(
+        "WITH resolvida AS (" + resolvida + ") "
+        f"SELECT res.subgrupo_id, SUM({VAL_DESPESA}) AS total "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        "JOIN resolvida res ON res.linha_id = t.linha_id "
+        "GROUP BY res.subgrupo_id;",
+        {"inicio": inicio, "fim": fim},
+    )
+    totais = {r["subgrupo_id"]: float(r["total"] or 0) for r in cur.fetchall()}
+
+    # o que nao casou com regra nenhuma: some dos totais por grupo do DRE, e
+    # por isso precisa aparecer em vez de sumir em silencio
+    cur.execute(
+        "WITH resolvida AS (" + resolvida + ") "
+        f"SELECT t.categoria, SUM({VAL_DESPESA}) AS total "
+        f"FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        "WHERE t.data_transacao >= %(inicio)s AND t.data_transacao < %(fim)s "
+        "AND COALESCE(t.duplicada, false) = false AND t.categoria IS NOT NULL "
+        f"AND {NATUREZA_SQL} = 'despesa' "
+        "AND NOT EXISTS (SELECT 1 FROM resolvida res WHERE res.linha_id = t.linha_id) "
+        "GROUP BY t.categoria;",
+        {"inicio": inicio, "fim": fim},
+    )
+    soltas = {r["categoria"]: float(r["total"] or 0) for r in cur.fetchall()}
+    return totais, sum(soltas.values()), soltas
+
+
+def definir_regra_padrao(cur, categoria, subgrupo_id):
+    """Define o subgrupo PADRAO da categoria - o destino quando nenhuma condicao casa.
+
+    Uma categoria tem no maximo uma regra sem condicao: duas seriam duas
+    respostas para a mesma pergunta, e o desempate por id decidiria em silencio
+    qual delas vale. Ponto unico porque /pendencias e a tela de Centro de Custos
+    fazem a mesma coisa por caminhos diferentes.
+
+    Le com `_campo` porque a tela usa RealDictCursor e a migracao usa cursor
+    comum (secao 10.4 n.7).
+    """
+    cur.execute(
+        "SELECT r.id FROM cartao.centro_regra r WHERE r.categoria = %s "
+        "AND NOT EXISTS (SELECT 1 FROM cartao.centro_regra_dimensao rd "
+        "WHERE rd.regra_id = r.id) ORDER BY r.id LIMIT 1;",
+        (categoria,),
+    )
+    atual = cur.fetchone()
+    if atual:
+        regra_id = _campo(atual, "id", 0)
+        cur.execute(
+            "UPDATE cartao.centro_regra SET subgrupo_id = %s WHERE id = %s;",
+            (subgrupo_id, regra_id),
+        )
+        return regra_id
+    cur.execute(
+        "INSERT INTO cartao.centro_regra (categoria, subgrupo_id) VALUES (%s,%s) RETURNING id;",
+        (categoria, subgrupo_id),
+    )
+    return _campo(cur.fetchone(), "id", 0)
+
+
+def arvore_centro_custo(cur):
+    """Grupos > subgrupos > regras, prontos para a tela e para a API.
+
+    Uma consulta por nivel em vez de uma por subgrupo: a tela monta a arvore
+    inteira de uma vez e o JS so redesenha o que mudou.
+    """
+    cur.execute("SELECT id, nome FROM cartao.grupo_custo;")
+    grupos = sorted(cur.fetchall(), key=lambda g: chave_alfa(g["nome"]))
+    cur.execute("SELECT id, grupo_id, nome FROM cartao.subgrupo_custo;")
+    subgrupos = sorted(cur.fetchall(), key=lambda s: chave_alfa(s["nome"]))
+    cur.execute(
+        "SELECT r.id, r.categoria, r.subgrupo_id, rd.dimensao_id, rd.valor_id, "
+        "d.nome AS dimensao_nome, dv.nome AS valor_nome "
+        "FROM cartao.centro_regra r "
+        "LEFT JOIN cartao.centro_regra_dimensao rd ON rd.regra_id = r.id "
+        "LEFT JOIN cartao.dimensao d ON d.id = rd.dimensao_id "
+        "LEFT JOIN cartao.dimensao_valor dv ON dv.id = rd.valor_id "
+        "ORDER BY r.id, d.ordem, d.nome;"
+    )
+    regras = {}
+    for r in cur.fetchall():
+        reg = regras.setdefault(r["id"], {
+            "id": r["id"],
+            "categoria": r["categoria"],
+            "categoria_nome": cat_pt_puro(r["categoria"]),
+            "subgrupo_id": r["subgrupo_id"],
+            "condicoes": [],
+        })
+        if r["dimensao_id"]:
+            reg["condicoes"].append({
+                "dimensao_id": r["dimensao_id"],
+                "dimensao_nome": r["dimensao_nome"],
+                "valor_id": r["valor_id"],
+                "valor_nome": r["valor_nome"],
+            })
+
+    por_subgrupo = {}
+    for reg in regras.values():
+        # rotulo legivel da regra, num lugar so: "Seguros" quando e o padrao da
+        # categoria, "Seguros · Portfolio: Veiculos" quando tem condicao. E o
+        # mesmo texto na tela, no DRE e no log - escrito em cada um, divergiria.
+        detalhe = " · ".join(
+            f'{c["dimensao_nome"]}: {c["valor_nome"]}' for c in reg["condicoes"]
+        )
+        reg["rotulo"] = f'{reg["categoria_nome"]} · {detalhe}' if detalhe else reg["categoria_nome"]
+        por_subgrupo.setdefault(reg["subgrupo_id"], []).append(reg)
+    # a mais especifica primeiro: e ela que vence, e a ordem na tela precisa
+    # contar a mesma historia que o motor de resolucao
+    for lista in por_subgrupo.values():
+        lista.sort(key=lambda x: (-len(x["condicoes"]), chave_alfa(x["categoria_nome"])))
+
+    por_grupo = {}
+    for s in subgrupos:
+        por_grupo.setdefault(s["grupo_id"], []).append({
+            "id": s["id"],
+            "nome": s["nome"],
+            "regras": por_subgrupo.get(s["id"], []),
+        })
+    return [{
+        "id": g["id"],
+        "nome": g["nome"],
+        "subgrupos": por_grupo.get(g["id"], []),
+    } for g in grupos]
+
+
 def levantar_pendencias(cur):
     """Levanta o que esta mal classificado e pode distorcer o DRE.
 
@@ -5885,11 +6127,15 @@ def levantar_pendencias(cur):
         key=lambda c: chave_alfa(cat_pt(c)),
     )
 
+    # sem NENHUMA regra: a categoria inteira fica fora dos totais por grupo do
+    # DRE. Categoria que tem regra mas so com condicao (nenhum padrao) pode
+    # deixar lancamento solto tambem - esse caso aparece com valor no proprio
+    # DRE, em "nao classificadas", que e onde ele vira decisao.
     cur.execute(
         f"SELECT DISTINCT t.categoria FROM {FINANCEIRO_TABELA} t "
         "JOIN cartao.categoria_natureza n ON n.categoria = t.categoria "
-        "LEFT JOIN cartao.categoria_subgrupo cs ON cs.categoria = t.categoria "
-        "WHERE n.natureza = 'despesa' AND cs.subgrupo_id IS NULL;"
+        "WHERE n.natureza = 'despesa' AND NOT EXISTS ("
+        "SELECT 1 FROM cartao.centro_regra r WHERE r.categoria = t.categoria);"
     )
     despesa_sem_centro = sorted(
         (r["categoria"] for r in cur.fetchall() if r["categoria"] not in CATEGORIAS_OCULTAS),

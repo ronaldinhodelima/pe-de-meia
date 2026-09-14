@@ -21,17 +21,21 @@ from core import (
     NATUREZA_SQL,
     SEED_NATUREZAS,
     VAL_DESPESA,
+    _campo,
     aplicar_regras,
+    arvore_centro_custo,
     carregar_origens,
     cat_pt,
     cat_pt_puro,
     categoria_com_nome,
+    definir_regra_padrao,
     chave_alfa,
     data_hora_local,
     detectar_banco,
     esc,
     get_conn,
     icone_tipo_html,
+    json_script,
     levantar_pendencias,
     ROTULO_TIPO_CONTA,
     marcar_falha_auditoria,
@@ -654,196 +658,337 @@ def regra_preview():
     return jsonify({"ok": True, "total": total, "lancamentos": lancamentos})
 
 
-@bp.route("/grupos", methods=["GET", "POST"])
-@requer("cadastros")
-def grupos_view():
-    conn = get_conn()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+def _estado_centro_custo(cur):
+    """Tudo que a tela de Centro de Custos precisa, numa estrutura so.
 
-    erro = aviso = None
-    if request.method == "POST":
-        acao = request.form.get("acao")
-        if acao == "criar_grupo":
-            nome = request.form.get("nome", "").strip()
-            try:
-                cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (nome,))
-                grupo_id = cur.fetchone()["id"]
-                conn.commit()
-                registrar_mudanca_auditoria(
-                    "Centro de custo", None, {"id": grupo_id, "nome": nome},
-                )
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
-                erro = f"Já existe um centro de custo chamado '{nome}'."
-        elif acao == "editar_grupo":
-            try:
-                grupo_id = request.form.get("grupo_id")
-                nome_novo = request.form.get("nome", "").strip()
-                cur.execute("SELECT nome FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
-                anterior = cur.fetchone()
-                cur.execute(
-                    "UPDATE cartao.grupo_custo SET nome=%s WHERE id=%s;",
-                    (nome_novo, grupo_id),
-                )
-                conn.commit()
-                if anterior and cur.rowcount:
-                    registrar_mudanca_auditoria(
-                        "Nome do centro de custo", anterior["nome"], nome_novo,
-                    )
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
-                erro = "Já existe um centro de custo com esse nome."
-        elif acao == "excluir_grupo":
-            grupo_id = request.form.get("grupo_id")
-            cur.execute("SELECT id, nome FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
-            anterior = cur.fetchone()
-            cur.execute("DELETE FROM cartao.grupo_custo WHERE id=%s;", (grupo_id,))
-            conn.commit()
-            if anterior and cur.rowcount:
-                registrar_mudanca_auditoria("Centro de custo", dict(anterior), None)
-        elif acao == "criar_subgrupo":
-            nome = request.form.get("nome", "").strip()
-            try:
-                cur.execute(
-                    "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,%s) RETURNING id;",
-                    (request.form.get("grupo_id"), nome),
-                )
-                subgrupo_id = cur.fetchone()["id"]
-                conn.commit()
-                registrar_mudanca_auditoria("Subgrupo de custo", None, {
-                    "id": subgrupo_id,
-                    "grupo_id": request.form.get("grupo_id"),
-                    "nome": nome,
-                })
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
-                erro = f"Já existe um subgrupo chamado '{nome}' nesse centro de custo."
-        elif acao == "editar_subgrupo":
-            try:
-                subgrupo_id = request.form.get("subgrupo_id")
-                nome_novo = request.form.get("nome", "").strip()
-                cur.execute(
-                    "SELECT id, grupo_id, nome FROM cartao.subgrupo_custo WHERE id=%s;",
-                    (subgrupo_id,),
-                )
-                anterior = cur.fetchone()
-                cur.execute(
-                    "UPDATE cartao.subgrupo_custo SET nome=%s WHERE id=%s;",
-                    (nome_novo, subgrupo_id),
-                )
-                conn.commit()
-                if anterior and cur.rowcount:
-                    registrar_mudanca_auditoria(
-                        "Nome do subgrupo", anterior["nome"], nome_novo,
-                    )
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
-                erro = "Já existe um subgrupo com esse nome nesse centro de custo."
-        elif acao == "excluir_subgrupo":
-            subgrupo_id = request.form.get("subgrupo_id")
-            cur.execute(
-                "SELECT id, grupo_id, nome FROM cartao.subgrupo_custo WHERE id=%s;",
-                (subgrupo_id,),
-            )
-            anterior = cur.fetchone()
-            cur.execute("DELETE FROM cartao.subgrupo_custo WHERE id=%s;", (subgrupo_id,))
-            conn.commit()
-            if anterior and cur.rowcount:
-                registrar_mudanca_auditoria("Subgrupo de custo", dict(anterior), None)
-        elif acao == "mapear_categoria":
-            subgrupo_id = request.form.get("subgrupo_id") or None
-            categoria = request.form.get("categoria")
-            # a categoria so cabe em um subgrupo (ela e a chave primaria da tabela),
-            # entao vincular uma ja vinculada MOVE. Antes isso acontecia sem dizer
-            # nada e a categoria sumia do subgrupo antigo.
-            cur.execute(
-                "SELECT s.nome AS subgrupo, g.nome AS grupo FROM cartao.categoria_subgrupo cs "
-                "JOIN cartao.subgrupo_custo s ON s.id = cs.subgrupo_id "
-                "JOIN cartao.grupo_custo g ON g.id = s.grupo_id "
-                "WHERE cs.categoria = %s;",
-                (categoria,),
-            )
-            antes = cur.fetchone()
-            cur.execute(
-                "INSERT INTO cartao.categoria_subgrupo (categoria, subgrupo_id) VALUES (%s,%s) "
-                "ON CONFLICT (categoria) DO UPDATE SET subgrupo_id = EXCLUDED.subgrupo_id;",
-                (categoria, subgrupo_id),
-            )
-            conn.commit()
-            cur.execute(
-                "SELECT s.nome AS subgrupo, g.nome AS grupo FROM cartao.subgrupo_custo s "
-                "JOIN cartao.grupo_custo g ON g.id = s.grupo_id WHERE s.id = %s;",
-                (subgrupo_id,),
-            )
-            depois = cur.fetchone()
-            registrar_mudanca_auditoria(
-                f"Centro de custo de {cat_pt_puro(categoria)}",
-                dict(antes) if antes else None,
-                dict(depois) if depois else None,
-            )
-            if antes:
-                aviso = (
-                    f'"{cat_pt_puro(categoria)}" foi movida de '
-                    f'{antes["grupo"]} › {antes["subgrupo"]} para cá — '
-                    "uma categoria pertence a um centro de custo por vez."
-                )
-            else:
-                aviso = f'"{cat_pt_puro(categoria)}" vinculada.'
-        if erro:
-            marcar_falha_auditoria()
+    E a MESMA estrutura que toda escrita devolve: a tela nunca remonta no
+    cliente o que o servidor decidiu. Isso importa porque a regra vencedora
+    depende das outras regras da mesma categoria - prever o resultado no JS
+    daria a resposta errada na primeira regra com condicao.
+    """
+    arvore = arvore_centro_custo(cur)
 
-    cur.execute("SELECT id, nome FROM cartao.grupo_custo;")
-    grupos_db = sorted(cur.fetchall(), key=lambda g: chave_alfa(g["nome"]))
-    cur.execute("SELECT id, grupo_id, nome FROM cartao.subgrupo_custo;")
-    subgrupos_db = sorted(cur.fetchall(), key=lambda s: chave_alfa(s["nome"]))
-    cur.execute("SELECT categoria, subgrupo_id FROM cartao.categoria_subgrupo;")
-    mapa_categoria = {r["categoria"]: r["subgrupo_id"] for r in cur.fetchall()}
-    nome_subgrupo = {
-        s["id"]: f'{next((g["nome"] for g in grupos_db if g["id"] == s["grupo_id"]), "")} › {s["nome"]}'
-        for s in subgrupos_db
-    }
-    cur.close()
-    conn.close()
+    cur.execute("SELECT id, nome FROM cartao.dimensao ORDER BY ordem, nome;")
+    dims = cur.fetchall()
+    cur.execute("SELECT id, dimensao_id, nome FROM cartao.dimensao_valor;")
+    valores_por_dim = {}
+    for v in cur.fetchall():
+        valores_por_dim.setdefault(v["dimensao_id"], []).append({
+            "id": v["id"], "nome": v["nome"],
+        })
+    for lista in valores_por_dim.values():
+        lista.sort(key=lambda x: chave_alfa(x["nome"]))
+    dimensoes = [{
+        "id": d["id"],
+        "nome": d["nome"],
+        "valores": valores_por_dim.get(d["id"], []),
+    } for d in dims]
 
-    subgrupos_por_grupo = {}
-    for s in subgrupos_db:
-        subgrupos_por_grupo.setdefault(s["grupo_id"], []).append(s)
-
-    todas_categorias = sorted(
-        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
+    vinculadas = {r["categoria"] for g in arvore for s in g["subgrupos"] for r in s["regras"]}
+    todas = sorted(
+        (set(CATEGORIA_PT) | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB))
+        - CATEGORIAS_NEUTRAS_PADRAO - CATEGORIAS_OCULTAS,
         key=lambda c: chave_alfa(cat_pt_puro(c)),
     )
-
-    # cada categoria vira {chave, nome, subgrupo_id} - o template filtra por
-    # subgrupo_id pra montar os chips e o dropdown de vincular
-    categorias = [
-        {
+    return {
+        "grupos": arvore,
+        "dimensoes": dimensoes,
+        "categorias": [{
             "chave": c,
             "nome": cat_pt_puro(c),
-            "subgrupo_id": mapa_categoria.get(c),
-            # usado no dropdown para dizer de onde a categoria sairia
-            "subgrupo_nome": nome_subgrupo.get(mapa_categoria.get(c), ""),
-        }
-        for c in todas_categorias
-    ]
-    categorias_por_subgrupo = {}
-    for c in categorias:
-        if c["subgrupo_id"]:
-            categorias_por_subgrupo.setdefault(c["subgrupo_id"], []).append(c)
-    sem_vinculo = [c for c in categorias if not c["subgrupo_id"]]
+            "vinculada": c in vinculadas,
+        } for c in todas],
+    }
 
+
+def _condicoes_do_pedido(cur, bruto):
+    """Le e valida as condicoes de dimensao vindas da tela.
+
+    Uma condicao por dimensao, no maximo: duas exigencias na mesma dimensao
+    nunca casariam ao mesmo tempo (um lancamento tem um valor por dimensao), e
+    a regra ficaria morta sem dizer por que.
+    """
+    condicoes = []
+    vistas = set()
+    for c in (bruto or []):
+        try:
+            dim_id = int(c.get("dimensao_id"))
+            valor_id = int(c.get("valor_id"))
+        except (TypeError, ValueError):
+            raise ValueError("Condição inválida: escolha a dimensão e o valor.")
+        if dim_id in vistas:
+            raise ValueError("Só cabe uma condição por dimensão.")
+        cur.execute(
+            "SELECT 1 FROM cartao.dimensao_valor WHERE id = %s AND dimensao_id = %s;",
+            (valor_id, dim_id),
+        )
+        if not cur.fetchone():
+            raise ValueError("Esse valor não pertence à dimensão escolhida.")
+        vistas.add(dim_id)
+        condicoes.append((dim_id, valor_id))
+    return condicoes
+
+
+def _regra_ja_existe(cur, categoria, condicoes, exceto_id=None):
+    """Ja existe regra com essa categoria e EXATAMENTE essas condicoes?
+
+    Duas regras iguais sao duas respostas para a mesma pergunta: o desempate
+    por id escolheria uma em silencio, e o DRE mudaria sem ninguem decidir.
+    """
+    cur.execute(
+        "SELECT r.id FROM cartao.centro_regra r WHERE r.categoria = %s "
+        "AND (SELECT count(*) FROM cartao.centro_regra_dimensao rd WHERE rd.regra_id = r.id) = %s;",
+        (categoria, len(condicoes)),
+    )
+    candidatas = [r["id"] for r in cur.fetchall() if r["id"] != exceto_id]
+    if not candidatas:
+        return None
+    alvo = {(d, v) for d, v in condicoes}
+    for rid in candidatas:
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.centro_regra_dimensao WHERE regra_id = %s;",
+            (rid,),
+        )
+        if {(r["dimensao_id"], r["valor_id"]) for r in cur.fetchall()} == alvo:
+            return rid
+    return None
+
+
+def _gravar_condicoes(cur, regra_id, condicoes):
+    cur.execute("DELETE FROM cartao.centro_regra_dimensao WHERE regra_id = %s;", (regra_id,))
+    for dim_id, valor_id in condicoes:
+        cur.execute(
+            "INSERT INTO cartao.centro_regra_dimensao (regra_id, dimensao_id, valor_id) "
+            "VALUES (%s,%s,%s);",
+            (regra_id, dim_id, valor_id),
+        )
+
+
+def _rotulo_regra(cur, regra_id):
+    """Texto da regra para a auditoria - o mesmo formato da tela."""
+    cur.execute(
+        "SELECT r.categoria, d.nome AS dimensao, dv.nome AS valor "
+        "FROM cartao.centro_regra r "
+        "LEFT JOIN cartao.centro_regra_dimensao rd ON rd.regra_id = r.id "
+        "LEFT JOIN cartao.dimensao d ON d.id = rd.dimensao_id "
+        "LEFT JOIN cartao.dimensao_valor dv ON dv.id = rd.valor_id "
+        "WHERE r.id = %s ORDER BY d.nome;",
+        (regra_id,),
+    )
+    linhas = cur.fetchall()
+    if not linhas:
+        return ""
+    detalhe = " · ".join(f'{l["dimensao"]}: {l["valor"]}' for l in linhas if l["dimensao"])
+    nome = cat_pt_puro(linhas[0]["categoria"])
+    return f"{nome} · {detalhe}" if detalhe else nome
+
+
+def _destino_regra(cur, regra_id):
+    cur.execute(
+        "SELECT g.nome AS grupo, s.nome AS subgrupo FROM cartao.centro_regra r "
+        "JOIN cartao.subgrupo_custo s ON s.id = r.subgrupo_id "
+        "JOIN cartao.grupo_custo g ON g.id = s.grupo_id WHERE r.id = %s;",
+        (regra_id,),
+    )
+    linha = cur.fetchone()
+    return f'{linha["grupo"]} › {linha["subgrupo"]}' if linha else None
+
+
+def _aplicar_acao_centro_custo(cur, acao, dados):
+    """Executa uma acao da tela. Erro de uso vira ValueError com texto em portugues."""
+    def _txt(campo, obrigatorio=True):
+        valor = (dados.get(campo) or "").strip()
+        if obrigatorio and not valor:
+            raise ValueError("Informe o nome.")
+        return valor
+
+    def _id(campo):
+        try:
+            return int(dados.get(campo))
+        except (TypeError, ValueError):
+            raise ValueError("Item não encontrado.")
+
+    if acao == "criar_grupo":
+        nome = _txt("nome")
+        cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (nome,))
+        registrar_mudanca_auditoria("Centro de custo", None, {
+            "id": _campo(cur.fetchone(), "id", 0), "nome": nome,
+        })
+        return f'Centro de custo "{nome}" criado.'
+
+    if acao == "renomear_grupo":
+        grupo_id, nome = _id("grupo_id"), _txt("nome")
+        cur.execute("SELECT nome FROM cartao.grupo_custo WHERE id = %s;", (grupo_id,))
+        anterior = cur.fetchone()
+        cur.execute("UPDATE cartao.grupo_custo SET nome = %s WHERE id = %s;", (nome, grupo_id))
+        if anterior and anterior["nome"] != nome:
+            registrar_mudanca_auditoria("Nome do centro de custo", anterior["nome"], nome)
+        return None
+
+    if acao == "excluir_grupo":
+        grupo_id = _id("grupo_id")
+        cur.execute("SELECT id, nome FROM cartao.grupo_custo WHERE id = %s;", (grupo_id,))
+        anterior = cur.fetchone()
+        cur.execute("DELETE FROM cartao.grupo_custo WHERE id = %s;", (grupo_id,))
+        if anterior:
+            registrar_mudanca_auditoria("Centro de custo", dict(anterior), None)
+        return f'Centro de custo "{anterior["nome"]}" excluído.' if anterior else None
+
+    if acao == "criar_subgrupo":
+        grupo_id, nome = _id("grupo_id"), _txt("nome")
+        cur.execute(
+            "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,%s) RETURNING id;",
+            (grupo_id, nome),
+        )
+        registrar_mudanca_auditoria("Subgrupo de custo", None, {
+            "id": _campo(cur.fetchone(), "id", 0), "grupo_id": grupo_id, "nome": nome,
+        })
+        return f'Subgrupo "{nome}" criado.'
+
+    if acao == "renomear_subgrupo":
+        subgrupo_id, nome = _id("subgrupo_id"), _txt("nome")
+        cur.execute("SELECT nome FROM cartao.subgrupo_custo WHERE id = %s;", (subgrupo_id,))
+        anterior = cur.fetchone()
+        cur.execute("UPDATE cartao.subgrupo_custo SET nome = %s WHERE id = %s;", (nome, subgrupo_id))
+        if anterior and anterior["nome"] != nome:
+            registrar_mudanca_auditoria("Nome do subgrupo", anterior["nome"], nome)
+        return None
+
+    if acao == "excluir_subgrupo":
+        subgrupo_id = _id("subgrupo_id")
+        cur.execute(
+            "SELECT id, grupo_id, nome FROM cartao.subgrupo_custo WHERE id = %s;",
+            (subgrupo_id,),
+        )
+        anterior = cur.fetchone()
+        cur.execute("DELETE FROM cartao.subgrupo_custo WHERE id = %s;", (subgrupo_id,))
+        if anterior:
+            registrar_mudanca_auditoria("Subgrupo de custo", dict(anterior), None)
+        return f'Subgrupo "{anterior["nome"]}" excluído.' if anterior else None
+
+    if acao == "criar_regra":
+        categoria = _txt("categoria")
+        subgrupo_id = _id("subgrupo_id")
+        condicoes = _condicoes_do_pedido(cur, dados.get("condicoes"))
+        if _regra_ja_existe(cur, categoria, condicoes):
+            raise ValueError(
+                f'Já existe essa mesma regra para "{cat_pt_puro(categoria)}" — '
+                "duas iguais dariam duas respostas para a mesma pergunta."
+            )
+        cur.execute(
+            "INSERT INTO cartao.centro_regra (categoria, subgrupo_id) VALUES (%s,%s) RETURNING id;",
+            (categoria, subgrupo_id),
+        )
+        regra_id = _campo(cur.fetchone(), "id", 0)
+        _gravar_condicoes(cur, regra_id, condicoes)
+        registrar_mudanca_auditoria(
+            f"Centro de custo de {cat_pt_puro(categoria)}", None,
+            {"regra": _rotulo_regra(cur, regra_id), "destino": _destino_regra(cur, regra_id)},
+        )
+        return f'"{_rotulo_regra(cur, regra_id)}" vinculada.'
+
+    if acao == "mover_regra":
+        regra_id, subgrupo_id = _id("regra_id"), _id("subgrupo_id")
+        antes = _destino_regra(cur, regra_id)
+        rotulo = _rotulo_regra(cur, regra_id)
+        cur.execute(
+            "UPDATE cartao.centro_regra SET subgrupo_id = %s WHERE id = %s;",
+            (subgrupo_id, regra_id),
+        )
+        depois = _destino_regra(cur, regra_id)
+        if antes != depois:
+            registrar_mudanca_auditoria(f"Centro de custo de {rotulo}", antes, depois)
+        return None
+
+    if acao == "atualizar_condicoes":
+        regra_id = _id("regra_id")
+        cur.execute("SELECT categoria FROM cartao.centro_regra WHERE id = %s;", (regra_id,))
+        linha = cur.fetchone()
+        if not linha:
+            raise ValueError("Regra não encontrada.")
+        condicoes = _condicoes_do_pedido(cur, dados.get("condicoes"))
+        if _regra_ja_existe(cur, linha["categoria"], condicoes, exceto_id=regra_id):
+            raise ValueError("Já existe outra regra igual a essa.")
+        antes = _rotulo_regra(cur, regra_id)
+        _gravar_condicoes(cur, regra_id, condicoes)
+        depois = _rotulo_regra(cur, regra_id)
+        if antes != depois:
+            registrar_mudanca_auditoria("Condições da regra de centro de custo", antes, depois)
+        return None
+
+    if acao == "excluir_regra":
+        regra_id = _id("regra_id")
+        rotulo = _rotulo_regra(cur, regra_id)
+        destino = _destino_regra(cur, regra_id)
+        cur.execute("DELETE FROM cartao.centro_regra WHERE id = %s;", (regra_id,))
+        if rotulo:
+            registrar_mudanca_auditoria(f"Centro de custo de {rotulo}", destino, None)
+        return None
+
+    raise ValueError("Ação desconhecida.")
+
+
+@bp.route("/grupos")
+@requer("cadastros")
+def grupos_view():
+    """Centro de Custos: centro > subgrupo > regras de vinculo.
+
+    A tela e toda AJAX (static/centro_custos.js): cada mudanca salva sozinha e
+    a pagina nunca recarrega. Esta rota so entrega o estado inicial; quem grava
+    e `/api/centro-custo`, que devolve a arvore recalculada.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    estado = _estado_centro_custo(cur)
+    cur.close()
+    conn.close()
     return render_template(
         "grupos.html",
         titulo="Centro de Custos",
         topbar=topbar_html("Centro de Custos", "grupos"),
-        erro=erro,
-        aviso=aviso,
-        grupos=grupos_db,
-        subgrupos_por_grupo=subgrupos_por_grupo,
-        categorias=categorias,
-        categorias_por_subgrupo=categorias_por_subgrupo,
-        sem_vinculo=sem_vinculo,
+        # json_script e nao |tojson: dentro de <script> o Jinja nao escapa "</",
+        # e um nome de categoria com "</script>" fecharia a tag (secao 9.2)
+        estado_json=json_script(estado),
     )
+
+
+@bp.route("/api/centro-custo", methods=["POST"])
+@requer("cadastros")
+def api_centro_custo():
+    """Toda escrita da tela de Centro de Custos passa por aqui.
+
+    Uma rota so, com a acao no corpo, e a resposta e sempre o estado inteiro
+    recalculado pelo servidor (secao 7.2-A: um segundo caminho de gravacao
+    comeca igual e diverge na primeira regra nova).
+    """
+    dados = request.get_json(silent=True) or {}
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        aviso = _aplicar_acao_centro_custo(cur, dados.get("acao"), dados)
+        conn.commit()
+    except ValueError as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        marcar_falha_auditoria()
+        return jsonify({"ok": False, "erro": str(e)}), 400
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        marcar_falha_auditoria()
+        return jsonify({"ok": False, "erro": "Já existe um item com esse nome aqui."}), 400
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        marcar_falha_auditoria()
+        return jsonify({"ok": False, "erro": str(e)}), 500
+    estado = _estado_centro_custo(cur)
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True, "aviso": aviso, "estado": estado})
 
 
 @bp.route("/contas", methods=["GET", "POST"])
@@ -1074,11 +1219,9 @@ def pendencias_view():
             categoria = request.form.get("categoria")
             subgrupo_id = request.form.get("subgrupo_id") or None
             if categoria and subgrupo_id:
-                cur.execute(
-                    "INSERT INTO cartao.categoria_subgrupo (categoria, subgrupo_id) VALUES (%s,%s) "
-                    "ON CONFLICT (categoria) DO UPDATE SET subgrupo_id = EXCLUDED.subgrupo_id;",
-                    (categoria, subgrupo_id),
-                )
+                # vincula o PADRAO da categoria; condicao por dimensao se monta
+                # na tela de Centro de Custos, que e onde ela e visivel
+                definir_regra_padrao(cur, categoria, subgrupo_id)
                 conn.commit()
                 aviso = f'"{cat_pt_puro(categoria)}" vinculada ao centro de custo.'
         elif acao == "definir_natureza_lote":
@@ -1308,7 +1451,7 @@ def categorias_view():
                     nome_anterior = cat_pt_puro(categoria)
                     cur.execute("DELETE FROM cartao.categoria WHERE categoria = %s;", (categoria,))
                     cur.execute("DELETE FROM cartao.categoria_natureza WHERE categoria = %s;", (categoria,))
-                    cur.execute("DELETE FROM cartao.categoria_subgrupo WHERE categoria = %s;", (categoria,))
+                    cur.execute("DELETE FROM cartao.centro_regra WHERE categoria = %s;", (categoria,))
                     cur.execute("INSERT INTO cartao.categoria_oculta (categoria) VALUES (%s) ON CONFLICT DO NOTHING;", (categoria,))
                     conn.commit()
                     registrar_mudanca_auditoria("Categoria", {

@@ -2,6 +2,7 @@
 import importlib.util
 import os
 import pathlib
+import re
 import sys
 import threading
 import time
@@ -48,7 +49,18 @@ def sistema_real():
     conn = core.get_conn()
     cur = conn.cursor()
     cur.execute("SELECT MAX(versao) FROM cartao.schema_version;")
-    assert cur.fetchone()[0] == 12
+    versao = cur.fetchone()[0]
+    # O numero era escrito a mao aqui (`== 12`) e ficou parado enquanto as
+    # migracoes passavam de 12 para 65: o teste so falharia no CI, entao a
+    # fixture inteira estava quebrada sem ninguem ver. Agora ele cobra a REGRA
+    # - o banco chegou na ultima migracao que o core conhece - em vez de um
+    # numero que envelhece a cada migracao nova.
+    ultima_conhecida = max(
+        int(n) for n in re.findall(r"versao_atual < (\d+)", (RAIZ / "core.py").read_text(encoding="utf-8"))
+    )
+    assert versao == ultima_conhecida, (
+        f"banco na versao {versao}, core conhece ate {ultima_conhecida}"
+    )
     cur.execute(
         "INSERT INTO cartao.usuario (usuario, nome, senha_hash, perfil, permissoes) "
         "VALUES ('integracao', 'Integração', %s, 'admin', %s) "
@@ -67,7 +79,13 @@ def sistema_real():
 def _login(cliente):
     resposta = cliente.post("/login", data={"usuario": "integracao", "senha": "senha-teste"})
     assert resposta.status_code == 302
-    assert resposta.headers["Location"].endswith("/")
+    # o destino do login e a tela de Lancamentos desde 09/09/2026, e mora num
+    # ponto unico (core.URL_LANCAMENTOS). Escrito a mao aqui, ficou em "/" e
+    # derrubou os seis testes desta suite - que so roda no CI e por isso passou
+    # despercebido, como o `== 12` da versao do schema logo acima.
+    import core
+
+    assert resposta.headers["Location"].endswith(core.URL_LANCAMENTOS)
 
 
 def test_fluxo_manual_completo_no_postgres_real(sistema_real):
@@ -430,6 +448,111 @@ def test_tela_suporta_dez_vezes_o_volume_atual(sistema_real):
     conn = core.get_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM cartao.transacao WHERE descricao LIKE %s;", (prefixo + "%",))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def test_regra_mais_especifica_manda_o_gasto_para_outro_centro(sistema_real):
+    """A mesma categoria em dois centros, separada pela dimensao (migracao 65).
+
+    Era o caso que motivou a mudanca: "Seguros" e usada tanto no seguro do carro
+    quanto no seguro de vida da familia, e ate aqui o centro de custo era da
+    CATEGORIA inteira - o seguro de vida contava dentro de Transporte.
+
+    Isto so se prova com banco de verdade: quem resolve a regra e SQL, e cursor
+    dublado nao executa SQL nenhum (secao 10.4 n.7).
+    """
+    _worker, core, _webapp = sistema_real
+    import uuid as _uuid
+
+    import psycopg2.extras
+
+    conn = core.get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    marca = _uuid.uuid4().hex[:8]
+
+    item = str(_uuid.uuid4())
+    conta = str(_uuid.uuid4())
+    cur.execute(
+        "INSERT INTO cartao.pluggy_item (item_id, connector_name, status) "
+        "VALUES (%s,'Teste','OK');", (item,))
+    cur.execute(
+        "INSERT INTO cartao.conta (account_id, item_id, nome, tipo) "
+        "VALUES (%s,%s,'Cartao Regra','CREDIT');", (conta, item))
+    cur.execute(
+        "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES ('Insurance','despesa') "
+        "ON CONFLICT (categoria) DO UPDATE SET natureza='despesa';")
+
+    cur.execute("SELECT id FROM cartao.dimensao ORDER BY ordem, id LIMIT 1;")
+    dimensao = cur.fetchone()["id"]
+
+    def valor(nome):
+        cur.execute(
+            "INSERT INTO cartao.dimensao_valor (dimensao_id, nome) VALUES (%s,%s) "
+            "ON CONFLICT (dimensao_id, nome) DO UPDATE SET nome=EXCLUDED.nome RETURNING id;",
+            (dimensao, f"{nome} {marca}"))
+        return cur.fetchone()["id"]
+
+    do_carro, da_vida = valor("Veiculos"), valor("Protecao")
+
+    cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (f"Transporte {marca}",))
+    grupo_a = cur.fetchone()["id"]
+    cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (f"Protecao {marca}",))
+    grupo_b = cur.fetchone()["id"]
+    cur.execute(
+        "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,'Manutencao') RETURNING id;",
+        (grupo_a,))
+    sub_carro = cur.fetchone()["id"]
+    cur.execute(
+        "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,'Seguro de Vida') RETURNING id;",
+        (grupo_b,))
+    sub_vida = cur.fetchone()["id"]
+
+    # padrao da categoria: seguro de vida. Especifica: quando a dimensao diz carro.
+    core.definir_regra_padrao(cur, "Insurance", sub_vida)
+    cur.execute(
+        "INSERT INTO cartao.centro_regra (categoria, subgrupo_id) VALUES ('Insurance',%s) RETURNING id;",
+        (sub_carro,))
+    especifica = cur.fetchone()["id"]
+    cur.execute(
+        "INSERT INTO cartao.centro_regra_dimensao (regra_id, dimensao_id, valor_id) VALUES (%s,%s,%s);",
+        (especifica, dimensao, do_carro))
+
+    def lancar(valor_brl, valor_id):
+        tid = str(_uuid.uuid4())
+        cur.execute(
+            "INSERT INTO cartao.transacao (transacao_id, account_id, data_transacao, descricao, "
+            "valor_brl, categoria, status) VALUES (%s,%s,'2026-05-10 12:00+00',%s,%s,'Insurance','POSTED');",
+            (tid, conta, f"Seguro {marca}", valor_brl))
+        if valor_id:
+            cur.execute(
+                "INSERT INTO cartao.transacao_dimensao (transacao_id, dimensao_id, valor_id) "
+                "VALUES (%s,%s,%s);", (tid, dimensao, valor_id))
+
+    lancar(300, do_carro)
+    lancar(700, da_vida)
+    lancar(50, None)          # sem dimensao: cai no padrao
+    conn.commit()
+
+    inicio, fim = core.intervalo_ano_local("2026")
+    totais, solto, _ = core.totais_por_subgrupo(cur, inicio, fim)
+    assert totais.get(sub_carro) == 300.0, "o seguro do carro tem que ir para Transporte"
+    assert totais.get(sub_vida) == 750.0, "o de vida e o sem dimensao ficam no padrao"
+    assert solto == 0.0, "nada pode ficar fora do centro de custo aqui"
+
+    # tirando a regra especifica, tudo volta para o padrao: quem separou os dois
+    # foi a condicao, nao o acaso do desempate
+    cur.execute("DELETE FROM cartao.centro_regra WHERE id = %s;", (especifica,))
+    conn.commit()
+    totais_sem, _, _ = core.totais_por_subgrupo(cur, inicio, fim)
+    assert totais_sem.get(sub_vida) == 1050.0
+    assert totais_sem.get(sub_carro) is None
+
+    cur.execute("DELETE FROM cartao.transacao WHERE descricao = %s;", (f"Seguro {marca}",))
+    cur.execute("DELETE FROM cartao.grupo_custo WHERE id IN (%s,%s);", (grupo_a, grupo_b))
+    cur.execute("DELETE FROM cartao.conta WHERE account_id = %s;", (conta,))
+    cur.execute("DELETE FROM cartao.pluggy_item WHERE item_id = %s;", (item,))
     conn.commit()
     cur.close()
     conn.close()

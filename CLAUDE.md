@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 12/09/2026 · **Schema:** migração 64 · **Testes:** 438 aprovados, 6 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 65 · **Testes:** 442 aprovados, 7 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -239,7 +239,8 @@ verdade: fazer o app chamar o worker pela rede interna e remover o domínio púb
 | `sync_log` | auditoria das rodadas de sincronização |
 | `categoria_natureza` | natureza contábil de cada categoria — base do DRE |
 | `categoria` / `categoria_oculta` | renomeações e categorias escondidas pelo usuário |
-| `grupo_custo` / `subgrupo_custo` / `categoria_subgrupo` | centro de custo |
+| `grupo_custo` / `subgrupo_custo` | centro de custo e seus subgrupos |
+| `centro_regra` / `centro_regra_dimensao` | regra de vínculo: categoria + condições opcionais de dimensão (§7.11) |
 | `usuario` | login (PBKDF2-HMAC-SHA256, 200k iterações), perfil e permissões |
 | `item_titular` | de quem é cada conexão |
 | `investimento` / `investimento_saldo` | posições e histórico diário |
@@ -2068,6 +2069,72 @@ mais rápidos que o `title` nativo.
 **Favicon:** fica em `static/favicon.png`. Se sumir após deploy, verificar a referência versionada
 em `templates/base.html` e renovar o parâmetro de cache — **não recriar a imagem**.
 
+## 7.11 Centro de custo por REGRA, não por categoria (14/09/2026)
+
+**Decisão do usuário.** O vínculo era `categoria → subgrupo`, com a categoria como chave
+primária: uma categoria ficava sempre no mesmo centro de custo. Isso quebrava no caso real de
+**Seguros**, que a família usa tanto no seguro do carro quanto no seguro de vida (§4.4, o rateio
+do DEB MONGERAL) — o seguro de vida contava dentro de **Transporte**, inflando um centro de custo
+com gasto que não é dele.
+
+A saída oferecida antes era criar uma categoria nova ("Seguro Veículo" / "Seguro de Vida"). O
+usuário recusou: **não quer inflar o cadastro de categorias para resolver um problema de
+agrupamento.** Hoje o vínculo é uma **regra**: categoria + **condições opcionais de dimensão**
+(Projeto, Portfólio, Responsável — qualquer uma, inclusive uma dimensão criada depois).
+
+**Vence a regra MAIS ESPECÍFICA** — a que tem mais condições satisfeitas, como no CSS. Sem
+condição, a regra é o padrão daquela categoria. O desempate é pelo **id mais antigo, nunca
+aleatório**: o DRE não pode dar respostas diferentes para o mesmo dado em duas leituras, que é o
+defeito de arquitetura que a §6.1 já cobrou caro.
+
+- **`CENTRO_REGRA_RESOLVIDA_SQL` é o ponto único.** DRE, `/pendencias` e a tela leem dali.
+  Escrita uma segunda vez em `views/`, a cópia divergiria — e aqui a divergência sai como
+  **número errado no DRE**, que é o que a §1.1 proíbe. Há teste varrendo `views/` por função
+  (pelo AST, não pelo arquivo inteiro: `lancamento_financeiro_dimensao` também aparece na tela de
+  dimensões, que não tem nada com isto).
+- **O DRE soma por LANÇAMENTO, não por categoria.** Somar por categoria volta a misturar os
+  centros no primeiro vínculo com condição, e **sem erro nenhum na tela**. `totais_por_subgrupo()`
+  faz a conta; `test_dre_soma_centro_de_custo_por_lancamento_e_nao_por_categoria` trava a volta.
+- **Duas regras iguais são recusadas** (mesma categoria, mesmas condições): seriam duas respostas
+  para a mesma pergunta, e o desempate escolheria uma em silêncio.
+- **Uma condição por dimensão, no máximo.** Duas exigências na mesma dimensão nunca casariam ao
+  mesmo tempo (o lançamento tem um valor por dimensão) e a regra ficaria morta sem dizer por quê.
+- **Apagar um valor de dimensão apaga a regra junto** (`ON DELETE CASCADE`). Sem isso a regra
+  ficaria com uma condição apontando para nada e viraria uma regra mais genérica em silêncio,
+  mudando o DRE sem ninguém pedir — o mesmo defeito que o `valor_id` nulável já custou (§3).
+- **Só categoria de despesa precisa estar aqui** — centro de custo é análise de gasto (§4.1).
+  Receita, transferência e bem ficam de fora de propósito.
+
+**Provado contra Postgres de verdade**, não por leitura de código: a resolução é SQL, e cursor
+dublado não executa SQL (a lição da §10.4 nº 7). `test_regra_mais_especifica_manda_o_gasto_para_
+outro_centro` monta o caso do Seguros com dois lançamentos e confere que cada um cai no seu
+centro — e que, **removida a regra específica, tudo volta para o padrão**, o que prova que quem
+separou os dois foi a condição e não o acaso.
+
+### A tela (reescrita no mesmo dia)
+
+`/grupos` é **toda AJAX**: cada mudança salva sozinha, nada recarrega. O servidor entrega o
+**estado** e `static/centro_custos.js` desenha — o Jinja **não** monta a árvore também. Duas
+implementações do mesmo desenho divergiriam na primeira regra nova, e só depois de uma edição,
+com a tela mostrando uma coisa e o DRE contando outra. `test_tela_de_centro_de_custo_tem_um_
+desenho_so` trava isso.
+
+- **Toda escrita passa por `/api/centro-custo`**, uma rota só, com a ação no corpo, e a resposta é
+  **o estado inteiro recalculado pelo servidor**. A tela nunca adivinha o resultado: qual regra
+  vence depende das outras regras da mesma categoria, então prever no cliente daria a resposta
+  errada justamente no caso que motivou a tela. Mesma regra do lote (§7.2-A) — há teste exigindo
+  **um único `fetch`** no arquivo.
+- **Arrastar e soltar move a ficha** entre subgrupos (= troca o destino da regra); soltar na área
+  "categorias sem centro de custo" desvincula. Nome de centro e de subgrupo se edita **na própria
+  linha**, sem botão Salvar: Enter grava, Esc desfaz.
+- **A hierarquia é desenhada por aninhamento** — centro é cartão, subgrupo é trilha, regra é
+  ficha. O `└` que desenhava a árvore com texto **saiu a pedido do usuário**: some no modo
+  escuro, quebra no celular e não diz nada que a moldura já não diga. Não reintroduzir.
+- **A ficha mostra a especificidade**: barra lateral acesa e badge com a condição quando a regra
+  tem uma, apagada quando é o padrão da categoria. E a lista põe **a mais específica primeiro**,
+  a mesma ordem que o motor de resolução usa — a tela conta a mesma história que o SQL.
+- Tudo em token (§7.8-A): o inventário continua em **16**, nenhum valor cru novo.
+
 ## 7.10 Compras futuras (05/09/2026)
 
 Menu próprio, preenchido à mão: o que a família **pretende** comprar, com valor previsto, mês-alvo,
@@ -2435,6 +2502,18 @@ pytest tests/ -v
 
 Teste de integração não substitui validação logada em produção: configuração, dados reais, rede do
 Coolify e comportamento do Pluggy são diferentes.
+
+**A suíte de Postgres estava quebrada havia meses, e ninguém viu** (descoberto em 14/09/2026, ao
+subir um Postgres em Docker para provar a regra de centro de custo). Ela só roda com
+`RUN_POSTGRES_INTEGRATION=1`, então nada acusa no dia a dia. Dois defeitos eram **número escrito à
+mão que envelheceu**: a fixture cobrava `MAX(versao) == 12` enquanto o schema já ia na 65, e o
+`_login` esperava redirect para `/` depois que o destino do login virou Lançamentos (§7.1-A).
+Os dois foram corrigidos para cobrar a **regra** em vez do valor — a versão sai do próprio
+`core.py`, e o destino de `core.URL_LANCAMENTOS`. **Continuam falhando 2**, por decisão de produto
+que os testes não acompanharam: eles esperam `duplicada = true`, e marcar duplicidade saiu da
+interface em 02/09/2026 (§1.3, §4.3). Ao mexer neles, é o teste que precisa mudar, não a regra.
+**Lição:** teste que só roda no CI precisa cobrar regra, não número — senão ele não protege nada e
+ainda esconde que parou de rodar.
 
 **Não existe como rodar a aplicação na máquina do usuário, e a tentativa já foi feita (08/09/2026).**
 Dois bloqueios independentes: o processo que o preview inicia **não tem permissão de ler dentro de
@@ -2968,3 +3047,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 62 | apaga `metrica_diaria` (ninguém lia; decisão do usuário), só se o backup tiver as mesmas linhas; `metrica_diaria_backup_v62` |
 | 63 | pendente ligado ao confirmado do mesmo débito (§4.3); `pendente_backup_v63` + `pendente_dim_backup_v63` |
 | 64 | `conta.nome_curto`: o nome curto de cada origem (§7.1-D); só a coluna, nenhum dado muda |
+| 65 | centro de custo vira REGRA (categoria + dimensão opcional, §7.11); `categoria_subgrupo` sai, `categoria_subgrupo_backup_v65` |
