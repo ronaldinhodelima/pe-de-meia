@@ -219,7 +219,11 @@
      sobrevive ao menu recolhido do celular, que e onde o usuario mais
      precisa dele. Apagado quando nao ha o que desfazer: botao sempre aceso
      que as vezes nao faz nada ensina a desconfiar dele. */
-  .marca-grupo { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+  /* `.topbar > div:first-child` ja existia com align-items:center, e o grupo da
+     marca PASSOU A SER esse primeiro div - a regra antiga vencia por
+     especificidade e o botao subia para o meio. Medido no navegador, porque
+     lendo o CSS as duas pareciam certas (secao 7.8-A). */
+  .topbar > .marca-grupo { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
   .desfazer-btn {
     flex: none; width: 32px; height: 32px; margin-bottom: 2px;
     display: inline-flex; align-items: center; justify-content: center;
