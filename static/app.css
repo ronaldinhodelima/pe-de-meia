@@ -223,7 +223,12 @@
      marca PASSOU A SER esse primeiro div - a regra antiga vencia por
      especificidade e o botao subia para o meio. Medido no navegador, porque
      lendo o CSS as duas pareciam certas (secao 7.8-A). */
-  .topbar > .marca-grupo { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+  /* `:first-child` conta como CLASSE na especificidade: `.topbar > div:first-child`
+     e (0,2,1) e vence `.topbar > .marca-grupo`, que e (0,2,0). Por isso a regra
+     repete o `:first-child` - empata a forma e ganha no desempate por ordem. */
+  .topbar > .marca-grupo:first-child {
+    display: flex; align-items: flex-end; gap: 10px; min-width: 0;
+  }
   .desfazer-btn {
     flex: none; width: 32px; height: 32px; margin-bottom: 2px;
     display: inline-flex; align-items: center; justify-content: center;
