@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 451 aprovados, 8 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 450 aprovados, 8 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -816,24 +816,36 @@ uma perda real em relação ao PDF; a garantia passa a ser o FITID.
 com 4 meses num arquivo só. Um arquivo assim vira **um** documento com ciclo de 4 meses — funciona,
 mas destoa da granularidade mensal do extrato em PDF.
 
-### Documento não entra por cima de período já importado (14/09/2026)
+### Importar o que falta, ignorar o que já existe (14/09/2026)
 
-**Pedido do usuário, e o buraco era real.** A chave do documento é `(conta, mês, ano)` e o mês sai
-do **fim** do período: um OFX de **01/08 a 14/09** vira "setembro", **não colide** com o extrato de
-agosto já importado e entraria cobrindo agosto de novo. Dali sairiam duas linhas para a mesma
-transação e, pela rota que cria lançamento sem contraparte (§5), **valor em dobro no DRE**.
+**Decisão do usuário, em duas etapas — e a segunda corrigiu a primeira.**
 
-`documento_sobreposto()` barra antes de gravar qualquer coisa, e a mensagem diz **qual** documento
-já cobre o período e de quando a quando. Três decisões:
+O problema era real: a chave do documento é `(conta, mês, ano)` e o mês sai do **fim** do período.
+Um OFX de **01/08 a 14/09** vira "setembro", **não colide** com o extrato de agosto já importado e
+entrava cobrindo agosto de novo. Dali sairiam duas linhas para a mesma transação e, pela rota que
+cria lançamento sem contraparte (§5), **valor em dobro no DRE**.
 
-- **Reenviar o mesmo `(conta, mês, ano)` continua valendo** — é substituição, não duplicação; o
+A primeira versão **recusava o arquivo inteiro**. O usuário corrigiu no mesmo dia: o banco exporta
+o período que se pedir, e recusar faz **perder a parte nova — que é dado real**. Hoje
+`recortar_linhas_ja_cobertas()` aceita o arquivo e traz só o que falta.
+
+- **O corte é por LINHA, pela data**, não pelo período do arquivo. Assim cada transação pertence a
+  exatamente um documento, e um arquivo que preencha um **buraco no meio** (dois documentos já
+  importados com um mês livre entre eles) entra normalmente — o período do arquivo nem precisa ser
+  contínuo.
+- **O documento passa a ser o que ele de fato tem:** período, total e mês de referência são
+  recalculados sobre as linhas que sobraram. Sem isso ele continuaria declarando cobrir agosto.
+- **Reenviar o mesmo `(conta, mês, ano)` não descarta nada** — é substituição, e o
   `ON CONFLICT DO UPDATE` da importação troca tudo no lugar.
-- **Um único dia em comum já barra**: bastaria ele para duplicar aquela transação.
-- **Sem data no arquivo, não bloqueia.** Sem período não dá para afirmar sobreposição, e recusar
-  no escuro seria pior que deixar passar.
+- **Linha sem data não é descartada**, e documento sem período não cobre nada: sem data não dá para
+  afirmar que já existe, e descartar no escuro perderia dado.
+- **Sobrando zero linhas, aí sim recusa** — não há nada novo a trazer, e gravar um documento vazio
+  só criaria ruído.
+- A tela diz **quantas linhas ficaram de fora e de qual documento**, e quantas entraram.
 
-A recusa é tratada à parte do `except` genérico da importação: ela é **deliberada**, então a
-mensagem vai limpa para a tela e a auditoria registra "recusado", sem traceback de defeito.
+**Medido com o arquivo real do usuário** (01/08 a 14/09, 35 linhas), com agosto já importado: 28
+linhas de agosto ignoradas, **7 de setembro importadas**, documento novo de 08/09 a 14/09 —
+e ele não encosta mais no de agosto.
 
 ### Formatos homologados e o extrato OFX do Nubank (11/09/2026)
 

@@ -34,7 +34,7 @@ from core import (
     _montar_filtro_relatorio,
     aplicar_regras,
     arvore_centro_custo,
-    documento_sobreposto,
+    recortar_linhas_ja_cobertas,
     totais_por_subgrupo,
     carregar_origens,
     chip_origem_html,
@@ -1110,6 +1110,9 @@ def conciliar_fatura():
     categorias_template = [{"chave": c, "nome": cat_pt_puro(c)} for c in categorias]
 
     erro = None
+    # aviso de importacao parcial: o arquivo pegou um pedaco ja coberto e
+    # so o que faltava entrou. O base.html renderiza `aviso` sozinho.
+    recorte_aviso = None
     resultado = None
     fatura_meta = None
     account_id = request.form.get("account_id") if request.method == "POST" else None
@@ -1229,25 +1232,51 @@ def conciliar_fatura():
                     )
                 )
 
-                # Antes de gravar: este periodo ja esta coberto por outro
-                # documento desta conta? Se estiver, para aqui - importar
-                # geraria linha em dobro para a mesma transacao e, pela rota
-                # que cria lancamento sem contraparte, valor em dobro no DRE.
-                conflito = documento_sobreposto(
-                    cur, account_id, periodo_inicio, periodo_fim,
+                # O arquivo pode pegar um pedaco que outro documento ja cobre -
+                # o banco exporta o periodo que o usuario pedir. Recusar o
+                # arquivo inteiro faria perder a parte NOVA, que e dado real
+                # (decisao do usuario, 14/09/2026); entao o corte e por linha:
+                # entra o que falta, fica de fora o que ja existe. Assim cada
+                # transacao pertence a um documento so, e a mesma cobranca nao
+                # vira duas linhas (que viraria valor em dobro no DRE, secao 5).
+                restantes, ignoradas = recortar_linhas_ja_cobertas(
+                    cur, account_id, fatura["linhas"],
                     fatura["mes_referencia"], fatura["ano_referencia"],
                 )
-                if conflito:
-                    qual = conflito["arquivo_nome"] or f'{conflito["tipo_documento"]} sem nome'
+                if ignoradas and not restantes:
+                    donos = {d["id"]: d for _l, d in ignoradas}
+                    nomes = ", ".join(
+                        f'{d["mes_referencia"]:02d}/{d["ano_referencia"]}' for d in donos.values()
+                    )
                     raise FaturaInvalida(
-                        f'Este período ({periodo_inicio.strftime("%d/%m/%Y")} a '
-                        f'{periodo_fim.strftime("%d/%m/%Y")}) já está coberto pelo documento de '
-                        f'{conflito["mes_referencia"]:02d}/{conflito["ano_referencia"]} '
-                        f'("{qual}", de {conflito["periodo_inicio"].strftime("%d/%m/%Y")} a '
-                        f'{conflito["periodo_fim"].strftime("%d/%m/%Y")}). '
-                        "Importar assim criaria a mesma transação duas vezes. "
-                        "Envie um arquivo que comece depois dessa data, ou apague o documento "
-                        "antigo antes, se a intenção for substituí-lo."
+                        f"Todos os {len(ignoradas)} lançamentos deste arquivo já estão em "
+                        f"documento importado ({nomes}). Não há nada novo para trazer."
+                    )
+                if ignoradas:
+                    # o documento passa a ser o que ele de fato tem: periodo,
+                    # total e mes de referencia saem das linhas que sobraram
+                    fatura["linhas"] = restantes
+                    periodo_inicio = min(l["data"] for l in restantes)
+                    periodo_fim = max(l["data"] for l in restantes)
+                    fatura["periodo_inicio"] = periodo_inicio
+                    fatura["periodo_fim"] = periodo_fim
+                    fatura["mes_referencia"] = periodo_fim.month
+                    fatura["ano_referencia"] = periodo_fim.year
+                    if fatura.get("extrato"):
+                        # no extrato o total e o MOVIMENTO das linhas (secao 6.8)
+                        fatura["total"] = sum((l["valor"] for l in restantes), Decimal("0"))
+                    donos = {d["id"]: d for _l, d in ignoradas}
+                    de_onde = "; ".join(
+                        f'{d["mes_referencia"]:02d}/{d["ano_referencia"]}'
+                        f' ({d["arquivo_nome"] or d["tipo_documento"]})'
+                        for d in donos.values()
+                    )
+                    recorte_aviso = (
+                        f"{len(ignoradas)} lançamento(s) já estavam em documento importado "
+                        f"[{de_onde}] e foram ignorados para não duplicar. "
+                        f"Importei os {len(restantes)} restantes "
+                        f'({periodo_inicio.strftime("%d/%m/%Y")} a '
+                        f'{periodo_fim.strftime("%d/%m/%Y")}).'
                     )
 
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
@@ -1538,6 +1567,7 @@ def conciliar_fatura():
         categorias=categorias_template,
         account_id=account_id,
         erro=erro,
+        aviso=recorte_aviso,
         resultado=resultado,
         historico=historico,
         fatura_id=fatura_id,

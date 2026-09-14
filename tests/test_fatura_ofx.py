@@ -337,21 +337,20 @@ def test_extrato_ofx_da_unicred_respeita_o_charset_do_cabecalho():
 
 
 class _CursorDeDocumentos:
-    """Banco dublado com UM documento ja importado, para exercitar a consulta
-    de sobreposicao sem Postgres. Repete a mesma condicao do SQL."""
+    """Banco dublado com os documentos ja importados de uma conta."""
 
-    def __init__(self, existente):
-        self.existente = existente
-        self.resultado = None
+    def __init__(self, existentes):
+        self.existentes = existentes
+        self.resultado = []
 
     def execute(self, sql, params):
-        _conta, mes, ano, fim, inicio = params
-        e = self.existente
-        mesmo_documento = (mes == e["mes_referencia"] and ano == e["ano_referencia"])
-        sobrepoe = e["periodo_inicio"] <= fim and e["periodo_fim"] >= inicio
-        self.resultado = None if (mesmo_documento or not sobrepoe) else e
+        _conta, mes, ano = params
+        self.resultado = [
+            d for d in self.existentes
+            if not (d["mes_referencia"] == mes and d["ano_referencia"] == ano)
+        ]
 
-    def fetchone(self):
+    def fetchall(self):
         return self.resultado
 
 
@@ -362,34 +361,72 @@ AGOSTO_JA_IMPORTADO = {
 }
 
 
-@pytest.mark.parametrize("rotulo,inicio,fim,mes,ano,bloqueia", [
-    # o caso real: OFX de 01/08 a 14/09 vira "setembro" (o mes sai do FIM) e
-    # NAO colide na chave (conta, mes, ano) - entrava cobrindo agosto de novo
-    ("OFX de agosto a setembro", date(2026, 8, 1), date(2026, 9, 14), 9, 2026, True),
-    # reenviar o proprio documento e substituicao, nao duplicacao
-    ("reenvio do proprio agosto", date(2026, 8, 1), date(2026, 8, 31), 8, 2026, False),
-    ("setembro limpo", date(2026, 9, 1), date(2026, 9, 30), 9, 2026, False),
-    ("periodo bem antes", date(2026, 1, 1), date(2026, 4, 30), 4, 2026, False),
-    # um unico dia em comum ja duplicaria aquela transacao
-    ("encosta um dia so", date(2026, 8, 31), date(2026, 9, 30), 9, 2026, True),
-])
-def test_documento_que_cobre_periodo_ja_importado_e_barrado(rotulo, inicio, fim, mes, ano, bloqueia):
-    """Pedido do usuario (14/09/2026): nao importar por cima do que ja existe.
+def _linha(dia, valor="1.00"):
+    return {"data": dia, "descricao": "x", "descricao_base": "x", "valor": Decimal(valor),
+            "parcela_atual": None, "parcela_total": None, "titular": None, "id_externo": None}
 
-    Sem isto, a mesma transacao vira duas linhas de documento e, pela rota que
-    cria lancamento sem contraparte (secao 5), valor em dobro no DRE.
+
+def test_importacao_traz_o_que_falta_e_ignora_o_que_ja_existe():
+    """Decisao do usuario (14/09/2026), corrigindo a primeira versao.
+
+    Recusar o arquivo inteiro fazia perder a parte NOVA - e ela e dado real. O
+    corte e por linha: entra o que falta, fica de fora o que ja esta em outro
+    documento. Assim a mesma transacao nunca vira duas linhas.
     """
-    from core import documento_sobreposto
+    from core import recortar_linhas_ja_cobertas
 
-    cur = _CursorDeDocumentos(AGOSTO_JA_IMPORTADO)
-    achado = documento_sobreposto(cur, "conta-x", inicio, fim, mes, ano)
-    assert bool(achado) is bloqueia, rotulo
+    cur = _CursorDeDocumentos([AGOSTO_JA_IMPORTADO])
+    linhas = [_linha(date(2026, 8, 3)), _linha(date(2026, 8, 31)),
+              _linha(date(2026, 9, 1)), _linha(date(2026, 9, 14))]
+    restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 9, 2026)
+
+    assert [l["data"] for l in restantes] == [date(2026, 9, 1), date(2026, 9, 14)]
+    assert [l["data"] for l, _d in ignoradas] == [date(2026, 8, 3), date(2026, 8, 31)]
+    # a tela precisa dizer de quem era a linha ignorada
+    assert all(d["arquivo_nome"] == "extrato-agosto.pdf" for _l, d in ignoradas)
 
 
-def test_documento_sem_periodo_nao_bloqueia_no_escuro():
-    """Sem data nao da para afirmar sobreposicao - recusar seria pior."""
-    from core import documento_sobreposto
+def test_reenviar_o_proprio_documento_nao_ignora_nada():
+    """Mesmo (conta, mes, ano) e substituicao, nao duplicacao: o ON CONFLICT da
+    importacao troca tudo no lugar, entao nenhuma linha pode ser descartada."""
+    from core import recortar_linhas_ja_cobertas
 
-    cur = _CursorDeDocumentos(AGOSTO_JA_IMPORTADO)
-    assert documento_sobreposto(cur, "conta-x", None, None, 9, 2026) is None
-    assert documento_sobreposto(cur, "conta-x", date(2026, 9, 1), None, 9, 2026) is None
+    cur = _CursorDeDocumentos([AGOSTO_JA_IMPORTADO])
+    linhas = [_linha(date(2026, 8, 3)), _linha(date(2026, 8, 20))]
+    restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 8, 2026)
+    assert len(restantes) == 2 and ignoradas == []
+
+
+def test_periodo_livre_entra_inteiro():
+    from core import recortar_linhas_ja_cobertas
+
+    cur = _CursorDeDocumentos([AGOSTO_JA_IMPORTADO])
+    linhas = [_linha(date(2026, 1, 5)), _linha(date(2026, 4, 30))]
+    restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 4, 2026)
+    assert len(restantes) == 2 and ignoradas == []
+
+
+def test_arquivo_com_buraco_no_meio_preenche_so_o_buraco():
+    """Dois documentos ja importados, com um mes livre entre eles: entra so o
+    mes livre. O corte e por data da linha, entao nao depende de o periodo do
+    arquivo ser continuo."""
+    from core import recortar_linhas_ja_cobertas
+
+    outubro = dict(AGOSTO_JA_IMPORTADO, id=2, mes_referencia=10,
+                   arquivo_nome="extrato-outubro.pdf",
+                   periodo_inicio=date(2026, 10, 1), periodo_fim=date(2026, 10, 31))
+    cur = _CursorDeDocumentos([AGOSTO_JA_IMPORTADO, outubro])
+    linhas = [_linha(date(2026, 8, 10)), _linha(date(2026, 9, 15)), _linha(date(2026, 10, 20))]
+    restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 9, 2026)
+    assert [l["data"] for l in restantes] == [date(2026, 9, 15)]
+    assert len(ignoradas) == 2
+
+
+def test_linha_sem_data_nao_e_descartada_no_escuro():
+    """Sem data nao da para afirmar que ja existe - descartar seria perder dado."""
+    from core import recortar_linhas_ja_cobertas
+
+    cur = _CursorDeDocumentos([AGOSTO_JA_IMPORTADO])
+    linhas = [_linha(None), _linha(date(2026, 8, 5))]
+    restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 9, 2026)
+    assert restantes == [linhas[0]] and len(ignoradas) == 1

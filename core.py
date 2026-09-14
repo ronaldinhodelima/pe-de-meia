@@ -6017,34 +6017,56 @@ def totais_por_subgrupo(cur, inicio, fim):
     return totais, sum(soltas.values()), soltas
 
 
-def documento_sobreposto(cur, account_id, inicio, fim, mes, ano):
-    """Ja existe documento da MESMA conta cobrindo parte deste periodo?
+def periodos_ja_cobertos(cur, account_id, mes, ano):
+    """Intervalos que OUTROS documentos desta conta ja cobrem.
 
-    Pedido do usuario (14/09/2026), e o buraco era real: a chave do documento e
-    (conta, mes, ano), e o mes sai do FIM do periodo. Um OFX de 01/08 a 14/09
-    vira "setembro" e NAO colide com o extrato de agosto ja importado - entra
-    como documento novo cobrindo agosto de novo. Dali sairiam duas linhas para a
-    mesma transacao e, pela rota que cria lancamento sem contraparte (secao 5),
-    lancamento em dobro no DRE.
-
-    Reenviar o MESMO (conta, mes, ano) continua valendo: e substituicao, nao
-    duplicacao - o `ON CONFLICT DO UPDATE` da importacao troca tudo no lugar.
-
-    Devolve o documento conflitante (ou None). Datas nulas nao bloqueiam: sem
-    periodo nao da para afirmar sobreposicao, e recusar no escuro seria pior.
+    Exclui o proprio (conta, mes, ano): reenviar o mesmo documento e
+    substituicao, nao duplicacao - o `ON CONFLICT DO UPDATE` da importacao
+    troca tudo no lugar.
     """
-    if not (inicio and fim):
-        return None
     cur.execute(
         "SELECT id, mes_referencia, ano_referencia, arquivo_nome, tipo_documento, "
         "periodo_inicio, periodo_fim FROM cartao.fatura_importada "
         "WHERE account_id = %s AND NOT (mes_referencia = %s AND ano_referencia = %s) "
         "AND periodo_inicio IS NOT NULL AND periodo_fim IS NOT NULL "
-        "AND periodo_inicio <= %s AND periodo_fim >= %s "
-        "ORDER BY ano_referencia, mes_referencia LIMIT 1;",
-        (account_id, mes, ano, fim, inicio),
+        "ORDER BY periodo_inicio;",
+        (account_id, mes, ano),
     )
-    return cur.fetchone()
+    return cur.fetchall()
+
+
+def recortar_linhas_ja_cobertas(cur, account_id, linhas, mes, ano):
+    """Fica so com as linhas que nenhum documento desta conta ja cobre.
+
+    Decisao do usuario (14/09/2026), corrigindo a primeira versao desta
+    protecao: um arquivo que pega um pedaco ja importado nao pode ser RECUSADO
+    inteiro - o banco exporta o periodo que quiser, e recusar faria perder a
+    parte nova, que e dado real. O certo e aceitar e trazer so o que falta.
+
+    O corte e por LINHA, pela data: cada transacao pertence a exatamente um
+    documento, entao nao ha como a mesma cobranca virar duas linhas (era esse o
+    risco - pela rota que cria lancamento sem contraparte, valor em dobro no
+    DRE, secao 5).
+
+    Devolve (restantes, ignoradas), onde cada ignorada e (linha, documento que
+    ja a cobria) - a tela precisa dizer o que deixou de fora e por causa de quem.
+    """
+    cobertos = periodos_ja_cobertos(cur, account_id, mes, ano)
+    if not cobertos:
+        return list(linhas), []
+    restantes, ignoradas = [], []
+    for linha in linhas:
+        data = linha.get("data")
+        dono = next(
+            (d for d in cobertos
+             if data and d["periodo_inicio"] <= data <= d["periodo_fim"]),
+            None,
+        )
+        if dono:
+            ignoradas.append((linha, dono))
+        else:
+            restantes.append(linha)
+    return restantes, ignoradas
 
 
 # ---- desfazer (migracao 66) --------------------------------------------------
