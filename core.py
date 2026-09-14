@@ -6017,6 +6017,36 @@ def totais_por_subgrupo(cur, inicio, fim):
     return totais, sum(soltas.values()), soltas
 
 
+def documento_sobreposto(cur, account_id, inicio, fim, mes, ano):
+    """Ja existe documento da MESMA conta cobrindo parte deste periodo?
+
+    Pedido do usuario (14/09/2026), e o buraco era real: a chave do documento e
+    (conta, mes, ano), e o mes sai do FIM do periodo. Um OFX de 01/08 a 14/09
+    vira "setembro" e NAO colide com o extrato de agosto ja importado - entra
+    como documento novo cobrindo agosto de novo. Dali sairiam duas linhas para a
+    mesma transacao e, pela rota que cria lancamento sem contraparte (secao 5),
+    lancamento em dobro no DRE.
+
+    Reenviar o MESMO (conta, mes, ano) continua valendo: e substituicao, nao
+    duplicacao - o `ON CONFLICT DO UPDATE` da importacao troca tudo no lugar.
+
+    Devolve o documento conflitante (ou None). Datas nulas nao bloqueiam: sem
+    periodo nao da para afirmar sobreposicao, e recusar no escuro seria pior.
+    """
+    if not (inicio and fim):
+        return None
+    cur.execute(
+        "SELECT id, mes_referencia, ano_referencia, arquivo_nome, tipo_documento, "
+        "periodo_inicio, periodo_fim FROM cartao.fatura_importada "
+        "WHERE account_id = %s AND NOT (mes_referencia = %s AND ano_referencia = %s) "
+        "AND periodo_inicio IS NOT NULL AND periodo_fim IS NOT NULL "
+        "AND periodo_inicio <= %s AND periodo_fim >= %s "
+        "ORDER BY ano_referencia, mes_referencia LIMIT 1;",
+        (account_id, mes, ano, fim, inicio),
+    )
+    return cur.fetchone()
+
+
 # ---- desfazer (migracao 66) --------------------------------------------------
 #
 # O que pode voltar atras, e ate onde. A lista e branca de proposito: desfazer e

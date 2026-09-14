@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 442 aprovados, 8 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 451 aprovados, 8 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -799,11 +799,47 @@ R$ 153.048,26 − saídas R$ 148.091,59 = R$ 4.956,67 = saldo final − saldo in
 realizado os débitos que hoje são compromissos, e é aí que o vínculo automático será testado de
 verdade.
 
+### Extrato OFX da Unicred (homologado em 14/09/2026)
+
+O usuário trouxe dois extratos OFX da conta corrente Unicred. **O que homologou não foi o parser
+não dar erro:** o arquivo de 01–04/2026 tem 157 linhas e movimento de **−R$ 30.736,70**, e isso
+bate **centavo a centavo** com os 157 lançamentos que o Pluggy já tinha no mesmo período — mesma
+contagem, mesmo total. Junto com FITID único por linha e a acentuação correta (`CHARSET:1252`,
+zero mojibake), é prova de leitura completa.
+
+Vale o mesmo que o OFX do Nubank (acima): sinal do banco (entrada positiva), sem leitura de
+parcela, e **o total é o movimento, não o `BALAMT`** — o arquivo traz só o saldo final, então a
+prova por saldo do PDF da Unicred (`saldo inicial + soma = saldo final`) **não existe aqui**. É
+uma perda real em relação ao PDF; a garantia passa a ser o FITID.
+
+**Cuidado com o intervalo:** o portal da Unicred exporta o período que o usuário pedir, e ele veio
+com 4 meses num arquivo só. Um arquivo assim vira **um** documento com ciclo de 4 meses — funciona,
+mas destoa da granularidade mensal do extrato em PDF.
+
+### Documento não entra por cima de período já importado (14/09/2026)
+
+**Pedido do usuário, e o buraco era real.** A chave do documento é `(conta, mês, ano)` e o mês sai
+do **fim** do período: um OFX de **01/08 a 14/09** vira "setembro", **não colide** com o extrato de
+agosto já importado e entraria cobrindo agosto de novo. Dali sairiam duas linhas para a mesma
+transação e, pela rota que cria lançamento sem contraparte (§5), **valor em dobro no DRE**.
+
+`documento_sobreposto()` barra antes de gravar qualquer coisa, e a mensagem diz **qual** documento
+já cobre o período e de quando a quando. Três decisões:
+
+- **Reenviar o mesmo `(conta, mês, ano)` continua valendo** — é substituição, não duplicação; o
+  `ON CONFLICT DO UPDATE` da importação troca tudo no lugar.
+- **Um único dia em comum já barra**: bastaria ele para duplicar aquela transação.
+- **Sem data no arquivo, não bloqueia.** Sem período não dá para afirmar sobreposição, e recusar
+  no escuro seria pior que deixar passar.
+
+A recusa é tratada à parte do `except` genérico da importação: ela é **deliberada**, então a
+mensagem vai limpa para a tela e a auditoria registra "recusado", sem traceback de defeito.
+
 ### Formatos homologados e o extrato OFX do Nubank (11/09/2026)
 
 **Só entra arquivo de layout homologado** (decisão do usuário). A lista mora em
-`fatura_unicred.FORMATOS_HOMOLOGADOS`: fatura Unicred (PDF), extrato Unicred (PDF), fatura Nubank
-(OFX) e extrato de conta corrente Nubank (OFX). Qualquer outro — outro banco no `ORG` do OFX,
+`fatura_unicred.FORMATOS_HOMOLOGADOS`: fatura Unicred (PDF), extrato Unicred (PDF), **extrato
+Unicred (OFX)**, fatura Nubank (OFX) e extrato de conta corrente Nubank (OFX). Qualquer outro — outro banco no `ORG` do OFX,
 poupança/investimento, PDF que não é da Unicred, CSV, planilha — é recusado com
 **"Arquivo não homologado: …"** e a lista do que é aceito (`ArquivoNaoHomologado`). Ler "do jeito
 que der" não serve: cada layout tem sinal e prova de leitura próprios, e o leitor errado grava

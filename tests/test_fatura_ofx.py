@@ -7,6 +7,8 @@ que estamos travando.
 import io
 import pathlib
 import sys
+from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -241,3 +243,153 @@ def test_lancamento_criado_pelo_extrato_e_debito_quando_o_dinheiro_sai():
     assert 'extrato = linha.get("tipo_documento") == "extrato"' in fonte
     assert 'tipo = "DEBIT" if valor < Decimal("0") else "CREDIT"' in fonte
     assert "fi.tipo_documento " in fonte
+
+
+# Layout REAL do extrato OFX da Unicred, com valores e nomes trocados: o
+# arquivo da familia nao entra no repositorio (secao 10.1). O que importa e a
+# forma - ORG "UNICRED DO BRASIL", BANKMSGSRSV1/CHECKING, CHARSET 1252, FITID
+# por linha e so o saldo FINAL (sem o inicial).
+OFX_EXTRATO_UNICRED = """OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+<OFX>
+  <SIGNONMSGSRSV1><SONRS><STATUS><CODE>0</CODE></STATUS>
+    <LANGUAGE>POR</LANGUAGE>
+    <FI><ORG>UNICRED DO BRASIL</ORG><FID>136</FID></FI>
+  </SONRS></SIGNONMSGSRSV1>
+  <BANKMSGSRSV1><STMTTRNRS><TRNUID>1</TRNUID>
+    <STMTRS>
+      <CURDEF>BRL</CURDEF>
+      <BANKACCTFROM>
+        <BANKID>136</BANKID><BRANCHID>0000-0</BRANCHID>
+        <ACCTID>9999999</ACCTID><ACCTTYPE>CHECKING</ACCTTYPE>
+      </BANKACCTFROM>
+      <BANKTRANLIST>
+        <DTSTART>20260101000000[-3:BRT]</DTSTART>
+        <DTEND>20260430000000[-3:BRT]</DTEND>
+        <STMTTRN>
+          <TRNTYPE>OTHER</TRNTYPE><DTPOSTED>20260102</DTPOSTED>
+          <TRNAMT>-100.00</TRNAMT><FITID>20260102000001</FITID>
+          <MEMO>APLICACAO FINANCEIRA ( DOC.: 1 )</MEMO>
+        </STMTTRN>
+        <STMTTRN>
+          <TRNTYPE>OTHER</TRNTYPE><DTPOSTED>20260210</DTPOSTED>
+          <TRNAMT>250.50</TRNAMT><FITID>20260210000002</FITID>
+          <MEMO>ARRECADA\xc7\xc3O DE CONV\xcaNIOS ( DOC.: CONV\xcaNIO / AGUA )</MEMO>
+        </STMTTRN>
+        <STMTTRN>
+          <TRNTYPE>OTHER</TRNTYPE><DTPOSTED>20260315</DTPOSTED>
+          <TRNAMT>-40.25</TRNAMT><FITID>20260315000003</FITID>
+          <MEMO>DEPOSITO EM ESP\xc9CIE ( DOC.: 2 ) Conta: 22247-0</MEMO>
+        </STMTTRN>
+      </BANKTRANLIST>
+      <LEDGERBAL><BALAMT>110.25</BALAMT><DTASOF>20260430000000[-3:BRT]</DTASOF></LEDGERBAL>
+    </STMTRS>
+  </STMTTRNRS></BANKMSGSRSV1>
+</OFX>
+""".encode("cp1252")
+
+
+def test_extrato_ofx_da_unicred_e_homologado():
+    """Homologado em 14/09/2026 contra dois arquivos reais do usuario.
+
+    O que provou a leitura nao foi o parser "nao dar erro": foi o movimento do
+    arquivo de 01-04/2026 (-R$ 30.736,70, 157 linhas) bater centavo a centavo
+    com os 157 lancamentos que o Pluggy ja tinha no periodo.
+    """
+    dados = extrair_fatura(io.BytesIO(OFX_EXTRATO_UNICRED))
+    assert dados["extrato"] is True
+    assert dados["conta_externa"] == "9999999"
+    assert len(dados["linhas"]) == 3
+    # o total do extrato e o MOVIMENTO, nao o saldo: o OFX so traz o final
+    assert dados["total"] == Decimal("110.25")
+    assert dados["saldo_inicial"] is None
+    assert dados["saldo_final"] == Decimal("110.25")
+    # o mes de referencia sai do FIM do periodo
+    assert (dados["mes_referencia"], dados["ano_referencia"]) == (4, 2026)
+    assert dados["ciclo_do_arquivo"] is True
+
+
+def test_extrato_ofx_da_unicred_mantem_o_sinal_do_banco_e_nao_inventa_parcela():
+    """Entrada positiva, saida negativa - igual ao extrato Unicred em PDF.
+
+    E conta corrente nao tem parcela: "Conta: 22247-0" no fim de um PIX nao
+    pode virar parcela 22 de 47 (a mesma armadilha do extrato Nubank).
+    """
+    linhas = extrair_fatura(io.BytesIO(OFX_EXTRATO_UNICRED))["linhas"]
+    assert linhas[0]["valor"] == Decimal("-100.00"), "saida fica negativa"
+    assert linhas[1]["valor"] == Decimal("250.50"), "entrada fica positiva"
+    assert all(l["parcela_total"] is None for l in linhas)
+    assert [l["id_externo"] for l in linhas] == [
+        "20260102000001", "20260210000002", "20260315000003",
+    ]
+
+
+def test_extrato_ofx_da_unicred_respeita_o_charset_do_cabecalho():
+    """CHARSET:1252 lido como UTF-8 escreveria "ARRECADAÃ‡ÃƒO"."""
+    linhas = extrair_fatura(io.BytesIO(OFX_EXTRATO_UNICRED))["linhas"]
+    assert "ARRECADAÇÃO DE CONVÊNIOS" in linhas[1]["descricao"]
+    assert "ESPÉCIE" in linhas[2]["descricao"]
+    assert "Ã" not in linhas[1]["descricao"].replace("ARRECADAÇÃO", "")
+
+
+class _CursorDeDocumentos:
+    """Banco dublado com UM documento ja importado, para exercitar a consulta
+    de sobreposicao sem Postgres. Repete a mesma condicao do SQL."""
+
+    def __init__(self, existente):
+        self.existente = existente
+        self.resultado = None
+
+    def execute(self, sql, params):
+        _conta, mes, ano, fim, inicio = params
+        e = self.existente
+        mesmo_documento = (mes == e["mes_referencia"] and ano == e["ano_referencia"])
+        sobrepoe = e["periodo_inicio"] <= fim and e["periodo_fim"] >= inicio
+        self.resultado = None if (mesmo_documento or not sobrepoe) else e
+
+    def fetchone(self):
+        return self.resultado
+
+
+AGOSTO_JA_IMPORTADO = {
+    "id": 1, "mes_referencia": 8, "ano_referencia": 2026,
+    "arquivo_nome": "extrato-agosto.pdf", "tipo_documento": "extrato",
+    "periodo_inicio": date(2026, 8, 1), "periodo_fim": date(2026, 8, 31),
+}
+
+
+@pytest.mark.parametrize("rotulo,inicio,fim,mes,ano,bloqueia", [
+    # o caso real: OFX de 01/08 a 14/09 vira "setembro" (o mes sai do FIM) e
+    # NAO colide na chave (conta, mes, ano) - entrava cobrindo agosto de novo
+    ("OFX de agosto a setembro", date(2026, 8, 1), date(2026, 9, 14), 9, 2026, True),
+    # reenviar o proprio documento e substituicao, nao duplicacao
+    ("reenvio do proprio agosto", date(2026, 8, 1), date(2026, 8, 31), 8, 2026, False),
+    ("setembro limpo", date(2026, 9, 1), date(2026, 9, 30), 9, 2026, False),
+    ("periodo bem antes", date(2026, 1, 1), date(2026, 4, 30), 4, 2026, False),
+    # um unico dia em comum ja duplicaria aquela transacao
+    ("encosta um dia so", date(2026, 8, 31), date(2026, 9, 30), 9, 2026, True),
+])
+def test_documento_que_cobre_periodo_ja_importado_e_barrado(rotulo, inicio, fim, mes, ano, bloqueia):
+    """Pedido do usuario (14/09/2026): nao importar por cima do que ja existe.
+
+    Sem isto, a mesma transacao vira duas linhas de documento e, pela rota que
+    cria lancamento sem contraparte (secao 5), valor em dobro no DRE.
+    """
+    from core import documento_sobreposto
+
+    cur = _CursorDeDocumentos(AGOSTO_JA_IMPORTADO)
+    achado = documento_sobreposto(cur, "conta-x", inicio, fim, mes, ano)
+    assert bool(achado) is bloqueia, rotulo
+
+
+def test_documento_sem_periodo_nao_bloqueia_no_escuro():
+    """Sem data nao da para afirmar sobreposicao - recusar seria pior."""
+    from core import documento_sobreposto
+
+    cur = _CursorDeDocumentos(AGOSTO_JA_IMPORTADO)
+    assert documento_sobreposto(cur, "conta-x", None, None, 9, 2026) is None
+    assert documento_sobreposto(cur, "conta-x", date(2026, 9, 1), None, 9, 2026) is None

@@ -36,6 +36,7 @@ class FaturaInvalida(ValueError):
 FORMATOS_HOMOLOGADOS = (
     "fatura do cartão Unicred (PDF)",
     "extrato da conta corrente Unicred (PDF)",
+    "extrato da conta corrente Unicred (OFX)",
     "fatura do cartão Nubank (OFX)",
     "extrato da conta corrente Nubank (OFX)",
 )

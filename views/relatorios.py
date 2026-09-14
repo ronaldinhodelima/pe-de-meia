@@ -34,6 +34,7 @@ from core import (
     _montar_filtro_relatorio,
     aplicar_regras,
     arvore_centro_custo,
+    documento_sobreposto,
     totais_por_subgrupo,
     carregar_origens,
     chip_origem_html,
@@ -1228,6 +1229,27 @@ def conciliar_fatura():
                     )
                 )
 
+                # Antes de gravar: este periodo ja esta coberto por outro
+                # documento desta conta? Se estiver, para aqui - importar
+                # geraria linha em dobro para a mesma transacao e, pela rota
+                # que cria lancamento sem contraparte, valor em dobro no DRE.
+                conflito = documento_sobreposto(
+                    cur, account_id, periodo_inicio, periodo_fim,
+                    fatura["mes_referencia"], fatura["ano_referencia"],
+                )
+                if conflito:
+                    qual = conflito["arquivo_nome"] or f'{conflito["tipo_documento"]} sem nome'
+                    raise FaturaInvalida(
+                        f'Este período ({periodo_inicio.strftime("%d/%m/%Y")} a '
+                        f'{periodo_fim.strftime("%d/%m/%Y")}) já está coberto pelo documento de '
+                        f'{conflito["mes_referencia"]:02d}/{conflito["ano_referencia"]} '
+                        f'("{qual}", de {conflito["periodo_inicio"].strftime("%d/%m/%Y")} a '
+                        f'{conflito["periodo_fim"].strftime("%d/%m/%Y")}). '
+                        "Importar assim criaria a mesma transação duas vezes. "
+                        "Envie um arquivo que comece depois dessa data, ou apague o documento "
+                        "antigo antes, se a intenção for substituí-lo."
+                    )
+
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
                 # entao o arquivo fica como bytea no Postgres (500KB-1MB,
@@ -1356,6 +1378,18 @@ def conciliar_fatura():
                         "linhas": len(fatura["linhas"]),
                         "parcelas": resumo_parcelas,
                     },
+                )
+              except FaturaInvalida as exc:
+                # Recusa DELIBERADA (ex: periodo ja coberto por outro
+                # documento), nao defeito: a mensagem ja esta escrita para o
+                # usuario e o prefixo "nao consegui gravar" mentiria sobre o
+                # que aconteceu. Fica na auditoria como recusa, sem traceback.
+                conn.rollback()
+                fatura_id = None
+                erro = str(exc)
+                registrar_auditoria(
+                    "alteracao", "relatorios.conciliar_fatura_importar", sucesso=False,
+                    detalhes={"conta": account_id, "recusado": str(exc)},
                 )
               except Exception as exc:
                 conn.rollback()

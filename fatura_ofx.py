@@ -27,7 +27,12 @@ from fatura_unicred import ArquivoNaoHomologado, FaturaInvalida
 # Bancos cujo OFX foi conferido contra arquivo real. O `ORG` e o que o proprio
 # arquivo declara; outro banco pode seguir o padrao com outra regra de sinal ou
 # de ciclo, e por isso fica fora ate alguem conferir um arquivo dele.
-BANCOS_HOMOLOGADOS = {"NU PAGAMENTOS S.A."}
+# Homologar = conferir um arquivo REAL antes de deixar o layout entrar (secao
+# 6.8). A Unicred entrou em 14/09/2026 com dois extratos de conta corrente do
+# usuario: o de 01-04/2026 tem 157 linhas, FITID unicos, e o movimento
+# (-R$ 30.736,70) bate centavo a centavo com os 157 lancamentos que o Pluggy ja
+# tinha no periodo - prova de que a leitura esta certa.
+BANCOS_HOMOLOGADOS = {"NU PAGAMENTOS S.A.", "UNICRED DO BRASIL"}
 
 
 def _texto(bruto):
