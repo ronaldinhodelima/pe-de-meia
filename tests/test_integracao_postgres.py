@@ -556,3 +556,68 @@ def test_regra_mais_especifica_manda_o_gasto_para_outro_centro(sistema_real):
     conn.commit()
     cur.close()
     conn.close()
+
+
+def test_desfazer_devolve_o_estado_anterior_e_recusa_o_que_nao_pode(sistema_real):
+    """Desfazer e GRAVACAO: precisa ser exercitado, nao lido (migracao 66).
+
+    Cobre o que da errado caro: a volta tem que restaurar o estado anterior
+    inteiro (inclusive as condicoes de uma regra apagada, senao ela volta mais
+    generica e muda o DRE em silencio), a fila e por usuario, e a lista branca
+    recusa o que a secao 1.2 reserva ao clique humano - o OK.
+    """
+    _worker, core, _webapp = sistema_real
+    import uuid as _uuid
+
+    import psycopg2.extras
+    import pytest as _pytest
+
+    conn = core.get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    marca = _uuid.uuid4().hex[:6]
+
+    cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (f"A {marca}",))
+    grupo = cur.fetchone()["id"]
+    cur.execute("INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,'um') RETURNING id;", (grupo,))
+    sub_a = cur.fetchone()["id"]
+    cur.execute("INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,'dois') RETURNING id;", (grupo,))
+    sub_b = cur.fetchone()["id"]
+    cur.execute(
+        "INSERT INTO cartao.centro_regra (categoria, subgrupo_id) VALUES ('Insurance',%s) RETURNING id;",
+        (sub_a,))
+    regra = cur.fetchone()["id"]
+    conn.commit()
+
+    # mover e desfazer
+    core.registrar_desfazivel(cur, "voltar", [{
+        "op": "update", "tabela": "cartao.centro_regra",
+        "onde": {"id": regra}, "valores": {"subgrupo_id": sub_a},
+    }], usuario=f"u{marca}")
+    cur.execute("UPDATE cartao.centro_regra SET subgrupo_id=%s WHERE id=%s;", (sub_b, regra))
+    conn.commit()
+    core.desfazer_ultima_acao(cur, f"u{marca}")
+    conn.commit()
+    cur.execute("SELECT subgrupo_id FROM cartao.centro_regra WHERE id=%s;", (regra,))
+    assert cur.fetchone()["subgrupo_id"] == sub_a, "desfazer tem que devolver a regra"
+
+    # cada um desfaz o proprio passo
+    core.registrar_desfazivel(cur, "da outra pessoa", [{
+        "op": "update", "tabela": "cartao.centro_regra",
+        "onde": {"id": regra}, "valores": {"subgrupo_id": sub_a},
+    }], usuario=f"outro{marca}")
+    conn.commit()
+    assert core.desfazer_ultima_acao(cur, f"u{marca}")[0] is None
+
+    # o OK nunca entra: retirar assinatura exige confirmacao uma a uma
+    with _pytest.raises(ValueError):
+        core.registrar_desfazivel(cur, "nao", [{
+            "op": "update", "tabela": "cartao.transacao",
+            "onde": {"transacao_id": "x"}, "valores": {"conferida": True},
+        }], usuario=f"u{marca}")
+    conn.rollback()
+
+    cur.execute("DELETE FROM cartao.acao_desfazivel WHERE usuario LIKE %s;", (f"%{marca}",))
+    cur.execute("DELETE FROM cartao.grupo_custo WHERE id=%s;", (grupo,))
+    conn.commit()
+    cur.close()
+    conn.close()

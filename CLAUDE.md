@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 14/09/2026 · **Schema:** migração 65 · **Testes:** 442 aprovados, 7 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 442 aprovados, 8 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -2465,6 +2465,42 @@ E-mail operacional: `ronaldo@brdrive.net`. Backup no mesmo servidor foi aceito c
 camada; teste de restauração foi **adiado explicitamente pelo usuário** — não executar sem nova
 autorização. Backup fora do servidor continua desejável.
 
+## 9.4 Desfazer (14/09/2026)
+
+**Pedido do usuário:** um botão Desfazer disponível em todas as telas, guardando pelo menos as
+50 últimas ações. Ele fica no **topbar** (por isso existe em qualquer tela) e só acende quando há
+algo a desfazer — botão sempre aceso que às vezes não faz nada ensina a desconfiar dele.
+
+**Quem grava é quem sabe reverter.** A ação registra, no momento da gravação, o passo a passo da
+volta em `cartao.acao_desfazivel` (`reversao jsonb`). Não se deduz a reversão do `audit_log`
+depois: o log é texto de leitura humana, e adivinhar a volta a partir dele erraria em silêncio.
+Ação que não souber se reverter simplesmente **não registra**, e a tela não oferece desfazer para
+ela — melhor não oferecer do que oferecer errado.
+
+- **`DESFAZER_PERMITIDO` é uma lista branca** de tabela → colunas. Desfazer é gravação guiada por
+  dado ("qual tabela, qual coluna"), e sem limite escrito isso seria uma porta aberta para
+  qualquer coisa. Todo passo é validado na gravação **e** de novo na hora de desfazer.
+- **`conferida` não está na lista, e não é esquecimento.** Retirar um OK exige confirmação
+  explícita, uma a uma (§1.2); um botão que desfaz assinatura em lote seria o oposto disso. Há
+  teste cobrando a recusa.
+- **A fila é por usuário.** Desfazer é sobre o próprio passo em falso; uma fila compartilhada faria
+  o clique de um apagar o trabalho do outro sem aviso.
+- **A volta restaura o estado inteiro**, não só a linha principal: apagar uma regra de centro de
+  custo guarda também as condições dela, senão ela voltaria mais genérica do que era e **mudaria o
+  DRE em silêncio** (§7.11).
+- **O desfazer também vai para o `audit_log`** — ele é uma alteração como qualquer outra, e deixá-lo
+  de fora abriria buraco na auditoria (§9.3).
+- A janela fica em **50 por usuário**: é para o passo em falso recente, não um histórico paralelo
+  ao log, que continua guardando tudo.
+
+Cobertura hoje: as ações do **Centro de Custos**. Cada novo ponto de gravação que quiser desfazer
+chama `registrar_desfazivel()` declarando a própria volta — é assim que a cobertura cresce sem que
+o motor precise adivinhar nada.
+
+**Provado contra Postgres real**, porque desfazer é gravação e precisa ser exercitado, não lido:
+restaura o estado anterior, recria a linha apagada com o **mesmo id** e com as condições, respeita
+a fila por usuário e recusa o que a lista branca não cobre.
+
 **Antes de qualquer alteração de dados em lote, criar ponto de reversão** no mesmo Postgres.
 **Nunca apagar lançamento do Pluggy** — preservar a origem para auditoria e marcar
 duplicidade/substituição só com decisão explícita ou prova segura.
@@ -3048,3 +3084,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 63 | pendente ligado ao confirmado do mesmo débito (§4.3); `pendente_backup_v63` + `pendente_dim_backup_v63` |
 | 64 | `conta.nome_curto`: o nome curto de cada origem (§7.1-D); só a coluna, nenhum dado muda |
 | 65 | centro de custo vira REGRA (categoria + dimensão opcional, §7.11); `categoria_subgrupo` sai, `categoria_subgrupo_backup_v65` |
+| 66 | `acao_desfazivel`: o botão Desfazer do topbar (§9.4) |

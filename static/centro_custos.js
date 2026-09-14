@@ -65,6 +65,8 @@
       estado = dados.estado;
       desenhar();
       toast(dados.aviso || 'Salvo', 'ok');
+      // o botao Desfazer do topbar acende assim que ha o que desfazer
+      if (window.pdmAtualizarDesfazer) window.pdmAtualizarDesfazer();
       return true;
     } catch (e) {
       toast('Falha de conexão ao salvar.', 'erro');
@@ -460,6 +462,25 @@
       if (nome) salvar({acao: 'criar_subgrupo', grupo_id: Number(campo.dataset.novoSubgrupo), nome: nome});
     }
   });
+
+  // Esta tela se redesenha sozinha: depois de um desfazer ela busca o estado
+  // novo em vez de recarregar, senao o usuario perderia os centros que abriu.
+  window.pdmRecarregarAposDesfazer = async function () {
+    const resp = await fetch(window.location.pathname, {headers: {'X-Requested-With': 'fetch'}});
+    const texto = await resp.text();
+    const doc = new DOMParser().parseFromString(texto, 'text/html');
+    const novo = doc.getElementById('ccEstado');
+    if (!novo) {
+      if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+      window.location.reload();
+      return;
+    }
+    estado = JSON.parse(novo.textContent);
+    formAberto = null;
+    regraEmEdicao = null;
+    subgrupoNovoEm = null;
+    desenhar();
+  };
 
   desenhar();
 })();

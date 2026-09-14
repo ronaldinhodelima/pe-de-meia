@@ -235,3 +235,54 @@ function alternarTema() {
   atualizarIconeTema();
 }
 atualizarIconeTema();
+
+// ---- Desfazer (pedido do usuario, 14/09/2026) -------------------------------
+// Fica no topbar, entao existe em TODAS as telas. So acende quando ha algo a
+// desfazer: um botao sempre aceso que as vezes nao faz nada ensina o usuario a
+// desconfiar dele. Quem sabe o que da para desfazer e o servidor - a lista vem
+// de la, nunca de um palpite do cliente.
+(function () {
+  const botao = document.getElementById('desfazerBtn');
+  if (!botao) return;
+
+  function pintar(proxima) {
+    botao.disabled = !proxima;
+    botao.title = proxima
+      ? 'Desfazer: ' + proxima.rotulo + ' (' + proxima.quando + ')'
+      : 'Nada para desfazer';
+    botao.setAttribute('data-tip', botao.title);
+  }
+
+  window.pdmAtualizarDesfazer = function () {
+    return fetch('/api/desfazer')
+      .then(r => r.json())
+      .then(d => { if (d.ok) pintar(d.proxima); })
+      .catch(() => {});
+  };
+
+  window.pdmDesfazer = function () {
+    if (botao.disabled) return;
+    botao.disabled = true;
+    fetch('/api/desfazer', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+      .then(r => r.json())
+      .then(function (d) {
+        if (!d.ok) {
+          if (window.pdmToast) window.pdmToast(d.erro || 'Não foi possível desfazer.', 'erro');
+          return window.pdmAtualizarDesfazer();
+        }
+        if (window.pdmToast) window.pdmToast(d.vazio ? d.aviso : 'Desfeito · ' + d.aviso, 'ok');
+        // a tela precisa mostrar o dado como ele ficou. Quem sabe se redesenhar
+        // sozinha (Centro de Custos) redesenha; o resto recarrega, guardando a
+        // posicao antes para nao jogar o usuario no topo.
+        if (window.pdmRecarregarAposDesfazer) return window.pdmRecarregarAposDesfazer();
+        if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+        window.location.reload();
+      })
+      .catch(function () {
+        if (window.pdmToast) window.pdmToast('Falha de conexão ao desfazer.', 'erro');
+        window.pdmAtualizarDesfazer();
+      });
+  };
+
+  window.pdmAtualizarDesfazer();
+})();

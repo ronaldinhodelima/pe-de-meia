@@ -5377,6 +5377,28 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (65);")
             conn.commit()
 
+        if versao_atual < 66:
+            # Desfazer de verdade (pedido do usuario, 14/09/2026): cada acao que
+            # sabe se reverter guarda AQUI o passo a passo da volta. O audit_log
+            # continua sendo a memoria de tudo o que aconteceu; esta tabela e
+            # menor e tem outro proposito - so o que da para desfazer com
+            # seguranca, e como.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.acao_desfazivel ("
+                "id bigserial PRIMARY KEY, "
+                "usuario text NOT NULL, "
+                "criado_em timestamptz NOT NULL DEFAULT now(), "
+                "rotulo text NOT NULL, "
+                "reversao jsonb NOT NULL, "
+                "desfeita_em timestamptz, desfeita_por text);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_acao_desfazivel_usuario "
+                "ON cartao.acao_desfazivel (usuario, id DESC);"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (66);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
@@ -5781,12 +5803,15 @@ def topbar_html(titulo, ativo=None):
             <span id="syncTexto">Verificando...</span>
             <button class="sync-btn" id="syncBtn" onclick="dispararSync()">Atualizar agora</button>
           </div>''' if pode("sincronizar") else ""}
+          {'''<button type="button" class="tema-toggle" id="desfazerBtn" onclick="pdmDesfazer()"
+                  title="Desfazer a última alteração" aria-label="Desfazer a última alteração"
+                  disabled>&#8630;</button>''' if pode("lancamentos_editar") or pode("cadastros") else ""}
           <button type="button" class="tema-toggle" id="temaToggle" onclick="alternarTema()"
                   title="Alternar modo escuro" aria-label="Alternar modo escuro">🌙</button>
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js?v=20260912-4"></script>
+      <script src="/static/topbar.js?v=20260914-1"></script>
     """
 
 
@@ -5990,6 +6015,148 @@ def totais_por_subgrupo(cur, inicio, fim):
     )
     soltas = {r["categoria"]: float(r["total"] or 0) for r in cur.fetchall()}
     return totais, sum(soltas.values()), soltas
+
+
+# ---- desfazer (migracao 66) --------------------------------------------------
+#
+# O que pode voltar atras, e ate onde. A lista e branca de proposito: desfazer e
+# gravacao, e gravacao guiada por dado ("qual tabela, qual coluna") sem limite
+# escrita seria uma porta aberta para qualquer coisa - inclusive para o que a
+# secao 1.2 proibe.
+#
+# `conferida` NAO esta aqui, e nao e esquecimento: retirar um OK exige
+# confirmacao explicita na tela, uma a uma (secao 1.2). Um botao que desfaz
+# assinatura em lote seria exatamente o contrario disso.
+# `id` entra onde a volta precisa RECRIAR a linha apagada com a mesma chave: uma
+# regra que volta com id novo perde a ordem de desempate, e o vinculo de
+# condicao (centro_regra_dimensao.regra_id) apontaria para o nada.
+DESFAZER_PERMITIDO = {
+    "cartao.centro_regra": {"id", "categoria", "subgrupo_id"},
+    "cartao.centro_regra_dimensao": {"regra_id", "dimensao_id", "valor_id"},
+    "cartao.grupo_custo": {"id", "nome"},
+    "cartao.subgrupo_custo": {"id", "nome", "grupo_id"},
+    "cartao.transacao": {"categoria", "categoria_manual", "observacao", "descricao"},
+    "cartao.transacao_dimensao": {"transacao_id", "dimensao_id", "valor_id"},
+}
+
+DESFAZER_LIMITE = 50
+
+
+def _validar_passo_desfazer(passo):
+    """Recusa qualquer passo fora da lista branca, com mensagem em portugues."""
+    tabela = passo.get("tabela")
+    if tabela not in DESFAZER_PERMITIDO:
+        raise ValueError(f"Desfazer não cobre a tabela {tabela!r}.")
+    permitidas = DESFAZER_PERMITIDO[tabela]
+    for campo in ("valores", "onde"):
+        for coluna in (passo.get(campo) or {}):
+            if coluna not in permitidas:
+                raise ValueError(f"Desfazer não cobre a coluna {tabela}.{coluna}.")
+    if passo.get("op") not in ("update", "insert", "delete"):
+        raise ValueError("Operação de desfazer inválida.")
+    return passo
+
+
+def registrar_desfazivel(cur, rotulo, reversao, usuario=None):
+    """Guarda COMO desfazer a acao que acabou de acontecer.
+
+    Quem grava e quem sabe reverter - por isso a reversao e montada no ponto da
+    gravacao, e nao deduzida depois a partir do log. Acao que nao souber se
+    reverter simplesmente nao chama isto, e a tela nao oferece desfazer para
+    ela: melhor nao oferecer do que oferecer errado.
+    """
+    if not reversao:
+        return None
+    for passo in reversao:
+        _validar_passo_desfazer(passo)
+    quem = usuario or (session.get("user") if has_request_context() else None) or "sistema"
+    cur.execute(
+        "INSERT INTO cartao.acao_desfazivel (usuario, rotulo, reversao) "
+        "VALUES (%s,%s,%s) RETURNING id;",
+        (quem, rotulo, json.dumps(reversao)),
+    )
+    novo = _campo(cur.fetchone(), "id", 0)
+    # mantem a janela curta: o desfazer e para o passo em falso recente, nao um
+    # historico paralelo ao audit_log
+    cur.execute(
+        "DELETE FROM cartao.acao_desfazivel WHERE usuario = %s AND id NOT IN ("
+        "SELECT id FROM cartao.acao_desfazivel WHERE usuario = %s ORDER BY id DESC LIMIT %s);",
+        (quem, quem, DESFAZER_LIMITE),
+    )
+    return novo
+
+
+def _aplicar_passo_desfazer(cur, passo):
+    tabela = passo["tabela"]
+    onde = passo.get("onde") or {}
+    valores = passo.get("valores") or {}
+    if passo["op"] == "update":
+        sets = ", ".join(f"{c} = %s" for c in valores)
+        filtro = " AND ".join(f"{c} = %s" for c in onde)
+        cur.execute(
+            f"UPDATE {tabela} SET {sets} WHERE {filtro};",
+            list(valores.values()) + list(onde.values()),
+        )
+    elif passo["op"] == "insert":
+        colunas = ", ".join(valores)
+        marcas = ", ".join(["%s"] * len(valores))
+        cur.execute(
+            f"INSERT INTO {tabela} ({colunas}) VALUES ({marcas}) ON CONFLICT DO NOTHING;",
+            list(valores.values()),
+        )
+    else:
+        filtro = " AND ".join(f"{c} = %s" for c in onde)
+        cur.execute(f"DELETE FROM {tabela} WHERE {filtro};", list(onde.values()))
+    return cur.rowcount
+
+
+def desfazer_ultima_acao(cur, usuario):
+    """Desfaz a acao mais recente do usuario. Devolve (rotulo, linhas_afetadas).
+
+    Cada usuario desfaz o proprio passo: a fila e por pessoa, senao o Enter de
+    um desfaria o trabalho do outro sem aviso.
+    """
+    cur.execute(
+        "SELECT id, rotulo, reversao FROM cartao.acao_desfazivel "
+        "WHERE usuario = %s AND desfeita_em IS NULL ORDER BY id DESC LIMIT 1;",
+        (usuario,),
+    )
+    acao = cur.fetchone()
+    if not acao:
+        return None, 0
+    acao_id = _campo(acao, "id", 0)
+    rotulo = _campo(acao, "rotulo", 1)
+    reversao = _campo(acao, "reversao", 2)
+    if isinstance(reversao, str):
+        reversao = json.loads(reversao)
+
+    afetadas = 0
+    for passo in reversao:
+        _validar_passo_desfazer(passo)
+        afetadas += _aplicar_passo_desfazer(cur, passo)
+
+    cur.execute(
+        "UPDATE cartao.acao_desfazivel SET desfeita_em = now(), desfeita_por = %s WHERE id = %s;",
+        (usuario, acao_id),
+    )
+    # o desfazer tambem e uma alteracao: precisa aparecer no log como qualquer
+    # outra, senao a auditoria passa a ter buracos (secao 9.3)
+    registrar_mudanca_auditoria("Desfazer", rotulo, None)
+    return rotulo, afetadas
+
+
+def acoes_desfazeis(cur, usuario, limite=DESFAZER_LIMITE):
+    cur.execute(
+        "SELECT id, rotulo, criado_em, desfeita_em FROM cartao.acao_desfazivel "
+        "WHERE usuario = %s ORDER BY id DESC LIMIT %s;",
+        (usuario, limite),
+    )
+    return [{
+        "id": _campo(r, "id", 0),
+        "rotulo": _campo(r, "rotulo", 1),
+        "quando": data_hora_local(_campo(r, "criado_em", 2)).strftime("%d/%m %H:%M"),
+        "desfeita": bool(_campo(r, "desfeita_em", 3)),
+    } for r in cur.fetchall()]
 
 
 def definir_regra_padrao(cur, categoria, subgrupo_id):

@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, render_template, jsonify
+from flask import Blueprint, request, render_template, jsonify, session
 
 from core import (
     valor_pt,
@@ -29,6 +29,9 @@ from core import (
     cat_pt_puro,
     categoria_com_nome,
     definir_regra_padrao,
+    registrar_desfazivel,
+    acoes_desfazeis,
+    desfazer_ultima_acao,
     chave_alfa,
     data_hora_local,
     detectar_banco,
@@ -811,9 +814,11 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
     if acao == "criar_grupo":
         nome = _txt("nome")
         cur.execute("INSERT INTO cartao.grupo_custo (nome) VALUES (%s) RETURNING id;", (nome,))
-        registrar_mudanca_auditoria("Centro de custo", None, {
-            "id": _campo(cur.fetchone(), "id", 0), "nome": nome,
-        })
+        novo_id = _campo(cur.fetchone(), "id", 0)
+        registrar_mudanca_auditoria("Centro de custo", None, {"id": novo_id, "nome": nome})
+        registrar_desfazivel(cur, f'Remover o centro "{nome}"', [{
+            "op": "delete", "tabela": "cartao.grupo_custo", "onde": {"id": novo_id},
+        }])
         return f'Centro de custo "{nome}" criado.'
 
     if acao == "renomear_grupo":
@@ -823,6 +828,10 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
         cur.execute("UPDATE cartao.grupo_custo SET nome = %s WHERE id = %s;", (nome, grupo_id))
         if anterior and anterior["nome"] != nome:
             registrar_mudanca_auditoria("Nome do centro de custo", anterior["nome"], nome)
+            registrar_desfazivel(cur, f'Voltar o nome para "{anterior["nome"]}"', [{
+                "op": "update", "tabela": "cartao.grupo_custo",
+                "onde": {"id": grupo_id}, "valores": {"nome": anterior["nome"]},
+            }])
         return None
 
     if acao == "excluir_grupo":
@@ -840,9 +849,13 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
             "INSERT INTO cartao.subgrupo_custo (grupo_id, nome) VALUES (%s,%s) RETURNING id;",
             (grupo_id, nome),
         )
+        novo_id = _campo(cur.fetchone(), "id", 0)
         registrar_mudanca_auditoria("Subgrupo de custo", None, {
-            "id": _campo(cur.fetchone(), "id", 0), "grupo_id": grupo_id, "nome": nome,
+            "id": novo_id, "grupo_id": grupo_id, "nome": nome,
         })
+        registrar_desfazivel(cur, f'Remover o subgrupo "{nome}"', [{
+            "op": "delete", "tabela": "cartao.subgrupo_custo", "onde": {"id": novo_id},
+        }])
         return f'Subgrupo "{nome}" criado.'
 
     if acao == "renomear_subgrupo":
@@ -852,6 +865,10 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
         cur.execute("UPDATE cartao.subgrupo_custo SET nome = %s WHERE id = %s;", (nome, subgrupo_id))
         if anterior and anterior["nome"] != nome:
             registrar_mudanca_auditoria("Nome do subgrupo", anterior["nome"], nome)
+            registrar_desfazivel(cur, f'Voltar o nome para "{anterior["nome"]}"', [{
+                "op": "update", "tabela": "cartao.subgrupo_custo",
+                "onde": {"id": subgrupo_id}, "valores": {"nome": anterior["nome"]},
+            }])
         return None
 
     if acao == "excluir_subgrupo":
@@ -885,12 +902,18 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
             f"Centro de custo de {cat_pt_puro(categoria)}", None,
             {"regra": _rotulo_regra(cur, regra_id), "destino": _destino_regra(cur, regra_id)},
         )
-        return f'"{_rotulo_regra(cur, regra_id)}" vinculada.'
+        rotulo_novo = _rotulo_regra(cur, regra_id)
+        registrar_desfazivel(cur, f'Desvincular {rotulo_novo}', [{
+            "op": "delete", "tabela": "cartao.centro_regra", "onde": {"id": regra_id},
+        }])
+        return f'"{rotulo_novo}" vinculada.'
 
     if acao == "mover_regra":
         regra_id, subgrupo_id = _id("regra_id"), _id("subgrupo_id")
         antes = _destino_regra(cur, regra_id)
         rotulo = _rotulo_regra(cur, regra_id)
+        cur.execute("SELECT subgrupo_id FROM cartao.centro_regra WHERE id = %s;", (regra_id,))
+        anterior = cur.fetchone()
         cur.execute(
             "UPDATE cartao.centro_regra SET subgrupo_id = %s WHERE id = %s;",
             (subgrupo_id, regra_id),
@@ -898,6 +921,11 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
         depois = _destino_regra(cur, regra_id)
         if antes != depois:
             registrar_mudanca_auditoria(f"Centro de custo de {rotulo}", antes, depois)
+            registrar_desfazivel(cur, f"{rotulo}: de volta para {antes}", [{
+                "op": "update", "tabela": "cartao.centro_regra",
+                "onde": {"id": regra_id},
+                "valores": {"subgrupo_id": anterior["subgrupo_id"]},
+            }])
         return None
 
     if acao == "atualizar_condicoes":
@@ -920,9 +948,29 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
         regra_id = _id("regra_id")
         rotulo = _rotulo_regra(cur, regra_id)
         destino = _destino_regra(cur, regra_id)
+        # a volta precisa recriar a regra E as condicoes dela; sem as condicoes
+        # ela voltaria mais generica do que era, mudando o DRE em silencio
+        cur.execute("SELECT categoria, subgrupo_id FROM cartao.centro_regra WHERE id = %s;", (regra_id,))
+        antes = cur.fetchone()
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.centro_regra_dimensao WHERE regra_id = %s;",
+            (regra_id,),
+        )
+        condicoes = cur.fetchall()
         cur.execute("DELETE FROM cartao.centro_regra WHERE id = %s;", (regra_id,))
-        if rotulo:
+        if rotulo and antes:
             registrar_mudanca_auditoria(f"Centro de custo de {rotulo}", destino, None)
+            volta = [{
+                "op": "insert", "tabela": "cartao.centro_regra",
+                "valores": {"id": regra_id, "categoria": antes["categoria"],
+                            "subgrupo_id": antes["subgrupo_id"]},
+            }]
+            volta += [{
+                "op": "insert", "tabela": "cartao.centro_regra_dimensao",
+                "valores": {"regra_id": regra_id, "dimensao_id": c["dimensao_id"],
+                            "valor_id": c["valor_id"]},
+            } for c in condicoes]
+            registrar_desfazivel(cur, f"Devolver {rotulo} a {destino}", volta)
         return None
 
     raise ValueError("Ação desconhecida.")
@@ -1585,3 +1633,39 @@ def faturas_pdf_view():
         aviso=aviso,
         faturas=faturas,
     )
+
+
+@bp.route("/api/desfazer", methods=["GET", "POST"])
+@requer("lancamentos_ver")
+def api_desfazer():
+    """Botao Desfazer do topbar - vale em qualquer tela.
+
+    GET diz o que da para desfazer agora (o botao usa isso para acender ou
+    apagar); POST desfaz a ultima acao do usuario logado. A fila e POR PESSOA:
+    desfazer e sobre o proprio passo em falso, e uma fila compartilhada faria o
+    clique de um apagar o trabalho do outro sem aviso.
+    """
+    usuario = session.get("user")
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        if request.method == "GET":
+            lista = acoes_desfazeis(cur, usuario)
+            pendentes = [a for a in lista if not a["desfeita"]]
+            return jsonify({
+                "ok": True,
+                "proxima": pendentes[0] if pendentes else None,
+                "historico": lista,
+            })
+        rotulo, afetadas = desfazer_ultima_acao(cur, usuario)
+        conn.commit()
+        if not rotulo:
+            return jsonify({"ok": True, "vazio": True, "aviso": "Nada para desfazer."})
+        return jsonify({"ok": True, "aviso": rotulo, "linhas": afetadas})
+    except Exception as e:
+        conn.rollback()
+        marcar_falha_auditoria()
+        return jsonify({"ok": False, "erro": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()

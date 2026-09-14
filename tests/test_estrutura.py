@@ -164,7 +164,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/fatura-linha/<int:linha_id>/vincular",
         "/api/fatura-linha/<int:linha_id>/desvincular",
         "/dre", "/investimentos",
-        "/categorias", "/grupos", "/api/centro-custo",
+        "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
         "/dimensoes", "/regras", "/contas", "/pendencias",
         "/configuracoes/faturas-pdf",
         "/usuarios", "/logs",
@@ -3157,5 +3157,8 @@ def test_toda_escrita_do_centro_de_custo_passa_por_um_ponto_so():
     """
     js = (RAIZ / "static" / "centro_custos.js").read_text(encoding="utf-8")
     sem_comentario = re.sub(r"//[^\n]*", "", js)
-    assert sem_comentario.count("fetch(") == 1, "a tela precisa gravar por um caminho so"
+    # a regra e sobre GRAVAR. Contar todo `fetch(` tambem pegava a releitura do
+    # estado depois de um desfazer, que so le - e o teste passava a proibir uma
+    # coisa que nunca foi o problema.
+    assert sem_comentario.count("method: 'POST'") == 1, "a tela precisa gravar por um caminho so"
     assert "/api/centro-custo" in sem_comentario
