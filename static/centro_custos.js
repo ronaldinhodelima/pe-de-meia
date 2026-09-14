@@ -33,6 +33,13 @@
     if (window.pdmToast) window.pdmToast(msg, tipo);
   }
 
+  // Chevron desenhado, e nao o glifo "⌄": aquele caractere tem a baseline
+  // pendurada e assenta abaixo da linha da ficha por mais que o flex
+  // centralize a CAIXA - centralizar a caixa nao centraliza o desenho dentro
+  // dela. O tamanho vem do CSS (.cc-icone svg), para nao nascer valor cru aqui.
+  const CHEVRON = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5 12 6.5"/></svg>';
+
   async function salvar(payload) {
     try {
       const resp = await fetch('/api/centro-custo', {
@@ -58,7 +65,8 @@
   // ---------- desenho ----------
 
   function fichaHtml(regra) {
-    const especifica = regra.condicoes.length ? ' cc-especifica' : '';
+    const especifica = (regra.condicoes.length ? ' cc-especifica' : '')
+      + (regra.id === regraEmEdicao ? ' cc-em-edicao' : '');
     const condicoes = regra.condicoes.map(c =>
       `<span class="cc-cond"><b>${escHtml(c.dimensao_nome)}</b> ${escHtml(c.valor_nome)}</span>`
     ).join('');
@@ -69,7 +77,8 @@
           ${condicoes ? `<div class="cc-condicoes">${condicoes}</div>` : ''}
         </div>
         <button type="button" class="cc-icone" data-editar="${regra.id}"
-                title="Condições de Projeto, Portfólio ou outra dimensão" aria-label="Editar condições">⌄</button>
+                aria-expanded="${regraEmEdicao === regra.id}"
+                title="Condições de Projeto, Portfólio ou outra dimensão" aria-label="Editar condições">${CHEVRON}</button>
         <button type="button" class="cc-icone cc-perigo" data-excluir-regra="${regra.id}"
                 title="Desvincular" aria-label="Desvincular">×</button>
       </div>`;
@@ -117,8 +126,14 @@
   }
 
   function trilhaHtml(sub) {
-    const fichas = sub.regras.map(fichaHtml).join('');
-    const emEdicao = regraEmEdicao && sub.regras.find(r => r.id === regraEmEdicao);
+    // O editor nasce LOGO ABAIXO da ficha que o abriu (pedido do usuario,
+    // 14/09/2026), empurrando o resto da trilha para baixo. No fim da lista ele
+    // aparecia longe do item escolhido, e em trilha cheia era preciso procurar
+    // qual ficha estava sendo editada.
+    const fichas = sub.regras.map(regra => {
+      const editor = regra.id === regraEmEdicao ? formHtml(sub.id, regra) : '';
+      return fichaHtml(regra) + editor;
+    }).join('');
     return `
       <div class="cc-trilha" data-subgrupo="${sub.id}">
         <div class="cc-trilha-topo">
@@ -129,7 +144,6 @@
         <div class="cc-fichas" data-fichas="${sub.id}">
           ${fichas || '<div class="cc-vazio">Sem categorias. Arraste uma para cá.</div>'}
         </div>
-        ${emEdicao ? formHtml(sub.id, emEdicao) : ''}
         ${formAberto === sub.id ? formHtml(sub.id, null) : `
         <button type="button" class="cc-add" data-abrir-form="${sub.id}">+ categoria</button>`}
       </div>`;

@@ -14,6 +14,9 @@
      modo escuro, quebra no celular e nao diz nada que a moldura ja nao diga. */
   .cc-topo{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
   .cc-topo h2{margin:0;font-size:var(--titulo-md);letter-spacing:-.01em}
+  /* o titulo carrega a explicacao no tooltip: o cursor precisa dizer isso, senao
+     a informacao existe e ninguem descobre que existe */
+  .cc-topo h2[data-tip]{cursor:help}
   .cc-sub{margin:4px 0 0;font-size:var(--fonte-sm);color:var(--ink-faint);line-height:1.5;max-width:70ch}
   .cc-novo{display:flex;gap:8px;align-items:center}
   .cc-novo input{width:220px}
@@ -50,6 +53,10 @@
   .cc-ficha:hover{border-color:var(--selecao);box-shadow:var(--shadow-1)}
   .cc-ficha.cc-especifica{border-left-color:var(--accent)}
   .cc-ficha.cc-arrastando{opacity:.4}
+  /* editor aberto: a ficha fica marcada e o quadro nasce logo abaixo dela,
+     recuado, para dizer de quem ele e */
+  .cc-ficha.cc-em-edicao{border-color:var(--accent)}
+  .cc-fichas .cc-form{margin-left:10px}
   .cc-ficha-corpo{flex:1 1 auto;min-width:0}
   .cc-ficha-cat{display:block;font-size:var(--fonte-sm);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cc-condicoes{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
@@ -61,6 +68,12 @@
     border:none;background:transparent;color:var(--ink-faint);border-radius:var(--radius-xs);cursor:pointer;
     font-size:var(--icone-md);line-height:1;padding:0;transition:background-color .12s,color .12s}
   .cc-icone:hover{background:var(--raise);color:var(--ink)}
+  /* O chevron e SVG, nao o glifo "⌄": aquele caractere tem a baseline pendurada
+     e assentava ABAIXO da linha da ficha por mais que o flex centralizasse a
+     caixa - centralizar a caixa nao centraliza o desenho dentro dela. O SVG
+     ocupa a caixa inteira e fica no meio de verdade. */
+  .cc-icone svg{width:var(--icone-sm);height:var(--icone-sm);display:block}
+  .cc-icone[aria-expanded="true"] svg{transform:rotate(180deg)}
   .cc-icone.cc-perigo:hover{background:var(--bad-soft);color:var(--bad)}
 
   .cc-add{align-self:flex-start;border:1px dashed var(--line);background:transparent;color:var(--ink-faint);
@@ -99,9 +112,12 @@
 
 {% block conteudo %}
 
+{# `det-body` nao e decoracao: e ela que traz o padding lateral do bloco
+   (details.cat-breakdown zera o proprio padding e passa a conta pro corpo).
+   Sem a classe, o texto encostava nas bordas do cartao. #}
 <details class="cat-breakdown">
   <summary style="cursor:pointer;font-weight:var(--peso-forte);font-size:var(--fonte-md);color:var(--ink-soft)">Como isso funciona?</summary>
-  <div style="font-size:var(--fonte-md);color:var(--ink-soft);line-height:1.7;margin-top:10px">
+  <div class="det-body" style="font-size:var(--fonte-md);color:var(--ink-soft);line-height:1.7">
     Cada ficha é uma <strong>regra</strong>: uma categoria, e opcionalmente uma condição de
     <strong>Projeto</strong>, <strong>Portfólio</strong> ou qualquer outra dimensão. Sem condição,
     a regra vale para toda a categoria. Com condição, ela só vale para o lançamento que tenha
@@ -116,10 +132,11 @@
 </details>
 
 <div class="cc-topo">
+  {# A explicacao virou tooltip do titulo (pedido do usuario, 14/09/2026): ela e
+     contexto que se le uma vez, e ocupando duas linhas fixas empurrava a arvore
+     - que e o que a tela existe para mostrar - para baixo em toda visita. #}
   <div>
-    <h2>Centro de Custos</h2>
-    <p class="cc-sub">Centro de custo é análise de gasto: só categorias de despesa precisam estar aqui.
-      Receita, transferência e compra de bem ficam de fora de propósito.</p>
+    <h2 data-tip="Centro de custo é análise de gasto: só categorias de despesa precisam estar aqui. Receita, transferência e compra de bem ficam de fora de propósito.">Centro de Custos</h2>
   </div>
   <div class="cc-novo">
     <input class="campo-caixa" id="ccNovoGrupo" placeholder="Novo centro de custo" aria-label="Nome do novo centro de custo">
@@ -134,4 +151,4 @@
 <script type="application/json" id="ccEstado">{{ estado_json|safe }}</script>
 {% endblock %}
 
-{% block scripts %}<script src="/static/centro_custos.js?v=20260914-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/centro_custos.js?v=20260914-2"></script>{% endblock %}
