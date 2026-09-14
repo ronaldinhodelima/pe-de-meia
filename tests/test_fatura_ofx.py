@@ -430,3 +430,33 @@ def test_linha_sem_data_nao_e_descartada_no_escuro():
     linhas = [_linha(None), _linha(date(2026, 8, 5))]
     restantes, ignoradas = recortar_linhas_ja_cobertas(cur, "conta-x", linhas, 9, 2026)
     assert restantes == [linhas[0]] and len(ignoradas) == 1
+
+
+def test_substituicao_de_documento_avisa_o_que_saiu_do_lugar():
+    """Reenviar o mesmo (conta, mes, ano) substitui - e isso e por desenho.
+
+    O que nao pode e a troca acontecer CALADA: em 14/09/2026 um arquivo de
+    teste com uma linha so substituiu, em producao, o extrato de agosto com 28
+    linhas, e a tela nao disse nada. O bloco monta a mensagem a partir do que
+    havia antes; aqui travamos que ele existe e que fala do caso perigoso (o
+    documento novo ser menor que o anterior).
+    """
+    fonte = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    trecho = fonte.split("if substituido:", 1)[1].split("# Reenviar o mesmo PDF", 1)[0]
+    assert "Substituí o documento" in trecho
+    assert "linha(s)" in trecho, "a mensagem precisa dizer o tamanho dos dois"
+    assert "menos linhas que o anterior" in trecho, "o encolhimento e o caso perigoso"
+    # e a substituicao tem que ficar na auditoria, com os dois tamanhos
+    assert "linhas_antes" in trecho and "linhas_depois" in trecho
+
+
+def test_importacao_le_o_documento_anterior_antes_de_gravar_por_cima():
+    """A contagem do que sera substituido precisa ser feita ANTES do INSERT.
+
+    Depois do `ON CONFLICT DO UPDATE` o documento antigo ja nao existe para ser
+    medido - a consulta traria o novo e o aviso diria uma bobagem.
+    """
+    fonte = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    consulta = fonte.index("substituido = cur.fetchone()")
+    gravacao = fonte.index("INSERT INTO cartao.fatura_importada")
+    assert consulta < gravacao, "medir o anterior depois de gravar mede o novo"

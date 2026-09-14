@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 450 aprovados, 8 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 452 aprovados, 8 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -846,6 +846,35 @@ o período que se pedir, e recusar faz **perder a parte nova — que é dado rea
 **Medido com o arquivo real do usuário** (01/08 a 14/09, 35 linhas), com agosto já importado: 28
 linhas de agosto ignoradas, **7 de setembro importadas**, documento novo de 08/09 a 14/09 —
 e ele não encosta mais no de agosto.
+
+### Substituir documento avisa o que saiu do lugar (14/09/2026)
+
+Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite
+corrigir um arquivo. O que não podia era a troca acontecer **calada**.
+
+**Incidente que criou a regra.** Ao validar um deploy, montei um OFX de teste com uma linha só e
+`DTEND` em 20/08. O mês de referência sai do **fim** do período, então ele virou **08/2026** — o
+mesmo do extrato de agosto — e o `ON CONFLICT DO UPDATE` **trocou o extrato real de 28 linhas pelo
+arquivo de teste**, em produção, sem nenhum aviso na tela. Perderam-se as linhas, os vínculos e o
+PDF guardado; **os 28 lançamentos, os OK e o DRE ficaram intactos**, porque a importação não
+encosta em `transacao`.
+
+Duas coisas saíram disso:
+
+- **A tela agora diz o que substituiu**: nome do documento anterior, quantas linhas ele tinha e
+  quantas o novo tem. Quando o novo é **menor**, acrescenta um alerta explícito — encolher é o
+  caso perigoso. Não bloqueia (reenvio corrigido é legítimo), mas não passa despercebido. A
+  auditoria guarda os dois tamanhos.
+- **Sonda de importação nunca pode cair no `(conta, mês, ano)` de um documento real.** Para testar
+  importação em produção, o arquivo de teste tem que mirar um mês **sem documento**, ou não ser
+  importado de jeito nenhum. Vale a lição maior: **uma verificação não pode custar o dado que ela
+  deveria proteger** — é a mesma família do polling que derrubou o acesso (§10.4 nº 9).
+
+**Como agosto foi recuperado** (decisão do usuário: só com OFX, sem reenviar o PDF): um recorte
+fiel do próprio OFX dele, com as 28 linhas de agosto e o período ajustado para 01/08–31/08 — ou
+seja, referência 08/2026, que substituiu o arquivo de teste. Conferido contra o que a §6.8 já
+registrava do extrato original: Entradas R$ 153.048,26, Saídas R$ 148.091,59, **variação
+R$ 4.956,67**, 28 linhas, zero órfãos dos dois lados. Só o PDF em si não voltou.
 
 ### Formatos homologados e o extrato OFX do Nubank (11/09/2026)
 

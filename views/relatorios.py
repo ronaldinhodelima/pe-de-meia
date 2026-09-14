@@ -1279,6 +1279,21 @@ def conciliar_fatura():
                         f'{periodo_fim.strftime("%d/%m/%Y")}).'
                     )
 
+                # Reenviar o mesmo (conta, mes, ano) SUBSTITUI o documento - e
+                # isso e por desenho. Mas ate aqui a troca acontecia calada: um
+                # extrato de 28 linhas podia ser trocado por um de 1 linha sem
+                # a tela dizer nada, e foi assim que um arquivo de teste apagou
+                # o extrato de agosto em producao (14/09/2026). Agora a tela
+                # diz o que saiu do lugar, com nome e tamanho.
+                cur.execute(
+                    "SELECT f.arquivo_nome, f.total, f.periodo_inicio, f.periodo_fim, "
+                    "(SELECT count(*) FROM cartao.fatura_linha l WHERE l.fatura_id = f.id) AS linhas "
+                    "FROM cartao.fatura_importada f "
+                    "WHERE f.account_id = %s AND f.mes_referencia = %s AND f.ano_referencia = %s;",
+                    (account_id, fatura["mes_referencia"], fatura["ano_referencia"]),
+                )
+                substituido = cur.fetchone()
+
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
                 # entao o arquivo fica como bytea no Postgres (500KB-1MB,
@@ -1308,6 +1323,28 @@ def conciliar_fatura():
                      "extrato" if fatura.get("extrato") else "fatura"),
                 )
                 fatura_id = cur.fetchone()["id"]
+                if substituido:
+                    quantas = substituido["linhas"]
+                    anterior = substituido["arquivo_nome"] or "documento sem nome"
+                    troca = (
+                        f'Substituí o documento de {fatura["mes_referencia"]:02d}/'
+                        f'{fatura["ano_referencia"]} que já existia ("{anterior}", '
+                        f'{quantas} linha(s)) pelo arquivo enviado '
+                        f'({len(fatura["linhas"])} linha(s)).'
+                    )
+                    if quantas > len(fatura["linhas"]):
+                        # o caso perigoso: o documento novo e MENOR que o que
+                        # saiu do lugar. Nao bloqueia (reenvio corrigido e
+                        # legitimo), mas nao passa mais despercebido.
+                        troca += " O documento novo tem menos linhas que o anterior — confira se é isso mesmo."
+                    recorte_aviso = f"{recorte_aviso} {troca}" if recorte_aviso else troca
+                    registrar_auditoria(
+                        "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
+                        detalhes={"substituiu": anterior, "linhas_antes": quantas,
+                                  "linhas_depois": len(fatura["linhas"]),
+                                  "conta": account_id,
+                                  "mes": fatura["mes_referencia"], "ano": fatura["ano_referencia"]},
+                    )
                 # Reenviar o mesmo PDF (ex: corrigir algo, ou so pra recalcular
                 # periodo_inicio depois que a fatura anterior passou a existir)
                 # apagava tudo e recriava do zero - perdendo silenciosamente o
