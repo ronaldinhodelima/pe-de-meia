@@ -3162,3 +3162,50 @@ def test_toda_escrita_do_centro_de_custo_passa_por_um_ponto_so():
     # coisa que nunca foi o problema.
     assert sem_comentario.count("method: 'POST'") == 1, "a tela precisa gravar por um caminho so"
     assert "/api/centro-custo" in sem_comentario
+
+
+def test_desfazer_da_edicao_so_nasce_de_mudanca_visivel():
+    """Edicao que nao muda nada visivel nao pode virar acao de desfazer.
+
+    Marcar a MESMA categoria de novo altera `categoria_manual` por baixo. Se
+    isso bastasse para registrar, a fila encheria de "Desfazer" que, clicado,
+    nao mexe em nada que o usuario veja - e o botao perderia o sentido.
+    """
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    corpo = fonte.split("def _registrar_desfazer_da_edicao", 1)[1].split("\ndef ", 1)[0]
+    assert "visiveis = {" in corpo
+    assert "set(mudou) & visiveis" in corpo, "registrar exige mudanca visivel"
+    # mas os campos de apoio continuam na REVERSAO, senao o estado volta torto
+    assert '"categoria_manual"' in corpo and '"conferida_por"' in corpo
+
+
+def test_auxiliar_de_desfazer_nao_rouba_os_decorators_da_rota():
+    """A funcao de apoio mora ANTES do bloco de decorators, nunca no meio dele.
+
+    Inserida entre o @bp.route e o `def`, ela vira a rota - foi o que aconteceu
+    ao escrever isto (secao 10.3: cortar/inserir por texto ignora decorator).
+    """
+    import ast as _ast
+
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    arvore = _ast.parse(fonte)
+    aux = next(n for n in arvore.body
+               if isinstance(n, _ast.FunctionDef) and n.name == "_registrar_desfazer_da_edicao")
+    rota = next(n for n in arvore.body
+                if isinstance(n, _ast.FunctionDef) and n.name == "update_transacao")
+    assert not aux.decorator_list, "a auxiliar nao pode estar decorada"
+    assert len(rota.decorator_list) >= 2, "a rota precisa dos proprios decorators"
+
+
+def test_botao_desfazer_fica_ao_lado_da_marca_e_usa_icone_solido():
+    """No topbar, junto da marca: ali ele sobrevive ao menu recolhido do celular.
+
+    O icone e SVG preenchido - o glifo de linha anterior (U+21B6) foi lido pelo
+    usuario como "chuveiro"; desenho fino nesse tamanho perde a forma.
+    """
+    core_txt = (RAIZ / "core.py").read_text(encoding="utf-8")
+    assert "DESFAZER_BOTAO_HTML" in core_txt
+    assert 'class="marca-grupo"' in core_txt, "o botao anda junto da marca"
+    bloco = core_txt.split("DESFAZER_BOTAO_HTML = (", 1)[1].split(")\n\n", 1)[0]
+    assert "<svg" in bloco and 'fill="currentColor"' in bloco, "icone solido, nao glifo"
+    assert "\u21b6" not in bloco.lower() and "&#8630;" not in bloco

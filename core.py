@@ -5757,11 +5757,29 @@ URL_LANCAMENTOS = "/lancamentos/fatura"
 URL_RESUMIDA = "/lancamentos/resumida"
 
 
+# O botao Desfazer fica ao lado da marca, na altura da linha de descricao
+# (pedido do usuario, 14/09/2026): la ele esta sempre visivel, inclusive no
+# celular, onde o resto do menu se recolhe atras do botao de tres tracos.
+#
+# O icone e uma seta curva SOLIDA. O glifo anterior (U+21B6) era um traco fino
+# que o usuario leu como "chuveiro" - desenho de linha nesse tamanho perde a
+# forma, e o que se reconhece de longe e a silhueta cheia.
+DESFAZER_BOTAO_HTML = (
+    '<button type="button" class="desfazer-btn" id="desfazerBtn" onclick="pdmDesfazer()"'
+    ' title="Desfazer a última alteração" aria-label="Desfazer a última alteração" disabled>'
+    '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">'
+    '<path d="M12.5 8H6.83l1.88-1.88a1 1 0 1 0-1.42-1.41L3.17 8.83a1 1 0 0 0 0 1.41l4.12 4.12'
+    'a1 1 0 0 0 1.42-1.41L6.83 11h5.67a4.5 4.5 0 0 1 0 9H9a1 1 0 1 0 0 2h3.5a6.5 6.5 0 0 0 0-13z"/>'
+    '</svg></button>'
+)
+
+
 def topbar_html(titulo, ativo=None):
     def cls(nome):
         return "ativo" if ativo == nome else ""
     return f"""
       <div class="topbar">
+        <div class="marca-grupo">
         <a href="{URL_LANCAMENTOS}" class="marca-box" style="text-decoration:none" title="Ir para o início">
           <img class="marca-icon" src="/static/logo-topbar.png" alt="Pé de Meia">
           <div>
@@ -5769,6 +5787,8 @@ def topbar_html(titulo, ativo=None):
             <span class="marca-pagina">{titulo} · {session.get('user')}</span>
           </div>
         </a>
+        {DESFAZER_BOTAO_HTML if (pode("lancamentos_editar") or pode("cadastros")) else ""}
+        </div>
         <button type="button" class="menu-toggle" onclick="menuMobile(this)"
                 aria-expanded="false" aria-controls="navMenu" aria-label="Abrir menu">&#9776;</button>
         <div class="nav-menu" id="navMenu">
@@ -5803,15 +5823,12 @@ def topbar_html(titulo, ativo=None):
             <span id="syncTexto">Verificando...</span>
             <button class="sync-btn" id="syncBtn" onclick="dispararSync()">Atualizar agora</button>
           </div>''' if pode("sincronizar") else ""}
-          {'''<button type="button" class="tema-toggle" id="desfazerBtn" onclick="pdmDesfazer()"
-                  title="Desfazer a última alteração" aria-label="Desfazer a última alteração"
-                  disabled>&#8630;</button>''' if pode("lancamentos_editar") or pode("cadastros") else ""}
           <button type="button" class="tema-toggle" id="temaToggle" onclick="alternarTema()"
                   title="Alternar modo escuro" aria-label="Alternar modo escuro">🌙</button>
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js?v=20260914-1"></script>
+      <script src="/static/topbar.js?v=20260914-2"></script>
     """
 
 
@@ -6076,9 +6093,12 @@ def recortar_linhas_ja_cobertas(cur, account_id, linhas, mes, ano):
 # escrita seria uma porta aberta para qualquer coisa - inclusive para o que a
 # secao 1.2 proibe.
 #
-# `conferida` NAO esta aqui, e nao e esquecimento: retirar um OK exige
-# confirmacao explicita na tela, uma a uma (secao 1.2). Um botao que desfaz
-# assinatura em lote seria exatamente o contrario disso.
+# `conferida` ENTROU em 14/09/2026, a pedido do usuario ("tudo que pode ser
+# feito pode ser desfeito"), mas sem furar a secao 1.2: retirar um OK continua
+# exigindo confirmacao explicita na tela. Quem carrega a exigencia e o campo
+# `exige_confirmacao` que a API devolve - acao que mexe em assinatura so e
+# desfeita depois de um segundo "sim", uma a uma. O que segue proibido e
+# desfazer assinatura em LOTE, sem a pessoa ver o que esta retirando.
 # `id` entra onde a volta precisa RECRIAR a linha apagada com a mesma chave: uma
 # regra que volta com id novo perde a ordem de desempate, e o vinculo de
 # condicao (centro_regra_dimensao.regra_id) apontaria para o nada.
@@ -6087,7 +6107,27 @@ DESFAZER_PERMITIDO = {
     "cartao.centro_regra_dimensao": {"regra_id", "dimensao_id", "valor_id"},
     "cartao.grupo_custo": {"id", "nome"},
     "cartao.subgrupo_custo": {"id", "nome", "grupo_id"},
-    "cartao.transacao": {"categoria", "categoria_manual", "observacao", "descricao"},
+    "cartao.transacao": {"transacao_id", "categoria", "categoria_manual", "observacao", "descricao",
+                         "conferida", "conferida_por", "duplicada", "natureza",
+                         "substituido_por"},
+    "cartao.transacao_rateio": {"id", "transacao_id", "ordem", "valor_brl", "categoria",
+                                "observacao"},
+    "cartao.transacao_rateio_dimensao": {"rateio_id", "dimensao_id", "valor_id"},
+    "cartao.categoria": {"categoria", "nome_pt"},
+    "cartao.categoria_natureza": {"categoria", "natureza"},
+    "cartao.categoria_oculta": {"categoria"},
+    "cartao.dimensao": {"id", "nome", "obrigatoria", "ordem"},
+    "cartao.dimensao_valor": {"id", "dimensao_id", "nome", "teto_mensal", "teto_anual"},
+    "cartao.regra_classificacao": {"id", "trecho", "categoria", "ativa", "account_id",
+                                   "operador_valor", "valor_referencia"},
+    "cartao.regra_dimensao_valor": {"regra_id", "dimensao_id", "valor_id"},
+    "cartao.compra_futura": {"id", "descricao", "valor_previsto", "valor_real", "mes_alvo",
+                             "prioridade", "observacao", "comprada_em", "transacao_id"},
+    "cartao.compra_futura_dimensao": {"compra_id", "dimensao_id", "valor_id"},
+    "cartao.cartao_nome": {"numero_final", "apelido"},
+    "cartao.item_titular": {"item_id", "titular"},
+    "cartao.conta": {"account_id", "nome_curto"},
+    "cartao.fatura_vinculo": {"id", "fatura_linha_id", "transacao_id", "origem"},
     "cartao.transacao_dimensao": {"transacao_id", "dimensao_id", "valor_id"},
 }
 
@@ -6199,16 +6239,28 @@ def desfazer_ultima_acao(cur, usuario):
 
 def acoes_desfazeis(cur, usuario, limite=DESFAZER_LIMITE):
     cur.execute(
-        "SELECT id, rotulo, criado_em, desfeita_em FROM cartao.acao_desfazivel "
+        "SELECT id, rotulo, criado_em, desfeita_em, reversao FROM cartao.acao_desfazivel "
         "WHERE usuario = %s ORDER BY id DESC LIMIT %s;",
         (usuario, limite),
     )
-    return [{
-        "id": _campo(r, "id", 0),
-        "rotulo": _campo(r, "rotulo", 1),
-        "quando": data_hora_local(_campo(r, "criado_em", 2)).strftime("%d/%m %H:%M"),
-        "desfeita": bool(_campo(r, "desfeita_em", 3)),
-    } for r in cur.fetchall()]
+    itens = []
+    for r in cur.fetchall():
+        reversao = _campo(r, "reversao", 4)
+        if isinstance(reversao, str):
+            try:
+                reversao = json.loads(reversao)
+            except ValueError:
+                reversao = []
+        # devolver assinatura exige o segundo "sim" na tela (secao 1.2)
+        toca_ok = any("conferida" in (passo.get("valores") or {}) for passo in (reversao or []))
+        itens.append({
+            "id": _campo(r, "id", 0),
+            "rotulo": _campo(r, "rotulo", 1),
+            "quando": data_hora_local(_campo(r, "criado_em", 2)).strftime("%d/%m %H:%M"),
+            "desfeita": bool(_campo(r, "desfeita_em", 3)),
+            "exige_confirmacao": toca_ok,
+        })
+    return itens
 
 
 def definir_regra_padrao(cur, categoria, subgrupo_id):

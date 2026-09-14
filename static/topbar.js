@@ -245,7 +245,10 @@ atualizarIconeTema();
   const botao = document.getElementById('desfazerBtn');
   if (!botao) return;
 
+  let proximaAcao = null;
+
   function pintar(proxima) {
+    proximaAcao = proxima || null;
     botao.disabled = !proxima;
     botao.title = proxima
       ? 'Desfazer: ' + proxima.rotulo + ' (' + proxima.quando + ')'
@@ -262,6 +265,18 @@ atualizarIconeTema();
 
   window.pdmDesfazer = function () {
     if (botao.disabled) return;
+    // Devolver uma assinatura de conferencia exige o segundo "sim" na tela
+    // (secao 1.2): o OK e do usuario, e retira-lo nunca pode acontecer com um
+    // clique distraido. O servidor e quem diz se a acao mexe em OK.
+    if (proximaAcao && proximaAcao.exige_confirmacao
+        && !confirm('Isto vai mexer na conferência (OK) de um lançamento:
+
+'
+                    + proximaAcao.rotulo + '
+
+Desfazer mesmo assim?')) {
+      return;
+    }
     botao.disabled = true;
     fetch('/api/desfazer', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
       .then(r => r.json())

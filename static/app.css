@@ -215,6 +215,22 @@
   }
   .tema-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
+  /* Desfazer: ao lado da marca, na altura da linha de descricao - ali ele
+     sobrevive ao menu recolhido do celular, que e onde o usuario mais
+     precisa dele. Apagado quando nao ha o que desfazer: botao sempre aceso
+     que as vezes nao faz nada ensina a desconfiar dele. */
+  .marca-grupo { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+  .desfazer-btn {
+    flex: none; width: 32px; height: 32px; margin-bottom: 2px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--surface); color: var(--accent); cursor: pointer; padding: 0;
+    transition: background-color .12s, border-color .12s, color .12s, opacity .12s;
+  }
+  .desfazer-btn svg { width: var(--icone-lg); height: var(--icone-lg); display: block; }
+  .desfazer-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+  .desfazer-btn:disabled { color: var(--ink-faint); opacity: .45; cursor: default; }
+
   .wrap { max-width: 1320px; margin: 24px auto; padding: 0 20px; }
 
   /* ---------- filters bar ---------- */

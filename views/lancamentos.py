@@ -13,6 +13,7 @@ from core import (
     URL_LANCAMENTOS,
     URL_RESUMIDA,
     valor_pt,
+    registrar_desfazivel,
     EXIGE_DIMENSOES_SQL,
     exige_dimensoes,
     CATEGORIAS_EXTRA,
@@ -2404,8 +2405,92 @@ def rateios_transacao(transacao_id):
         conn.close()
 
 
+def _registrar_desfazer_da_edicao(cur, transacao_id, antes, dim_antes):
+    """Guarda como voltar atras nesta edicao de lancamento.
+
+    Compara o estado lido no inicio com o que ficou gravado e registra so o que
+    de fato MUDOU - registrar campo intocado faria o desfazer reescrever valor
+    que ninguem pediu, e encheria a fila de acoes que nao fizeram nada.
+
+    A propagacao para a familia de parcelas (secao 7.2) fica de fora de
+    proposito: ela alcanca outros lancamentos, e um desfazer que mexe no que o
+    usuario nem estava olhando seria pior que nao ter desfazer.
+    """
+    campos = ("categoria", "categoria_manual", "observacao", "descricao",
+              "conferida", "conferida_por", "duplicada", "natureza")
+    cur.execute(
+        "SELECT categoria, COALESCE(categoria_manual,false), observacao, descricao, "
+        "conferida, conferida_por, COALESCE(duplicada,false), natureza "
+        "FROM cartao.transacao WHERE transacao_id = %s;",
+        (transacao_id,),
+    )
+    linha = cur.fetchone()
+    if not linha:
+        return
+    depois = dict(zip(campos, linha))
+    mudou = {c: antes[c] for c in campos if antes.get(c) != depois.get(c)}
+
+    # `categoria_manual` e `conferida_por` acompanham a reversao (para devolver o
+    # estado fiel), mas NAO bastam para criar uma acao: marcar a mesma categoria
+    # de novo muda so o `categoria_manual` por baixo, e virava um "Desfazer"
+    # que, clicado, nao mexia em nada que o usuario visse.
+    visiveis = {"categoria", "observacao", "descricao", "conferida", "duplicada", "natureza"}
+    passos, rotulos = [], []
+    if mudou and (set(mudou) & visiveis):
+        passos.append({
+            "op": "update", "tabela": "cartao.transacao",
+            "onde": {"transacao_id": str(transacao_id)}, "valores": mudou,
+        })
+        if "conferida" in mudou:
+            rotulos.append("OK retirado" if depois["conferida"] else "OK devolvido")
+        for campo in ("categoria", "observacao", "descricao", "duplicada", "natureza"):
+            if campo in mudou:
+                rotulos.append(campo.capitalize())
+
+    # so as dimensoes que esta edicao tocou: `dim_antes` ja vem filtrado por
+    # elas, e olhar as outras faria o desfazer reescrever o que ninguem mexeu
+    dim_depois = {}
+    if dim_antes:
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.transacao_dimensao "
+            "WHERE transacao_id = %s AND dimensao_id = ANY(%s);",
+            (transacao_id, list(dim_antes)),
+        )
+        dim_depois = {d: v for d, v in cur.fetchall()}
+    for dimensao_id in set(dim_antes) | set(dim_depois):
+        if dim_antes.get(dimensao_id) == dim_depois.get(dimensao_id):
+            continue
+        if dim_antes.get(dimensao_id) is not None:
+            passos.append({
+                "op": "insert", "tabela": "cartao.transacao_dimensao",
+                "valores": {"transacao_id": str(transacao_id), "dimensao_id": dimensao_id,
+                            "valor_id": dim_antes[dimensao_id]},
+            })
+            # o INSERT nao alcanca linha que ja existe (ON CONFLICT DO NOTHING),
+            # entao o valor antigo volta pelo UPDATE logo abaixo
+            passos.append({
+                "op": "update", "tabela": "cartao.transacao_dimensao",
+                "onde": {"transacao_id": str(transacao_id), "dimensao_id": dimensao_id},
+                "valores": {"valor_id": dim_antes[dimensao_id]},
+            })
+        else:
+            passos.append({
+                "op": "delete", "tabela": "cartao.transacao_dimensao",
+                "onde": {"transacao_id": str(transacao_id), "dimensao_id": dimensao_id},
+            })
+        rotulos.append("dimensão")
+
+    if not passos:
+        return
+    descricao = antes.get("descricao") or "lançamento"
+    resumo = ", ".join(dict.fromkeys(rotulos)) or "edição"
+    registrar_desfazivel(cur, f"{resumo} · {descricao[:40]}", passos)
+
+
 @bp.route("/api/transacao/<transacao_id>", methods=["POST"])
 @requer("lancamentos_editar")
+
+
 def update_transacao(transacao_id):
     data = request.get_json(force=True)
     conn = get_conn()
@@ -2493,6 +2578,24 @@ def update_transacao(transacao_id):
             dimensao_antiga[1] if dimensao_antiga else None,
             nome_valor_novo,
         ))
+
+    # Estado ANTERIOR para o botao Desfazer. Fica aqui, e nao no inicio da rota:
+    # neste ponto as validacoes ja passaram e nada foi gravado ainda, entao a
+    # leitura so acontece quando a edicao vai mesmo valer. As dimensoes antigas
+    # ja vem prontas em `dimensoes_validadas` - nao custam consulta nova.
+    _dim_antes = {d: antigo for d, _novo, _nome, antigo, _va, _vn in dimensoes_validadas}
+    cur.execute(
+        "SELECT descricao, COALESCE(categoria_manual, false) FROM cartao.transacao "
+        "WHERE transacao_id = %s;",
+        (transacao_id,),
+    )
+    _extra = cur.fetchone()
+    _estado_antes = {
+        "conferida": transacao[0], "conferida_por": transacao[1], "duplicada": transacao[2],
+        "categoria": transacao[3], "observacao": transacao[4], "natureza": transacao[5],
+        "descricao": _extra[0] if _extra else None,
+        "categoria_manual": _extra[1] if _extra else False,
+    }
 
     for dim_id, valor_id_int, _nome_dimensao, _valor_id_antigo, _valor_antigo, _valor_novo in dimensoes_validadas:
         cur.execute(
@@ -2687,6 +2790,7 @@ def update_transacao(transacao_id):
             observacao_enviada=bool(observacao_familia) or "observacao" in data,
             observacao=observacao_familia,
         )
+    _registrar_desfazer_da_edicao(cur, transacao_id, _estado_antes, _dim_antes)
     conn.commit()
     # Depois do commit e ANTES de fechar. Esta consulta rodava com o cursor e a
     # conexao ja fechados e derrubava a rota inteira com 500 - qualquer edicao,
