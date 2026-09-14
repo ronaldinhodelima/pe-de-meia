@@ -12,25 +12,40 @@
      cartao, o subgrupo e uma trilha dentro dele, a regra e uma ficha dentro da
      trilha. O "└" que existia aqui desenhava a arvore com texto - some no
      modo escuro, quebra no celular e nao diz nada que a moldura ja nao diga. */
+  /* Esta tela e o piloto de tipografia maior (pedido do usuario, 14/09/2026):
+     tudo sobe um degrau da escala para medir se vale subir no projeto inteiro.
+     Continua saindo de token - degrau acima, nunca valor cru. */
   .cc-topo{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
-  .cc-topo h2{margin:0;font-size:var(--titulo-md);letter-spacing:-.01em}
+  .cc-topo h2{margin:0;font-size:var(--titulo-lg);letter-spacing:-.01em}
   /* o titulo carrega a explicacao no tooltip: o cursor precisa dizer isso, senao
      a informacao existe e ninguem descobre que existe */
   .cc-topo h2[data-tip]{cursor:help}
-  .cc-sub{margin:4px 0 0;font-size:var(--fonte-sm);color:var(--ink-faint);line-height:1.5;max-width:70ch}
+  .cc-sub{margin:4px 0 0;font-size:var(--fonte-md);color:var(--ink-soft);line-height:1.5;max-width:70ch}
   .cc-novo{display:flex;gap:8px;align-items:center}
-  .cc-novo input{width:220px}
+  .cc-novo input{width:220px;font-size:var(--fonte-lg)}
 
   .cc-arvore{display:flex;flex-direction:column;gap:14px}
 
   .cc-grupo{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-  .cc-grupo-topo{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line-soft);background:var(--bg)}
-  .cc-grupo-nome{flex:1 1 auto;min-width:0;font-size:var(--fonte-lg);font-weight:var(--peso-forte);color:var(--ink);
+  .cc-grupo-topo{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--bg);
+    cursor:pointer;list-style:none}
+  .cc-grupo-topo::-webkit-details-marker{display:none}
+  .cc-form-subgrupo{margin:14px 14px 0}
+  .cc-grupo[open] .cc-grupo-topo{border-bottom:1px solid var(--line-soft)}
+  /* O centro abre e fecha (pedido do usuario, 14/09/2026): no celular, dez
+     centros abertos viram uma coluna sem fim e some a visao do conjunto. O
+     <details> faz isso sem JS de estado, e `open` e atributo - sobrevive a
+     qualquer redesenho da arvore. */
+  .cc-seta{flex:none;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;
+    color:var(--ink-faint);transition:transform .15s}
+  .cc-seta svg{width:var(--icone-sm);height:var(--icone-sm);display:block}
+  .cc-grupo[open] .cc-seta{transform:rotate(180deg)}
+  .cc-grupo-nome{flex:1 1 auto;min-width:0;font-size:var(--titulo-sm);font-weight:var(--peso-forte);color:var(--ink);
     background:transparent;border:1px solid transparent;border-radius:var(--radius-xs);padding:5px 8px;font-family:inherit}
   .cc-grupo-nome:hover{border-color:var(--line)}
   .cc-grupo-nome:focus{outline:none;border-color:var(--accent);background:var(--surface)}
-  .cc-contador{flex:none;font-size:var(--fonte-xxs);color:var(--ink-faint);font-variant-numeric:tabular-nums;
-    background:var(--raise);border-radius:var(--radius-pill);padding:3px 9px}
+  .cc-contador{flex:none;font-size:var(--fonte-xs);color:var(--ink-soft);font-variant-numeric:tabular-nums;
+    background:var(--raise);border-radius:var(--radius-pill);padding:4px 10px}
 
   .cc-trilhas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;padding:14px}
 
@@ -38,7 +53,7 @@
     border-radius:var(--radius-sm);padding:10px;transition:border-color .12s,background-color .12s}
   .cc-trilha.cc-alvo{border-color:var(--accent);background:var(--accent-soft)}
   .cc-trilha-topo{display:flex;align-items:center;gap:6px}
-  .cc-trilha-nome{flex:1 1 auto;min-width:0;font-size:var(--fonte-md);font-weight:var(--peso-medio);color:var(--ink);
+  .cc-trilha-nome{flex:1 1 auto;min-width:0;font-size:var(--fonte-lg);font-weight:var(--peso-medio);color:var(--ink);
     background:transparent;border:1px solid transparent;border-radius:var(--radius-xs);padding:4px 6px;font-family:inherit}
   .cc-trilha-nome:hover{border-color:var(--line)}
   .cc-trilha-nome:focus{outline:none;border-color:var(--accent);background:var(--surface)}
@@ -58,28 +73,34 @@
   .cc-ficha.cc-em-edicao{border-color:var(--accent)}
   .cc-fichas .cc-form{margin-left:10px}
   .cc-ficha-corpo{flex:1 1 auto;min-width:0}
-  .cc-ficha-cat{display:block;font-size:var(--fonte-sm);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cc-ficha-cat{display:block;font-size:var(--fonte-lg);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cc-condicoes{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
   .cc-cond{display:inline-flex;align-items:center;gap:3px;background:var(--accent-soft);color:var(--accent);
-    border-radius:var(--radius-xxs);padding:1px 5px;font-size:var(--fonte-xxs);white-space:nowrap}
+    border-radius:var(--radius-xxs);padding:2px 6px;font-size:var(--fonte-xs);white-space:nowrap}
   .cc-cond b{font-weight:var(--peso-medio)}
 
-  .cc-icone{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;
+  /* Cor DIZ o que o botao faz, sem depender do hover (pedido do usuario,
+     14/09/2026): o que remove e avermelhado desde sempre, o que acrescenta ou
+     vincula usa o acento. O hover so reforca o que a cor ja anunciou. */
+  .cc-icone{flex:none;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;
     border:none;background:transparent;color:var(--ink-faint);border-radius:var(--radius-xs);cursor:pointer;
-    font-size:var(--icone-md);line-height:1;padding:0;transition:background-color .12s,color .12s}
+    font-size:var(--icone-lg);line-height:1;padding:0;transition:background-color .12s,color .12s}
   .cc-icone:hover{background:var(--raise);color:var(--ink)}
+  .cc-icone.cc-vincular{color:var(--accent)}
+  .cc-icone.cc-vincular:hover{background:var(--accent-soft);color:var(--accent-strong)}
   /* O chevron e SVG, nao o glifo "⌄": aquele caractere tem a baseline pendurada
      e assentava ABAIXO da linha da ficha por mais que o flex centralizasse a
      caixa - centralizar a caixa nao centraliza o desenho dentro dela. O SVG
      ocupa a caixa inteira e fica no meio de verdade. */
   .cc-icone svg{width:var(--icone-sm);height:var(--icone-sm);display:block}
   .cc-icone[aria-expanded="true"] svg{transform:rotate(180deg)}
+  .cc-icone.cc-perigo{color:var(--bad)}
   .cc-icone.cc-perigo:hover{background:var(--bad-soft);color:var(--bad)}
 
-  .cc-add{align-self:flex-start;border:1px dashed var(--line);background:transparent;color:var(--ink-faint);
-    border-radius:var(--radius-xs);padding:5px 9px;font-size:var(--fonte-xs);cursor:pointer;font-family:inherit;
-    transition:border-color .12s,color .12s}
-  .cc-add:hover{border-color:var(--accent);color:var(--accent)}
+  .cc-add{align-self:flex-start;border:1px dashed var(--accent-line);background:transparent;color:var(--accent);
+    border-radius:var(--radius-xs);padding:6px 10px;font-size:var(--fonte-md);cursor:pointer;font-family:inherit;
+    transition:border-color .12s,color .12s,background-color .12s}
+  .cc-add:hover{border-color:var(--accent);background:var(--accent-soft)}
 
   /* Formulario de vinculo: categoria obrigatoria, condicoes opcionais - e a
      condicao e o que permite a mesma categoria cair em centros diferentes. */
@@ -87,18 +108,18 @@
     border-radius:var(--radius-sm);padding:10px}
   .cc-form-linha{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .cc-form select,.cc-form input{min-width:0}
-  .cc-form-rotulo{font-size:var(--fonte-xxs);color:var(--ink-faint);text-transform:none;letter-spacing:.02em}
+  .cc-form-rotulo{font-size:var(--fonte-sm);color:var(--ink-soft);text-transform:none;letter-spacing:.02em}
   .cc-form-acoes{display:flex;gap:6px;align-items:center;justify-content:flex-end}
   .cc-cond-editor{display:flex;gap:6px;align-items:center}
   .cc-cond-editor select{flex:1 1 auto}
 
-  .cc-vazio{font-size:var(--fonte-xs);color:var(--ink-faint);padding:4px 2px;line-height:1.4}
+  .cc-vazio{font-size:var(--fonte-md);color:var(--ink-faint);padding:4px 2px;line-height:1.4}
 
   .cc-soltas{margin-top:18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
-  .cc-soltas h3{margin:0 0 4px;font-size:var(--fonte-lg);font-weight:var(--peso-forte)}
+  .cc-soltas h3{margin:0 0 4px;font-size:var(--titulo-sm);font-weight:var(--peso-forte)}
   .cc-soltas-lista{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:32px}
   .cc-solta{display:inline-flex;align-items:center;background:var(--bg);border:1px solid var(--line);
-    border-radius:var(--radius-xs);padding:5px 9px;font-size:var(--fonte-sm);color:var(--ink-soft);cursor:grab}
+    border-radius:var(--radius-xs);padding:6px 10px;font-size:var(--fonte-lg);color:var(--ink-soft);cursor:grab}
   .cc-solta:hover{border-color:var(--selecao);color:var(--ink)}
   .cc-soltas.cc-alvo{border-color:var(--bad);background:var(--bad-soft)}
 
@@ -106,6 +127,14 @@
     .cc-trilhas{grid-template-columns:1fr}
     .cc-novo{width:100%}
     .cc-novo input{flex:1 1 auto;width:auto}
+    /* Em 375px o contador roubava a largura do nome e o centro aparecia como
+       "Alime…". O nome ganha a linha inteira com os botoes, e o contador desce
+       - ele e referencia, o nome e a identidade. */
+    .cc-grupo-topo{flex-wrap:wrap}
+    .cc-contador{order:1;flex-basis:100%;text-align:center}
+    /* o nome precisa poder encolher, senao empurra o "x" para uma linha so
+       dele: base pequena, e ele cresce com o que sobrar da linha */
+    .cc-grupo-nome{flex:1 1 60px}
   }
 </style>
 {% endblock %}
@@ -151,4 +180,4 @@
 <script type="application/json" id="ccEstado">{{ estado_json|safe }}</script>
 {% endblock %}
 
-{% block scripts %}<script src="/static/centro_custos.js?v=20260914-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/centro_custos.js?v=20260914-3"></script>{% endblock %}

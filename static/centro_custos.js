@@ -24,10 +24,16 @@
     estado = {grupos: [], dimensoes: [], categorias: []};
   }
 
-  // formulario aberto (subgrupo_id) e regra em edicao (regra_id): sao estado da
-  // TELA, nao do dado - por isso vivem aqui e nao voltam do servidor
+  // formulario aberto (subgrupo_id), regra em edicao (regra_id), onde esta o
+  // campo de subgrupo novo (grupo_id) e quais centros estao abertos: e tudo
+  // estado da TELA, nao do dado - por isso vive aqui e nao volta do servidor.
   let formAberto = null;
   let regraEmEdicao = null;
+  let subgrupoNovoEm = null;
+  // Quais centros estao abertos. Comeca vazio: a tela abre mostrando so os
+  // centros (pedido do usuario, 14/09/2026), porque no celular dez centros
+  // abertos viram uma coluna sem fim e some a visao do conjunto.
+  const abertos = new Set();
 
   function toast(msg, tipo) {
     if (window.pdmToast) window.pdmToast(msg, tipo);
@@ -39,6 +45,10 @@
   // dela. O tamanho vem do CSS (.cc-icone svg), para nao nascer valor cru aqui.
   const CHEVRON = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"'
     + ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5 8 10.5 12 6.5"/></svg>';
+  const MAIS = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>';
+  const FECHAR = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"'
+    + ' stroke-width="1.8" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>';
 
   async function salvar(payload) {
     try {
@@ -76,11 +86,11 @@
           <span class="cc-ficha-cat" title="${escHtml(regra.rotulo)}">${escHtml(regra.categoria_nome)}</span>
           ${condicoes ? `<div class="cc-condicoes">${condicoes}</div>` : ''}
         </div>
-        <button type="button" class="cc-icone" data-editar="${regra.id}"
+        <button type="button" class="cc-icone cc-vincular" data-editar="${regra.id}"
                 aria-expanded="${regraEmEdicao === regra.id}"
                 title="Condições de Projeto, Portfólio ou outra dimensão" aria-label="Editar condições">${CHEVRON}</button>
         <button type="button" class="cc-icone cc-perigo" data-excluir-regra="${regra.id}"
-                title="Desvincular" aria-label="Desvincular">×</button>
+                title="Desvincular" aria-label="Desvincular">${FECHAR}</button>
       </div>`;
   }
 
@@ -138,38 +148,59 @@
       <div class="cc-trilha" data-subgrupo="${sub.id}">
         <div class="cc-trilha-topo">
           <input class="cc-trilha-nome" value="${escHtml(sub.nome)}" data-nome-subgrupo="${sub.id}" aria-label="Nome do subgrupo">
+          <button type="button" class="cc-icone cc-vincular" data-abrir-form="${sub.id}"
+                  title="Vincular categoria a este subgrupo" aria-label="Vincular categoria">${MAIS}</button>
           <button type="button" class="cc-icone cc-perigo" data-excluir-subgrupo="${sub.id}"
-                  title="Excluir subgrupo" aria-label="Excluir subgrupo">×</button>
+                  title="Excluir subgrupo" aria-label="Excluir subgrupo">${FECHAR}</button>
         </div>
+        ${formAberto === sub.id ? formHtml(sub.id, null) : ''}
         <div class="cc-fichas" data-fichas="${sub.id}">
           ${fichas || '<div class="cc-vazio">Sem categorias. Arraste uma para cá.</div>'}
         </div>
-        ${formAberto === sub.id ? formHtml(sub.id, null) : `
-        <button type="button" class="cc-add" data-abrir-form="${sub.id}">+ categoria</button>`}
       </div>`;
   }
 
   function grupoHtml(grupo) {
     const regras = grupo.subgrupos.reduce((n, s) => n + s.regras.length, 0);
     const trilhas = grupo.subgrupos.map(trilhaHtml).join('');
+    // <details> em vez de classe controlada por JS: `open` e atributo do
+    // proprio elemento e o teclado ja abre e fecha de graca.
     return `
-      <article class="cc-grupo" data-grupo="${grupo.id}">
-        <header class="cc-grupo-topo">
+      <details class="cc-grupo" data-grupo="${grupo.id}"${abertos.has(grupo.id) ? ' open' : ''}>
+        <summary class="cc-grupo-topo">
+          <span class="cc-seta">${CHEVRON}</span>
           <input class="cc-grupo-nome" value="${escHtml(grupo.nome)}" data-nome-grupo="${grupo.id}" aria-label="Nome do centro de custo">
           <span class="cc-contador">${grupo.subgrupos.length} subgrupo${grupo.subgrupos.length === 1 ? '' : 's'} · ${regras} regra${regras === 1 ? '' : 's'}</span>
+          <button type="button" class="cc-icone cc-vincular" data-novo-subgrupo-em="${grupo.id}"
+                  title="Adicionar subgrupo" aria-label="Adicionar subgrupo">${MAIS}</button>
           <button type="button" class="cc-icone cc-perigo" data-excluir-grupo="${grupo.id}"
-                  title="Excluir centro de custo" aria-label="Excluir centro de custo">×</button>
-        </header>
-        <div class="cc-trilhas">
-          ${trilhas}
-          <div class="cc-trilha">
-            <span class="cc-form-rotulo">Novo subgrupo</span>
-            <input class="campo-caixa" data-novo-subgrupo="${grupo.id}" placeholder="Nome do subgrupo" aria-label="Nome do novo subgrupo">
-            <button type="button" class="cc-add" data-criar-subgrupo="${grupo.id}">+ adicionar</button>
+                  title="Excluir centro de custo" aria-label="Excluir centro de custo">${FECHAR}</button>
+        </summary>
+        ${subgrupoNovoEm === grupo.id ? `
+        <div class="cc-form cc-form-subgrupo">
+          <label class="cc-form-rotulo">Nome do novo subgrupo
+            <input class="campo-caixa" data-novo-subgrupo="${grupo.id}" placeholder="Ex: Seguros" aria-label="Nome do novo subgrupo" style="width:100%;margin-top:4px">
+          </label>
+          <div class="cc-form-acoes">
+            <button type="button" class="ver-btn" data-cancelar>Cancelar</button>
+            <button type="button" class="btn-primario" data-criar-subgrupo="${grupo.id}">Adicionar</button>
           </div>
+        </div>` : ''}
+        <div class="cc-trilhas">
+          ${trilhas || '<div class="cc-vazio">Nenhum subgrupo ainda. Use o + acima.</div>'}
         </div>
-      </article>`;
+      </details>`;
   }
+
+  // `abertos` e reaplicado a cada desenho pelo grupoHtml; aqui so registramos o
+  // que o usuario abriu ou fechou. Sem isto, salvar qualquer coisa fecharia
+  // todos os centros - a arvore e redesenhada inteira a cada gravacao.
+  document.addEventListener('toggle', function (e) {
+    const grupo = e.target.closest && e.target.closest('.cc-grupo[data-grupo]');
+    if (!grupo) return;
+    const id = Number(grupo.dataset.grupo);
+    if (grupo.open) abertos.add(id); else abertos.delete(id);
+  }, true);
 
   function desenhar() {
     raiz.innerHTML = estado.grupos.map(grupoHtml).join('')
@@ -244,10 +275,18 @@
   // preso ao elemento morreria junto com ele (a licao do seletor trocado por
   // AJAX, seccao 7.1).
 
+  // O cabecalho do centro e um <summary>: clicar nele abre e fecha. Os botoes e
+  // o campo de nome moram dentro dele, entao precisam parar o evento - senao
+  // renomear um centro o fechava na cara do usuario.
+  document.addEventListener('click', function (e) {
+    const dentroDoTopo = e.target.closest && e.target.closest('.cc-grupo-topo');
+    if (dentroDoTopo && e.target.closest('button, input')) e.preventDefault();
+  });
+
   document.addEventListener('click', function (e) {
     const alvo = e.target.closest && e.target.closest('[data-cc-acao],[data-abrir-form],[data-cancelar],'
       + '[data-confirmar],[data-add-cond],[data-remover-cond],[data-editar],[data-excluir-regra],'
-      + '[data-excluir-subgrupo],[data-excluir-grupo],[data-criar-subgrupo]');
+      + '[data-excluir-subgrupo],[data-excluir-grupo],[data-criar-subgrupo],[data-novo-subgrupo-em]');
     if (!alvo) return;
 
     if (alvo.dataset.ccAcao === 'criar_grupo') {
@@ -259,18 +298,33 @@
       return;
     }
 
+    if (alvo.dataset.novoSubgrupoEm) {
+      const grupoId = Number(alvo.dataset.novoSubgrupoEm);
+      subgrupoNovoEm = subgrupoNovoEm === grupoId ? null : grupoId;
+      abertos.add(grupoId);       // adicionar subgrupo sem ver o centro nao faz sentido
+      formAberto = null;
+      regraEmEdicao = null;
+      desenhar();
+      const campo = raiz.querySelector(`[data-novo-subgrupo="${grupoId}"]`);
+      if (campo) campo.focus();
+      return;
+    }
+
     if (alvo.dataset.criarSubgrupo) {
       const grupoId = alvo.dataset.criarSubgrupo;
       const campo = raiz.querySelector(`[data-novo-subgrupo="${grupoId}"]`);
       const nome = campo.value.trim();
       if (!nome) { campo.focus(); return; }
+      subgrupoNovoEm = null;
       salvar({acao: 'criar_subgrupo', grupo_id: Number(grupoId), nome: nome});
       return;
     }
 
     if (alvo.dataset.abrirForm) {
-      formAberto = Number(alvo.dataset.abrirForm);
+      const subId = Number(alvo.dataset.abrirForm);
+      formAberto = formAberto === subId ? null : subId;
       regraEmEdicao = null;
+      subgrupoNovoEm = null;
       desenhar();
       const select = raiz.querySelector('[data-nova-categoria]');
       if (select) select.focus();
@@ -287,6 +341,7 @@
     if (alvo.hasAttribute('data-cancelar')) {
       formAberto = null;
       regraEmEdicao = null;
+      subgrupoNovoEm = null;
       desenhar();
       return;
     }

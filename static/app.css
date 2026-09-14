@@ -5,9 +5,13 @@
     --bg: #f4f5fa;
     --surface: #ffffff;
     --raise: #eef0f7;
-    --ink: #0d1526;
-    --ink-soft: #4a5670;
-    --ink-faint: #78829b;
+    /* Contraste reforcado em duas rodadas a pedido do usuario (12 e 14/09/2026).
+       O texto secundario e o esmaecido eram os piores: --ink-faint carrega
+       rotulo de coluna, contador e explicacao, e no cinza antigo sumia em tela
+       de celular sob luz. */
+    --ink: #050a12;
+    --ink-soft: #39445a;
+    --ink-faint: #5d6880;
     --line: #d9dce8;
     --line-soft: #e7eaf3;
     --accent: #0e7490;
@@ -86,9 +90,9 @@
       --bg: #0a0f1e;
       --surface: #111830;
       --raise: #1a2340;
-      --ink: #f3f5fb;
-      --ink-soft: #aeb9d3;
-      --ink-faint: #7683a3;
+      --ink: #fbfcfe;
+      --ink-soft: #c3cde2;
+      --ink-faint: #8f9cb8;
       --line: #313d64;
       --line-soft: #202a4a;
       --accent: #2dd4bf;
@@ -133,9 +137,9 @@
     --bg: #0a0f1e;
     --surface: #111830;
     --raise: #1a2340;
-    --ink: #f3f5fb;
-    --ink-soft: #aeb9d3;
-    --ink-faint: #7683a3;
+    --ink: #fbfcfe;
+    --ink-soft: #c3cde2;
+    --ink-faint: #8f9cb8;
     --line: #313d64;
     --line-soft: #202a4a;
     --accent: #2dd4bf;
