@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 452 aprovados, 8 ignorados
+**Última revisão:** 14/09/2026 · **Schema:** migração 66 · **Testes:** 458 aprovados, 8 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -2570,9 +2570,37 @@ ela — melhor não oferecer do que oferecer errado.
 - A janela fica em **50 por usuário**: é para o passo em falso recente, não um histórico paralelo
   ao log, que continua guardando tudo.
 
-Cobertura hoje: as ações do **Centro de Custos**. Cada novo ponto de gravação que quiser desfazer
-chama `registrar_desfazivel()` declarando a própria volta — é assim que a cobertura cresce sem que
-o motor precise adivinhar nada.
+**O botão fica junto da marca**, na altura da linha de descrição (pedido do usuário, 14/09/2026):
+ali ele sobrevive ao menu recolhido do celular. O ícone é uma seta curva **sólida** — o glifo de
+linha anterior foi lido como "chuveiro", porque desenho fino nesse tamanho perde a forma. Duas
+regras antigas do topbar venceram a nova por especificidade antes de acertar, e **só o valor
+computado no navegador mostrou** (§7.8-A); `:first-child` conta como classe no desempate.
+
+**Cobertura (14/09/2026), em ondas:**
+
+| Tela | Ações cobertas |
+|---|---|
+| Centro de Custos | grupo, subgrupo e regra: criar, renomear, mover, excluir |
+| Lançamentos | edição (categoria, dimensões, observação, descrição, OK, duplicada, natureza) |
+| Lançamento manual | criar (desfazer apaga) e excluir (desfazer **recria** inteiro) |
+| Rateio | criar, editar e desfazer |
+
+**Só entra na fila o que muda algo VISÍVEL.** Marcar a mesma categoria de novo altera
+`categoria_manual` por baixo; sem esse filtro a fila enchia de "Desfazer" que, clicado, não mexia
+em nada que o usuário visse. Os campos de apoio seguem na reversão, para o estado voltar fiel.
+
+**A reversão vira JSON**, então `Decimal`, `uuid` e `datetime` precisam virar texto — um Decimal
+solto ali derrubou a exclusão de lançamento manual com 400, e o lançamento nem chegava a ser
+apagado. E o rateio **não** pode ser recriado por `_estado_rateios`, que normaliza com `abs()` para
+a tela: o sinal se perderia e a soma das partes não fecharia com o banco (§4.4).
+
+**Fora de propósito:** a **importação de documento** (desfazer não consegue restaurar o documento
+que foi substituído — ali quem protege é o aviso do §6.8) e o **vínculo automático da fatura**, que
+faz centenas de vínculos numa tacada; desfazer em massa é o que a regra do OK manda evitar, e para
+isso já existe o "refazer vínculos".
+
+Cada novo ponto de gravação que quiser desfazer chama `registrar_desfazivel()` declarando a própria
+volta — é assim que a cobertura cresce sem que o motor precise adivinhar nada.
 
 **Provado contra Postgres real**, porque desfazer é gravação e precisa ser exercitado, não lido:
 restaura o estado anterior, recria a linha apagada com o **mesmo id** e com as condições, respeita

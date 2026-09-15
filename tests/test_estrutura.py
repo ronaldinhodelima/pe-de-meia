@@ -3209,3 +3209,55 @@ def test_botao_desfazer_fica_ao_lado_da_marca_e_usa_icone_solido():
     bloco = core_txt.split("DESFAZER_BOTAO_HTML = (", 1)[1].split(")\n\n", 1)[0]
     assert "<svg" in bloco and 'fill="currentColor"' in bloco, "icone solido, nao glifo"
     assert "\u21b6" not in bloco.lower() and "&#8630;" not in bloco
+
+
+def test_reversao_nao_leva_tipo_que_nao_vira_json():
+    """Decimal, uuid e datetime nao serializam em JSON.
+
+    A reversao e gravada como jsonb: um Decimal solto ali derrubava a exclusao
+    de lancamento manual com 400, e o lancamento nem chegava a ser apagado. O
+    Postgres aceita todos esses tipos de volta como texto.
+    """
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    corpo = fonte.split("def excluir_lancamento_manual", 1)[1].split("\n@bp.route", 1)[0]
+    assert "isinstance(valor, Decimal)" in corpo
+    assert "isoformat()" in corpo
+
+
+def test_rateio_nao_e_recriado_pelo_valor_absoluto():
+    """`_estado_rateios` normaliza com abs() para a tela.
+
+    Reaproveita-la na reversao inverteria o sinal de uma saida, e a soma das
+    partes tem que fechar com o banco ao centavo (secao 4.4). Por isso existe
+    `_reversao_do_rateio`, que le o valor bruto.
+    """
+    import ast as _ast
+
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    no = next(n for n in _ast.parse(fonte).body
+              if isinstance(n, _ast.FunctionDef) and n.name == "_reversao_do_rateio")
+    # sem a docstring: ela CITA o abs() para explicar por que ele nao esta aqui,
+    # e procurar no texto inteiro confunde a explicacao com o codigo (10.4 n.15)
+    codigo = _ast.unparse(_ast.Module(body=no.body[1:], type_ignores=[]))
+    assert "abs(" not in codigo, "a reversao precisa do valor com sinal"
+    assert "valor_brl" in codigo
+
+
+def test_todas_as_gravacoes_de_lancamento_registram_desfazer():
+    """As quatro acoes de lancamento que gravam sabem voltar atras.
+
+    Sao as mais usadas do sistema; uma que ficasse de fora daria ao usuario um
+    botao que funciona "as vezes", que e pior do que nao ter.
+    """
+    import ast as _ast
+
+    fonte = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    arvore = _ast.parse(fonte)
+    esperadas = {"update_transacao", "lancamento_manual",
+                 "excluir_lancamento_manual", "rateios_transacao"}
+    for no in arvore.body:
+        if isinstance(no, _ast.FunctionDef) and no.name in esperadas:
+            corpo = _ast.get_source_segment(fonte, no) or ""
+            marca = ("registrar_desfazivel" in corpo
+                     or "_registrar_desfazer_da_edicao" in corpo)
+            assert marca, f"{no.name} grava sem registrar como desfazer"

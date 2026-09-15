@@ -6107,9 +6107,15 @@ DESFAZER_PERMITIDO = {
     "cartao.centro_regra_dimensao": {"regra_id", "dimensao_id", "valor_id"},
     "cartao.grupo_custo": {"id", "nome"},
     "cartao.subgrupo_custo": {"id", "nome", "grupo_id"},
-    "cartao.transacao": {"transacao_id", "categoria", "categoria_manual", "observacao", "descricao",
-                         "conferida", "conferida_por", "duplicada", "natureza",
-                         "substituido_por"},
+    # As colunas de criacao entram porque desfazer a EXCLUSAO de um lancamento
+    # manual e recria-lo inteiro - excluir por engano e o caso classico de
+    # undo. Continuam de fora as que o Pluggy manda (secao 4.6): quem veio do
+    # banco nunca e apagado nem recriado por aqui.
+    "cartao.transacao": {"transacao_id", "categoria", "categoria_manual", "observacao",
+                         "descricao", "descricao_original", "conferida", "conferida_por",
+                         "conferida_em", "duplicada", "natureza", "substituido_por",
+                         "account_id", "data_transacao", "valor_brl", "valor_original",
+                         "moeda_original", "status", "tipo", "criado_por", "importado"},
     "cartao.transacao_rateio": {"id", "transacao_id", "ordem", "valor_brl", "categoria",
                                 "observacao"},
     "cartao.transacao_rateio_dimensao": {"rateio_id", "dimensao_id", "valor_id"},

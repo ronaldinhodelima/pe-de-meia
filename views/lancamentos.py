@@ -131,6 +131,47 @@ def _normalizar_rateios(valor_pai, partes):
     return normalizadas
 
 
+def _reversao_do_rateio(cur, transacao_id):
+    """Passos que devolvem o rateio ao estado em que ele esta AGORA.
+
+    Nao reaproveita `_estado_rateios`: aquela normaliza o valor com abs() para
+    a tela, e recriar a parte pelo valor absoluto inverteria o sinal de uma
+    saida - a soma das partes tem que fechar com o banco ao centavo (secao 4.4).
+
+    Sem rateio nenhum, a volta e so apagar o que existir: e assim que se desfaz
+    a CRIACAO de um rateio.
+    """
+    cur.execute(
+        "SELECT id, ordem, valor_brl, categoria, observacao FROM cartao.transacao_rateio "
+        "WHERE transacao_id = %s ORDER BY ordem, id;",
+        (transacao_id,),
+    )
+    partes = cur.fetchall()
+    passos = [{
+        "op": "delete", "tabela": "cartao.transacao_rateio",
+        "onde": {"transacao_id": str(transacao_id)},
+    }]
+    for rateio_id, ordem, valor, categoria, observacao in partes:
+        passos.append({
+            "op": "insert", "tabela": "cartao.transacao_rateio",
+            "valores": {"id": rateio_id, "transacao_id": str(transacao_id), "ordem": ordem,
+                        "valor_brl": str(valor), "categoria": categoria,
+                        "observacao": observacao},
+        })
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.transacao_rateio_dimensao "
+            "WHERE rateio_id = %s;",
+            (rateio_id,),
+        )
+        for dimensao_id, valor_id in cur.fetchall():
+            passos.append({
+                "op": "insert", "tabela": "cartao.transacao_rateio_dimensao",
+                "valores": {"rateio_id": rateio_id, "dimensao_id": dimensao_id,
+                            "valor_id": valor_id},
+            })
+    return passos, len(partes)
+
+
 def _estado_rateios(cur, transacao_id):
     cur.execute(
         "SELECT r.id, r.ordem, r.valor_brl, r.categoria, r.observacao, "
@@ -2117,6 +2158,14 @@ def lancamento_manual():
                 "DO UPDATE SET valor_id = EXCLUDED.valor_id;",
                 (transacao_id, int(dim_id), int(valor_id)),
             )
+        # desfazer de um lancamento CRIADO e apaga-lo: ele nasceu aqui, entao
+        # some inteiro, com as dimensoes junto (nao ha FK entre as duas tabelas)
+        registrar_desfazivel(cur, f"Remover o lançamento \"{descricao[:40]}\"", [
+            {"op": "delete", "tabela": "cartao.transacao_dimensao",
+             "onde": {"transacao_id": str(transacao_id)}},
+            {"op": "delete", "tabela": "cartao.transacao",
+             "onde": {"transacao_id": str(transacao_id)}},
+        ])
         conn.commit()
         transacao_encerrada = True
         registrar_auditoria(
@@ -2159,8 +2208,45 @@ def excluir_lancamento_manual(transacao_id):
                 "erro": "Só é possível excluir lançamentos manuais ou importados de arquivo. Este veio da sincronização com o banco e voltaria na próxima atualização — se ele repete um lançamento que já existe, aponte a substituição nos detalhes.",
             }), 400
 
+        # Antes de apagar, guarda o lancamento inteiro: desfazer aqui e
+        # recria-lo como estava, com dimensoes e assinatura. Excluir por engano
+        # e justamente o caso em que o botao mais vale.
+        colunas = ("transacao_id", "account_id", "data_transacao", "descricao",
+                   "valor_brl", "valor_original", "moeda_original", "categoria",
+                   "categoria_manual", "observacao", "conferida", "conferida_por",
+                   "status", "tipo", "criado_por", "importado")
+        cur.execute(
+            f"SELECT {', '.join(colunas)} FROM cartao.transacao WHERE transacao_id = %s;",
+            (transacao_id,),
+        )
+        antes = dict(zip(colunas, cur.fetchone()))
+        # A reversao vira JSON: Decimal, uuid e datetime nao serializam, e o
+        # Postgres aceita todos eles como texto na volta. Sem isto a exclusao
+        # respondia 400 - o lancamento nem chegava a ser apagado.
+        for chave, valor in list(antes.items()):
+            if isinstance(valor, Decimal):
+                antes[chave] = str(valor)
+            elif hasattr(valor, "isoformat"):
+                antes[chave] = valor.isoformat()
+            elif isinstance(valor, uuid.UUID):
+                antes[chave] = str(valor)
+        antes["transacao_id"] = str(antes["transacao_id"])
+        antes["account_id"] = str(antes["account_id"])
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.transacao_dimensao WHERE transacao_id = %s;",
+            (str(transacao_id),),
+        )
+        dims_antes = cur.fetchall()
+        volta = [{"op": "insert", "tabela": "cartao.transacao", "valores": antes}]
+        volta += [{
+            "op": "insert", "tabela": "cartao.transacao_dimensao",
+            "valores": {"transacao_id": str(transacao_id), "dimensao_id": d, "valor_id": v},
+        } for d, v in dims_antes]
+
         cur.execute("DELETE FROM cartao.transacao_dimensao WHERE transacao_id = %s;", (str(transacao_id),))
         cur.execute("DELETE FROM cartao.transacao WHERE transacao_id = %s;", (transacao_id,))
+        registrar_desfazivel(
+            cur, f"Recriar o lançamento \"{(antes.get('descricao') or '')[:40]}\"", volta)
         conn.commit()
         transacao_encerrada = True
         return jsonify({"ok": True})
@@ -2301,8 +2387,11 @@ def rateios_transacao(transacao_id):
                 "erro": "Desmarque o OK antes de desfazer o rateio.",
             }), 409
         antes = _estado_rateios(cur, transacao_id)
+        _volta_rateio, _partes_antes = _reversao_do_rateio(cur, transacao_id)
         if request.method == "DELETE":
             cur.execute("DELETE FROM cartao.transacao_rateio WHERE transacao_id=%s;", (transacao_id,))
+            registrar_desfazivel(
+                cur, f"Refazer o rateio em {_partes_antes} parte(s)", _volta_rateio)
             conn.commit()
             registrar_mudanca_auditoria("Rateio", antes, None)
             return jsonify({"ok": True, "rateios": []})
@@ -2392,6 +2481,14 @@ def rateios_transacao(transacao_id):
                     (session.get("user"), transacao_id),
                 )
                 conferiu_pai = cur.rowcount > 0
+        # desfazer aqui devolve o rateio ao que era antes deste POST: sem
+        # rateio nenhum (criacao) ou ao conjunto anterior (edicao)
+        registrar_desfazivel(
+            cur,
+            ("Desfazer o rateio" if not _partes_antes
+             else f"Voltar o rateio para {_partes_antes} parte(s)"),
+            _volta_rateio,
+        )
         conn.commit()
         depois = _estado_rateios(cur, transacao_id)
         registrar_mudanca_auditoria("Rateio", antes or None, depois)
