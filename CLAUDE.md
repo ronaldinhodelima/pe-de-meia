@@ -2643,8 +2643,14 @@ e conferiu quais não registram desfazer. O que sobrou, sobrou por decisão:
 | vínculo automático da fatura | centenas de vínculos numa tacada; para refazer já existe o "refazer vínculos" |
 | criar cobranças sem Pluggy | mesma natureza: 1.135 lançamentos numa rodada, que desde então podem ter sido classificados e conferidos |
 | sincronizar parcelas / recalcular ciclo | redistribuem o DRE entre meses em lote; a prévia é que protege (§4.5) |
+| apagar arquivo da fatura | zera os **bytes** do PDF; guardá-los na reversão para poder voltar seria absurdo — o arquivo inteiro dentro de um `jsonb` |
 | `/usuarios` | ver abaixo |
 | `login` | não é ação do usuário sobre um dado |
+
+A varredura é repetível e vale rodar depois de mexer em rota: ela lê por AST cada função com
+`@bp.route`, procura `INSERT`/`UPDATE cartao.`/`DELETE` nos literais de SQL dela **e dos helpers do
+próprio módulo que ela chama**, e lista quem grava sem registrar desfazer. Qualquer nome novo que
+apareça nela é uma decisão a tomar — cobrir ou explicar aqui.
 
 **`/usuarios` fica de fora de propósito, e é a decisão mais difícil desta seção.** O motor é um
 **replay cego**: ele reescreve colunas, não conhece regra de negócio. A tela de usuários é a única
