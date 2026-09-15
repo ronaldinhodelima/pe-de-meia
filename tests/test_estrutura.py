@@ -149,6 +149,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/diagnostico/classificacao-ok",
         "/api/diagnostico/suspeitas-duplicidade",
         "/api/diagnostico/importados",
+        "/api/diagnostico/horario-unicred",
         "/api/faturas/recalcular-ciclo-do-arquivo",
         "/api/diagnostico/casamento/<int:fatura_id>",
         "/api/regras/preview", "/api/dimensao/<int:dimensao_id>/valor",

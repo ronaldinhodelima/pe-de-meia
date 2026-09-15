@@ -42,6 +42,18 @@ PLUGGY_ITEM_ID = os.environ.get("PLUGGY_ITEM_ID")
 SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", str(60 * 60)))
 # Obrigatoria nos dois servicos, com o mesmo valor. O worker recusa iniciar sem
 # ela para nunca expor /sync por erro de configuracao.
+# Contas cujo horario o Pluggy entrega com +3h (secao 4.6). E a MESMA lista do
+# `core.CONTAS_HORARIO_MAIS_3H`; este servico roda em outro container (o
+# Dockerfile copia so o `app.py`) e por isso nao importa de la. Ha teste
+# comparando as duas.
+#
+# O criterio e a CONTA, como na migracao 43. A versao anterior olhava o nome da
+# conexao (`"unicred" in nome_conexao.lower()`), e o Pluggy devolve "MeuPluggy"
+# nas tres conexoes da familia: a condicao era sempre falsa, a correcao nunca
+# rodou uma vez sequer, e como o UPSERT reescreve `data_transacao` a cada
+# rodada, toda sincronizacao desfazia a migracao 43.
+CONTAS_HORARIO_MAIS_3H = ("b6243125-dca2-42b2-8c20-0825782c6d8d",)
+
 SYNC_SECRET = os.environ.get("SYNC_SECRET")
 if not SYNC_SECRET:
     raise RuntimeError("SYNC_SECRET e obrigatoria; o worker nao pode iniciar sem autenticacao")
@@ -343,6 +355,16 @@ def upsert_account(cur, item_id, acc):
     )
 
 
+def _corrige_horario_da_conta(acc):
+    """Se esta CONTA e uma das que o Pluggy entrega com +3h.
+
+    Funcao propria, e nao uma condicao solta dentro do laco de sincronizacao,
+    porque foi exatamente a condicao solta que passou meses errada sem teste:
+    o `_data_transacao_pluggy` tinha teste, mas quem calculava a flag dele nao.
+    """
+    return str((acc or {}).get("id")) in CONTAS_HORARIO_MAIS_3H
+
+
 def _data_transacao_pluggy(valor, corrigir_horario=False):
     """Normaliza o caso Unicred em que o Pluggy entrega hora com +3h.
 
@@ -610,9 +632,7 @@ def _run_sync_unlocked(origem="manual"):
                 novas_item = atualizadas_item = 0
                 for acc in contas:
                     novas_conta = atualizadas_conta = 0
-                    corrigir_horario = (
-                        acc.get("type") == "CREDIT" and "unicred" in nome_conexao.lower()
-                    )
+                    corrigir_horario = _corrige_horario_da_conta(acc)
                     for tx in fetch_all_transactions(api_key, acc["id"]):
                         if upsert_transaction(cur, tx, corrigir_horario=corrigir_horario):
                             novas_conta += 1

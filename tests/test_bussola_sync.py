@@ -131,6 +131,35 @@ def test_unicred_corrige_tres_horas_mas_preserva_meia_noite(monkeypatch):
     assert worker._data_transacao_pluggy("2026-08-13T18:49:00+00:00", False) == "2026-08-13T18:49:00+00:00"
 
 
+def test_quem_decide_corrigir_o_horario_olha_a_conta_e_nao_o_nome_da_conexao(monkeypatch):
+    """A condicao antiga era `"unicred" in nome_conexao.lower()`.
+
+    O Pluggy devolve "MeuPluggy" como nome do conector nas tres conexoes da
+    familia, entao ela nunca foi verdadeira: a correcao de -3h jamais rodou, e
+    como o UPSERT reescreve `data_transacao`, toda sincronizacao desfazia a
+    migracao 43. O criterio certo e a conta, o mesmo que a migracao usou.
+    """
+    worker = carregar_worker(monkeypatch)
+    conta_do_cartao = worker.CONTAS_HORARIO_MAIS_3H[0]
+
+    assert worker._corrige_horario_da_conta({"id": conta_do_cartao, "type": "CREDIT"})
+    # outra conta da MESMA conexao nao e corrigida - o horario torto e da conta
+    assert not worker._corrige_horario_da_conta({"id": "outra-conta", "type": "CREDIT"})
+    assert not worker._corrige_horario_da_conta({})
+
+
+def test_a_lista_de_contas_com_horario_torto_e_a_mesma_nos_dois_servicos(monkeypatch):
+    """O worker roda em outro container e nao importa do `core`.
+
+    Duas listas escritas a mao divergem em silencio, e a divergencia aqui sai
+    como horario errado no lancamento - por isso o teste compara as duas.
+    """
+    worker = carregar_worker(monkeypatch)
+    import core
+
+    assert tuple(worker.CONTAS_HORARIO_MAIS_3H) == tuple(core.CONTAS_HORARIO_MAIS_3H)
+
+
 def test_falha_de_uma_conexao_nao_impede_as_demais_e_gera_aviso(monkeypatch):
     worker = carregar_worker(monkeypatch)
 

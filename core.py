@@ -315,6 +315,17 @@ CENTROS_CONFIRMADOS = {
 CONTA_MANUAL_ID = "00000000-0000-0000-0000-000000000002"
 
 
+# Contas cujo horario o Pluggy entrega com +3h (secao 4.6). E a MESMA lista do
+# worker (`bussola/app.py`), que roda em outro container e por isso nao importa
+# daqui - `test_a_lista_de_contas_com_horario_torto_e_a_mesma_nos_dois_servicos`
+# compara as duas para elas nao divergirem em silencio.
+#
+# O criterio e a CONTA, nunca o nome da conexao: o Pluggy devolve "MeuPluggy"
+# como nome do conector nas tres conexoes da familia, entao a condicao antiga
+# (`"unicred" in nome_conexao`) era sempre falsa e a correcao nunca rodou.
+CONTAS_HORARIO_MAIS_3H = ("b6243125-dca2-42b2-8c20-0825782c6d8d",)
+
+
 APP_NOME = "Pé de Meia"
 
 

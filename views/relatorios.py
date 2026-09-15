@@ -22,6 +22,7 @@ from core import (
     parcela_na_descricao,
     CATEGORIAS_EXTRA,
     CATEGORIAS_OCULTAS,
+    CONTAS_HORARIO_MAIS_3H,
     CATEGORIA_PT_DB,
     DATA_LOCAL_SQL,
     FINANCEIRO_DIM_TABELA,
@@ -4054,4 +4055,92 @@ def api_diagnostico_importados():
         "ultima_data": itens[-1]["data"] if itens else None,
         "lancamentos": itens[:200],
         "mostrando": min(len(itens), 200),
+    })
+
+
+@bp.route("/api/diagnostico/horario-unicred")
+@requer("cadastros")
+def api_diagnostico_horario_unicred():
+    """Previa da correcao de -3h do cartao Unicred - somente leitura.
+
+    A migracao 43 ja corrigiu esse horario uma vez, e toda sincronizacao o
+    desfez: o worker decidia corrigir pelo NOME da conexao, que o Pluggy devolve
+    como "MeuPluggy", entao a condicao era sempre falsa e o UPSERT regravava o
+    valor cru. Esta rota mostra quantos lancamentos voltariam a ficar certos,
+    ANTES de qualquer gravacao (secao 10.4 nº 1: nao testar hipotese em
+    producao).
+
+    Mesmo recorte da migracao 43, e pelos mesmos motivos: so a conta do cartao,
+    so registro que veio do Pluggy (`importado=false`), e horario 00:00 fica
+    intacto - ali nao ha hora real, e recuar 3h mudaria o DIA.
+
+    Nao grava nada, nao encosta no OK (secao 1.2) e nao muda valor nenhum: o DRE
+    e por data, e nenhum lancamento atravessa a meia-noite neste recorte (a
+    consulta devolve `mudam_de_dia` justamente para provar isso antes).
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    alvo = (
+        "FROM cartao.transacao t WHERE t.account_id::text = ANY(%s) "
+        "AND COALESCE(t.importado,false)=false "
+        "AND (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::time <> time '00:00:00'"
+    )
+    contas = list(CONTAS_HORARIO_MAIS_3H)
+    cur.execute(
+        "SELECT COUNT(*) AS total, "
+        "COUNT(*) FILTER (WHERE t.conferida) AS conferidos, "
+        # recuar 3h nao pode empurrar lancamento para o dia anterior sem que
+        # isso esteja a vista: mudar de dia mexeria no mes do DRE (secao 1.1)
+        "COUNT(*) FILTER (WHERE (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::date "
+        "                    <> ((t.data_transacao - interval '3 hours') "
+        "                        AT TIME ZONE 'America/Sao_Paulo')::date) AS mudam_de_dia, "
+        "MIN(t.data_transacao) AS primeira, MAX(t.data_transacao) AS ultima "
+        + alvo + ";",
+        (contas,),
+    )
+    resumo = cur.fetchone()
+    # O caso de controle que o usuario conferiu no app da Visa: se ele nao
+    # terminar em 15:49, a correcao nao fez o que promete e nao se grava nada.
+    cur.execute(
+        "SELECT t.data_transacao, t.descricao, COALESCE(t.valor_brl,t.valor_original) AS valor "
+        + alvo + " AND t.descricao ILIKE %s "
+        "AND (t.data_transacao AT TIME ZONE 'America/Sao_Paulo')::date = date '2026-08-13' "
+        "AND ROUND(ABS(COALESCE(t.valor_brl,t.valor_original))::numeric,2) = 220.01;",
+        (contas, "%DELTA VIDEIRA%"),
+    )
+    referencia = cur.fetchone()
+    cur.execute(
+        "SELECT t.data_transacao, t.descricao, t.conferida "
+        + alvo + " ORDER BY t.data_transacao DESC LIMIT 15;",
+        (contas,),
+    )
+    amostra = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    def antes_depois(valor):
+        local = data_hora_local(valor)
+        return {
+            "antes": local.strftime("%d/%m/%Y %H:%M"),
+            "depois": (local - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
+        }
+
+    return jsonify({
+        "contas": contas,
+        "gravou": False,
+        "total": resumo["total"],
+        "conferidos": resumo["conferidos"],
+        "mudam_de_dia": resumo["mudam_de_dia"],
+        "primeira": data_hora_local(resumo["primeira"]).strftime("%d/%m/%Y %H:%M") if resumo["primeira"] else None,
+        "ultima": data_hora_local(resumo["ultima"]).strftime("%d/%m/%Y %H:%M") if resumo["ultima"] else None,
+        "referencia_delta_videira": (
+            dict(antes_depois(referencia["data_transacao"]),
+                 valor=float(referencia["valor"] or 0), esperado="13/08/2026 15:49")
+            if referencia else None
+        ),
+        "amostra": [
+            dict(antes_depois(r["data_transacao"]), descricao=r["descricao"],
+                 conferido=bool(r["conferida"]))
+            for r in amostra
+        ],
     })
