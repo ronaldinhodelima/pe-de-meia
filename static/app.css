@@ -208,9 +208,12 @@
   .topbar a:hover { color: var(--ink); }
 
   /* ---------- alternador de tema ---------- */
+  /* Fundo `--surface`, o mesmo do "Atualizar agora" (`.sync-btn`): os botoes do
+     topbar formam um conjunto e precisam ler como um so. `--raise` deixava os
+     dois botoes-icone um tom mais escuros que o botao de texto ao lado. */
   .tema-toggle {
     width: 30px; height: 30px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-    background: var(--raise); color: var(--ink-soft); cursor: pointer;
+    background: var(--surface); color: var(--ink-soft); cursor: pointer;
     display: grid; place-items: center; font-size: var(--fonte-lg); transition: border-color .12s, color .12s;
   }
   .tema-toggle:hover { border-color: var(--accent); color: var(--accent); }
@@ -230,15 +233,15 @@
     display: flex; align-items: flex-end; gap: 10px; min-width: 0;
   }
   /* Mesmo efeito do `.tema-toggle` (o outro botao-icone quadrado do topbar):
-     neutro em repouso, acende para a cor de marca so no hover. Antes o
-     desfazer ficava com o icone na cor de marca o tempo todo - inclusive
-     desabilitado, antes da opacidade entrar - o que fazia ele parecer "aceso"
-     mesmo sem nada para desfazer. */
+     fundo branco como o "Atualizar agora", neutro em repouso, e acende para a
+     cor de marca so no hover. Antes o desfazer ficava com o icone na cor de
+     marca o tempo todo - inclusive desabilitado, antes da opacidade entrar -
+     o que fazia ele parecer "aceso" mesmo sem nada para desfazer. */
   .desfazer-btn {
     flex: none; width: 32px; height: 32px; margin-bottom: 2px;
     display: inline-flex; align-items: center; justify-content: center;
     border: 1px solid var(--line); border-radius: var(--radius-sm);
-    background: var(--raise); color: var(--ink-soft); cursor: pointer; padding: 0;
+    background: var(--surface); color: var(--ink-soft); cursor: pointer; padding: 0;
     transition: border-color .12s, color .12s, opacity .12s;
   }
   .desfazer-btn svg { width: var(--icone-lg); height: var(--icone-lg); display: block; }
