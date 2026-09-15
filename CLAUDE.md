@@ -218,9 +218,21 @@ léxica, ignorando comentário, template literal e regex.
 - **Coolify** (`https://coolify.brdrive.net`, projeto Ronaldinho):
   - App principal `conferencia-cartao-app`, uuid `nvbnzjhig1og7s0gn5nrbxjo`,
     domínio **https://pedemeia.brdrive.net**.
-  - Worker de sync `bussola-financeira-app-v2`, uuid `hdgffcvh3ljqe61dczztaycz`.
+  - Worker de sync `pe-de-meia-sync`, uuid `hdgffcvh3ljqe61dczztaycz`.
     **Esse domínio já mudou sozinho uma vez** e quebrou "Atualizar agora" porque a URL estava
     hardcoded em `BUSSOLA_SYNC_URL`. Se o sync der 404/502, conferir isso primeiro.
+- **O push na `main` publica só o APP PRINCIPAL — o worker NÃO.** Descoberto em 15/09/2026: o
+  `pe-de-meia-sync` tinha 24 deploys, **todos manuais**, o último de 3 semanas antes, e rodava
+  código velho sem ninguém notar. A causa é o **nome do repositório guardado nele**:
+  `ronaldinhodelima/conferencia-cartao-brdrive`, o nome antigo. O `git clone` funciona (o GitHub
+  redireciona nome antigo), então o deploy manual sempre deu certo e escondeu o problema — mas o
+  payload do webhook traz o nome **atual**, `ronaldinhodelima/pe-de-meia`, que não casa com o que
+  está gravado, e o Coolify nunca encontra a aplicação. "Deploy on push (webhooks)" já está ligado
+  nele; o que falta é o nome e um webhook no GitHub assinado com o **secret dele** (cada aplicação
+  tem o seu, e o repositório hoje só tem um webhook, com o do app principal).
+  **Lição:** renomear repositório não avisa quem guardava o nome antigo, e a coisa quebra só no
+  caminho automático — o manual continua funcionando e mascara tudo. Ao mexer no worker, conferir
+  a data do último deploy dele antes de supor que o código está no ar.
 - **Push na `main` dispara o webhook → Coolify.** Acompanhar build, troca de container e logs;
   push não é conclusão. Token do Coolify e credenciais ficam nas variáveis de ambiente do
   Coolify — nunca no código nem no git.
@@ -507,7 +519,9 @@ para dentro ou fora do ciclo de uma fatura. Os vínculos não se perdem (são po
 Referência confirmada na Visa: DELTA VIDEIRA, R$ 220,01, 13/08/2026 às **15:49**, que o sistema
 mostrava como 18:49. A migração subtraiu 3h **só** de registros Pluggy da Unicred Conjunta,
 guardando o estado em `cartao.horario_backup_v43`; o worker aplica a mesma normalização a novas
-sincronizações. **Horários exatamente 00:00 são preservados** — representam data sem hora
+sincronizações. **Ela ficou fora do ar de ~25/08 a 15/09/2026**, porque o worker não publica por
+push (§2.3) e o commit que a levou nunca subiu: tudo o que a Unicred sincronizou nessas três
+semanas entrou +3h. Conferir antes de tratar horário desse período como confiável. **Horários exatamente 00:00 são preservados** — representam data sem hora
 confiável, e mover levaria ao dia anterior. **Não aplicar a Nubank ou conta corrente sem antes
 validar um evento concreto no app da instituição.**
 
