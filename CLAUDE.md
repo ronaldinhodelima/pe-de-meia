@@ -221,15 +221,16 @@ léxica, ignorando comentário, template literal e regex.
   - Worker de sync `pe-de-meia-sync`, uuid `hdgffcvh3ljqe61dczztaycz`.
     **Esse domínio já mudou sozinho uma vez** e quebrou "Atualizar agora" porque a URL estava
     hardcoded em `BUSSOLA_SYNC_URL`. Se o sync der 404/502, conferir isso primeiro.
-- **O push na `main` publica só o APP PRINCIPAL — o worker NÃO.** Descoberto em 15/09/2026: o
-  `pe-de-meia-sync` tinha 24 deploys, **todos manuais**, o último de 3 semanas antes, e rodava
-  código velho sem ninguém notar. A causa é o **nome do repositório guardado nele**:
-  `ronaldinhodelima/conferencia-cartao-brdrive`, o nome antigo. O `git clone` funciona (o GitHub
-  redireciona nome antigo), então o deploy manual sempre deu certo e escondeu o problema — mas o
-  payload do webhook traz o nome **atual**, `ronaldinhodelima/pe-de-meia`, que não casa com o que
-  está gravado, e o Coolify nunca encontra a aplicação. "Deploy on push (webhooks)" já está ligado
-  nele; o que falta é o nome e um webhook no GitHub assinado com o **secret dele** (cada aplicação
-  tem o seu, e o repositório hoje só tem um webhook, com o do app principal).
+- **O worker passou 3 semanas sem receber push, e ninguém viu** (corrigido em 15/09/2026). O
+  `pe-de-meia-sync` tinha 24 deploys, **todos manuais**, e rodava código velho. A causa era o
+  **nome do repositório guardado nele**: `ronaldinhodelima/conferencia-cartao-brdrive`, o nome
+  antigo. O `git clone` funciona (o GitHub redireciona nome antigo), então o deploy manual sempre
+  deu certo e escondeu o problema — mas o payload do webhook traz o nome **atual**, que não casava
+  com o gravado, e o Coolify nunca encontrava a aplicação.
+- **Cada aplicação tem o SEU segredo de webhook, então o repositório precisa de um webhook por
+  aplicação.** O `.../webhooks/source/github/events/manual` é o mesmo endereço para todas, mas o
+  Coolify confere a assinatura com o segredo **daquela** aplicação; um webhook só nunca publicaria
+  as duas. Hoje o repositório tem dois, um com o segredo do app e outro com o do worker.
   **Lição:** renomear repositório não avisa quem guardava o nome antigo, e a coisa quebra só no
   caminho automático — o manual continua funcionando e mascara tudo. Ao mexer no worker, conferir
   a data do último deploy dele antes de supor que o código está no ar.
