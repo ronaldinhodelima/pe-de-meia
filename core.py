@@ -6112,7 +6112,7 @@ DESFAZER_PERMITIDO = {
     # undo. Continuam de fora as que o Pluggy manda (secao 4.6): quem veio do
     # banco nunca e apagado nem recriado por aqui.
     "cartao.transacao": {"transacao_id", "categoria", "categoria_manual", "observacao",
-                         "descricao", "descricao_original", "conferida", "conferida_por",
+                         "descricao", "descricao_bruta", "conferida", "conferida_por",
                          "conferida_em", "duplicada", "natureza", "substituido_por",
                          "account_id", "data_transacao", "valor_brl", "valor_original",
                          "moeda_original", "status", "tipo", "criado_por", "importado"},
@@ -6123,14 +6123,16 @@ DESFAZER_PERMITIDO = {
     "cartao.categoria_natureza": {"categoria", "natureza"},
     "cartao.categoria_oculta": {"categoria"},
     "cartao.dimensao": {"id", "nome", "obrigatoria", "ordem"},
-    "cartao.dimensao_valor": {"id", "dimensao_id", "nome", "teto_mensal", "teto_anual"},
-    "cartao.regra_classificacao": {"id", "trecho", "categoria", "ativa", "account_id",
-                                   "operador_valor", "valor_referencia"},
+    "cartao.dimensao_valor": {"id", "dimensao_id", "nome", "teto_mensal", "teto_anual",
+                              "icone", "portfolio_valor_id"},
+    "cartao.regra_classificacao": {"id", "padrao", "categoria", "ordem", "ativa",
+                                   "account_id", "valor_operador", "valor_limite"},
     "cartao.regra_dimensao_valor": {"regra_id", "dimensao_id", "valor_id"},
     "cartao.compra_futura": {"id", "descricao", "valor_previsto", "valor_real", "mes_alvo",
-                             "prioridade", "observacao", "comprada_em", "transacao_id"},
+                             "prioridade", "observacao", "situacao", "comprada_em",
+                             "transacao_id"},
     "cartao.compra_futura_dimensao": {"compra_id", "dimensao_id", "valor_id"},
-    "cartao.cartao_nome": {"numero_final", "apelido"},
+    "cartao.cartao_nome": {"final4", "prefixo"},
     "cartao.item_titular": {"item_id", "titular"},
     "cartao.conta": {"account_id", "nome_curto"},
     "cartao.fatura_vinculo": {"id", "fatura_linha_id", "transacao_id", "origem"},
@@ -6184,16 +6186,40 @@ def registrar_desfazivel(cur, rotulo, reversao, usuario=None):
     return novo
 
 
+def _filtro_do_passo(onde):
+    """WHERE do passo. Valor em LISTA vira `= ANY(%s)`.
+
+    Existe para a acao em lote - mover lancamentos de uma categoria para outra
+    alcanca dezenas de linhas de uma vez, e a volta precisa ser exatamente
+    aquele conjunto, nao "todos os que hoje estao na categoria destino" (que
+    levaria junto os que ja estavam la antes).
+
+    A lista vai sempre como TEXTO, com a coluna castada: o jsonb so guarda
+    texto, e `uuid = ANY(text[])` nao existe no Postgres - derruba a consulta
+    inteira, nao devolve numero errado (secao 10.4 n.6). Castar a coluna vale
+    para uuid, bigint e text de uma vez.
+    """
+    partes, parametros = [], []
+    for coluna, valor in onde.items():
+        if isinstance(valor, (list, tuple)):
+            partes.append(f"{coluna}::text = ANY(%s)")
+            parametros.append([str(v) for v in valor])
+        else:
+            partes.append(f"{coluna} = %s")
+            parametros.append(valor)
+    return " AND ".join(partes), parametros
+
+
 def _aplicar_passo_desfazer(cur, passo):
     tabela = passo["tabela"]
     onde = passo.get("onde") or {}
     valores = passo.get("valores") or {}
     if passo["op"] == "update":
         sets = ", ".join(f"{c} = %s" for c in valores)
-        filtro = " AND ".join(f"{c} = %s" for c in onde)
+        filtro, parametros = _filtro_do_passo(onde)
         cur.execute(
             f"UPDATE {tabela} SET {sets} WHERE {filtro};",
-            list(valores.values()) + list(onde.values()),
+            list(valores.values()) + parametros,
         )
     elif passo["op"] == "insert":
         colunas = ", ".join(valores)
@@ -6203,8 +6229,8 @@ def _aplicar_passo_desfazer(cur, passo):
             list(valores.values()),
         )
     else:
-        filtro = " AND ".join(f"{c} = %s" for c in onde)
-        cur.execute(f"DELETE FROM {tabela} WHERE {filtro};", list(onde.values()))
+        filtro, parametros = _filtro_do_passo(onde)
+        cur.execute(f"DELETE FROM {tabela} WHERE {filtro};", parametros)
     return cur.rowcount
 
 

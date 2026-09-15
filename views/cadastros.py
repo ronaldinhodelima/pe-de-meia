@@ -144,6 +144,9 @@ def dimensoes_view():
                         (nome, request.form.get("obrigatoria") == "on", 99),
                     )
                     nova_id = cur.fetchone()["id"]
+                    registrar_desfazivel(cur, f'Remover a dimensão "{nome}"', [
+                        {"op": "delete", "tabela": "cartao.dimensao", "onde": {"id": nova_id}},
+                    ])
                     conn.commit()
                     registrar_mudanca_auditoria("Dimensão", None, {
                         "id": nova_id, "nome": nome,
@@ -168,6 +171,13 @@ def dimensoes_view():
                         "UPDATE cartao.dimensao SET nome=%s, obrigatoria=%s WHERE id=%s;",
                         (nome, obrigatoria, request.form.get("dimensao_id")),
                     )
+                    if anterior and cur.rowcount:
+                        registrar_desfazivel(
+                            cur, f'Voltar a dimensão para "{anterior["nome"]}"',
+                            [{"op": "update", "tabela": "cartao.dimensao",
+                              "onde": {"id": anterior["id"]},
+                              "valores": {"nome": anterior["nome"],
+                                          "obrigatoria": bool(anterior["obrigatoria"])}}])
                     conn.commit()
                     if anterior and cur.rowcount:
                         registrar_mudanca_auditoria("Nome da dimensão", anterior["nome"], nome)
@@ -187,6 +197,14 @@ def dimensoes_view():
                 )
                 anterior = cur.fetchone()
                 cur.execute("DELETE FROM cartao.dimensao WHERE id=%s;", (dimensao_id,))
+                if anterior and cur.rowcount:
+                    # so chega aqui sem lancamento vinculado (a trava acima),
+                    # entao devolver a dimensao basta - nao ha valor a recriar
+                    registrar_desfazivel(cur, f'Recriar a dimensão "{anterior["nome"]}"', [
+                        {"op": "insert", "tabela": "cartao.dimensao",
+                         "valores": {"id": anterior["id"], "nome": anterior["nome"],
+                                     "obrigatoria": bool(anterior["obrigatoria"])}},
+                    ])
                 conn.commit()
                 if anterior and cur.rowcount:
                     registrar_mudanca_auditoria("Dimensão", {
@@ -202,6 +220,9 @@ def dimensoes_view():
                         (request.form.get("dimensao_id"), nome),
                     )
                     novo_id = cur.fetchone()["id"]
+                    registrar_desfazivel(cur, f'Remover o valor "{nome}"', [
+                        {"op": "delete", "tabela": "cartao.dimensao_valor", "onde": {"id": novo_id}},
+                    ])
                     conn.commit()
                     registrar_mudanca_auditoria("Valor de dimensão", None, {
                         "id": novo_id,
@@ -244,6 +265,22 @@ def dimensoes_view():
                     valor_id,
                 ),
             )
+            if anterior and cur.rowcount:
+                registrar_desfazivel(
+                    cur, f'Voltar o valor para "{anterior["nome"]}"',
+                    [{"op": "update", "tabela": "cartao.dimensao_valor",
+                      "onde": {"id": anterior["id"]},
+                      "valores": {
+                          "nome": anterior["nome"],
+                          # teto e NUMERIC: vira Decimal, que nao serializa em
+                          # jsonb - texto volta igual pelo Postgres
+                          "teto_mensal": (str(anterior["teto_mensal"])
+                                          if anterior["teto_mensal"] is not None else None),
+                          "teto_anual": (str(anterior["teto_anual"])
+                                         if anterior["teto_anual"] is not None else None),
+                          "icone": anterior["icone"],
+                          "portfolio_valor_id": anterior["portfolio_valor_id"],
+                      }}])
             conn.commit()
             if anterior and cur.rowcount:
                 registrar_mudanca_auditoria("Nome do valor", anterior["nome"], nome_novo)
@@ -265,6 +302,18 @@ def dimensoes_view():
                 )
                 anterior = cur.fetchone()
                 cur.execute("DELETE FROM cartao.dimensao_valor WHERE id=%s;", (valor_id,))
+                if anterior and cur.rowcount:
+                    registrar_desfazivel(cur, f'Recriar o valor "{anterior["nome"]}"', [
+                        {"op": "insert", "tabela": "cartao.dimensao_valor",
+                         "valores": {
+                             "id": anterior["id"], "dimensao_id": anterior["dimensao_id"],
+                             "nome": anterior["nome"],
+                             "teto_mensal": (str(anterior["teto_mensal"])
+                                             if anterior["teto_mensal"] is not None else None),
+                             "teto_anual": (str(anterior["teto_anual"])
+                                            if anterior["teto_anual"] is not None else None),
+                             "icone": anterior["icone"]}},
+                    ])
                 conn.commit()
                 if anterior and cur.rowcount:
                     registrar_mudanca_auditoria("Valor de dimensão", {
@@ -383,6 +432,30 @@ def regras_view():
             },
         }
 
+    def passos_para_restaurar(estado):
+        """Passos que devolvem a regra ao estado lido por estado_regra().
+
+        O `regra_aplicada_id` dos lancamentos NAO entra: ele e um ponteiro
+        derivado, que aplicar_regras() refaz sozinho na proxima abertura da
+        tela. Guardar a lista de lancamentos tocados so para reescrever um
+        ponteiro que se reconstroi seria peso sem ganho.
+        """
+        passos = [{
+            "op": "insert", "tabela": "cartao.regra_classificacao",
+            "valores": {
+                "id": estado["id"], "padrao": estado["padrao"],
+                "categoria": estado["categoria"]["chave"] if estado["categoria"] else "",
+                "valor_operador": estado["valor_operador"],
+                "valor_limite": estado["valor_limite"],
+                "account_id": estado["account_id"],
+            }}]
+        for dim_id, valor_id in estado["dimensoes"].items():
+            passos.append({
+                "op": "insert", "tabela": "cartao.regra_dimensao_valor",
+                "valores": {"regra_id": estado["id"], "dimensao_id": int(dim_id),
+                            "valor_id": valor_id}})
+        return passos
+
     if request.method == "POST":
         acao = request.form.get("acao")
         # Origem da regra. Vazio = vale para todas, que e exatamente como as
@@ -420,6 +493,11 @@ def regras_view():
                             "INSERT INTO cartao.regra_dimensao_valor (regra_id, dimensao_id, valor_id) VALUES (%s,%s,%s);",
                             (regra_id, dim_id, valor),
                         )
+                registrar_desfazivel(cur, f'Remover a regra "{padrao}"', [
+                    # o ON DELETE CASCADE leva regra_dimensao_valor junto
+                    {"op": "delete", "tabela": "cartao.regra_classificacao",
+                     "onde": {"id": regra_id}},
+                ])
                 conn.commit()
                 registrar_mudanca_auditoria("Regra automática", None, estado_regra(regra_id))
         elif acao == "excluir_regra":
@@ -431,6 +509,10 @@ def regras_view():
                 (regra_id,),
             )
             cur.execute("DELETE FROM cartao.regra_classificacao WHERE id=%s;", (regra_id,))
+            if anterior and cur.rowcount:
+                registrar_desfazivel(
+                    cur, f'Recriar a regra "{anterior["padrao"]}"',
+                    passos_para_restaurar(anterior))
             conn.commit()
             if anterior and cur.rowcount:
                 registrar_mudanca_auditoria("Regra automática", anterior, None)
@@ -489,6 +571,14 @@ def regras_view():
                     "WHERE regra_aplicada_id = %s AND conferida = false;",
                     (regra_id,),
                 )
+                if anterior:
+                    # apaga e recria: a regra pode ter perdido dimensoes na
+                    # edicao, e um UPDATE dos campos deixaria as sobras para tras
+                    registrar_desfazivel(
+                        cur, f'Voltar a regra "{anterior["padrao"]}"',
+                        [{"op": "delete", "tabela": "cartao.regra_classificacao",
+                          "onde": {"id": anterior["id"]}}]
+                        + passos_para_restaurar(anterior))
                 conn.commit()
                 registrar_mudanca_auditoria(
                     "Regra automática", anterior, estado_regra(regra_id),
@@ -1066,6 +1156,14 @@ def contas_view():
                 if not erro and not prefixo:
                     # nome em branco = remover o apelido, volta a aparecer como "final NNNN"
                     cur.execute("DELETE FROM cartao.cartao_nome WHERE final4 = %s;", (final4,))
+                    if cartao_anterior:
+                        registrar_desfazivel(
+                            cur,
+                            f'Devolver o apelido "{cartao_anterior["prefixo"]}" '
+                            f"ao cartão final {final4}",
+                            [{"op": "insert", "tabela": "cartao.cartao_nome",
+                              "valores": {"final4": final4,
+                                          "prefixo": cartao_anterior["prefixo"]}}])
                     conn.commit()
                     registrar_mudanca_auditoria(
                         f"Apelido do cartão final {final4}",
@@ -1093,6 +1191,21 @@ def contas_view():
                             "ON CONFLICT (final4) DO UPDATE SET prefixo = EXCLUDED.prefixo;",
                             (final4, prefixo),
                         )
+                        if cartao_anterior:
+                            registrar_desfazivel(
+                                cur,
+                                f'Voltar o apelido do final {final4} para '
+                                f'"{cartao_anterior["prefixo"]}"',
+                                [{"op": "update", "tabela": "cartao.cartao_nome",
+                                  "onde": {"final4": final4},
+                                  "valores": {"prefixo": cartao_anterior["prefixo"]}}])
+                        else:
+                            # nao havia apelido: desfazer e TIRAR, nao gravar
+                            # um nome que nunca existiu
+                            registrar_desfazivel(
+                                cur, f"Tirar o apelido do cartão final {final4}",
+                                [{"op": "delete", "tabela": "cartao.cartao_nome",
+                                  "onde": {"final4": final4}}])
                         conn.commit()
                         registrar_mudanca_auditoria(
                             f"Apelido do cartão final {final4}",
@@ -1117,6 +1230,13 @@ def contas_view():
                         "UPDATE cartao.conta SET nome_curto = %s WHERE account_id::text = %s;",
                         (nome_curto or None, account_id),
                     )
+                    registrar_desfazivel(
+                        cur,
+                        (f'Voltar o nome curto para "{antes["nome_curto"]}"'
+                         if antes["nome_curto"] else "Tirar o nome curto da origem"),
+                        [{"op": "update", "tabela": "cartao.conta",
+                          "onde": {"account_id": account_id},
+                          "valores": {"nome_curto": antes["nome_curto"]}}])
                     conn.commit()
                     registrar_mudanca_auditoria(
                         "Nome curto da origem", antes["nome_curto"], nome_curto or None
@@ -1141,6 +1261,24 @@ def contas_view():
                         (item_id, titular),
                     )
                     aviso = f'Titular salvo: "{titular}".'
+                if titular_anterior:
+                    # a acao pode ter APAGADO a linha (titular em branco) ou
+                    # trocado o nome: o insert recria quando ela sumiu (e nao faz
+                    # nada quando ainda existe), o update cobre o outro caso
+                    registrar_desfazivel(
+                        cur,
+                        f'Voltar o titular para "{titular_anterior["titular"]}"',
+                        [{"op": "insert", "tabela": "cartao.item_titular",
+                          "valores": {"item_id": item_id,
+                                      "titular": titular_anterior["titular"]}},
+                         {"op": "update", "tabela": "cartao.item_titular",
+                          "onde": {"item_id": item_id},
+                          "valores": {"titular": titular_anterior["titular"]}}])
+                else:
+                    registrar_desfazivel(
+                        cur, "Tirar o titular dessa conexão",
+                        [{"op": "delete", "tabela": "cartao.item_titular",
+                          "onde": {"item_id": item_id}}])
                 conn.commit()
                 registrar_mudanca_auditoria(
                     "Titular da conexão",
@@ -1243,6 +1381,25 @@ def contas_view():
     )
 
 
+def _volta_da_natureza(cur, categoria):
+    """Passo que devolve a natureza da categoria ao que ela era AGORA.
+
+    Chamar antes do INSERT. Sem linha anterior o passo e um DELETE: repor
+    'despesa' por omissao moveria o DRE sem ninguem pedir (secao 4.1).
+    """
+    cur.execute(
+        "SELECT natureza FROM cartao.categoria_natureza WHERE categoria = %s;",
+        (categoria,),
+    )
+    antes = cur.fetchone()
+    if antes:
+        return {"op": "update", "tabela": "cartao.categoria_natureza",
+                "onde": {"categoria": categoria},
+                "valores": {"natureza": antes["natureza"]}}
+    return {"op": "delete", "tabela": "cartao.categoria_natureza",
+            "onde": {"categoria": categoria}}
+
+
 @bp.route("/pendencias", methods=["GET", "POST"])
 @requer("cadastros")
 def pendencias_view():
@@ -1256,11 +1413,14 @@ def pendencias_view():
             categoria = request.form.get("categoria")
             natureza = request.form.get("natureza")
             if categoria and natureza in NATUREZAS:
+                volta = _volta_da_natureza(cur, categoria)
                 cur.execute(
                     "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES (%s,%s) "
                     "ON CONFLICT (categoria) DO UPDATE SET natureza = EXCLUDED.natureza;",
                     (categoria, natureza),
                 )
+                registrar_desfazivel(
+                    cur, f'Desfazer a natureza de "{cat_pt_puro(categoria)}"', [volta])
                 conn.commit()
                 aviso = f'Natureza de "{cat_pt_puro(categoria)}" definida como {NATUREZAS[natureza]}.'
         elif acao == "vincular_centro":
@@ -1269,7 +1429,26 @@ def pendencias_view():
             if categoria and subgrupo_id:
                 # vincula o PADRAO da categoria; condicao por dimensao se monta
                 # na tela de Centro de Custos, que e onde ela e visivel
-                definir_regra_padrao(cur, categoria, subgrupo_id)
+                cur.execute(
+                    "SELECT r.id, r.subgrupo_id FROM cartao.centro_regra r "
+                    "WHERE r.categoria = %s AND NOT EXISTS (SELECT 1 FROM "
+                    "cartao.centro_regra_dimensao rd WHERE rd.regra_id = r.id) "
+                    "ORDER BY r.id LIMIT 1;",
+                    (categoria,),
+                )
+                regra_antes = cur.fetchone()
+                nova_id = definir_regra_padrao(cur, categoria, subgrupo_id)
+                registrar_desfazivel(
+                    cur,
+                    f'Desfazer o centro de custo de "{cat_pt_puro(categoria)}"',
+                    [{"op": "update", "tabela": "cartao.centro_regra",
+                      "onde": {"id": regra_antes["id"]},
+                      "valores": {"subgrupo_id": regra_antes["subgrupo_id"]}}]
+                    if regra_antes else
+                    # nao havia vinculo: desfazer e tirar a regra que acabou de
+                    # nascer, nao apontar para um subgrupo escolhido por ninguem
+                    [{"op": "delete", "tabela": "cartao.centro_regra",
+                      "onde": {"id": nova_id}}])
                 conn.commit()
                 aviso = f'"{cat_pt_puro(categoria)}" vinculada ao centro de custo.'
         elif acao == "definir_natureza_lote":
@@ -1282,12 +1461,19 @@ def pendencias_view():
             elif not marcadas:
                 erro = "Marque ao menos uma categoria."
             else:
+                voltas = []
                 for categoria in marcadas:
+                    voltas.append(_volta_da_natureza(cur, categoria))
                     cur.execute(
                         "INSERT INTO cartao.categoria_natureza (categoria, natureza) VALUES (%s,%s) "
                         "ON CONFLICT (categoria) DO UPDATE SET natureza = EXCLUDED.natureza;",
                         (categoria, natureza),
                     )
+                # um passo por categoria, e nao um filtro em lote: cada uma tinha
+                # (ou nao tinha) a sua natureza, e voltar todas para a mesma
+                # coisa seria inventar um estado que nunca existiu
+                registrar_desfazivel(
+                    cur, f"Desfazer a natureza de {len(marcadas)} categoria(s)", voltas)
                 conn.commit()
                 quantas = len(marcadas)
                 aviso = (
@@ -1299,9 +1485,20 @@ def pendencias_view():
             transacao_id = request.form.get("transacao_id")
             if transacao_id:
                 cur.execute(
+                    "SELECT natureza FROM cartao.transacao WHERE transacao_id = %s;",
+                    (transacao_id,),
+                )
+                antes = cur.fetchone()
+                cur.execute(
                     "UPDATE cartao.transacao SET natureza = NULL WHERE transacao_id = %s;",
                     (transacao_id,),
                 )
+                if antes and antes["natureza"]:
+                    registrar_desfazivel(
+                        cur, "Devolver a natureza própria do lançamento",
+                        [{"op": "update", "tabela": "cartao.transacao",
+                          "onde": {"transacao_id": transacao_id},
+                          "valores": {"natureza": antes["natureza"]}}])
                 conn.commit()
                 aviso = "Lançamento voltou a seguir a natureza da categoria."
         elif acao == "definir_categoria_lancamento":
@@ -1323,6 +1520,13 @@ def pendencias_view():
                     (categoria, transacao_id),
                 )
                 if cur.rowcount:
+                    # o UPDATE so alcanca quem estava com categoria NULL, entao a
+                    # volta e sempre para NULL - nao ha valor anterior a guardar
+                    registrar_desfazivel(
+                        cur, "Tirar a categoria desse lançamento",
+                        [{"op": "update", "tabela": "cartao.transacao",
+                          "onde": {"transacao_id": transacao_id},
+                          "valores": {"categoria": None, "categoria_manual": False}}])
                     conn.commit()
                     aviso = "Categoria definida. O lançamento continua pendente de conferência."
                 else:
@@ -1335,6 +1539,11 @@ def pendencias_view():
                     "INSERT INTO cartao.categoria_oculta (categoria) VALUES (%s) ON CONFLICT DO NOTHING;",
                     (categoria,),
                 )
+                if cur.rowcount:
+                    registrar_desfazivel(
+                        cur, f'Mostrar "{cat_pt_puro(categoria)}" de novo',
+                        [{"op": "delete", "tabela": "cartao.categoria_oculta",
+                          "onde": {"categoria": categoria}}])
                 conn.commit()
                 recarregar_categorias_db()
                 aviso = f'"{cat_pt_puro(categoria)}" ocultada — não aparece mais nas listas.'
@@ -1408,6 +1617,21 @@ def categorias_view():
                         "ON CONFLICT (categoria) DO UPDATE SET natureza = EXCLUDED.natureza;",
                         (categoria, natureza),
                     )
+                    if anterior:
+                        registrar_desfazivel(
+                            cur,
+                            f"Natureza de {cat_pt_puro(categoria)} de volta para "
+                            f'{NATUREZAS.get(anterior["natureza"], anterior["natureza"])}',
+                            [{"op": "update", "tabela": "cartao.categoria_natureza",
+                              "onde": {"categoria": categoria},
+                              "valores": {"natureza": anterior["natureza"]}}])
+                    else:
+                        # nao havia natureza nenhuma: desfazer e TIRAR a linha.
+                        # Gravar um palpite por cima moveria o DRE sem ninguem pedir
+                        registrar_desfazivel(
+                            cur, f"Tirar a natureza de {cat_pt_puro(categoria)}",
+                            [{"op": "delete", "tabela": "cartao.categoria_natureza",
+                              "onde": {"categoria": categoria}}])
                     conn.commit()
                     registrar_mudanca_auditoria(
                         f"Natureza de {cat_pt_puro(categoria)}",
@@ -1427,7 +1651,17 @@ def categorias_view():
                         "ON CONFLICT (categoria) DO UPDATE SET nome_pt = EXCLUDED.nome_pt;",
                         (nome, nome),
                     )
+                    # a criacao tambem TIRA da lista de ocultas: se a categoria
+                    # estava so escondida, desfazer tem que devolve-la para la,
+                    # senao o "desfazer" a deixa visivel - o oposto do que havia
+                    estava_oculta = nome in CATEGORIAS_OCULTAS
                     cur.execute("DELETE FROM cartao.categoria_oculta WHERE categoria = %s;", (nome,))
+                    passos = [{"op": "delete", "tabela": "cartao.categoria",
+                               "onde": {"categoria": nome}}]
+                    if estava_oculta:
+                        passos.append({"op": "insert", "tabela": "cartao.categoria_oculta",
+                                       "valores": {"categoria": nome}})
+                    registrar_desfazivel(cur, f'Remover a categoria "{nome}"', passos)
                     conn.commit()
                     registrar_mudanca_auditoria("Categoria", None, {
                         "chave": nome, "nome": nome,
@@ -1455,6 +1689,11 @@ def categorias_view():
                         "ON CONFLICT (categoria) DO UPDATE SET nome_pt = EXCLUDED.nome_pt;",
                         (categoria, novo_nome),
                     )
+                    registrar_desfazivel(
+                        cur, f'Voltar o nome para "{nome_anterior}"',
+                        [{"op": "update", "tabela": "cartao.categoria",
+                          "onde": {"categoria": categoria},
+                          "valores": {"nome_pt": nome_anterior}}])
                     conn.commit()
                     registrar_mudanca_auditoria(
                         "Nome da categoria", nome_anterior, novo_nome,
@@ -1469,6 +1708,19 @@ def categorias_view():
                 elif origem == destino:
                     erro = "Escolha categorias diferentes para mover."
                 else:
+                    # Os ids sao lidos ANTES de mover. Desfazer precisa alcancar
+                    # exatamente ESTES lancamentos - reverter por "categoria =
+                    # destino" levaria junto os que ja estavam la antes.
+                    cur.execute(
+                        "SELECT transacao_id FROM cartao.transacao WHERE categoria = %s;",
+                        (origem,),
+                    )
+                    movidos = [str(r["transacao_id"]) for r in cur.fetchall()]
+                    cur.execute(
+                        "SELECT id FROM cartao.transacao_rateio WHERE categoria = %s;",
+                        (origem,),
+                    )
+                    movidas_partes = [r["id"] for r in cur.fetchall()]
                     cur.execute(
                         "UPDATE cartao.transacao SET categoria = %s, categoria_manual = true, "
                         "regra_aplicada_id = NULL WHERE categoria = %s;",
@@ -1481,6 +1733,23 @@ def categorias_view():
                         (destino, origem),
                     )
                     qtd += cur.rowcount
+                    passos_volta = []
+                    if movidos:
+                        passos_volta.append(
+                            {"op": "update", "tabela": "cartao.transacao",
+                             "onde": {"transacao_id": movidos},
+                             "valores": {"categoria": origem}})
+                    if movidas_partes:
+                        passos_volta.append(
+                            {"op": "update", "tabela": "cartao.transacao_rateio",
+                             "onde": {"id": movidas_partes},
+                             "valores": {"categoria": origem}})
+                    if passos_volta:
+                        registrar_desfazivel(
+                            cur,
+                            f'Devolver {qtd} lançamento(s) para '
+                            f'"{cat_pt_puro(origem)}"',
+                            passos_volta)
                     conn.commit()
                     if qtd:
                         registrar_mudanca_auditoria(
@@ -1497,10 +1766,33 @@ def categorias_view():
                     erro = f'Não é possível remover: existem {qtd} lançamento(s) nessa categoria. Mova-os primeiro.'
                 else:
                     nome_anterior = cat_pt_puro(categoria)
+                    # a natureza e lida ANTES de sumir: sem ela o desfazer
+                    # devolveria a categoria como 'despesa' por omissao (4.1) e
+                    # mudaria o DRE em silencio
+                    cur.execute(
+                        "SELECT natureza FROM cartao.categoria_natureza WHERE categoria = %s;",
+                        (categoria,),
+                    )
+                    natureza_anterior = cur.fetchone()
                     cur.execute("DELETE FROM cartao.categoria WHERE categoria = %s;", (categoria,))
                     cur.execute("DELETE FROM cartao.categoria_natureza WHERE categoria = %s;", (categoria,))
                     cur.execute("DELETE FROM cartao.centro_regra WHERE categoria = %s;", (categoria,))
                     cur.execute("INSERT INTO cartao.categoria_oculta (categoria) VALUES (%s) ON CONFLICT DO NOTHING;", (categoria,))
+                    # o centro de custo NAO volta: as regras podiam ser varias, com
+                    # condicoes proprias, e recria-las pela metade seria pior que
+                    # nao recriar. A trava acima garante zero lancamentos aqui.
+                    passos = [
+                        {"op": "delete", "tabela": "cartao.categoria_oculta",
+                         "onde": {"categoria": categoria}},
+                        {"op": "insert", "tabela": "cartao.categoria",
+                         "valores": {"categoria": categoria, "nome_pt": nome_anterior}},
+                    ]
+                    if natureza_anterior:
+                        passos.append(
+                            {"op": "insert", "tabela": "cartao.categoria_natureza",
+                             "valores": {"categoria": categoria,
+                                         "natureza": natureza_anterior["natureza"]}})
+                    registrar_desfazivel(cur, f'Recriar a categoria "{nome_anterior}"', passos)
                     conn.commit()
                     registrar_mudanca_auditoria("Categoria", {
                         "chave": categoria, "nome": nome_anterior,

@@ -17,6 +17,7 @@ from core import (
     get_conn,
     pode,
     registrar_auditoria,
+    registrar_desfazivel,
     requer,
     rotulo_valor_dimensao,
     topbar_html,
@@ -147,6 +148,29 @@ def _gravar_dimensoes(cur, compra_id, dimensoes):
         )
 
 
+COLUNAS_COMPRA = ("descricao", "valor_previsto", "valor_real", "mes_alvo",
+                  "prioridade", "observacao", "situacao", "comprada_em", "transacao_id")
+
+
+def _estado_da_compra(cur, compra_id):
+    """A linha como esta agora, pronta para virar jsonb.
+
+    Decimal, date e datetime nao serializam em jsonb - viram texto, e o
+    Postgres os le de volta iguais na hora do desfazer.
+    """
+    cur.execute(
+        f"SELECT {', '.join(COLUNAS_COMPRA)} FROM cartao.compra_futura WHERE id=%s;",
+        (compra_id,),
+    )
+    linha = cur.fetchone()
+    if not linha:
+        return None
+    return {
+        coluna: (valor if valor is None or isinstance(valor, (str, int, bool)) else str(valor))
+        for coluna, valor in zip(COLUNAS_COMPRA, linha)
+    }
+
+
 @bp.route("/api/compra-futura", methods=["POST"])
 @requer("lancamentos_manual")
 def criar_compra_futura():
@@ -173,6 +197,10 @@ def criar_compra_futura():
         )
         compra_id = cur.fetchone()[0]
         _gravar_dimensoes(cur, compra_id, dados.get("dimensoes"))
+        registrar_desfazivel(cur, f'Remover "{descricao}" da lista de compras', [
+            # o ON DELETE CASCADE leva compra_futura_dimensao junto
+            {"op": "delete", "tabela": "cartao.compra_futura", "onde": {"id": compra_id}},
+        ])
         conn.commit()
     except Exception:
         conn.rollback()
@@ -194,8 +222,24 @@ def editar_compra_futura(compra_id):
     conn = get_conn()
     cur = conn.cursor()
     if request.method == "DELETE":
+        antes = _estado_da_compra(cur, compra_id)
+        cur.execute(
+            "SELECT dimensao_id, valor_id FROM cartao.compra_futura_dimensao "
+            "WHERE compra_id=%s;",
+            (compra_id,),
+        )
+        dims_antes = cur.fetchall()
         cur.execute("DELETE FROM cartao.compra_futura WHERE id=%s;", (compra_id,))
         apagou = cur.rowcount
+        if apagou and antes:
+            registrar_desfazivel(cur, f'Recriar "{antes["descricao"]}"', [
+                {"op": "insert", "tabela": "cartao.compra_futura",
+                 "valores": dict(antes, id=compra_id)},
+            ] + [
+                {"op": "insert", "tabela": "cartao.compra_futura_dimensao",
+                 "valores": {"compra_id": compra_id, "dimensao_id": d, "valor_id": v}}
+                for d, v in dims_antes
+            ])
         conn.commit()
         cur.close()
         conn.close()
@@ -255,6 +299,17 @@ def editar_compra_futura(compra_id):
         valores.append(alvo)
 
     if sets:
+        # o estado anterior e lido ANTES do UPDATE, e a volta so reescreve as
+        # colunas que este pedido mexeu - reescrever a linha inteira desfaria
+        # tambem o que outra pessoa alterou no meio tempo
+        antes = _estado_da_compra(cur, compra_id)
+        tocadas = [s.split("=", 1)[0] for s in sets]
+        if antes:
+            registrar_desfazivel(
+                cur, f'Desfazer a alteração em "{antes["descricao"]}"',
+                [{"op": "update", "tabela": "cartao.compra_futura",
+                  "onde": {"id": compra_id},
+                  "valores": {c: antes[c] for c in tocadas if c in antes}}])
         sets.append("atualizado_em=now()")
         cur.execute(
             f"UPDATE cartao.compra_futura SET {', '.join(sets)} WHERE id=%s;",

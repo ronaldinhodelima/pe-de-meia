@@ -608,16 +608,134 @@ def test_desfazer_devolve_o_estado_anterior_e_recusa_o_que_nao_pode(sistema_real
     conn.commit()
     assert core.desfazer_ultima_acao(cur, f"u{marca}")[0] is None
 
-    # o OK nunca entra: retirar assinatura exige confirmacao uma a uma
-    with _pytest.raises(ValueError):
-        core.registrar_desfazivel(cur, "nao", [{
-            "op": "update", "tabela": "cartao.transacao",
-            "onde": {"transacao_id": "x"}, "valores": {"conferida": True},
-        }], usuario=f"u{marca}")
+    # Passo que mexe no OK nao e recusado - ele existe para recriar um
+    # lancamento manual excluido por engano, com a assinatura que ele tinha.
+    # A trava da secao 1.2 mudou de lugar: a tela marca a acao como
+    # `exige_confirmacao` e pede o segundo "sim" antes de retirar um OK.
+    core.registrar_desfazivel(cur, "mexe no OK", [{
+        "op": "update", "tabela": "cartao.transacao",
+        "onde": {"transacao_id": "x"}, "valores": {"conferida": False},
+    }], usuario=f"u{marca}")
+    conn.commit()
+    topo = core.acoes_desfazeis(cur, f"u{marca}")[0]
+    assert topo["exige_confirmacao"] is True, "retirar OK tem que pedir confirmacao"
+
+    # tabela e coluna fora da lista branca continuam recusadas
+    for passo in (
+        {"op": "update", "tabela": "cartao.usuario",
+         "onde": {"usuario": "x"}, "valores": {"perfil": "admin"}},
+        {"op": "update", "tabela": "cartao.transacao",
+         "onde": {"transacao_id": "x"}, "valores": {"observacao_sistema": "x"}},
+    ):
+        with _pytest.raises(ValueError):
+            core.registrar_desfazivel(cur, "nao", [passo], usuario=f"u{marca}")
     conn.rollback()
 
     cur.execute("DELETE FROM cartao.acao_desfazivel WHERE usuario LIKE %s;", (f"%{marca}",))
     cur.execute("DELETE FROM cartao.grupo_custo WHERE id=%s;", (grupo,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def test_toda_coluna_da_lista_do_desfazer_existe_mesmo_no_banco(sistema_real):
+    """A whitelist do desfazer nao pode citar coluna que nao existe.
+
+    Ela e escrita a mao, e nome inventado nao quebra nada ate alguem apertar
+    Desfazer: so entao o UPDATE levanta UndefinedColumn, com a acao ja gravada
+    e sem volta. Foi assim que `regra_classificacao.trecho`, `cartao_nome.apelido`
+    e `compra_futura` sem `situacao` entraram e sobreviveram a suite inteira -
+    a varredura estrutural le codigo, e so o banco sabe quais colunas existem.
+    """
+    import core
+
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT table_schema || '.' || table_name, column_name "
+        "FROM information_schema.columns WHERE table_schema = 'cartao';"
+    )
+    reais = {}
+    for tabela, coluna in cur.fetchall():
+        reais.setdefault(tabela, set()).add(coluna)
+    cur.close()
+    conn.close()
+
+    faltando = []
+    for tabela, colunas in core.DESFAZER_PERMITIDO.items():
+        if tabela not in reais:
+            faltando.append(f"{tabela} (tabela inexistente)")
+            continue
+        for coluna in sorted(colunas - reais[tabela]):
+            faltando.append(f"{tabela}.{coluna}")
+    assert not faltando, "colunas na lista do desfazer que nao existem: " + ", ".join(faltando)
+
+
+def test_desfazer_em_lote_alcanca_exatamente_os_lancamentos_movidos(sistema_real):
+    """Mover categoria em lote e voltar: so os movidos voltam.
+
+    A volta e por LISTA de transacao_id. Duas coisas se provam aqui e nenhuma
+    aparece sem Postgres: `transacao_id = ANY(...)` com uuid contra texto
+    derruba a consulta inteira (secao 10.4 n.6), e reverter por "categoria =
+    destino" levaria junto quem ja estava no destino antes.
+    """
+    _worker, core, _webapp = sistema_real
+    marca = uuid.uuid4().hex[:8]
+    conn = core.get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    cur.execute(
+        "INSERT INTO cartao.pluggy_item (item_id, connector_name) VALUES (%s,%s) "
+        "ON CONFLICT DO NOTHING;",
+        (str(uuid.uuid4()), f"lote{marca}"),
+    )
+    cur.execute("SELECT item_id FROM cartao.pluggy_item LIMIT 1;")
+    item = cur.fetchone()["item_id"]
+    conta = str(uuid.uuid4())
+    cur.execute(
+        "INSERT INTO cartao.conta (account_id, item_id, nome, tipo) VALUES (%s,%s,%s,'MANUAL');",
+        (conta, item, f"lote{marca}"),
+    )
+
+    origem, destino = f"Ori{marca}", f"Des{marca}"
+    ids = []
+    for n in range(3):
+        tid = str(uuid.uuid4())
+        ids.append(tid)
+        # o terceiro ja NASCE no destino: ele nao pode ser tocado pelo desfazer
+        cur.execute(
+            "INSERT INTO cartao.transacao (transacao_id, account_id, descricao, "
+            "valor_brl, data_transacao, categoria) VALUES (%s,%s,%s,%s,now(),%s);",
+            (tid, conta, f"t{n}", -10, destino if n == 2 else origem),
+        )
+
+    cur.execute("SELECT transacao_id FROM cartao.transacao WHERE categoria=%s;", (origem,))
+    movidos = [str(r["transacao_id"]) for r in cur.fetchall()]
+    assert len(movidos) == 2
+
+    cur.execute(
+        "UPDATE cartao.transacao SET categoria=%s WHERE categoria=%s;", (destino, origem)
+    )
+    core.registrar_desfazivel(cur, "voltar", [{
+        "op": "update", "tabela": "cartao.transacao",
+        "onde": {"transacao_id": movidos}, "valores": {"categoria": origem},
+    }], usuario=f"u{marca}")
+    conn.commit()
+
+    core.desfazer_ultima_acao(cur, f"u{marca}")
+    conn.commit()
+
+    cur.execute(
+        "SELECT transacao_id, categoria FROM cartao.transacao WHERE account_id::text=%s;",
+        (conta,),
+    )
+    por_id = {str(r["transacao_id"]): r["categoria"] for r in cur.fetchall()}
+    assert por_id[ids[0]] == origem and por_id[ids[1]] == origem, "os movidos tem que voltar"
+    assert por_id[ids[2]] == destino, "quem ja estava no destino nao pode ser arrastado junto"
+
+    cur.execute("DELETE FROM cartao.acao_desfazivel WHERE usuario=%s;", (f"u{marca}",))
+    cur.execute("DELETE FROM cartao.transacao WHERE account_id::text=%s;", (conta,))
+    cur.execute("DELETE FROM cartao.conta WHERE account_id::text=%s;", (conta,))
     conn.commit()
     cur.close()
     conn.close()

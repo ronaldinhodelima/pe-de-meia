@@ -2584,6 +2584,27 @@ computado no navegador mostrou** (§7.8-A); `:first-child` conta como classe no 
 | Lançamentos | edição (categoria, dimensões, observação, descrição, OK, duplicada, natureza) |
 | Lançamento manual | criar (desfazer apaga) e excluir (desfazer **recria** inteiro) |
 | Rateio | criar, editar e desfazer |
+| Dimensões | dimensão e valor: criar, renomear, excluir (tetos, ícone, portfólio padrão) |
+| Categorias | natureza, criar, renomear, **mover lançamentos em lote**, excluir |
+| Regras automáticas | criar, editar e excluir — a regra volta com as dimensões dela |
+| Contas | apelido do cartão, nome curto da origem, titular da conexão |
+| Pendências | natureza (uma e em lote), vincular centro de custo, limpar natureza, definir categoria, ocultar |
+| Compras futuras | criar, editar e excluir (o item volta inteiro, com as dimensões) |
+
+**Desfazer em lote alcança os ids lidos ANTES da ação, nunca um filtro.** Mover lançamentos entre
+categorias toca dezenas de linhas; reverter por `categoria = destino` levaria junto quem já estava
+no destino antes da mudança. A lista vai como **texto, com a coluna castada** (`id::text = ANY(%s)`):
+o jsonb só guarda texto, e `uuid = ANY(text[])` não existe no Postgres — derruba a consulta inteira
+em vez de devolver número errado (§10.4 nº 6).
+
+**Ação que não tinha estado anterior não ganha palpite.** Definir a natureza de uma categoria que
+não tinha nenhuma desfaz-se **apagando a linha**, não gravando `despesa`: repor o padrão moveria o
+DRE sem ninguém pedir (§4.1). Vale igual para apelido de cartão, nome curto, titular e centro de
+custo — o desfazer devolve o vazio que existia.
+
+**O que o desfazer deliberadamente NÃO recria:** ao excluir uma categoria, o centro de custo dela
+não volta — podiam ser várias regras com condições próprias, e recriá-las pela metade é pior que
+não recriar. A natureza volta, porque essa sim muda o DRE em silêncio se sumir.
 
 **Só entra na fila o que muda algo VISÍVEL.** Marcar a mesma categoria de novo altera
 `categoria_manual` por baixo; sem esse filtro a fila enchia de "Desfazer" que, clicado, não mexia
@@ -2605,6 +2626,16 @@ volta — é assim que a cobertura cresce sem que o motor precise adivinhar nada
 **Provado contra Postgres real**, porque desfazer é gravação e precisa ser exercitado, não lido:
 restaura o estado anterior, recria a linha apagada com o **mesmo id** e com as condições, respeita
 a fila por usuário e recusa o que a lista branca não cobre.
+
+**Coluna inventada na lista branca só o BANCO pega.** A `DESFAZER_PERMITIDO` é escrita à mão, e um
+nome errado não quebra nada até alguém apertar Desfazer — só então o `UPDATE` levanta
+`UndefinedColumn`, com a ação já gravada e sem volta. Quatro entraram assim e sobreviveram à suíte
+inteira: `regra_classificacao.trecho`/`.ativa`/`.operador_valor`/`.valor_referencia` (os reais são
+`padrao`, `valor_operador`, `valor_limite`), `cartao_nome.apelido`/`.numero_final` (são `prefixo` e
+`final4`), `transacao.descricao_original` (é `descricao_bruta`) e `compra_futura` sem `situacao`. A
+varredura estrutural lê código; quais colunas existem, só o Postgres sabe.
+`test_toda_coluna_da_lista_do_desfazer_existe_mesmo_no_banco` compara a lista com o
+`information_schema` e é o único lugar onde isso aparece antes do usuário.
 
 **Antes de qualquer alteração de dados em lote, criar ponto de reversão** no mesmo Postgres.
 **Nunca apagar lançamento do Pluggy** — preservar a origem para auditoria e marcar
