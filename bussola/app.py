@@ -34,7 +34,12 @@ SYNC_LOCK = threading.Lock()
 PLUGGY_CLIENT_ID = os.environ.get("PLUGGY_CLIENT_ID")
 PLUGGY_CLIENT_SECRET = os.environ.get("PLUGGY_CLIENT_SECRET")
 PLUGGY_ITEM_ID = os.environ.get("PLUGGY_ITEM_ID")
-SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", str(24 * 60 * 60)))
+# Uma sincronizacao por HORA (pedido do usuario, 15/09/2026). Era 24h, e o
+# lancamento do dia so aparecia no dia seguinte. A trava SYNC_LOCK garante que
+# uma rodada longa nao se sobreponha a proxima nem ao "Atualizar agora".
+# O valor continua vindo do ambiente quando o Coolify o define — conferir la
+# antes de concluir que mudar aqui bastou.
+SYNC_INTERVAL_SECONDS = int(os.environ.get("SYNC_INTERVAL_SECONDS", str(60 * 60)))
 # Obrigatoria nos dois servicos, com o mesmo valor. O worker recusa iniciar sem
 # ela para nunca expor /sync por erro de configuracao.
 SYNC_SECRET = os.environ.get("SYNC_SECRET")

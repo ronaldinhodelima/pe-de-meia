@@ -233,6 +233,12 @@ léxica, ignorando comentário, template literal e regex.
 Toda nova conexão bancária no Pluggy precisa do `item_id` na env `PLUGGY_ITEM_ID` do worker — a
 auto-descoberta só funciona para conexões que já sincronizaram alguma vez.
 
+**A sincronização automática roda de hora em hora** (pedido do usuário, 15/09/2026; era 24h, e o
+lançamento do dia só aparecia no dia seguinte). O valor mora em `SYNC_INTERVAL_SECONDS`, com
+**3600 como padrão no código** — se a env estiver definida no Coolify, é ela que vale, e mudar o
+código não muda nada. O agendador dorme **depois** de cada rodada, então o intervalo conta do fim
+de uma ao início da seguinte, e o `SYNC_LOCK` impede que ela se sobreponha ao "Atualizar agora".
+
 **Decisão sobre o worker (21/08/2026):** fica acessível publicamente. Uma `ipallowlist` no Traefik
 foi tentada e **quebrou o sync** (403): o app chama o worker pela URL pública e o Traefik vê um IP
 interno do Docker. Foi revertido. A proteção real é por chave (`SYNC_SECRET`). Para fechar de
