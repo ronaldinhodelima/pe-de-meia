@@ -51,6 +51,7 @@ from core import (
     pode,
     preencher_classificacao_vazia_parcelas,
     registrar_auditoria,
+    registrar_desfazivel,
     registrar_mudanca_auditoria,
     requer,
     topbar_html,
@@ -1613,6 +1614,30 @@ def conciliar_fatura():
     )
 
 
+def _volta_da_substituicao(cur, transacao_id):
+    """Passo que devolve o lancamento ao que ele e AGORA. Chamar antes do UPDATE.
+
+    Desfazer aqui traz o lancamento de volta para DENTRO do resultado (secao
+    4.3), entao o estado anterior tem que ser fiel: `duplicada` vai junto
+    porque a marcacao manual a zera, e reponde-la como `false` apagaria um
+    estado que existia.
+    """
+    cur.execute(
+        "SELECT substituido_por, duplicada FROM cartao.transacao WHERE transacao_id = %s;",
+        (transacao_id,),
+    )
+    antes = cur.fetchone()
+    if not antes:
+        return None
+    return {"op": "update", "tabela": "cartao.transacao",
+            "onde": {"transacao_id": str(transacao_id)},
+            "valores": {
+                "substituido_por": (str(antes["substituido_por"])
+                                    if antes["substituido_por"] else None),
+                "duplicada": bool(antes["duplicada"]),
+            }}
+
+
 @bp.route("/api/fatura-linha/<int:linha_id>/criar-lancamento", methods=["POST"])
 @requer("lancamentos_manual")
 def criar_lancamento_de_fatura(linha_id):
@@ -1658,6 +1683,16 @@ def criar_lancamento_de_fatura(linha_id):
             "UPDATE cartao.fatura_linha SET transacao_id_criado = %s WHERE id = %s;",
             (str(transacao_id), linha_id),
         )
+        # A linha so chega aqui com `transacao_id_criado` vazio (a trava 409
+        # acima), entao a volta e sempre para NULL. O lancamento nasceu deste
+        # clique e some inteiro - nao havia nada antes dele.
+        registrar_desfazivel(
+            cur, f'Apagar o lançamento criado de "{linha["descricao"]}"', [
+                {"op": "update", "tabela": "cartao.fatura_linha",
+                 "onde": {"id": linha_id}, "valores": {"transacao_id_criado": None}},
+                {"op": "delete", "tabela": "cartao.transacao",
+                 "onde": {"transacao_id": str(transacao_id)}},
+            ])
         conn.commit()
         registrar_mudanca_auditoria("Lançamento criado a partir da fatura", None, {
             "fatura_linha_id": linha_id, "transacao_id": str(transacao_id),
@@ -2259,15 +2294,22 @@ def marcar_duplicidades():
         substituto_manual = (data.get("substituto_id") or "").strip()
         if substituto_manual and data.get("ids"):
             marcados = 0
+            voltas = []
             for tid in [str(i) for i in data["ids"]]:
                 if tid == substituto_manual:
                     continue
+                volta = _volta_da_substituicao(cur, tid)
                 cur.execute(
                     "UPDATE cartao.transacao SET substituido_por = %s, duplicada = false, "
                     "atualizado_em = now() WHERE transacao_id = %s;",
                     (substituto_manual, tid),
                 )
+                if cur.rowcount and volta:
+                    voltas.append(volta)
                 marcados += cur.rowcount or 0
+            if voltas:
+                registrar_desfazivel(
+                    cur, f"Devolver {len(voltas)} lançamento(s) ao resultado", voltas)
             conn.commit()
             if marcados:
                 registrar_mudanca_auditoria(
@@ -2289,6 +2331,7 @@ def marcar_duplicidades():
             return jsonify({"ok": True, "marcados": 0})
 
         marcados = 0
+        voltas = []
         for i in itens:
             if i["substituto_id"] == i["transacao_id"]:
                 continue  # nunca apontar para si mesmo
@@ -2305,12 +2348,18 @@ def marcar_duplicidades():
                 candidatos.get(i["substituto_id"]),
             ):
                 continue
+            volta = _volta_da_substituicao(cur, i["transacao_id"])
             cur.execute(
                 "UPDATE cartao.transacao SET substituido_por = %s, duplicada = false, "
                 "atualizado_em = now() WHERE transacao_id = %s AND substituido_por IS NULL;",
                 (i["substituto_id"], i["transacao_id"]),
             )
+            if cur.rowcount and volta:
+                voltas.append(volta)
             marcados += cur.rowcount or 0
+        if voltas:
+            registrar_desfazivel(
+                cur, f"Devolver {len(voltas)} lançamento(s) ao resultado", voltas)
         conn.commit()
         if marcados:
             registrar_mudanca_auditoria(
@@ -2686,6 +2735,17 @@ def vincular_linha_fatura(linha_id):
         if str(transacao["account_id"]) != str(linha["account_id"]):
             return jsonify({"ok": False, "erro": "Esse lançamento é de outra conta."}), 400
 
+        # O INSERT tem ON CONFLICT DO UPDATE: pode existir um vinculo
+        # automatico aqui, e o clique so o promove a manual. Desfazer tem que
+        # devolver a origem que havia - apagar levaria junto um vinculo que o
+        # casamento tinha achado sozinho, e isso muda o que entra no DRE
+        # (secao 11.2-A).
+        cur.execute(
+            "SELECT origem, criado_por FROM cartao.fatura_vinculo "
+            "WHERE fatura_linha_id = %s AND transacao_id = %s;",
+            (linha_id, transacao_id),
+        )
+        vinculo_antes = cur.fetchone()
         cur.execute(
             "INSERT INTO cartao.fatura_vinculo (fatura_linha_id, transacao_id, origem, criado_por) "
             "VALUES (%s, %s, 'manual', %s) "
@@ -2693,6 +2753,16 @@ def vincular_linha_fatura(linha_id):
             "criado_por=EXCLUDED.criado_por, criado_em=now();",
             (linha_id, transacao_id, session.get("user")),
         )
+        registrar_desfazivel(
+            cur,
+            f'Desfazer o vínculo com "{linha["descricao"]}"',
+            [{"op": "update", "tabela": "cartao.fatura_vinculo",
+              "onde": {"fatura_linha_id": linha_id, "transacao_id": transacao_id},
+              "valores": {"origem": vinculo_antes["origem"],
+                          "criado_por": vinculo_antes["criado_por"]}}]
+            if vinculo_antes else
+            [{"op": "delete", "tabela": "cartao.fatura_vinculo",
+              "onde": {"fatura_linha_id": linha_id, "transacao_id": transacao_id}}])
         conn.commit()
         registrar_mudanca_auditoria(
             f"Vínculo manual com a fatura (linha {linha_id})", None,
@@ -2723,10 +2793,19 @@ def desvincular_linha_fatura(linha_id):
     try:
         cur.execute(
             "DELETE FROM cartao.fatura_vinculo WHERE fatura_linha_id = %s AND transacao_id = %s "
-            "RETURNING origem;",
+            "RETURNING origem, criado_por;",
             (linha_id, transacao_id),
         )
         removido = cur.fetchone()
+        if removido:
+            # o id nao volta (a sequence anda), e nao precisa: quem identifica o
+            # vinculo e o par (linha, transacao), que e a chave unica da tabela
+            registrar_desfazivel(cur, "Refazer o vínculo com a fatura", [
+                {"op": "insert", "tabela": "cartao.fatura_vinculo",
+                 "valores": {"fatura_linha_id": linha_id, "transacao_id": transacao_id,
+                             "origem": removido["origem"],
+                             "criado_por": removido["criado_por"]}},
+            ])
         conn.commit()
         if removido:
             registrar_mudanca_auditoria(
@@ -2755,8 +2834,26 @@ def marcar_repeticao_conferida():
         return jsonify({"ok": False, "erro": "Lista de linhas inválida."}), 400
 
     conn = get_conn()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
+        # o estado de cada linha vem ANTES: o grupo pode ter linhas ja revisadas
+        # e outras nao, e desfazer tem que devolver cada uma a que ela era
+        cur.execute(
+            "SELECT id, conferida_repeticao, conferida_repeticao_por, "
+            "conferida_repeticao_em FROM cartao.fatura_linha WHERE id = ANY(%s);",
+            (ids,),
+        )
+        voltas = [
+            {"op": "update", "tabela": "cartao.fatura_linha",
+             "onde": {"id": r["id"]},
+             "valores": {
+                 "conferida_repeticao": bool(r["conferida_repeticao"]),
+                 "conferida_repeticao_por": r["conferida_repeticao_por"],
+                 "conferida_repeticao_em": (r["conferida_repeticao_em"].isoformat()
+                                            if r["conferida_repeticao_em"] else None),
+             }}
+            for r in cur.fetchall()
+        ]
         if conferida:
             cur.execute(
                 "UPDATE cartao.fatura_linha SET conferida_repeticao = true, "
@@ -2771,6 +2868,12 @@ def marcar_repeticao_conferida():
                 "WHERE id = ANY(%s);",
                 (ids,),
             )
+        if voltas:
+            registrar_desfazivel(
+                cur,
+                ("Desmarcar a revisão dessa cobrança repetida" if conferida
+                 else "Remarcar a revisão dessa cobrança repetida"),
+                voltas)
         conn.commit()
         registrar_mudanca_auditoria("Cobrança repetida na fatura conferida", not conferida, {
             "fatura_linha_ids": ids, "conferida": conferida,

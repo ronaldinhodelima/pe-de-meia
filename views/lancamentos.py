@@ -2356,6 +2356,11 @@ def criar_valor_dimensao_rapido(dimensao_id):
             (dimensao_id, nome),
         )
         valor = cur.fetchone()
+        registrar_desfazivel(cur, f'Remover "{valor["nome"]}" de {dimensao["nome"]}', [
+            # se o valor ja tiver sido usado num lancamento, o ON DELETE SET NULL
+            # deixa aquela dimensao vazia - que e exatamente o estado de antes
+            {"op": "delete", "tabela": "cartao.dimensao_valor", "onde": {"id": valor["id"]}},
+        ])
         conn.commit()
         criado = True
         registrar_mudanca_auditoria("Valor de dimensão", None, {

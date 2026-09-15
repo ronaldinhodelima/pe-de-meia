@@ -2568,9 +2568,13 @@ ela — melhor não oferecer do que oferecer errado.
 - **`DESFAZER_PERMITIDO` é uma lista branca** de tabela → colunas. Desfazer é gravação guiada por
   dado ("qual tabela, qual coluna"), e sem limite escrito isso seria uma porta aberta para
   qualquer coisa. Todo passo é validado na gravação **e** de novo na hora de desfazer.
-- **`conferida` não está na lista, e não é esquecimento.** Retirar um OK exige confirmação
-  explícita, uma a uma (§1.2); um botão que desfaz assinatura em lote seria o oposto disso. Há
-  teste cobrando a recusa.
+- **Passo que mexe em conferência pede o segundo "sim".** `conferida` entrou na lista branca
+  porque recriar um lançamento manual excluído tem de devolver a assinatura que ele tinha; a trava
+  da §1.2 mudou de lugar, não sumiu — a tela marca a ação como `exige_confirmacao` e pergunta
+  antes. Vale para **qualquer** coluna que comece com `conferida`, não só o OK:
+  `conferida_repeticao` também registra que uma pessoa olhou, e apagá-la calada perderia revisão
+  humana do mesmo jeito. Há teste dos dois lados — pede confirmação quando toca conferência, e
+  **não** pede quando não toca (perguntar sempre ensina a clicar "sim" sem ler).
 - **A fila é por usuário.** Desfazer é sobre o próprio passo em falso; uma fila compartilhada faria
   o clique de um apagar o trabalho do outro sem aviso.
 - **A volta restaura o estado inteiro**, não só a linha principal: apagar uma regra de centro de
@@ -2601,6 +2605,10 @@ computado no navegador mostrou** (§7.8-A); `:first-child` conta como classe no 
 | Contas | apelido do cartão, nome curto da origem, titular da conexão |
 | Pendências | natureza (uma e em lote), vincular centro de custo, limpar natureza, definir categoria, ocultar |
 | Compras futuras | criar, editar e excluir (o item volta inteiro, com as dimensões) |
+| Conciliação | vincular e desvincular linha da fatura; lançamento criado a partir da fatura |
+| Duplicidades | "mesmo evento" (`substituido_por`), pelos dois caminhos — o lançamento volta ao resultado |
+| Cadastro rápido | Projeto/Portfólio criado sem sair da classificação |
+| Cobrança repetida | a marca de revisão do grupo (pede confirmação, abaixo) |
 
 **Desfazer em lote alcança os ids lidos ANTES da ação, nunca um filtro.** Mover lançamentos entre
 categorias toca dezenas de linhas; reverter por `categoria = destino` levaria junto quem já estava
@@ -2626,10 +2634,27 @@ solto ali derrubou a exclusão de lançamento manual com 400, e o lançamento ne
 apagado. E o rateio **não** pode ser recriado por `_estado_rateios`, que normaliza com `abs()` para
 a tela: o sinal se perderia e a soma das partes não fecharia com o banco (§4.4).
 
-**Fora de propósito:** a **importação de documento** (desfazer não consegue restaurar o documento
-que foi substituído — ali quem protege é o aviso do §6.8) e o **vínculo automático da fatura**, que
-faz centenas de vínculos numa tacada; desfazer em massa é o que a regra do OK manda evitar, e para
-isso já existe o "refazer vínculos".
+**Fora de propósito** — a varredura de 15/09/2026 percorreu, por AST, toda rota que grava no banco
+e conferiu quais não registram desfazer. O que sobrou, sobrou por decisão:
+
+| Rota | Por que não |
+|---|---|
+| importação de documento | não dá para restaurar o documento substituído; quem protege é o aviso do §6.8 |
+| vínculo automático da fatura | centenas de vínculos numa tacada; para refazer já existe o "refazer vínculos" |
+| criar cobranças sem Pluggy | mesma natureza: 1.135 lançamentos numa rodada, que desde então podem ter sido classificados e conferidos |
+| sincronizar parcelas / recalcular ciclo | redistribuem o DRE entre meses em lote; a prévia é que protege (§4.5) |
+| `/usuarios` | ver abaixo |
+| `login` | não é ação do usuário sobre um dado |
+
+**`/usuarios` fica de fora de propósito, e é a decisão mais difícil desta seção.** O motor é um
+**replay cego**: ele reescreve colunas, não conhece regra de negócio. A tela de usuários é a única
+com uma **invariante** — tem de sobrar ao menos um administrador ativo com acesso a usuários — e
+todo caminho de volta pode violá-la: desfazer "promovi X a admin" rebaixa X, e se X virou o único
+admin **ninguém mais entra na tela**. Some-se a isso que desfazer troca de senha significaria
+**ressuscitar o hash antigo** — a senha que o dono acha que trocou voltaria a valer. Cobrir isso
+direito exige uma trava de negócio dentro do motor, que é justamente o que ele não tem. Vale a
+regra da própria seção: **melhor não oferecer do que oferecer errado.** Se um dia for preciso, o
+caminho é um gancho de verificação por passo, não afrouxar o replay.
 
 Cada novo ponto de gravação que quiser desfazer chama `registrar_desfazivel()` declarando a própria
 volta — é assim que a cobertura cresce sem que o motor precise adivinhar nada.

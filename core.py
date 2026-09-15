@@ -6135,7 +6135,12 @@ DESFAZER_PERMITIDO = {
     "cartao.cartao_nome": {"final4", "prefixo"},
     "cartao.item_titular": {"item_id", "titular"},
     "cartao.conta": {"account_id", "nome_curto"},
-    "cartao.fatura_vinculo": {"id", "fatura_linha_id", "transacao_id", "origem"},
+    "cartao.fatura_vinculo": {"id", "fatura_linha_id", "transacao_id", "origem", "criado_por"},
+    # so `transacao_id_criado`: desfazer o lancamento nascido da fatura devolve a
+    # linha ao estado "sem lancamento". O resto da linha e o DOCUMENTO (secao 5)
+    # e nao se reescreve por aqui.
+    "cartao.fatura_linha": {"id", "transacao_id_criado", "conferida_repeticao",
+                            "conferida_repeticao_por", "conferida_repeticao_em"},
     "cartao.transacao_dimensao": {"transacao_id", "dimensao_id", "valor_id"},
 }
 
@@ -6283,8 +6288,14 @@ def acoes_desfazeis(cur, usuario, limite=DESFAZER_LIMITE):
                 reversao = json.loads(reversao)
             except ValueError:
                 reversao = []
-        # devolver assinatura exige o segundo "sim" na tela (secao 1.2)
-        toca_ok = any("conferida" in (passo.get("valores") or {}) for passo in (reversao or []))
+        # Devolver assinatura exige o segundo "sim" na tela (secao 1.2). Vale
+        # para QUALQUER coluna de conferencia, nao so o OK do lancamento:
+        # `conferida_repeticao` tambem registra que uma pessoa olhou, e apagar
+        # isso sem perguntar seria perder revisao humana do mesmo jeito.
+        toca_ok = any(
+            any(str(c).startswith("conferida") for c in (passo.get("valores") or {}))
+            for passo in (reversao or [])
+        )
         itens.append({
             "id": _campo(r, "id", 0),
             "rotulo": _campo(r, "rotulo", 1),

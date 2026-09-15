@@ -620,6 +620,25 @@ def test_desfazer_devolve_o_estado_anterior_e_recusa_o_que_nao_pode(sistema_real
     topo = core.acoes_desfazeis(cur, f"u{marca}")[0]
     assert topo["exige_confirmacao"] is True, "retirar OK tem que pedir confirmacao"
 
+    # Vale para QUALQUER coluna de conferencia, nao so o OK do lancamento:
+    # `conferida_repeticao` tambem registra que uma pessoa olhou aquele grupo,
+    # e apaga-la sem perguntar perderia revisao humana do mesmo jeito.
+    core.registrar_desfazivel(cur, "mexe na revisao da repeticao", [{
+        "op": "update", "tabela": "cartao.fatura_linha",
+        "onde": {"id": 1}, "valores": {"conferida_repeticao": False},
+    }], usuario=f"u{marca}")
+    conn.commit()
+    assert core.acoes_desfazeis(cur, f"u{marca}")[0]["exige_confirmacao"] is True
+
+    # e uma acao que nao toca conferencia nenhuma NAO pode pedir confirmacao -
+    # pedir sempre ensina o usuario a clicar "sim" sem ler
+    core.registrar_desfazivel(cur, "so o nome", [{
+        "op": "update", "tabela": "cartao.grupo_custo",
+        "onde": {"id": grupo}, "valores": {"nome": "x"},
+    }], usuario=f"u{marca}")
+    conn.commit()
+    assert core.acoes_desfazeis(cur, f"u{marca}")[0]["exige_confirmacao"] is False
+
     # tabela e coluna fora da lista branca continuam recusadas
     for passo in (
         {"op": "update", "tabela": "cartao.usuario",
