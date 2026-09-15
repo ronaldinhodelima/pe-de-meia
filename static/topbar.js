@@ -269,12 +269,8 @@ atualizarIconeTema();
     // (secao 1.2): o OK e do usuario, e retira-lo nunca pode acontecer com um
     // clique distraido. O servidor e quem diz se a acao mexe em OK.
     if (proximaAcao && proximaAcao.exige_confirmacao
-        && !confirm('Isto vai mexer na conferência (OK) de um lançamento:
-
-'
-                    + proximaAcao.rotulo + '
-
-Desfazer mesmo assim?')) {
+        && !confirm('Isto vai mexer na conferência (OK) de um lançamento:\n\n'
+                    + proximaAcao.rotulo + '\n\nDesfazer mesmo assim?')) {
       return;
     }
     botao.disabled = true;

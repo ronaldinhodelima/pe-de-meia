@@ -3261,3 +3261,106 @@ def test_todas_as_gravacoes_de_lancamento_registram_desfazer():
             marca = ("registrar_desfazivel" in corpo
                      or "_registrar_desfazer_da_edicao" in corpo)
             assert marca, f"{no.name} grava sem registrar como desfazer"
+
+
+def _strings_que_atravessam_linha(js):
+    """Literais '...' ou "..." abertos que chegam ao fim da linha.
+
+    Em JS isso e erro de sintaxe, e o efeito e desproporcional: o arquivo
+    INTEIRO deixa de ser avaliado, entao toda funcao dele some. Nao ha
+    mensagem na tela - so um SyntaxError no console que ninguem ve.
+
+    Comentarios, template literals (que PODEM ter quebra) e literais de
+    expressao regular ficam de fora. A regex e reconhecida pela heuristica
+    classica: uma `/` que vem depois de operador ou abre-parenteses inicia
+    regex; depois de um valor, e divisao.
+    """
+    achados = []
+    estado = None          # None, "//", "/*", "'", '"', "`", "/"
+    anterior = ""          # ultimo caractere significativo
+    linha = 1
+    i = 0
+    while i < len(js):
+        c = js[i]
+        if c == "\n":
+            linha += 1
+        if estado in ("'", '"'):
+            if c == "\\":
+                i += 2
+                continue
+            if c == "\n":
+                achados.append(linha - 1)
+                estado = None
+            elif c == estado:
+                estado = None
+            i += 1
+            continue
+        if estado == "`":
+            if c == "\\":
+                i += 2
+                continue
+            if c == "`":
+                estado = None
+            i += 1
+            continue
+        if estado == "//":
+            if c == "\n":
+                estado = None
+            i += 1
+            continue
+        if estado == "/*":
+            if c == "*" and js[i + 1:i + 2] == "/":
+                estado = None
+                i += 2
+                continue
+            i += 1
+            continue
+        if estado == "/":          # dentro de uma regex
+            if c == "\\":
+                i += 2
+                continue
+            if c in ("/", "\n"):
+                estado = None
+            i += 1
+            continue
+        # estado normal
+        if c == "/" and js[i + 1:i + 2] == "/":
+            estado = "//"
+            i += 2
+            continue
+        if c == "/" and js[i + 1:i + 2] == "*":
+            estado = "/*"
+            i += 2
+            continue
+        if c == "/" and anterior in ("", "(", ",", "=", ":", "[", "!", "&", "|",
+                                     "?", "{", "}", ";", "+", "-", "*", "%",
+                                     "<", ">", "~", "^"):
+            estado = "/"
+            i += 1
+            continue
+        if c in ("'", '"', "`"):
+            estado = c
+            i += 1
+            continue
+        if not c.isspace():
+            anterior = c
+        i += 1
+    return achados
+
+
+def test_nenhum_js_tem_string_aberta_ate_o_fim_da_linha():
+    """Um `\n` que virou quebra de linha de verdade apaga o arquivo todo.
+
+    Aconteceu em 15/09/2026 no `topbar.js`: a mensagem de confirmacao do
+    Desfazer foi escrita com quebras reais dentro de aspas simples. O arquivo
+    parou de ser avaliado na linha 272 e **nada** depois dele existiu - os
+    menus Relatorios e Configuracoes deixaram de abrir (`menuToggle` sumiu) e
+    o proprio botao Desfazer ficou morto. A API continuava perfeita, entao
+    testar pela rota nao pegava; so abrindo a tela.
+    """
+    quebrados = {}
+    for arquivo in sorted((RAIZ / "static").glob("*.js")):
+        linhas = _strings_que_atravessam_linha(arquivo.read_text(encoding="utf-8"))
+        if linhas:
+            quebrados[arquivo.name] = linhas
+    assert not quebrados, f"string aberta ate o fim da linha: {quebrados}"
