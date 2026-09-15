@@ -240,6 +240,13 @@ léxica, ignorando comentário, template literal e regex.
 - **Ao criar pasta nova, adicione o `COPY` no Dockerfile** — o container sobe sem ela e quebra só
   na hora de servir a tela.
 - **Não há ambiente de staging.** Todo push na `main` vai direto para o app que a família usa.
+- **O worker SINCRONIZA ao subir — publicar o worker já aplica a mudança aos dados.** O
+  `scheduler_loop` roda uma sincronização antes do primeiro `sleep` (§2.4). Em 15/09/2026 isso
+  atropelou uma prévia combinada com o usuário: o commit que consertou o critério da correção de
+  horário foi publicado para *depois* mostrar a prévia, e a sincronização de boot já reescreveu os
+  2.973 lançamentos do cartão Unicred. Deu no resultado certo, mas por sorte. **Mudança no worker
+  que altere dado não tem prévia possível depois do deploy** — a prévia tem que sair antes, por
+  rota somente leitura ou com a correção desligada por variável, e só então se publica o worker.
 
 ## 2.4 Operacional
 
@@ -520,9 +527,27 @@ para dentro ou fora do ciclo de uma fatura. Os vínculos não se perdem (são po
 Referência confirmada na Visa: DELTA VIDEIRA, R$ 220,01, 13/08/2026 às **15:49**, que o sistema
 mostrava como 18:49. A migração subtraiu 3h **só** de registros Pluggy da Unicred Conjunta,
 guardando o estado em `cartao.horario_backup_v43`; o worker aplica a mesma normalização a novas
-sincronizações. **Ela ficou fora do ar de ~25/08 a 15/09/2026**, porque o worker não publica por
-push (§2.3) e o commit que a levou nunca subiu: tudo o que a Unicred sincronizou nessas três
-semanas entrou +3h. Conferir antes de tratar horário desse período como confiável. **Horários exatamente 00:00 são preservados** — representam data sem hora
+sincronizações.
+
+**A correção do worker nunca rodou uma vez sequer, de 01/09 a 15/09/2026, e ninguém viu.** Ela
+perguntava `"unicred" in nome_conexao.lower()`, e `nome_conexao` é o nome do **conector** que o
+Pluggy devolve — que nas três conexões da família é **"MeuPluggy"**. A condição era sempre falsa;
+como o UPSERT reescreve `data_transacao` (acima), **cada sincronização desfazia a migração 43**, e
+o cartão inteiro voltava para +3h. O critério certo é a **conta**, o mesmo que a migração usou:
+`CONTAS_HORARIO_MAIS_3H`, escrita nos dois serviços (o worker roda em outro container e não importa
+do `core`) com teste comparando as duas listas.
+
+**O teste que existia passava e não protegia nada:** ele chamava `_data_transacao_pluggy(..., True)`
+com a flag já pronta — **nunca exercitava quem calcula a flag**. Hoje `_corrige_horario_da_conta()`
+é função com nome e teste próprio. **Lição:** testar o efeito e não a decisão deixa a decisão sem
+rede, e aqui ela ficou errada por duas semanas sem uma linha vermelha em lugar nenhum.
+
+**Três lançamentos mudaram de mês ao ser corrigidos** — 31/10/2025 21:00, 31/12/2025 21:00 e
+28/02/2026 22:19. Não é defeito: eles aconteceram mesmo no fim daqueles dias e estavam datados no
+dia 1º do mês seguinte. O DRE desses meses se move um pouco, na direção certa.
+
+**A correção é idempotente:** o valor gravado é sempre `valor do Pluggy − 3h`, nunca
+`valor gravado − 3h`. Sincronizar de novo não subtrai outra vez. **Horários exatamente 00:00 são preservados** — representam data sem hora
 confiável, e mover levaria ao dia anterior. **Não aplicar a Nubank ou conta corrente sem antes
 validar um evento concreto no app da instituição.**
 
