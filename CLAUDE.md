@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 15/09/2026 · **Schema:** migração 66 · **Testes:** 458 aprovados, 10 ignorados
+**Última revisão:** 15/09/2026 · **Schema:** migração 66 · **Testes:** 459 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -200,6 +200,17 @@ com desenho próprio (`accent-color`) no mesmo dia em que a regra foi declarada 
 
 **O JS da visão detalhada usa parâmetro de versão no `src`.** Sempre renovar quando o
 comportamento mudar, evitando HTML novo com script antigo no cache.
+
+**Erro de sintaxe em JS não fica no trecho — apaga o ARQUIVO INTEIRO.** Em 15/09/2026 a mensagem
+de confirmação do Desfazer foi escrita com quebras de linha **reais** dentro de aspas simples (um
+`\n` que virou newline de verdade). O `topbar.js` parou de ser avaliado na linha 272 e **nada**
+depois dela passou a existir: `menuToggle` e `menuMobile` sumiram, e os menus **Relatórios e
+Configurações deixaram de abrir em todas as telas** — junto com o próprio botão Desfazer, que
+nunca chegou a funcionar pela interface. A API respondia perfeitamente, então exercitar a rota
+(foi o que fiz para validar o deploy) **não pega nada**; a única pista era um `SyntaxError` no
+console, que ninguém olha. **Ao validar um recurso novo, clicar no botão — não chamar a rota por
+trás dele.** `test_nenhum_js_tem_string_aberta_ate_o_fim_da_linha` varre `static/*.js` por análise
+léxica, ignorando comentário, template literal e regex.
 
 ## 2.3 Repositório e deploy
 
@@ -2647,7 +2658,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**458 aprovados e 10 ignorados** (15/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**459 aprovados e 10 ignorados** (15/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
