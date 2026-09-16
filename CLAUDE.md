@@ -2581,6 +2581,45 @@ valor que nunca mudou — não o nome, que o banco grafa de seis jeitos. Ajustad
 de 2026 −R$ 2.359,61). **Buscar por nome de estabelecimento na conta corrente perde grafia; quando
 o valor é fixo, procurar pelo valor.**
 
+**Despesa da BRDrive paga com dinheiro pessoal — padrão criado em 16/09/2026** (decisão do
+usuário). Todo mês o Ronaldo paga contas da BRDrive com cartão, PIX ou dinheiro, e na metade do mês
+seguinte a empresa reembolsa. Duas categorias novas, **as duas com natureza `transferência`**:
+
+| Categoria | O que é |
+|---|---|
+| **BRDrive Pago** | o que ele adiantou |
+| **BRDrive Recebido** | o que a BRDrive devolveu |
+
+**Nenhum dos dois lados é resultado**, e é por isso que são duas categorias e não uma despesa com
+uma receita. A saída não diminui o patrimônio — ela vira um **direito de receber**; a entrada não é
+renda — é esse direito sendo quitado. Lançar como despesa e receita inflaria os dois lados do DRE
+com dinheiro que nunca foi da família (§1.1).
+
+**Por que DUAS e não uma só:** com uma categoria só se enxerga o líquido, e **R$ 0,00 tanto pode
+ser "fechou certinho" quanto "não aconteceu nada"**. Com duas, aparecem os dois volumes e a
+comparação é direta. Também mantém o acerto fora da categoria `Reembolso` genérica, que está
+contaminada (abaixo).
+
+**Onde conferir:** Relatórios › visão **"Transferências e reembolsos"** (§6.3), agrupando por
+Categoria ou por Período (mês). Antes dela, categoria neutra não aparecia em relatório nenhum.
+
+**Compra mista vai para RATEIO** (§4.4): a parte da empresa em BRDrive Pago, a parte da família na
+categoria real. Sem isso, ou a despesa da família infla, ou uma despesa real some.
+
+**Não confundir com `Reembolso`** (§8.4, 11/09/2026): lá a despesa era da família e voltou; aqui a
+despesa nunca foi dela. E reembolso de despesa da própria família continua voltando para a
+categoria da despesa (§8.3).
+
+**Pendência que a visão nova deixou à vista:** a categoria `Reembolso` tem **46 lançamentos e
+−R$ 201.952,53**, quase tudo em um item só — `BRSIM LTDA CRED RECEBIMENTO PIX`, 30/12/2025,
+**R$ 189.961,27**, que a §11.2 já listava como sem classificação. Não infla o DRE (é neutra), mas
+contamina qualquer conferência de saldo feita por ali. **Aguardando decisão do usuário.**
+
+**E duas categorias diferentes se chamam "Transferência Interna"** — `Same person transfer` e
+`Transfer - Internal` — então a visão nova mostra **duas linhas com o mesmo nome**. É o defeito que
+a trava do "renomear" passou a impedir; estas duas são anteriores a ela. Juntar exige "Mover
+lançamentos" e remover a que ficar vazia — decisão do usuário.
+
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
