@@ -963,6 +963,44 @@ o período que se pedir, e recusar faz **perder a parte nova — que é dado rea
 linhas de agosto ignoradas, **7 de setembro importadas**, documento novo de 08/09 a 14/09 —
 e ele não encosta mais no de agosto.
 
+### O recorte NUNCA pode rodar sobre fatura de cartão (16/09/2026)
+
+**Ele apagou quatro faturas da Andrea.** O usuário reimportou as faturas 06, 07 e 08/2026 do Nubank
+e "vários lançamentos sumiram". O que sumiu foram as **linhas dos documentos**, e o mecanismo é
+exatamente a premissa do recorte: *"cada transação pertence a um documento só, então a data da
+linha diz qual é"*. **Numa fatura de cartão isso é falso** — duas faturas seguidas compartilham o
+dia da virada do ciclo (`DTEND` de uma = `DTSTART` da outra) e o Nubank data **toda parcela** nesse
+dia (§11.3-A, que já registrava o fato).
+
+Resultado, para o arquivo de 06/2026 (ciclo 02/05 a 02/06, 17 linhas):
+
+- as linhas de **02/05** caíam dentro do período da fatura de 05/2026 → descartadas;
+- as linhas de **02/06** caíam dentro do período da de 07/2026 → descartadas;
+- sobravam as 4 do meio do mês, e então o código **recalculava o mês de referência pelas linhas
+  restantes** → o arquivo virava **05/2026** e **substituía a fatura de maio**, de 18 para 4 linhas.
+
+O mesmo empurrão de um mês aconteceu em cadeia: 07 virou 06, 08 virou 07, e o arquivo de 01/2026
+virou 12/2025. Quatro documentos sobrescritos.
+
+**A correção:** o recorte só roda quando `fatura.get("extrato")`. Fatura de cartão entra inteira — o
+ciclo dela vem do arquivo e a chave `(conta, mês, ano)` já resolve substituição.
+`test_o_recorte_por_data_so_alcanca_extrato_nunca_fatura_de_cartao` cobra a guarda.
+
+**Nenhum LANÇAMENTO foi perdido, e isso não foi sorte:** importar documento nunca cria nem apaga
+lançamento. A auditoria das oito importações mostra `parcelas_criadas: 0`, `agregados: 0`,
+`marcados_agora: 0`, `desmarcados_agora: 0` e zero classificações sobrescritas. O estrago ficou em
+`fatura_linha` e `fatura_vinculo`.
+
+**A recuperação veio do próprio banco:** `pdf_arquivo` guarda o arquivo enviado, e ele **não** é
+recortado — só as linhas são. Então os documentos errados continham os arquivos **certos**, um mês
+fora do lugar, e bastou reenviá-los pela mesma rota depois do conserto. 06/2026 voltou de 6 para 17
+linhas e 07/2026 de 8 para 20, fechando centavo a centavo com o total impresso.
+
+**O que NÃO voltou:** 05/2026 e 12/2025. Os arquivos originais desses dois meses foram
+sobrescritos, e não há backup de `fatura_importada` — só o usuário reexportando do app do Nubank.
+**Lição:** `ON CONFLICT DO UPDATE` sobre `pdf_arquivo` destrói o único exemplar do arquivo. O aviso
+de substituição (acima) diz o que saiu, mas não guarda o que saiu.
+
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
 Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite
