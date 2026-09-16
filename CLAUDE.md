@@ -663,6 +663,11 @@ lançamentos do grupo.
   positiva, entrada negativa. Par que fechou soma **zero**; o que sobra é o que está em aberto.
 - O rótulo do total é **"Saldo em aberto (saídas − entradas)"**, não "Total": chamar de total
   sugeriria volume, e aí zero passaria a parecer "não houve nada" em vez de "fechou".
+- **Cada grupo mostra os DOIS volumes, não só o saldo** (16/09/2026): `↑ saiu` e `↓ entrou` ao lado
+  do saldo, e o mesmo no card do total. É o que torna possível **uma categoria só** por contraparte
+  (`BRDrive`, §8.4) em vez de uma para cada lado: o usuário não diz se é entrada ou saída, o valor
+  diz. Sem os dois volumes, saldo zero seria ambíguo entre "fechou certinho" e "não aconteceu nada"
+  — e é justamente isso que se confere todo mês.
 - `test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo` compara as três listas — o
   seletor, o conjunto aceito na rota e o `LABEL_VISAO` do JS. Visão oferecida que a rota não aceita
   cai no `else` e a tela mostra outra coisa dizendo que filtrou: é o defeito da §7.1-C.
@@ -2610,22 +2615,21 @@ o valor é fixo, procurar pelo valor.**
 
 **Despesa da BRDrive paga com dinheiro pessoal — padrão criado em 16/09/2026** (decisão do
 usuário). Todo mês o Ronaldo paga contas da BRDrive com cartão, PIX ou dinheiro, e na metade do mês
-seguinte a empresa reembolsa. Duas categorias novas, **as duas com natureza `transferência`**:
+seguinte a empresa reembolsa. **Uma categoria só: `BRDrive`, natureza `transferência`.**
 
-| Categoria | O que é |
-|---|---|
-| **BRDrive Pago** | o que ele adiantou |
-| **BRDrive Recebido** | o que a BRDrive devolveu |
+**Nenhum dos dois lados é resultado.** A saída não diminui o patrimônio — ela vira um **direito de
+receber**; a entrada não é renda — é esse direito sendo quitado. Lançar como despesa e receita
+inflaria os dois lados do DRE com dinheiro que nunca foi da família (§1.1).
 
-**Nenhum dos dois lados é resultado**, e é por isso que são duas categorias e não uma despesa com
-uma receita. A saída não diminui o patrimônio — ela vira um **direito de receber**; a entrada não é
-renda — é esse direito sendo quitado. Lançar como despesa e receita inflaria os dois lados do DRE
-com dinheiro que nunca foi da família (§1.1).
+**Quem diz o lado é o SINAL, não a categoria** (decisão do usuário, 16/09/2026, corrigindo o
+desenho do mesmo dia). Nasceram duas categorias — `BRDrive Pago` e `BRDrive Recebido` — e elas
+obrigavam a escolher o lado na mão, sendo que o valor já diz: compra no cartão e PIX enviado saem
+**positivos** em `VAL_DESPESA`, crédito na conta corrente sai **negativo**. As duas foram unidas em
+`BRDrive` (48 lançamentos movidos, DRE inalterado) e o relatório passou a somar os dois lados
+separados (§6.3). **Não é `fluxo`:** ali a direção decide entre receita e despesa e o lançamento
+**entra** no DRE, que é exatamente o que não pode acontecer aqui.
 
-**Por que DUAS e não uma só:** com uma categoria só se enxerga o líquido, e **R$ 0,00 tanto pode
-ser "fechou certinho" quanto "não aconteceu nada"**. Com duas, aparecem os dois volumes e a
-comparação é direta. Também mantém o acerto fora da categoria `Reembolso` genérica, que está
-contaminada (abaixo).
+Isso mantém o acerto fora da categoria `Reembolso` genérica, que está contaminada (abaixo).
 
 **Onde conferir:** Relatórios › visão **"Transferências e reembolsos"** (§6.3), agrupando por
 Categoria ou por Período (mês). Antes dela, categoria neutra não aparecia em relatório nenhum.
