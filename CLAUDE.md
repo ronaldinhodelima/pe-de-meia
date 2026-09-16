@@ -2615,10 +2615,32 @@ categoria da despesa (§8.3).
 **R$ 189.961,27**, que a §11.2 já listava como sem classificação. Não infla o DRE (é neutra), mas
 contamina qualquer conferência de saldo feita por ali. **Aguardando decisão do usuário.**
 
-**E duas categorias diferentes se chamam "Transferência Interna"** — `Same person transfer` e
-`Transfer - Internal` — então a visão nova mostra **duas linhas com o mesmo nome**. É o defeito que
-a trava do "renomear" passou a impedir; estas duas são anteriores a ela. Juntar exige "Mover
-lançamentos" e remover a que ficar vazia — decisão do usuário.
+**Duas categorias chamadas "Transferência Interna" — resolvido em 16/09/2026, e não era o que
+parecia.** `Same person transfer` e `Transfer - Internal` mostravam duas linhas com o mesmo nome na
+visão nova. Abrindo as duas, **não eram a mesma coisa**: a segunda tinha só **3 lançamentos, todos
+`Pag de Fatura Via Deb Aut`** (mai, jun e jul/2026, R$ 51.849,48 no cartão Unicred Ronaldo) — o lado
+do **cartão** do pagamento da fatura, que pela §4.1 pertence a **Pagamento de Fatura**. Escaparam da
+migração 56 porque estavam em `Transfer - Internal`, e não em `Transfers`.
+
+Juntar as duas teria enterrado três pagamentos de fatura dentro de transferência entre contas. Os 3
+foram para `Credit card payment` e `Transfer - Internal` foi excluída. **O DRE não se moveu** (as
+três categorias são `transferencia`): 2026 despesa R$ 352.100,54 e receita R$ 444.421,57; 2025
+R$ 262.033,67 e R$ 225.442,90, idênticos antes e depois.
+
+**A prova de que a classificação estava mesmo errada veio do saldo:** `Pagamento de Fatura` em 2026
+foi de **R$ 52.629,79 para R$ 780,31**. Os dois lados agora se anulam, que é o que tem de acontecer
+— faltavam justamente os três créditos do lado do cartão. É a visão nova fazendo o trabalho dela.
+
+**Excluir categoria APAGA a natureza dela, e isso é uma mina** quando o Pluggy ainda manda aquela
+chave. `Transfer - Internal` chegou a ser sincronizada em 21/07/2026; sem a linha em
+`categoria_natureza`, o próximo lançamento dela cairia em `NATUREZA_PADRAO` = **despesa**
+(`_NAT_BASE` lê a tabela, e `SEED_NATUREZAS` só roda dentro de migração) — um pagamento de fatura de
+R$ 16 mil entrando como despesa **em silêncio**, que é exatamente o estrago da §4.1. E ninguém veria:
+categoria oculta não aparece em `/pendencias`. A natureza foi **regravada depois da exclusão** —
+`categoria_natureza` aceita linha de categoria oculta, então ela fica fora dos seletores e continua
+com a natureza certa. Conferido com um lançamento de teste de R$ 0,01 nessa categoria, que apareceu
+em "Transferências e reembolsos" e **não** em Despesas, e foi apagado em seguida.
+**Ao excluir categoria que a sincronização ainda pode trazer, regravar a natureza logo depois.**
 
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
