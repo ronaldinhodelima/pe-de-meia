@@ -2092,7 +2092,16 @@ def lancamento_manual():
             return jsonify({"ok": False, "erro": "Preencha data, descrição e um valor válido."}), 400
 
         tipo = "CREDIT" if direcao == "entrada" else "DEBIT"
-        data_transacao = f"{data_str} 12:00:00-03:00"
+        # A hora do lancamento manual e a hora REAL de quem lancou - lancando
+        # hoje, e agora. Em data passada nao existe hora real para saber, e as
+        # 12:00 eram um valor inventado que a tela mostrava como se fosse
+        # verdade. O sistema ja tem como dizer "sem hora confiavel": 00:00
+        # (secao 4.6), que a tela esconde em vez de mentir.
+        agora = datetime.now(FUSO_LOCAL)
+        if data_str == agora.strftime("%Y-%m-%d"):
+            data_transacao = agora.isoformat(sep=" ", timespec="seconds")
+        else:
+            data_transacao = f"{data_str} 00:00:00-03:00"
 
         # O OK e assinatura humana: so vai marcado quando QUEM ESTA CRIANDO
         # marcou a caixa, e ainda assim passa pela mesma trava da tela - sem

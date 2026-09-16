@@ -1070,6 +1070,12 @@ navegador devolve as 190 linhas e o status anterior. O filtro "Pendentes de clas
   fatura em foco, o botão leva ao período com `?manual=1`, que já abre o formulário. **Ao abrir, o
   cursor já está na Data** (pedido do usuário, 12/09/2026), pelos dois caminhos — o botão e o
   `?manual=1`: é por ela que se começa a digitar.
+- **O manual nasce com a HORA REAL** (pedido do usuário, 16/09/2026). Lançando hoje, é a hora de
+  agora; em data passada não existe hora real para saber, e o lançamento entra com **00:00**, que
+  é como o sistema diz "sem hora confiável" (§4.6) e que a tela **esconde**. Antes eram **12:00
+  fixas** — um valor inventado que a tela mostrava ao lado da data como se fosse a hora da compra,
+  e três lançamentos manuais seguidos apareciam todos ao meio-dia. O lançamento criado pela fatura
+  (`F`) continua com hora padrão, e a tela continua escondendo a dele pelo mesmo motivo.
 - **O avatar antes da descrição existe também na fatura em andamento**, e pinta a cor da marca do
   banco (Unicred verde, Nubank roxo) — a mesma tabela `BANCOS_ESTILO` do selo, via `cor_banco()`.
   Duas tabelas de cor divergiriam no primeiro banco novo. Ali o nome impresso do portador **ainda

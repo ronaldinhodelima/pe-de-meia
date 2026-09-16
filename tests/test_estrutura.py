@@ -1937,6 +1937,22 @@ def test_lancamento_manual_aceita_a_classificacao_inteira_e_trava_o_ok():
     assert "registrar_auditoria" in bloco
 
 
+def test_lancamento_manual_nasce_com_a_hora_real_e_nunca_com_hora_inventada():
+    """Lancado hoje, a hora e agora; em data passada, 00:00 = "sem hora".
+
+    As 12:00 fixas eram um valor inventado, e a tela mostrava esse valor ao
+    lado da data como se fosse a hora da compra (secao 4.6: 00:00 e o jeito do
+    sistema dizer que nao ha hora confiavel, e a tela esconde).
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    bloco = view.split("def lancamento_manual", 1)[1].split("@bp.route", 1)[0]
+    # sem comentario: o "12:00" da explicacao nao pode fazer o teste passar
+    codigo = re.sub(r"#[^\n]*", "", bloco)
+    assert "12:00" not in codigo, "hora inventada nao volta"
+    assert "datetime.now(FUSO_LOCAL)" in codigo
+    assert "00:00:00-03:00" in codigo, "data passada entra como sem hora"
+
+
 def test_descricao_so_muda_em_lancamento_manual():
     """A descricao de lancamento do Pluggy pertence ao banco (secao 4.6).
 
