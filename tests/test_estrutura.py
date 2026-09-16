@@ -2012,6 +2012,22 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
 
 
+def test_orfao_conferido_aparece_com_o_selo_na_conciliacao():
+    """Perder o VINCULO nao retira a assinatura.
+
+    Depois do incidente de 16/09/2026 a lista de "Lançamentos do Pluggy sem
+    vínculo" encheu de lançamentos que continuavam conferidos - o que a tela
+    nao dizia, e a leitura natural era "o OK voltou atras". O selo separa
+    "falta religar" de "falta conferir".
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "conciliar_fatura.html").read_text(encoding="utf-8")
+    bloco = view.split("orfas = [{", 1)[1].split("} for r in", 1)[0]
+    assert '"conferida"' in bloco, "a orfa leva o estado de OK para a tela"
+    sem_comentario = re.sub(r"\{#.*?#\}", "", html, flags=re.S)
+    assert "o.conferida" in sem_comentario
+
+
 def test_substituir_documento_guarda_o_arquivo_anterior():
     """`ON CONFLICT DO UPDATE` sobrescreve `pdf_arquivo` (migracao 67).
 

@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 472 aprovados, 10 ignorados
+**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 473 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1006,6 +1006,12 @@ dele já seria o arquivo novo —, só quando existe documento sendo trocado e s
 arquivo (o "Apagar" da tela zera `pdf_arquivo` e não faz sentido guardar linha vazia). Tabela
 própria, e não coluna: um documento pode ser substituído várias vezes.
 **Lição:** um aviso que diz o que saiu não substitui guardar o que saiu.
+
+**Órfão conferido ganhou selo na conciliação.** Com os vínculos destruídos, a lista "Lançamentos do
+Pluggy sem vínculo" encheu de lançamentos que **continuavam conferidos** — e a tela não dizia isso,
+então a leitura natural virou "o OK voltou atrás". Não voltou: perder o vínculo não retira a
+assinatura, e a auditoria do dia não tem um único evento retirando OK. O selo `conferido` (com o
+autor no tooltip) separa **"falta religar"** de **"falta conferir"**.
 
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
@@ -2931,7 +2937,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**472 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**473 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

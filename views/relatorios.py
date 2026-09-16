@@ -1002,7 +1002,11 @@ def _estado_fatura(cur, fatura_row):
             "repetidas_na_fatura": [],
         }
     cur.execute(
+        # `conferida` vem junto porque perder o VINCULO nao retira a assinatura:
+        # um lancamento conferido que aparece aqui nao e trabalho a refazer, e
+        # sem dizer isso a lista parece que o OK voltou atras (16/09/2026).
         f"SELECT t.transacao_id, t.descricao, COALESCE(t.valor_brl, t.valor_original) AS valor, "
+        f"COALESCE(t.conferida, false) AS conferida, t.conferida_por, "
         f"({DATA_LOCAL_SQL})::date AS data_local "
         f"FROM cartao.transacao t "
         f"WHERE t.account_id = %s AND COALESCE(t.duplicada, false) = false "
@@ -1021,6 +1025,7 @@ def _estado_fatura(cur, fatura_row):
     orfas = [{
         "transacao_id": str(r["transacao_id"]), "descricao": r["descricao"],
         "valor": _reais(_centavos(r["valor"])), "data": r["data_local"],
+        "conferida": bool(r["conferida"]), "conferida_por": r["conferida_por"],
     } for r in cur.fetchall()]
 
     def _nao_e_pagamento_recebido(l):

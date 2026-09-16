@@ -306,6 +306,7 @@
         Estão na conta, dentro do ciclo desta fatura, e não têm vínculo com nenhuma linha de nenhuma fatura.
         Pode ser cobrança que aparece na fatura seguinte, ou vínculo que falta fazer. O que já foi
         resolvido em <a href="/relatorios/duplicidades-fatura">Duplicidades da fatura</a> não aparece aqui.
+        O selo <span class="estado ok">conferido</span> diz que o lançamento já tem OK — falta só o vínculo.
       </div>
       <table class="compacta"><thead><tr><th>Data</th><th>Descrição</th>
         <th style="text-align:right">Valor</th><th>Vincular a uma linha da fatura</th></tr></thead>
@@ -313,7 +314,14 @@
         {% for o in resultado.orfas %}
           <tr data-transacao-id="{{ o.transacao_id }}">
             <td>{{ o.data.strftime('%d/%m/%Y') }}</td>
-            <td>{{ o.descricao }}</td>
+            {# Perder o VINCULO nao retira a assinatura: um lancamento conferido
+               que cai aqui nao e trabalho a refazer, so falta religa-lo a uma
+               linha. Sem o selo, a lista parecia dizer que o OK voltou atras -
+               foi o que assustou depois do incidente de 16/09/2026. #}
+            <td>{{ o.descricao }}{% if o.conferida %}
+              <span class="estado ok" style="margin-left:7px"
+                    data-tip="Conferido{{ ' por ' ~ o.conferida_por if o.conferida_por }} — falta só o vínculo com a linha da fatura">conferido</span>
+            {% endif %}</td>
             <td class="valor">{{ o.valor|moeda }}</td>
             <td>
               {% if pode_editar_conciliacao %}
