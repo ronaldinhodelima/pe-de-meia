@@ -2060,6 +2060,10 @@ def test_a_visao_neutra_separa_saidas_de_entradas_pelo_sinal():
     assert "saidas_geral" in view and "entradas_geral" in view, "e o total tambem"
     codigo = re.sub(r"//[^\n]*", "", js)
     assert "g.saidas" in codigo and "g.entradas" in codigo, "a linha do grupo mostra os dois"
+    # agrupado por mes, a variacao mes a mes NAO pode tomar o lugar do saiu/entrou:
+    # ali o numero e um saldo que troca de sinal, e a variacao percentual sobre ele
+    # nao significa nada
+    assert "ehPeriodo && !neutro" in codigo
 
 
 def test_a_visao_neutra_e_a_unica_que_enxerga_transferencia():

@@ -158,13 +158,17 @@ function renderGrupos(grupos, ehPeriodo) {
     // metade da historia: zero tanto pode ser "fechou certinho" quanto "nao
     // aconteceu nada". Saidas e entradas aparecem ao lado do saldo, e uma
     // categoria so - "BRDrive" - basta, sem o usuario dizer o lado (16/09/2026).
-    if (window.__visao === 'neutro') {
+    const neutro = window.__visao === 'neutro';
+    if (neutro) {
       direita = '<span style="color:var(--bad)" title="saiu">↑ ' + fmtMoeda(g.saidas) + '</span>' +
                 ' <span style="color:var(--good)" title="entrou">↓ ' + fmtMoeda(g.entradas) + '</span>' +
                 ' <strong title="saldo em aberto (saídas − entradas)">' + fmtMoeda(g.total) + '</strong>';
     }
-    // lista invertida: o mes anterior e o de baixo (i + 1)
-    if (ehPeriodo && i < lista.length - 1) {
+    // lista invertida: o mes anterior e o de baixo (i + 1). Na visao neutra a
+    // variacao nao entra: ali o numero do mes e um SALDO que troca de sinal, e
+    // "caiu 957%" sobre um saldo que foi de -278 para +174 nao diz nada - alem
+    // de tomar o lugar do saiu/entrou, que e o que se quer ver mes a mes.
+    if (ehPeriodo && !neutro && i < lista.length - 1) {
       const ant = lista[i + 1].total;
       if (ant) {
         const varPct = (g.total - ant) / Math.abs(ant) * 100;
