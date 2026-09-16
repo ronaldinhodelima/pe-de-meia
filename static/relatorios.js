@@ -84,8 +84,18 @@ const LABEL_VISAO = { despesa: 'Total de despesas', receita: 'Total de receitas'
                       investimento: 'Investido / adquirido', tudo: 'Fluxo de caixa (líquido)',
                       neutro: 'Saldo em aberto (saídas − entradas)' };
 function renderResultado(data) {
+  // lido pelo renderGrupos: a visao decide se a linha mostra os dois lados
+  window.__visao = data.visao;
   document.getElementById('totalGeral').textContent = fmtMoeda(data.total_geral);
   document.getElementById('labelTotal').textContent = LABEL_VISAO[data.visao] || 'Total no filtro';
+  const lados = document.getElementById('totalLados');
+  if (lados) {
+    lados.hidden = data.visao !== 'neutro';
+    if (data.visao === 'neutro') {
+      lados.innerHTML = '<span style="color:var(--bad)">↑ saiu ' + fmtMoeda(data.saidas_geral) + '</span>' +
+                        ' · <span style="color:var(--good)">↓ entrou ' + fmtMoeda(data.entradas_geral) + '</span>';
+    }
+  }
   document.getElementById('qtdGeral').textContent = data.qtd_geral;
   const ehPeriodo = data.agrupar === 'mes';
   document.getElementById('graficoTitulo').textContent =
@@ -112,6 +122,15 @@ function renderGrupos(grupos, ehPeriodo) {
   cont.innerHTML = lista.map((g, i) => {
     const larguraBarra = ehPeriodo ? (Math.abs(g.total) / maxTotal * 100) : Math.max(g.pct, 0);
     let direita = '<strong>' + fmtMoeda(g.total) + '</strong> <span style="color:var(--ink-faint)">' + g.pct + '%</span>';
+    // Na visao neutra o SINAL e o que separa os lados, e ver so o saldo esconde
+    // metade da historia: zero tanto pode ser "fechou certinho" quanto "nao
+    // aconteceu nada". Saidas e entradas aparecem ao lado do saldo, e uma
+    // categoria so - "BRDrive" - basta, sem o usuario dizer o lado (16/09/2026).
+    if (window.__visao === 'neutro') {
+      direita = '<span style="color:var(--bad)" title="saiu">↑ ' + fmtMoeda(g.saidas) + '</span>' +
+                ' <span style="color:var(--good)" title="entrou">↓ ' + fmtMoeda(g.entradas) + '</span>' +
+                ' <strong title="saldo em aberto (saídas − entradas)">' + fmtMoeda(g.total) + '</strong>';
+    }
     // lista invertida: o mes anterior e o de baixo (i + 1)
     if (ehPeriodo && i < lista.length - 1) {
       const ant = lista[i + 1].total;

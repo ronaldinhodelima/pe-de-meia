@@ -38,7 +38,10 @@
 <div class="chips-sel" id="chipsSel" style="margin:-6px 0 14px 0"></div>
 
 <div class="cards">
-  <div class="card"><div class="label" id="labelTotal">Total no filtro</div><div class="val" id="totalGeral">-</div></div>
+  {# Na visao "Transferencias e reembolsos" o card mostra os DOIS lados abaixo do
+     saldo: ali o sinal e que separa entrada de saida, e so o saldo esconderia
+     metade da historia (secao 6.3). Nas outras visoes o bloco fica oculto. #}
+  <div class="card"><div class="label" id="labelTotal">Total no filtro</div><div class="val" id="totalGeral">-</div><div class="card-explicacao" id="totalLados" hidden></div></div>
   <div class="card"><div class="label">Lançamentos</div><div class="val" id="qtdGeral">-</div></div>
 </div>
 
@@ -54,5 +57,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/relatorios.js?v=20260916-1"></script>
+<script src="/static/relatorios.js?v=20260916-2"></script>
 {% endblock %}

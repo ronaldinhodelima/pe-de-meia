@@ -346,8 +346,18 @@ def relatorios_dados():
     # (do mais antigo para o mais recente). Nos demais agrupamentos, maior valor primeiro.
     # periodo sai em ordem cronologica; o resto, do maior gasto para o menor
     ordem = f"{cfg['group_expr']} ASC" if cfg["agrupar"] in ("mes", "ano") else "total DESC"
+    # Saidas e entradas separadas, alem do saldo. Numa categoria neutra o SINAL e
+    # que diz o lado (secao 6.3): quem adiantou e foi reembolsado quer ver os dois
+    # volumes, porque saldo zero sozinho tanto pode ser "fechou certinho" quanto
+    # "nao aconteceu nada". `VAL_DESPESA` e positivo quando o dinheiro SAI, entao
+    # as duas colunas saem positivas e `total` continua sendo saidas - entradas.
+    lados = (
+        f"SUM(CASE WHEN {VAL_DESPESA} > 0 THEN {VAL_DESPESA} ELSE 0 END) AS saidas, "
+        f"SUM(CASE WHEN {VAL_DESPESA} < 0 THEN -({VAL_DESPESA}) ELSE 0 END) AS entradas"
+    )
     cur.execute(
-        f"SELECT {cfg['group_expr']} AS grupo, COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total "
+        f"SELECT {cfg['group_expr']} AS grupo, COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total, "
+        f"{lados} "
         f"FROM {cfg['tabela']} t {cfg['join_natureza']} {cfg['join_extra']} "
         f"WHERE {cfg['where_sql']} GROUP BY {cfg['group_expr']} ORDER BY {ordem};",
         cfg["params"],
@@ -355,7 +365,7 @@ def relatorios_dados():
     grupos_raw = cur.fetchall()
 
     cur.execute(
-        f"SELECT COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total "
+        f"SELECT COUNT(*) AS qtd, SUM({cfg['soma_expr']}) AS total, {lados} "
         f"FROM {cfg['tabela']} t {cfg['join_natureza']} WHERE {cfg['where_sql']};",
         cfg["params"],
     )
@@ -410,6 +420,8 @@ def relatorios_dados():
             "selo": selo_grupo(g["grupo"]),
             "qtd": g["qtd"],
             "total": round(total_g, 2),
+            "saidas": round(float(g["saidas"] or 0), 2),
+            "entradas": round(float(g["entradas"] or 0), 2),
             "pct": round(pct, 1),
         })
 
@@ -419,6 +431,8 @@ def relatorios_dados():
 
     return jsonify({
         "total_geral": round(total_geral, 2),
+        "saidas_geral": round(float(totalizador["saidas"] or 0), 2),
+        "entradas_geral": round(float(totalizador["entradas"] or 0), 2),
         "qtd_geral": qtd_geral,
         "visao": cfg["visao"],
         "agrupar": cfg["agrupar"],

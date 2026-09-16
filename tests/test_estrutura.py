@@ -2009,6 +2009,26 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
 
 
+def test_a_visao_neutra_separa_saidas_de_entradas_pelo_sinal():
+    """Uma categoria so, e o SINAL decide o lado (decisao do usuario, 16/09/2026).
+
+    Duas categorias ("BRDrive Pago" e "BRDrive Recebido") obrigavam a escolher o
+    lado na mao, sendo que o valor ja diz: cartao e PIX enviado saem positivos
+    em `VAL_DESPESA`, credito na conta corrente sai negativo. O relatorio soma os
+    dois lados separados, e o saldo continua sendo saidas - entradas.
+
+    Sem os dois volumes, saldo zero tanto pode ser "fechou certinho" quanto "nao
+    aconteceu nada" - e e justamente isso que se quer conferir todo mes.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "relatorios.js").read_text(encoding="utf-8")
+    assert "AS saidas" in view and "AS entradas" in view
+    assert '"saidas"' in view and '"entradas"' in view, "cada grupo leva os dois lados"
+    assert "saidas_geral" in view and "entradas_geral" in view, "e o total tambem"
+    codigo = re.sub(r"//[^\n]*", "", js)
+    assert "g.saidas" in codigo and "g.entradas" in codigo, "a linha do grupo mostra os dois"
+
+
 def test_a_visao_neutra_e_a_unica_que_enxerga_transferencia():
     """As outras quatro excluem `transferencia`, e isso e decisao (secao 1.1).
 
