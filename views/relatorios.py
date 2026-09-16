@@ -1602,7 +1602,19 @@ def conciliar_fatura():
         f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) END "
         f" AND CASE WHEN f.ciclo_do_arquivo THEN f.periodo_fim - 1 ELSE f.periodo_fim END "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
-        f") AS orfaos "
+        f") AS orfaos, "
+        # Quantos lancamentos DESTA fatura ainda esperam assinatura. COUNT
+        # DISTINCT porque uma transacao pode atender varias linhas (parcelamento
+        # que o Pluggy gravou de uma vez so) - sem isso ela contaria N vezes.
+        # Registro fora do resultado nao entra: ele nunca vai ter OK.
+        f"(SELECT COUNT(DISTINCT t.transacao_id) FROM cartao.fatura_linha fl "
+        f"  JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
+        f"  JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
+        f" WHERE fl.fatura_id = f.id "
+        f"   AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
+        f"   AND COALESCE(t.somente_conciliacao,false) = false "
+        f"   AND COALESCE(t.conferida,false) = false"
+        f") AS lancamentos_sem_ok "
         f"FROM cartao.fatura_importada f "
         f"ORDER BY f.ano_referencia DESC, f.mes_referencia DESC, f.importado_em DESC;"
     )
@@ -1613,22 +1625,44 @@ def conciliar_fatura():
     # o que a tela mostra
     for r in linhas_historico:
         conta = contas_by_id.get(str(r["account_id"]))
+        fecha = not r["linhas_sem_vinculo"] and not r["orfaos"]
         historico.append({
             **r, "conta_label": conta["label"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
             "periodo_inicio": _ciclo_inicio(cur, r),
-            "fecha_100": not r["linhas_sem_vinculo"] and not r["orfaos"],
+            "fecha_100": fecha,
+            # "resolvida" e o cruzamento das duas coisas que essa tela cobra:
+            # conciliacao fechada E nada esperando assinatura. Uma fatura que
+            # fecha 100% mas tem lancamento sem OK ainda da trabalho.
+            "resolvida": fecha and not r["lancamentos_sem_ok"],
         })
+
+    # Por padrao a lista mostra so o que ainda da trabalho (pedido do usuario,
+    # 16/09/2026): com 61 documentos, as resolvidas empurravam as pendentes para
+    # fora da tela. `mostrar=todas` traz o historico inteiro.
+    # A fatura ABERTA fica sempre visivel, mesmo resolvida: escondê-la deixaria
+    # a tela sem a linha que o usuario acabou de clicar, e as setas de navegacao
+    # saem desta mesma lista.
+    mostrar_faturas = "todas" if request.args.get("mostrar") == "todas" else "pendentes"
+    historico_completo = historico
+    if mostrar_faturas == "pendentes":
+        historico = [h for h in historico if not h["resolvida"] or h["id"] == fatura_id]
+    historico_ocultas = len(historico_completo) - len(historico)
 
     # navegacao entre faturas: `historico` ja vem da mais nova para a mais
     # antiga, entao a seguinte na lista e' o mes ANTERIOR
+    # As setas andam pelo historico COMPLETO, nunca pelo filtrado: com o filtro
+    # de pendentes ligado, pular as resolvidas faria "fatura anterior" saltar
+    # meses sem dizer nada.
     fatura_mais_nova = fatura_mais_antiga = None
     if fatura_id:
-        ids = [h["id"] for h in historico]
+        ids = [h["id"] for h in historico_completo]
         if fatura_id in ids:
             pos = ids.index(fatura_id)
-            fatura_mais_nova = historico[pos - 1] if pos > 0 else None
-            fatura_mais_antiga = historico[pos + 1] if pos + 1 < len(historico) else None
+            fatura_mais_nova = historico_completo[pos - 1] if pos > 0 else None
+            fatura_mais_antiga = (
+                historico_completo[pos + 1] if pos + 1 < len(historico_completo) else None
+            )
 
     # Compromissos do extrato: debitos ja agendados pelo banco. Nao sao
     # movimento do periodo e nao entram em nenhum total - a tela mostra a parte,
@@ -1688,6 +1722,8 @@ def conciliar_fatura():
         aviso=recorte_aviso,
         resultado=resultado,
         historico=historico,
+        mostrar_faturas=mostrar_faturas,
+        historico_ocultas=historico_ocultas,
         fatura_id=fatura_id,
         pode_editar_conciliacao=pode("conciliacao_editar"),
         pode_criar_lancamento=pode("lancamentos_manual"),

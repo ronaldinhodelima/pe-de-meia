@@ -2012,6 +2012,30 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
 
 
+def test_lista_de_faturas_mostra_so_as_pendentes_por_padrao():
+    """Pedido do usuario (16/09/2026): com dezenas de documentos, as resolvidas
+    empurravam as pendentes para fora da tela.
+
+    Duas travas que a filtragem exige:
+    - **a fatura ABERTA nunca some**, mesmo resolvida; senao a tela fica sem a
+      linha que o usuario acabou de clicar;
+    - **as setas andam pelo historico COMPLETO**, senao "fatura anterior"
+      saltaria meses em silencio.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    bloco = view.split("mostrar_faturas =", 1)[1].split("compromissos", 1)[0]
+    assert 'h["id"] == fatura_id' in bloco, "a fatura aberta fica visivel"
+    assert "historico_completo" in bloco and "ids = [h[\"id\"] for h in historico_completo]" in bloco
+
+    # "resolvida" cruza as DUAS coisas: fecha 100% E nada esperando assinatura
+    resolvida = view.split('"resolvida":', 1)[1].split("\n", 1)[0]
+    assert "fecha" in resolvida and "lancamentos_sem_ok" in resolvida
+
+    # o contador nao pode contar a mesma transacao duas vezes: uma transacao
+    # atende varias linhas num parcelamento que o Pluggy gravou de uma vez so
+    assert "COUNT(DISTINCT t.transacao_id)" in view
+
+
 def test_orfao_conferido_aparece_com_o_selo_na_conciliacao():
     """Perder o VINCULO nao retira a assinatura.
 

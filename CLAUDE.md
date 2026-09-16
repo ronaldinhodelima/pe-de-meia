@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 473 aprovados, 10 ignorados
+**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 474 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1006,6 +1006,16 @@ dele já seria o arquivo novo —, só quando existe documento sendo trocado e s
 arquivo (o "Apagar" da tela zera `pdf_arquivo` e não faz sentido guardar linha vazia). Tabela
 própria, e não coluna: um documento pode ser substituído várias vezes.
 **Lição:** um aviso que diz o que saiu não substitui guardar o que saiu.
+
+**A lista de faturas mostra só o que falta resolver** (pedido do usuário, 16/09/2026). Com 61
+documentos, as resolvidas empurravam as pendentes para fora da tela. **"Resolvida" cruza as duas
+coisas que a tela cobra:** fecha 100% **e** nenhum lançamento esperando OK — fatura que fecha 100%
+com lançamento sem assinatura ainda dá trabalho, e pintá-la de verde diria que acabou. O seletor
+alterna para **Todas**, e a coluna **Sem OK** conta os lançamentos de cada fatura que ainda esperam
+assinatura (`COUNT DISTINCT`: no parcelamento que o Pluggy gravou de uma vez, a mesma transação
+atende várias linhas). Duas travas: **a fatura aberta nunca some da lista**, mesmo resolvida, senão
+a tela fica sem a linha que a pessoa acabou de clicar; e **as setas de navegação andam pelo
+histórico completo**, senão "fatura anterior" saltaria meses em silêncio.
 
 **Órfão conferido ganhou selo na conciliação.** Com os vínculos destruídos, a lista "Lançamentos do
 Pluggy sem vínculo" encheu de lançamentos que **continuavam conferidos** — e a tela não dizia isso,
@@ -2937,7 +2947,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**473 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**474 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
