@@ -55,8 +55,32 @@ clique humano não acrescenta conferência nenhuma. Antes desta data a regra era
    só quando a natureza participa do resultado (§4.1).
 
 Faltando qualquer uma, a linha continua pendente. Rateado fica de fora: ali quem decide são as
-partes. Roda só em **POST** (importação da fatura e vínculo automático), nunca ao abrir a tela —
-assinar num GET seria o oposto de uma conferência.
+partes. Roda só em **POST** (importação da fatura, vínculo automático e o botão "Conferir o que a
+fatura confirma"), nunca ao abrir a tela — assinar num GET seria o oposto de uma conferência.
+
+**O OK da fatura não alcança o que veio depois dela, e isso é estrutural** (visto em 16/09/2026).
+Ele roda no **momento** do POST: documento importado **antes de 05/09/2026** nunca passou por ele
+— eram **41 dos 61** —, e mesmo depois, lançamento classificado *depois* da importação fica para
+trás, porque nada reexecuta a assinatura sozinho. Caso concreto: a fatura 01/2026 do Nubank da
+Andrea foi importada em 03/09, dois dias antes de a regra existir; hoje os 13 lançamentos dela têm
+categoria e as três dimensões, a fatura fecha 100% ao centavo, e nenhum estava conferido.
+
+- **`GET /api/faturas/ok-pendente`** — somente leitura — diz quantos lançamentos **cada** fatura
+  assinaria hoje. Ela chama o **`preview=True` da própria função que assina**, nunca uma consulta
+  parecida escrita à parte: o número mostrado é exatamente o que o botão vai marcar, e uma segunda
+  consulta divergiria na primeira regra nova — prometendo OK que não acontece.
+- **`POST /api/fatura/<id>/conferir-pela-fatura`** — o botão **"Conferir o que a fatura confirma"**,
+  na tela de conciliação — reexecuta a assinatura sobre o que já está importado, **sem tocar em
+  linha nem em vínculo**.
+- **Reimportar o arquivo também funcionaria e também NÃO duplica lançamento** — importar documento
+  nunca cria lançamento —, mas recria as linhas com ids novos e o `ON DELETE CASCADE` leva os
+  vínculos junto, **inclusive os manuais**, que são decisão humana (§6.5 nº 9). Trocar uma
+  assinatura que falta por vínculos perdidos é mau negócio; o botão existe para não precisar disso.
+- **Quem clica é o usuário.** O OK é assinatura, e a §1.2 diz de quem ela pode ser — o Claude
+  construir o botão é uma coisa, apertá-lo é outra.
+- `test_ok_da_fatura_exige_as_tres_condicoes_e_nunca_desmarca` passou a checar por **AST** que rota
+  sem POST só chama a função com `preview=True`. A versão anterior procurava a palavra "GET" perto
+  da chamada e daria a mesma resposta para uma rota de leitura que *assinasse*.
 
 **O que continua proibido para todos, inclusive a fatura:** desmarcar, tocar em lançamento já
 conferido e sobrescrever `conferida_por`. Quem já tem assinatura humana continua com ela. O

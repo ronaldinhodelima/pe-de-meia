@@ -156,6 +156,15 @@
         <button type="button" class="ver-btn" style="font-size:var(--fonte-sm)" onclick="vincularAutomatico({{ f.id }}, this)">
           Vincular automaticamente o que sobrou
         </button>
+        {# O "OK dado pela fatura" so roda em POST, na importacao e no vinculo
+           automatico (secao 1.2). Documento importado antes de 05/09/2026 nunca
+           passou por ele, e o que foi classificado DEPOIS da importacao tambem
+           ficou para tras. Este botao reexecuta a assinatura sobre o que ja
+           existe - sem tocar em linha nem em vinculo, e sem reimportar. Quem
+           clica e o usuario: o OK e assinatura dele, da fatura ou das partes. #}
+        <button type="button" class="ver-btn" style="font-size:var(--fonte-sm)" onclick="conferirPelaFatura({{ f.id }}, this)">
+          Conferir o que a fatura confirma
+        </button>
         <span id="vinculo-status" style="font-size:var(--fonte-sm);color:var(--ink-faint)"></span>
       {% endif %}
     </div>
@@ -495,6 +504,34 @@ function postJSON(url, corpo) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(corpo || {})
   }).then(r => r.json());
+}
+
+function conferirPelaFatura(faturaId, btn) {
+  const status = document.getElementById('vinculo-status');
+  btn.disabled = true;
+  status.style.color = 'var(--ink-faint)';
+  status.textContent = 'Conferindo…';
+  postJSON('/api/fatura/' + encodeURIComponent(faturaId) + '/conferir-pela-fatura')
+    .then(d => {
+      btn.disabled = false;
+      if (!d.ok) {
+        status.style.color = 'var(--bad)';
+        status.textContent = d.erro || 'Não consegui conferir.';
+        return;
+      }
+      status.style.color = d.marcados ? 'var(--good)' : 'var(--ink-faint)';
+      // zero nao e erro: quer dizer que nao havia nada esperando assinatura -
+      // ou ja esta tudo conferido, ou falta classificacao/vinculo em alguma linha
+      status.textContent = d.marcados
+        ? d.marcados + ' lançamento(s) conferido(s) pela ' + d.rotulo + '.'
+        : 'Nada a conferir: ou já está tudo assinado, ou falta classificação ou vínculo.';
+      if (d.marcados > 0) setTimeout(() => location.reload(), 1200);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      status.style.color = 'var(--bad)';
+      status.textContent = 'Não consegui conferir.';
+    });
 }
 
 function vincularAutomatico(faturaId, btn) {

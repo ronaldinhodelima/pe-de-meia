@@ -2738,6 +2738,114 @@ def vincular_automatico_fatura(fatura_id):
         conn.close()
 
 
+@bp.route("/api/faturas/ok-pendente")
+@requer("relatorios")
+def api_faturas_ok_pendente():
+    """Quantos lancamentos cada fatura ASSINARIA hoje — somente leitura.
+
+    O "OK dado pela fatura" so nasceu em 05/09/2026 e roda **so em POST**, na
+    importacao do documento e no vinculo automatico (secao 1.2). Documento
+    importado antes dessa data nunca passou por ele; e mesmo depois, o que foi
+    classificado DEPOIS da importacao ficou para tras, porque nada reexecuta a
+    assinatura sozinho - e nem poderia: assinar ao abrir a tela seria o oposto
+    de uma conferencia.
+
+    Esta rota responde "onde ha assinatura esperando" antes de qualquer
+    gravacao. Ela usa o `preview=True` da propria funcao que assina - nao uma
+    segunda consulta parecida -, entao o numero mostrado aqui e exatamente o que
+    o botao vai marcar. Uma consulta escrita a parte divergiria na primeira
+    regra nova, e aqui divergir e prometer OK que nao acontece.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    contas_by_id, _ = carregar_origens(cur)
+    account_id = (request.args.get("origem") or "").strip()
+    onde, params = "", []
+    if account_id:
+        onde, params = "WHERE account_id::text = %s", [account_id]
+    cur.execute(
+        "SELECT id, account_id::text AS account_id, ano_referencia, mes_referencia, "
+        "tipo_documento, importado_em FROM cartao.fatura_importada "
+        f"{onde} ORDER BY ano_referencia DESC, mes_referencia DESC;",
+        params,
+    )
+    faturas = cur.fetchall()
+
+    itens, total = [], 0
+    for f in faturas:
+        # `preview=True` nao executa o UPDATE: a funcao devolve a contagem e sai
+        previa = marcar_ok_automatico_da_fatura(cur, f["id"], preview=True)
+        if not previa["marcados"]:
+            continue
+        total += previa["marcados"]
+        conta = contas_by_id.get(f["account_id"]) or {}
+        itens.append({
+            "fatura_id": f["id"],
+            "referencia": f"{f['mes_referencia']:02d}/{f['ano_referencia']}",
+            "origem": conta.get("label") or f["account_id"],
+            "tipo_documento": f["tipo_documento"],
+            "assinaria": previa["marcados"],
+            "importado_em": (
+                data_hora_local(f["importado_em"]).strftime("%d/%m/%Y %H:%M")
+                if f["importado_em"] else None
+            ),
+            "url": f"/relatorios/conciliar-fatura?fatura_id={f['id']}",
+        })
+    # nada foi escrito; o rollback deixa isso explicito em vez de depender do
+    # fato de que nenhuma consulta acima grava
+    conn.rollback()
+    cur.close()
+    conn.close()
+    return jsonify({
+        "gravou": False,
+        "faturas_com_ok_esperando": len(itens),
+        "lancamentos": total,
+        "itens": itens,
+    })
+
+
+@bp.route("/api/fatura/<int:fatura_id>/conferir-pela-fatura", methods=["POST"])
+@requer("lancamentos_conferir")
+def conferir_pela_fatura(fatura_id):
+    """Reexecuta o OK da fatura sobre o que JA esta importado.
+
+    Existe porque a alternativa era reimportar o arquivo. Reimportar funciona e
+    **nao duplica lancamento nenhum** - importar documento nunca cria lancamento
+    -, mas recria as linhas com ids novos, e o `ON DELETE CASCADE` leva junto os
+    vinculos, **inclusive os manuais**, que sao decisao humana (secao 6.5 n.9).
+    Trocar uma assinatura que falta por vinculos perdidos e um mau negocio.
+
+    Aqui nao se mexe em linha nem em vinculo: so as TRES condicoes da secao 1.2
+    sao reavaliadas. Nunca desmarca, nunca sobrescreve `conferida_por` e nunca
+    toca em quem ja tem assinatura humana - isso mora na propria funcao.
+
+    Quem dispara e o USUARIO, pelo botao: o OK e assinatura, e a secao 1.2 diz
+    de quem ela pode ser.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute("SELECT id FROM cartao.fatura_importada WHERE id = %s;", (fatura_id,))
+        if not cur.fetchone():
+            return jsonify({"ok": False, "erro": "Fatura não encontrada."}), 404
+        resultado = marcar_ok_automatico_da_fatura(cur, fatura_id)
+        conn.commit()
+        if resultado["marcados"]:
+            registrar_auditoria(
+                "alteracao", "OK dado pela fatura, reexecutado sobre o que já existia",
+                detalhes={"fatura_id": fatura_id, "rotulo": resultado["rotulo"],
+                          "lancamentos": resultado["marcados"]},
+            )
+        return jsonify({"ok": True, "marcados": resultado["marcados"],
+                        "rotulo": resultado["rotulo"]})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"ok": False, "erro": f"Não consegui conferir: {exc}"}), 400
+    finally:
+        cur.close()
+        conn.close()
+
+
 @bp.route("/api/fatura-linha/<int:linha_id>/vincular", methods=["POST"])
 @requer("conciliacao_editar")
 def vincular_linha_fatura(linha_id):

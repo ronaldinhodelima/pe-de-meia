@@ -164,6 +164,8 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/duplicidades/marcar",
         "/api/fatura-linha/<int:linha_id>/vincular",
         "/api/fatura-linha/<int:linha_id>/desvincular",
+        "/api/faturas/ok-pendente",
+        "/api/fatura/<int:fatura_id>/conferir-pela-fatura",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
         "/dimensoes", "/regras", "/contas", "/pendencias",
@@ -2509,10 +2511,30 @@ def test_ok_da_fatura_exige_as_tres_condicoes_e_nunca_desmarca():
     # e o carimbo separa quem assinou
     assert 'rotulo = f"fatura {mes:02d}/{ano}"' in fn
 
-    # so em POST: assinar ao abrir a tela nao seria conferencia
-    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
-    for trecho in view.split("marcar_ok_automatico_da_fatura(cur")[1:]:
-        assert "GET" not in trecho[:200]
+    # So ASSINA em POST: assinar ao abrir a tela nao seria conferencia. Rota que
+    # nao e POST pode chamar a funcao, mas obrigatoriamente com `preview=True` -
+    # e como a previa "onde ha OK esperando" existe sem gravar nada. A checagem
+    # e por AST, e nao por "GET perto da chamada": o texto solto dava a mesma
+    # resposta para uma rota de leitura que ASSINASSE.
+    arvore = ast.parse((RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8"))
+    faltando = []
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.FunctionDef):
+            continue
+        decoradores = " ".join(ast.unparse(d) for d in no.decorator_list)
+        if "bp.route" not in decoradores:
+            continue
+        eh_post = "POST" in decoradores
+        for chamada in ast.walk(no):
+            if not isinstance(chamada, ast.Call):
+                continue
+            alvo = getattr(chamada.func, "id", "") or getattr(chamada.func, "attr", "")
+            if alvo != "marcar_ok_automatico_da_fatura":
+                continue
+            previa = any(kw.arg == "preview" for kw in chamada.keywords)
+            if not eh_post and not previa:
+                faltando.append(no.name)
+    assert not faltando, f"rota sem POST assinando o OK: {faltando}"
 
 
 def test_extrato_entra_na_maquina_da_fatura_mas_marcado_como_extrato():
