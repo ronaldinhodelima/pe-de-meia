@@ -37,6 +37,22 @@
 </div>
 <div class="chips-sel" id="chipsSel" style="margin:-6px 0 14px 0"></div>
 
+{# Um clique monta a conciliacao de uma contraparte: visao neutra + aquela
+   categoria + agrupado por mes, que responde "o que saiu e o que voltou, mes a
+   mes" (secao 8.4). A lista vem do BANCO - toda categoria neutra com movimento
+   -, entao contraparte nova aparece sozinha e nenhum nome esta escrito aqui.
+   O botao nao monta URL propria: ele mexe nos MESMOS controles e chama o mesmo
+   aplicarFiltros(), senao viraria um segundo caminho de filtrar (secao 7.2-A). #}
+{% if atalhos_conciliacao %}
+<div class="rel-atalhos">
+  <span class="rel-atalhos-rotulo">Conciliar:</span>
+  {% for item in atalhos_conciliacao %}
+  <button type="button" class="chip-btn rel-atalho" data-atalho-categoria="{{ item.chave }}"
+          data-tip="Ver o que saiu e o que voltou em {{ item.nome }}, mês a mês">{{ item.nome }}</button>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="cards">
   {# Na visao "Transferencias e reembolsos" o card mostra os DOIS lados abaixo do
      saldo: ali o sinal e que separa entrada de saida, e so o saldo esconderia
@@ -57,5 +73,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/relatorios.js?v=20260916-2"></script>
+<script src="/static/relatorios.js?v=20260916-3"></script>
 {% endblock %}

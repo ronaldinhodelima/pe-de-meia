@@ -278,6 +278,22 @@ def relatorios():
     categorias_db = {r["categoria"] for r in cur.fetchall()}
     todas_categorias = sorted((categorias_db | set(CATEGORIAS_EXTRA) | set(CATEGORIA_PT_DB)) - CATEGORIAS_OCULTAS, key=lambda c: chave_alfa(cat_pt_puro(c)))
 
+    # Atalhos de conciliacao: um clique monta a visao neutra + aquela categoria +
+    # agrupamento por mes, que e a pergunta "o que saiu e o que voltou, mes a
+    # mes" (secao 8.4). A lista sai do BANCO - toda categoria neutra que tem
+    # movimento -, nunca de um nome escrito aqui: "BRDrive" no template seria uma
+    # segunda verdade que some no dia em que a categoria for renomeada, e uma
+    # contraparte nova nunca apareceria.
+    cur.execute(
+        f"SELECT t.categoria, COUNT(*) AS qtd FROM {FINANCEIRO_TABELA} t {JOIN_NATUREZA} "
+        f"WHERE t.categoria IS NOT NULL AND {NATUREZA_SQL} = 'transferencia' "
+        "GROUP BY t.categoria ORDER BY COUNT(*) DESC;"
+    )
+    atalhos_conciliacao = [
+        {"chave": r["categoria"], "nome": cat_pt_puro(r["categoria"]), "qtd": r["qtd"]}
+        for r in cur.fetchall() if r["categoria"] not in CATEGORIAS_OCULTAS
+    ]
+
     cur.execute("SELECT DISTINCT numero_cartao_final FROM cartao.transacao WHERE numero_cartao_final IS NOT NULL;")
     finais_usados = sorted({r["numero_cartao_final"] for r in cur.fetchall()})
 
@@ -327,6 +343,7 @@ def relatorios():
         agrupar=cfg["agrupar"],
         agrupar_opcoes=agrupar_opcoes,
         filtros_chip=filtros_chip,
+        atalhos_conciliacao=atalhos_conciliacao,
         data_ini=cfg["data_ini"],
         data_fim=cfg["data_fim"],
     )

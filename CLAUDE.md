@@ -663,6 +663,16 @@ lançamentos do grupo.
   positiva, entrada negativa. Par que fechou soma **zero**; o que sobra é o que está em aberto.
 - O rótulo do total é **"Saldo em aberto (saídas − entradas)"**, não "Total": chamar de total
   sugeriria volume, e aí zero passaria a parecer "não houve nada" em vez de "fechou".
+- **Atalhos "Conciliar:"** (pedido do usuário, 16/09/2026). Abaixo dos filtros, um botão por
+  contraparte: um clique monta **visão neutra + aquela categoria + agrupado por mês**, que é a
+  pergunta "o que saiu e o que voltou, mês a mês". **A lista sai do banco** — toda categoria neutra
+  com movimento —, nunca de um nome escrito no template: `BRDrive` fixo ali sumiria no dia em que a
+  categoria fosse renomeada, e uma contraparte nova nunca apareceria. **O botão não monta URL
+  própria:** ele mexe nos mesmos controles e chama o mesmo `aplicarFiltros()`, senão seria um
+  segundo caminho de filtrar (§7.2-A) — e divergir aqui significa o botão mostrar um recorte
+  diferente do que os filtros dizem estar aplicado. Ele acende só quando o recorte na tela é
+  exatamente o dele (visão neutra + aquela categoria sozinha), senão dois atalhos pareceriam ligados
+  ao mesmo tempo.
 - **Cada grupo mostra os DOIS volumes, não só o saldo** (16/09/2026): `↑ saiu` e `↓ entrou` ao lado
   do saldo, e o mesmo no card do total. É o que torna possível **uma categoria só** por contraparte
   (`BRDrive`, §8.4) em vez de uma para cada lado: o usuário não diz se é entrada ou saída, o valor

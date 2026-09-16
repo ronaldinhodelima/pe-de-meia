@@ -766,6 +766,13 @@
   .rel-datewrap input[type=date] { border: none; font-size: var(--fonte-md); padding: 2px; outline: none; }
   .rel-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
 
+  /* Atalhos de conciliacao: um clique monta visao neutra + categoria + mes.
+     Ficam abaixo dos filtros e acima dos cards - sao ponto de PARTIDA, nao
+     filtro ativo, entao nao competem com os chips do que ja esta selecionado. */
+  .rel-atalhos { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px 0; }
+  .rel-atalhos-rotulo { font-size: var(--fonte-sm); color: var(--ink-faint); }
+  .rel-atalho.ativo { border-color: var(--accent); color: var(--accent); }
+
   .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
   .chart-card h3 { margin: 0 0 14px 0; font-size: var(--fonte-md); color: var(--ink-soft); font-weight: var(--peso-medio); text-transform: none; letter-spacing: .03em; }
 

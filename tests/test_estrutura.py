@@ -2009,6 +2009,39 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
 
 
+def test_o_atalho_de_conciliacao_nao_e_um_segundo_caminho_de_filtrar():
+    """O botao mexe nos MESMOS controles e chama o mesmo `aplicarFiltros()`.
+
+    Montando a propria URL, ele comecaria igual e divergiria na primeira regra
+    nova (secao 7.2-A) - e divergir aqui significa o botao mostrar um recorte
+    diferente do que os filtros na tela dizem estar aplicado.
+    """
+    js = (RAIZ / "static" / "relatorios.js").read_text(encoding="utf-8")
+    corpo = js.split("function conciliarCategoria", 1)[1].split("\nfunction ", 1)[0]
+    codigo = re.sub(r"//[^\n]*", "", corpo)
+    assert "aplicarFiltros()" in codigo
+    assert "location" not in codigo and "fetch(" not in codigo, "sem caminho proprio"
+    assert "'neutro'" in codigo, "o atalho abre a visao que enxerga as duas pontas"
+
+
+def test_a_lista_de_atalhos_de_conciliacao_vem_do_banco():
+    """Nenhum nome de categoria escrito no template.
+
+    "BRDrive" fixo ali seria uma segunda verdade: some no dia em que a categoria
+    for renomeada, e uma contraparte nova nunca apareceria. A rota lista toda
+    categoria NEUTRA com movimento.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    html = (RAIZ / "templates" / "relatorios.html").read_text(encoding="utf-8")
+    bloco = view.split("atalhos_conciliacao = [", 1)[1].split("\n    ]", 1)[0]
+    assert "cat_pt_puro" in bloco, "o nome mostrado e o traduzido, como no resto da tela"
+    consulta = view.split("Atalhos de conciliacao", 1)[1].split("atalhos_conciliacao", 1)[0]
+    assert "= 'transferencia'" in consulta, "so categoria neutra"
+    sem_comentario = re.sub(r"\{#.*?#\}", "", html, flags=re.S)
+    assert "BRDrive" not in sem_comentario, "nome de categoria nao se escreve no template"
+    assert "data-atalho-categoria" in sem_comentario
+
+
 def test_a_visao_neutra_separa_saidas_de_entradas_pelo_sinal():
     """Uma categoria so, e o SINAL decide o lado (decisao do usuario, 16/09/2026).
 

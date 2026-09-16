@@ -18,6 +18,16 @@ function atualizarChipLabels() {
     btn.innerHTML = label + (n ? ' (' + n + ')' : '') +
       (n ? '<span class="chip-clear" onclick="cfClear(event, this)">&times;</span>' : '');
   });
+  // o atalho acende quando o recorte na tela e exatamente o dele: visao neutra
+  // e aquela categoria sozinha. Sem isso, dois atalhos pareceriam ligados ao
+  // mesmo tempo depois de um clique.
+  const visaoNeutra = document.getElementById('selVisao').value === 'neutro';
+  const cats = Array.from(document.querySelectorAll('.chipfilter input[name="categoria"]:checked'))
+                    .map(cb => cb.value);
+  document.querySelectorAll('[data-atalho-categoria]').forEach(botao => {
+    botao.classList.toggle('ativo',
+      visaoNeutra && cats.length === 1 && cats[0] === botao.dataset.atalhoCategoria);
+  });
   // chips pequenos mostrando tudo que esta selecionado
   const cont = document.getElementById('chipsSel');
   if (cont) {
@@ -41,7 +51,29 @@ function atualizarChipLabels() {
 document.addEventListener('click', function (e) {
   const x = e.target.closest('.chip-x');
   if (x) desmarcarFiltro(x.dataset.nome, x.dataset.valor);
+  const atalho = e.target.closest('[data-atalho-categoria]');
+  if (atalho) conciliarCategoria(atalho.dataset.atalhoCategoria);
 });
+// O atalho NAO monta uma URL propria: ele mexe nos mesmos controles e chama o
+// mesmo aplicarFiltros(). Um segundo caminho de filtrar comecaria igual e
+// divergiria na primeira regra nova (secao 7.2-A) - e aqui divergir significa o
+// botao mostrar um recorte diferente do que os filtros dizem estar aplicado.
+function conciliarCategoria(chave) {
+  document.getElementById('selVisao').value = 'neutro';
+  // mes a mes: a pergunta e "o que saiu e o que voltou em cada mes"
+  const agrupar = document.getElementById('selAgrupar');
+  if (Array.from(agrupar.options).some(o => o.value === 'mes')) agrupar.value = 'mes';
+  // a categoria do atalho passa a ser a UNICA marcada: somar outra contraparte
+  // no mesmo saldo nao concilia coisa nenhuma
+  let achou = false;
+  document.querySelectorAll('.chipfilter input[type=checkbox][name="categoria"]').forEach(cb => {
+    cb.checked = cb.value === chave;
+    if (cb.checked) achou = true;
+  });
+  // periodo e demais filtros ficam como estao: o usuario ja escolheu a janela
+  if (!achou) return;
+  aplicarFiltros();
+}
 function desmarcarFiltro(nome, valor) {
   // comparacao em JS em vez de seletor CSS: valor com aspas quebraria o seletor
   const cb = Array.from(document.querySelectorAll('.chipfilter input[type=checkbox][name]'))
@@ -233,5 +265,7 @@ function renderChart(grupos, ehPeriodo) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // abrindo por um link ja filtrado, o atalho correspondente ja nasce aceso
+  atualizarChipLabels();
   carregarDados(new URLSearchParams(window.location.search));
 });
