@@ -1915,6 +1915,22 @@ def faturas_pdf_view():
             **r, "conta_label": conta["label"] if conta else "(conta removida)",
             "importado_em": data_hora_local(r["importado_em"]),
         })
+
+    # Versoes ANTERIORES, guardadas a cada substituicao (migracao 67). Existem
+    # porque reenviar o mesmo (conta, mes, ano) troca o arquivo no lugar, e ate
+    # 16/09/2026 isso apagava o unico exemplar do que o banco emitiu.
+    cur.execute(
+        "SELECT id, account_id, mes_referencia, ano_referencia, arquivo_nome, linhas, "
+        "total, substituido_em, substituido_por, octet_length(pdf_arquivo) AS pdf_tamanho "
+        "FROM cartao.fatura_arquivo_backup ORDER BY substituido_em DESC, id DESC;"
+    )
+    anteriores = []
+    for r in cur.fetchall():
+        conta = contas_by_id.get(str(r["account_id"]))
+        anteriores.append({
+            **r, "conta_label": conta["label"] if conta else "(conta removida)",
+            "substituido_em": data_hora_local(r["substituido_em"]),
+        })
     cur.close()
     conn.close()
 
@@ -1924,6 +1940,7 @@ def faturas_pdf_view():
         topbar=topbar_html("Arquivos de fatura", "faturas-pdf"),
         aviso=aviso,
         faturas=faturas,
+        anteriores=anteriores,
     )
 
 

@@ -166,6 +166,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/fatura-linha/<int:linha_id>/desvincular",
         "/api/faturas/ok-pendente",
         "/api/fatura/<int:fatura_id>/conferir-pela-fatura",
+        "/relatorios/fatura-anterior/<int:backup_id>/arquivo",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
         "/dimensoes", "/regras", "/contas", "/pendencias",
@@ -2009,6 +2010,25 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
 
     assert oferecidas == aceitas, f"seletor e rota discordam: {oferecidas ^ aceitas}"
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
+
+
+def test_substituir_documento_guarda_o_arquivo_anterior():
+    """`ON CONFLICT DO UPDATE` sobrescreve `pdf_arquivo` (migracao 67).
+
+    Esse era o UNICO exemplar do que o banco emitiu: uma substituicao por
+    engano apagava o original para sempre, e foi assim que as faturas de
+    05/2026 e 12/2025 do Nubank se perderam em 16/09/2026. A copia tem de ser
+    feita ANTES do INSERT, senao guarda o arquivo novo.
+    """
+    core_py = (RAIZ / "core.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS cartao.fatura_arquivo_backup" in core_py
+
+    antes, depois = view.split("INSERT INTO cartao.fatura_arquivo_backup", 1)
+    assert "INSERT INTO cartao.fatura_importada " in depois, \
+        "a copia vem ANTES do INSERT que substitui"
+    # e so quando ha mesmo um documento sendo trocado
+    assert "if substituido:" in antes.rsplit("\n\n", 1)[-1] or "if substituido:" in antes[-800:]
 
 
 def test_o_recorte_por_data_so_alcanca_extrato_nunca_fatura_de_cartao():

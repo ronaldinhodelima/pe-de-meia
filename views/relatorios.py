@@ -1343,13 +1343,32 @@ def conciliar_fatura():
                 # o extrato de agosto em producao (14/09/2026). Agora a tela
                 # diz o que saiu do lugar, com nome e tamanho.
                 cur.execute(
-                    "SELECT f.arquivo_nome, f.total, f.periodo_inicio, f.periodo_fim, "
+                    "SELECT f.id, f.arquivo_nome, f.total, f.periodo_inicio, f.periodo_fim, "
                     "(SELECT count(*) FROM cartao.fatura_linha l WHERE l.fatura_id = f.id) AS linhas "
                     "FROM cartao.fatura_importada f "
                     "WHERE f.account_id = %s AND f.mes_referencia = %s AND f.ano_referencia = %s;",
                     (account_id, fatura["mes_referencia"], fatura["ano_referencia"]),
                 )
                 substituido = cur.fetchone()
+
+                # O arquivo que vai ser trocado e guardado ANTES da troca
+                # (migracao 67). O `ON CONFLICT DO UPDATE` abaixo sobrescreve
+                # `pdf_arquivo`, que e o unico exemplar do que o banco emitiu -
+                # uma substituicao por engano apagava o original para sempre, e
+                # foi assim que duas faturas se perderam em 16/09/2026. O
+                # `SELECT ... WHERE pdf_arquivo IS NOT NULL` evita guardar linha
+                # vazia de documento cujo arquivo ja tinha sido apagado na tela.
+                if substituido:
+                    cur.execute(
+                        "INSERT INTO cartao.fatura_arquivo_backup "
+                        "(fatura_id, account_id, mes_referencia, ano_referencia, "
+                        " arquivo_nome, pdf_arquivo, linhas, total, substituido_por) "
+                        "SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, "
+                        "       f.arquivo_nome, f.pdf_arquivo, %s, f.total, %s "
+                        "  FROM cartao.fatura_importada f "
+                        " WHERE f.id = %s AND f.pdf_arquivo IS NOT NULL;",
+                        (substituido["linhas"], session.get("user"), substituido["id"]),
+                    )
 
                 # Guarda as linhas extraidas E o PDF original (pdf_arquivo) -
                 # o app roda em container sem volume persistente confirmado,
@@ -3072,6 +3091,34 @@ def baixar_fatura_pdf(fatura_id):
     # nome vem do arquivo enviado pelo usuario - tira aspas/controle antes de
     # colocar no header, pra nao dar pra escapar do filename="..."
     nome = re.sub(r'[\r\n"]', "", row["arquivo_nome"] or "") or f"fatura-{fatura_id}.pdf"
+    return Response(
+        bytes(row["pdf_arquivo"]),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nome}"'},
+    )
+
+
+@bp.route("/relatorios/fatura-anterior/<int:backup_id>/arquivo")
+@requer("relatorios")
+def baixar_fatura_anterior(backup_id):
+    """Uma versao ANTERIOR do arquivo, guardada quando ela foi substituida.
+
+    Mesmo caminho do arquivo atual, so que lendo de `fatura_arquivo_backup`
+    (migracao 67). E o que permite desfazer uma substituicao por engano: baixar
+    o exemplar antigo e reenviar.
+    """
+    conn = get_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT arquivo_nome, pdf_arquivo FROM cartao.fatura_arquivo_backup WHERE id=%s;",
+        (backup_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row or not row["pdf_arquivo"]:
+        return "Arquivo não encontrado.", 404
+    nome = re.sub(r'[\r\n"]', "", row["arquivo_nome"] or "") or f"fatura-anterior-{backup_id}"
     return Response(
         bytes(row["pdf_arquivo"]),
         mimetype="application/pdf",

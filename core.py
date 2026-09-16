@@ -5410,6 +5410,40 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (66);")
             conn.commit()
 
+        if versao_atual < 67:
+            # Reenviar o mesmo (conta, mes, ano) SUBSTITUI o documento, e o
+            # `ON CONFLICT DO UPDATE` sobrescrevia `pdf_arquivo` - o UNICO
+            # exemplar do arquivo que o banco emitiu. Em 16/09/2026 isso custou
+            # as faturas de 05/2026 e 12/2025 do Nubank da Andrea: o recorte por
+            # data (secao 6.8) jogou arquivos no mes errado, e o original de
+            # cada um foi por cima do que estava la. O aviso de substituicao
+            # dizia o que SAIU, mas nao guardava o que saiu.
+            #
+            # A partir daqui a versao anterior vai para ca antes de ser trocada.
+            # Tabela propria, e nao coluna: um documento pode ser substituido
+            # varias vezes, e cada troca merece o seu exemplar.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.fatura_arquivo_backup ("
+                "id bigserial PRIMARY KEY, "
+                "fatura_id bigint, "
+                "account_id uuid NOT NULL, "
+                "mes_referencia integer NOT NULL, "
+                "ano_referencia integer NOT NULL, "
+                "arquivo_nome text, "
+                "pdf_arquivo bytea NOT NULL, "
+                "linhas integer, "
+                "total numeric(14,2), "
+                "substituido_em timestamptz NOT NULL DEFAULT now(), "
+                "substituido_por text);"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fatura_arquivo_backup_conta "
+                "ON cartao.fatura_arquivo_backup "
+                "(account_id, ano_referencia DESC, mes_referencia DESC, id DESC);"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (67);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

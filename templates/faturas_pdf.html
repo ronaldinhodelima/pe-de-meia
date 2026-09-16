@@ -49,4 +49,41 @@
   </table>
 </div>
 
+{# Reenviar o mesmo (conta, mes, ano) substitui o documento - e por desenho, e e
+   o que permite corrigir um arquivo. Ate 16/09/2026 a troca levava junto o
+   UNICO exemplar do arquivo que o banco emitiu, e uma substituicao por engano
+   era definitiva: foi assim que as faturas de 05/2026 e 12/2025 do Nubank se
+   perderam. Agora a versao anterior fica guardada aqui, para baixar e reenviar. #}
+{% if anteriores %}
+<div class="cat-breakdown" style="margin-top:22px">
+  <h3>Versões anteriores ({{ anteriores|length }})</h3>
+  <p style="font-size:var(--fonte-sm);color:var(--ink-faint);margin:0 0 12px">
+    Guardadas automaticamente quando um documento foi substituído por outro do mesmo mês.
+    Para desfazer uma substituição, baixe o arquivo antigo e importe-o de novo.
+  </p>
+  <table class="compacta">
+    <thead>
+      <tr><th>Referência</th><th>Origem</th><th>Arquivo</th><th>Linhas</th>
+          <th>Tamanho</th><th>Substituído em</th><th>Por</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in anteriores %}
+      <tr>
+        <td>{{ '%02d'|format(a.mes_referencia) }}/{{ a.ano_referencia }}</td>
+        <td>{{ a.conta_label }}</td>
+        <td>{{ a.arquivo_nome or '-' }}</td>
+        <td>{{ a.linhas if a.linhas is not none else '-' }}</td>
+        <td>{{ (a.pdf_tamanho / 1024)|round(0, 'floor')|int }} KB</td>
+        <td>{{ a.substituido_em.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ a.substituido_por or '-' }}</td>
+        <td style="white-space:nowrap">
+          <a class="ver-btn" href="/relatorios/fatura-anterior/{{ a.id }}/arquivo" target="_blank">Baixar</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% endblock %}

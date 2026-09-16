@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 16/09/2026 · **Schema:** migração 66 · **Testes:** 467 aprovados, 10 ignorados
+**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 472 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -997,9 +997,15 @@ fora do lugar, e bastou reenviá-los pela mesma rota depois do conserto. 06/2026
 linhas e 07/2026 de 8 para 20, fechando centavo a centavo com o total impresso.
 
 **O que NÃO voltou:** 05/2026 e 12/2025. Os arquivos originais desses dois meses foram
-sobrescritos, e não há backup de `fatura_importada` — só o usuário reexportando do app do Nubank.
-**Lição:** `ON CONFLICT DO UPDATE` sobre `pdf_arquivo` destrói o único exemplar do arquivo. O aviso
-de substituição (acima) diz o que saiu, mas não guarda o que saiu.
+sobrescritos, e não havia backup — só o usuário reexportando do app do Nubank.
+
+**Daí saiu a migração 67:** `cartao.fatura_arquivo_backup` guarda a versão ANTERIOR a cada
+substituição, e `/configuracoes/faturas-pdf` ganhou a seção **"Versões anteriores"**, com o arquivo
+para baixar e reenviar. A cópia é feita **antes** do `INSERT ... ON CONFLICT DO UPDATE` — depois
+dele já seria o arquivo novo —, só quando existe documento sendo trocado e só quando ele ainda tem
+arquivo (o "Apagar" da tela zera `pdf_arquivo` e não faz sentido guardar linha vazia). Tabela
+própria, e não coluna: um documento pode ser substituído várias vezes.
+**Lição:** um aviso que diz o que saiu não substitui guardar o que saiu.
 
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
@@ -2925,7 +2931,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**467 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**472 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo
@@ -3499,3 +3505,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 64 | `conta.nome_curto`: o nome curto de cada origem (§7.1-D); só a coluna, nenhum dado muda |
 | 65 | centro de custo vira REGRA (categoria + dimensão opcional, §7.11); `categoria_subgrupo` sai, `categoria_subgrupo_backup_v65` |
 | 66 | `acao_desfazivel`: o botão Desfazer do topbar (§9.4) |
+| 67 | `fatura_arquivo_backup`: a versão anterior do arquivo, guardada a cada substituição (§6.8) |
