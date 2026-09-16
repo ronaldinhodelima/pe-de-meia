@@ -537,15 +537,25 @@
   function atualizarResumoFiltros() {
     const partes = [];
     let ativos = 0;
-    const origens = Array.from(document.querySelectorAll('.fatura-filtros .chip-opt'))
-      .filter(opcao => opcao.querySelector('input:checked'))
-      // o nome completo ("Cartão de crédito · Nubank · Ronaldo"): fora da lista,
-      // sem o grupo em volta, "Nubank · Ronaldo" nao diria se e cartao ou conta
-      .map(opcao => (opcao.dataset.tip || textoDaOpcao(opcao)).trim());
-    if (origens.length) {
+    // Um chip por vez, e nao todos os .chip-opt da gaveta de uma vez: desde que
+    // Categoria, Responsavel, Projeto e Portfolio entraram aqui (16/09/2026),
+    // contar tudo junto diria "3 origens" para quem escolheu uma origem e duas
+    // categorias. O rotulo sai do proprio chip (`data-label`), entao dimensao
+    // nova aparece no resumo sem tocar neste arquivo.
+    document.querySelectorAll('.fatura-filtros .chipfilter').forEach(chip => {
+      const escolhidas = Array.from(chip.querySelectorAll('.chip-opt'))
+        .filter(opcao => opcao.querySelector('input:checked'))
+        // o nome completo ("Cartão de crédito · Nubank · Ronaldo"): fora da lista,
+        // sem o grupo em volta, "Nubank · Ronaldo" nao diria se e cartao ou conta
+        .map(opcao => (opcao.dataset.tip || textoDaOpcao(opcao)).trim());
+      if (!escolhidas.length) return;
       ativos++;
-      partes.push(origens.length > 2 ? origens.length + ' origens' : origens.join(', '));
-    }
+      const botao = chip.querySelector('.chip-btn');
+      const rotulo = (botao && botao.dataset.label) || 'Filtro';
+      partes.push(escolhidas.length > 2
+        ? escolhidas.length + ' em ' + rotulo.toLowerCase()
+        : escolhidas.join(', '));
+    });
     const fatura = document.getElementById('filtroFatura');
     if (fatura && fatura.selectedIndex > 0) {
       ativos++;

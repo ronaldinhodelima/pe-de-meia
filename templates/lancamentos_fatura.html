@@ -275,6 +275,18 @@
         {% for valor, rotulo in status_opcoes %}<option value="{{ valor }}" {{ 'selected' if status == valor }}>{{ rotulo }}</option>{% endfor %}
       </select>
     </div>
+    {# Categoria e as dimensoes (pedido do usuario, 16/09/2026). O rotulo de
+       cada dimensao vem do BANCO - Responsavel, Projeto e Portfolio hoje, outra
+       amanha -, entao a lista e montada no servidor por chips_de_classificacao()
+       e o template so injeta. Escrever os tres nomes aqui criaria uma segunda
+       verdade que quebra na primeira dimensao nova. Num rateado a classificacao
+       mora nas partes, e o filtro alcanca as partes tambem (secao 4.4). #}
+    {% for rotulo, chip in filtros_classificacao %}
+    <div class="gaveta-campo">
+      <span class="gaveta-rotulo">{{ rotulo }}</span>
+      {{ chip|safe }}
+    </div>
+    {% endfor %}
   </div>
   <div class="gaveta-rodape">
     <button type="button" class="ver-btn gaveta-limpar" data-limpar-filtros>&times; Limpar todos os filtros</button>
@@ -583,4 +595,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260913-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260916-1"></script>{% endblock %}

@@ -1937,6 +1937,57 @@ def test_lancamento_manual_aceita_a_classificacao_inteira_e_trava_o_ok():
     assert "registrar_auditoria" in bloco
 
 
+def test_todo_recorte_de_lancamentos_entrega_os_filtros_de_classificacao():
+    """Os quatro recortes da tela mandam `filtros_classificacao` para a gaveta.
+
+    Iterar variavel ausente no Jinja nao levanta erro: o `{% for %}` simplesmente
+    nao rende nada. Ou seja, um recorte que esquecesse de passar os chips ficaria
+    **sem os filtros de Categoria, Responsavel, Projeto e Portfolio**, com a tela
+    respondendo 200 e a suite passando - a mesma familia do config incompleto que
+    desligou o quadro de rateio (secao 7.1).
+
+    O estado de erro (sem fatura importada) fica de fora: ali nao ha lista
+    nenhuma para filtrar, e o template nem desenha a gaveta.
+    """
+    arvore = ast.parse((RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8"))
+    faltando = []
+    for no in ast.walk(arvore):
+        if not isinstance(no, ast.Call):
+            continue
+        alvo = no.func.attr if isinstance(no.func, ast.Attribute) else getattr(no.func, "id", "")
+        if alvo != "render_template" or not no.args:
+            continue
+        primeiro = no.args[0]
+        if not (isinstance(primeiro, ast.Constant) and primeiro.value == "lancamentos_fatura.html"):
+            continue
+        chaves = {kw.arg for kw in no.keywords}
+        if "erro" in chaves:
+            continue
+        if "filtros_classificacao" not in chaves:
+            faltando.append(no.lineno)
+    assert not faltando, f"recorte sem os chips de classificacao na linha {faltando}"
+
+
+def test_filtro_de_classificacao_alcanca_as_partes_do_rateio():
+    """Num rateado a classificacao mora nas partes (secao 4.4).
+
+    Sem o ramo do rateio, filtrar por "Vestuario" esconderia justamente o
+    rateado cujas partes sao Vestuario - a tela mentiria por omissao, que e o
+    defeito dos 57 falsos pendentes da secao 6.5 n.10. Os dois recortes filtram
+    de jeitos diferentes (SQL no periodo, Python na fatura) e por isso os dois
+    precisam do ramo.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    sql = view.split("def where_de_classificacao", 1)[1].split("\ndef ", 1)[0]
+    assert "cartao.transacao_rateio" in sql
+    assert "cartao.transacao_rateio_dimensao" in sql
+    # uuid nao se compara com text (secao 10.4 n.10)
+    assert "t.transacao_id::text" in sql
+
+    py = view.split("def linha_bate_classificacao", 1)[1].split("\ndef ", 1)[0]
+    assert "rateios" in py, "a versao em Python tambem olha as partes"
+
+
 def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     """O seletor, a rota e o rotulo do JS falam da MESMA lista.
 

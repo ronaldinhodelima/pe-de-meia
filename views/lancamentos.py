@@ -286,6 +286,105 @@ STATUS_LANCAMENTO = (
 )
 
 
+def selecao_de_classificacao(dimensoes):
+    """O que a gaveta escolheu em Categoria e em cada dimensao.
+
+    As dimensoes vem do banco (Responsavel, Projeto, Portfolio hoje; outra
+    amanha), entao os nomes dos parametros sao derivados do id - escreve-los a
+    mao criaria uma segunda verdade que quebra na primeira dimensao nova.
+    """
+    categoria_sel = [c for c in request.args.getlist("categoria") if c]
+    dim_sel = {}
+    for d in dimensoes:
+        vals = [v for v in request.args.getlist(f"dim_{d['id']}") if v.isdigit()]
+        if vals:
+            dim_sel[d["id"]] = vals
+    return categoria_sel, dim_sel
+
+
+def chips_de_classificacao(categorias, dimensoes, valores_por_dim,
+                           categoria_sel, dim_sel, onchange="aplicarFiltrosPeriodo()"):
+    """Os chips de Categoria e das dimensoes: (rotulo, html). Ponto unico dos
+    DOIS recortes - escritos duas vezes, divergiriam na primeira regra nova.
+
+    Dimensao sem nenhum valor cadastrado nao vira chip: um filtro que nao tem o
+    que oferecer so ocupa espaco na gaveta.
+    """
+    chips = [("Categoria", chip_filter_html(
+        "categoria", "Categoria",
+        [(c, cat_pt_puro(c)) for c in categorias],
+        [str(c) for c in categoria_sel], onchange=onchange))]
+    chips += [
+        (d["nome"], chip_filter_html(
+            f"dim_{d['id']}", d["nome"],
+            [(v["id"], rotulo_valor_dimensao(v)) for v in valores_por_dim.get(d["id"], [])],
+            [str(v) for v in dim_sel.get(d["id"], [])], onchange=onchange))
+        for d in dimensoes if valores_por_dim.get(d["id"])
+    ]
+    return chips
+
+
+def where_de_classificacao(categoria_sel, dim_sel):
+    """WHERE de Categoria e dimensao, alcancando tambem as PARTES do rateio.
+
+    Num lancamento rateado a classificacao mora nas partes (secao 4.4) - o pai
+    nao tem categoria propria nem linha em `transacao_dimensao`. Sem o ramo do
+    rateio, filtrar por "Vestuario" esconderia justamente o rateado cujas partes
+    sao Vestuario, e a tela mentiria por omissao.
+    """
+    clausulas, params = [], []
+    if categoria_sel:
+        clausulas.append(
+            "(t.categoria IN %s OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rc "
+            " WHERE rc.transacao_id = t.transacao_id AND rc.categoria IN %s))"
+        )
+        params.extend([tuple(categoria_sel), tuple(categoria_sel)])
+    for dim_id, valores in dim_sel.items():
+        ids = tuple(int(v) for v in valores)
+        clausulas.append(
+            # `transacao_dimensao.transacao_id` e TEXT e `transacao.transacao_id`
+            # e UUID: sem o cast a consulta inteira quebra (secao 10.4 n.10)
+            "(EXISTS (SELECT 1 FROM cartao.transacao_dimensao td"
+            "   WHERE td.transacao_id = t.transacao_id::text"
+            "     AND td.dimensao_id = %s AND td.valor_id IN %s)"
+            " OR EXISTS (SELECT 1 FROM cartao.transacao_rateio rx"
+            "   JOIN cartao.transacao_rateio_dimensao rd ON rd.rateio_id = rx.id"
+            "   WHERE rx.transacao_id = t.transacao_id"
+            "     AND rd.dimensao_id = %s AND rd.valor_id IN %s))"
+        )
+        params.extend([dim_id, ids, dim_id, ids])
+    return clausulas, params
+
+
+def linha_bate_classificacao(linha, categoria_sel, dim_sel):
+    """A mesma regra do `where_de_classificacao`, para o recorte por FATURA.
+
+    Ali a lista e montada em Python a partir das linhas do documento, como ja
+    acontece com o filtro de Status - nao ha um WHERE onde encaixar. A regra
+    tem de ser a mesma dos dois lados, inclusive o ramo do rateio: divergir
+    faria o mesmo filtro mostrar conjuntos diferentes conforme a tela.
+    """
+    if not (categoria_sel or dim_sel):
+        return True
+    principal = linha.get("principal")
+    # linha do documento sem lancamento nao tem classificacao nenhuma: filtrar
+    # por categoria e perguntar "qual e a dela?", e nao ha resposta
+    if not principal:
+        return False
+    partes = linha.get("rateios") or []
+    if categoria_sel:
+        atuais = {principal.get("categoria")} | {p.get("categoria") for p in partes}
+        if not set(categoria_sel) & {c for c in atuais if c}:
+            return False
+    for dim_id, valores in dim_sel.items():
+        alvo = {int(v) for v in valores}
+        atuais = {(principal.get("dims") or {}).get(dim_id)}
+        atuais |= {(p.get("dims") or {}).get(dim_id) for p in partes}
+        if not alvo & {v for v in atuais if v is not None}:
+            return False
+    return True
+
+
 def where_status_lancamento(status, ids_suspeitos=()):
     """(clausulas, params) do filtro de Status, sobre `cartao.transacao t`."""
     where, params = [], []
@@ -1122,6 +1221,10 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         (status == "pendente_banco" and tem_situacao(l, "pendente-banco")) or
         (status == "rateio_incompleto" and tem_situacao(l, "rateio"))
     )]
+    categoria_sel, dim_sel = selecao_de_classificacao(dimensoes)
+    linhas_visiveis = [
+        l for l in linhas_visiveis if linha_bate_classificacao(l, categoria_sel, dim_sel)
+    ]
     # Sem rateio e sem vinculo aqui: o ciclo em andamento nao tem documento,
     # entao essas situacoes nao existem nele - lista-las prometeria um filtro
     # que nunca traria linha nenhuma.
@@ -1179,6 +1282,8 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         origem_filtro_html=chip_origem_html(
             contas_by_id, origem_opcoes, [account_id],
             onchange="aplicarFiltrosPeriodo()"),
+        filtros_classificacao=chips_de_classificacao(
+            categorias, dimensoes, valores_por_dim, categoria_sel, dim_sel),
         faturas_da_origem=faturas_para_o_filtro(
             cur, [account_id], contas_by_id, fatura["id"]),
         status_opcoes=opcoes_de_status(
@@ -1237,11 +1342,32 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
     for r in cur.fetchall():
         ids_suspeitos.update(r["ids"] or [])
 
+    # As dimensoes sao lidas ANTES do WHERE porque a gaveta filtra por elas, e
+    # os nomes dos parametros (`dim_<id>`) saem daqui.
+    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
+    dimensoes = cur.fetchall()
+    obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
+    nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
+    ids_dimensoes = {chave_alfa(d["nome"]): d["id"] for d in dimensoes}
+    cur.execute(
+        "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
+        "FROM cartao.dimensao_valor ORDER BY nome;"
+    )
+    valores_por_dim, projeto_portfolio_map = {}, {}
+    for valor in cur.fetchall():
+        valores_por_dim.setdefault(valor["dimensao_id"], []).append(valor)
+        if valor["portfolio_valor_id"]:
+            projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
+    categoria_sel, dim_sel = selecao_de_classificacao(dimensoes)
+
     where = ["t.data_transacao >= %s", "t.data_transacao < %s"]
     params = [inicio_mes, fim_mes]
     if origem_sel:
         where.append("t.account_id IN %s")
         params.append(tuple(origem_sel))
+    clausulas_classif, params_classif = where_de_classificacao(categoria_sel, dim_sel)
+    where.extend(clausulas_classif)
+    params.extend(params_classif)
     clausulas_status, params_status = where_status_lancamento(status, ids_suspeitos)
     where.extend(clausulas_status)
     params.extend(params_status)
@@ -1261,21 +1387,6 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
     )
     rows = [dict(r) for r in cur.fetchall()]
     ids = [r["transacao_id"] for r in rows]
-
-    cur.execute("SELECT id, nome, obrigatoria FROM cartao.dimensao ORDER BY ordem, nome;")
-    dimensoes = cur.fetchall()
-    obrigatorias = {d["id"] for d in dimensoes if d["obrigatoria"]}
-    nomes_dimensoes = {d["id"]: d["nome"] for d in dimensoes}
-    ids_dimensoes = {chave_alfa(d["nome"]): d["id"] for d in dimensoes}
-    cur.execute(
-        "SELECT id, dimensao_id, nome, icone, portfolio_valor_id "
-        "FROM cartao.dimensao_valor ORDER BY nome;"
-    )
-    valores_por_dim, projeto_portfolio_map = {}, {}
-    for valor in cur.fetchall():
-        valores_por_dim.setdefault(valor["dimensao_id"], []).append(valor)
-        if valor["portfolio_valor_id"]:
-            projeto_portfolio_map[str(valor["id"])] = str(valor["portfolio_valor_id"])
 
     nomes_por_dim = {
         d["id"]: {v["id"]: rotulo_valor_dimensao(v) for v in valores_por_dim.get(d["id"], [])}
@@ -1505,6 +1616,8 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             contas_by_id, origem_opcoes, origem_sel,
             onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,
         ),
+        filtros_classificacao=chips_de_classificacao(
+            categorias, dimensoes, valores_por_dim, categoria_sel, dim_sel),
         por_categoria=por_categoria,
         receita_mes=receita, gasto_real=gasto, resultado_mes=receita - gasto,
         total_reais=total_reais,
@@ -2012,6 +2125,10 @@ def lancamentos_por_fatura():
         (status == "pendente_banco" and tem_situacao(l, "pendente-banco")) or
         (status == "rateio_incompleto" and tem_situacao(l, "rateio"))
     )]
+    categoria_sel, dim_sel = selecao_de_classificacao(dimensoes)
+    linhas_visiveis = [
+        l for l in linhas_visiveis if linha_bate_classificacao(l, categoria_sel, dim_sel)
+    ]
     filtros_situacao = filtros_por_situacao([
         ("conferida", "Conferido"),
         ("pendente_banco", "Pendente no banco"),
@@ -2067,6 +2184,8 @@ def lancamentos_por_fatura():
         por_categoria=por_categoria, filtros_situacao=filtros_situacao,
         # A barra de filtros e a MESMA nos dois recortes e se autogerencia.
         origem_filtro_html=filtro_origem, faturas_da_origem=faturas_da_origem,
+        filtros_classificacao=chips_de_classificacao(
+            categorias, dimensoes, valores_por_dim, categoria_sel, dim_sel),
         status_opcoes=opcoes_de_status(com_fatura=True),
         url_do_periodo=url_do_periodo,
         mes=mes_da_fatura, periodo=periodo_da_fatura,

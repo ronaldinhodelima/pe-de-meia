@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 15/09/2026 · **Schema:** migração 66 · **Testes:** 459 aprovados, 10 ignorados
+**Última revisão:** 16/09/2026 · **Schema:** migração 66 · **Testes:** 467 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1311,6 +1311,33 @@ Filtro, pesquisa e ordenação novos voltam à página 1. A página é lembrada 
 `sessionStorage` — o Voltar do navegador e o recarregar depois de salvar um rateio devolvem o
 usuário à página dele, senão a rolagem guardada cairia numa página 1 que não é a sua. O tamanho
 escolhido fica no `localStorage`.
+
+### Categoria, Responsável, Projeto e Portfólio na gaveta (16/09/2026)
+
+**Pedido do usuário.** A gaveta tinha Origem, Fatura e Status; ganhou **Categoria** e **um chip por
+dimensão**, na mesma ordem em que elas aparecem na tabela. Primeiro o recorte (origem, fatura,
+status), depois o refino dentro dele.
+
+- **Os rótulos e os nomes dos parâmetros saem do BANCO**, não do template: `chips_de_classificacao()`
+  monta `categoria` e `dim_<id>` a partir da tabela `dimensao`. Escritos à mão, uma dimensão nova
+  não apareceria — é a mesma regra do `rotularCelulas()` no modo cartão (§7.8-B).
+- **O filtro alcança as PARTES do rateio.** Num rateado a classificação mora nas partes (§4.4), e o
+  pai não tem categoria própria nem linha em `transacao_dimensao`: sem esse ramo, filtrar por
+  "Vestuário" esconderia justamente o rateado cujas partes são Vestuário. Vale nos dois recortes —
+  `where_de_classificacao()` (SQL, no período) e `linha_bate_classificacao()` (Python, na fatura e
+  no ciclo em andamento), com teste cobrando o ramo nos dois.
+- **Dimensão sem nenhum valor cadastrado não vira chip** — filtro que não tem o que oferecer só
+  ocupa espaço.
+- **`queryDoPeriodo()` não precisou mudar:** ela já recolhia *qualquer* `.chipfilter input[name]`
+  marcado, e o "Limpar todos" já limpava todos os chips da gaveta. Quem precisou mudar foi o
+  **resumo ao lado do botão**, que tratava todo `.chip-opt` marcado como se fosse origem e diria
+  "3 origens" para uma origem e duas categorias. Agora ele percorre **chip a chip** e tira o nome do
+  `data-label` do próprio chip — dimensão nova entra no resumo sem tocar no JS.
+- **Iterar variável ausente no Jinja NÃO levanta erro** — o `{% for %}` simplesmente não rende nada.
+  Um recorte que esquecesse de passar os chips ficaria sem os filtros, com a tela respondendo 200 e
+  a suíte passando. `test_todo_recorte_de_lancamentos_entrega_os_filtros_de_classificacao` varre por
+  AST cada `render_template("lancamentos_fatura.html", ...)` e cobra a chave, menos no estado de
+  erro, onde não há lista para filtrar.
 
 **A gaveta é o mesmo bloco `.fatura-filtros` que o filtro troca por AJAX** — só mudou de lugar.
 Cada escolha vale na hora e ela **fica aberta** até o usuário fechar (X, fundo ou Esc), inclusive
@@ -2822,7 +2849,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**459 aprovados e 10 ignorados** (15/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**467 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

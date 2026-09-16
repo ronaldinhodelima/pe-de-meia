@@ -574,6 +574,11 @@ class TestDetalhadaPorPeriodo:
             "valores_por_dim": {1: [{"id": 7, "nome": "Família", "icone": None}]},
             "mes": "2026-08", "periodo": "mes", "data_inicio": "", "data_fim": "",
             "origem_filtro_html": '<div class="chipfilter"></div>',
+            # o mesmo formato que chips_de_classificacao() devolve: (rotulo, html)
+            "filtros_classificacao": [
+                ("Categoria", '<div class="chipfilter" data-chip="categoria"></div>'),
+                ("Responsável", '<div class="chipfilter" data-chip="dim_1"></div>'),
+            ],
             "por_categoria": [{"nome": "Água", "total": 212.35}],
             "filtros_situacao": [{"rotulo": "Conferido", "url": "?status=conferida"}],
             "status_opcoes": opcoes_de_status(),
@@ -619,6 +624,18 @@ class TestDetalhadaPorPeriodo:
         # o recorte por periodo nao fala em fatura nem em conciliacao
         assert "Falta vincular" not in html
         assert "Ver conciliação da fatura" not in html
+
+    def test_a_gaveta_tem_os_filtros_de_classificacao_com_o_rotulo_do_banco(self, ctx):
+        """Categoria e as dimensoes entram na gaveta (pedido do usuario,
+        16/09/2026), e o rotulo de cada dimensao vem do BANCO - "Responsável"
+        aqui, outra amanha. Escrito no template, um nome novo nao apareceria."""
+        html = render_template("lancamentos_fatura.html", **self.contexto())
+        gaveta = html.split('class="fatura-filtros"', 1)[1].split("gaveta-rodape", 1)[0]
+        assert 'data-chip="categoria"' in gaveta and 'data-chip="dim_1"' in gaveta
+        assert "Responsável" in gaveta
+        # os chips ficam DEPOIS de Origem, Fatura e Status: primeiro o recorte,
+        # depois o refino dentro dele
+        assert gaveta.index("Status") < gaveta.index('data-chip="categoria"')
 
     def test_o_gasto_por_categoria_acompanha_o_recorte(self, ctx):
         """Ele e do PERIODO: numa fatura o total ja e a soma das compras
