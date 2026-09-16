@@ -6089,6 +6089,15 @@ def recortar_linhas_ja_cobertas(cur, account_id, linhas, mes, ano):
     risco - pela rota que cria lancamento sem contraparte, valor em dobro no
     DRE, secao 5).
 
+    **So para EXTRATO de conta corrente.** A premissa "a data diz a qual
+    documento a linha pertence" e falsa em fatura de cartao: duas faturas
+    seguidas compartilham o dia da virada do ciclo e o Nubank data toda parcela
+    nesse dia (secao 11.3-A). Rodar isto sobre fatura descarta as linhas das
+    bordas como "ja cobertas" e o resto redefine o mes de referencia, jogando o
+    arquivo em cima da fatura vizinha - foi o que apagou quatro faturas da
+    Andrea em 16/09/2026. Quem decide e o chamador, e ha teste cobrando que a
+    importacao so chame isto quando o documento e extrato.
+
     Devolve (restantes, ignoradas), onde cada ignorada e (linha, documento que
     ja a cobria) - a tela precisa dizer o que deixou de fora e por causa de quem.
     """

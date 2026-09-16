@@ -2011,6 +2011,32 @@ def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
     assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
 
 
+def test_o_recorte_por_data_so_alcanca_extrato_nunca_fatura_de_cartao():
+    """A premissa do corte e falsa em fatura de cartao.
+
+    O corte por LINHA, pela data, assume que cada transacao pertence a um
+    documento so. Numa fatura isso nao vale: duas faturas seguidas compartilham
+    o dia da virada do ciclo (`DTEND` de uma = `DTSTART` da outra) e o Nubank
+    data toda parcela nesse dia (secao 11.3-A). Rodando sobre fatura, as linhas
+    das bordas sao descartadas como "ja cobertas" e o que sobra REDEFINE o mes
+    de referencia - o arquivo de 06/2026 vira 05/2026 e substitui a fatura de
+    maio. Quatro faturas da Andrea foram apagadas assim em 16/09/2026.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    antes = view.split("recortar_linhas_ja_cobertas(", 1)[0]
+    # a ultima linha de codigo antes da chamada e a guarda "e extrato?"
+    codigo = [l.strip() for l in antes.splitlines()
+              if l.strip() and not l.strip().startswith("#")]
+    assert codigo[-2] == 'if fatura.get("extrato"):', \
+        f"o recorte tem de estar guardado por 'documento e extrato?', veio: {codigo[-2]!r}"
+    # fatura de cartao entra INTEIRA, e o mes de referencia so e reescrito
+    # dentro do caminho do extrato
+    depois = view.split("recortar_linhas_ja_cobertas(", 1)[1]
+    ate_ignoradas = depois.split("if ignoradas", 1)[0]
+    assert "restantes, ignoradas = list(fatura[\"linhas\"]), []" in ate_ignoradas
+    assert 'fatura["mes_referencia"] = periodo_fim.month' in depois
+
+
 def test_o_atalho_de_conciliacao_nao_e_um_segundo_caminho_de_filtrar():
     """O botao mexe nos MESMOS controles e chama o mesmo `aplicarFiltros()`.
 

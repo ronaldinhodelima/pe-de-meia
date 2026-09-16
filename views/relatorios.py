@@ -1275,10 +1275,28 @@ def conciliar_fatura():
                 # entra o que falta, fica de fora o que ja existe. Assim cada
                 # transacao pertence a um documento so, e a mesma cobranca nao
                 # vira duas linhas (que viraria valor em dobro no DRE, secao 5).
-                restantes, ignoradas = recortar_linhas_ja_cobertas(
-                    cur, account_id, fatura["linhas"],
-                    fatura["mes_referencia"], fatura["ano_referencia"],
-                )
+                #
+                # SÓ VALE PARA EXTRATO, e isso nao e detalhe (16/09/2026). Numa
+                # FATURA DE CARTAO o ciclo vem do proprio arquivo e **duas
+                # faturas seguidas compartilham o dia da virada** - o `DTEND` de
+                # uma e o `DTSTART` da outra, e o Nubank data toda parcela nesse
+                # dia (secao 11.3-A). Ou seja: a data da linha NAO diz a qual
+                # documento ela pertence, que e justamente a premissa do corte.
+                # Rodando sobre fatura, as linhas do primeiro e do ultimo dia
+                # caiam dentro do periodo das faturas vizinhas, eram descartadas
+                # como "ja cobertas", e o pouco que sobrava REDEFINIA o mes de
+                # referencia - o arquivo de 06/2026 entrava como 05/2026 e
+                # substituia a fatura de maio. Aconteceu com quatro faturas da
+                # Andrea de uma vez. Na conta corrente a premissa vale: o arquivo
+                # abrange o periodo que o usuario pediu e cada transacao tem uma
+                # data so.
+                if fatura.get("extrato"):
+                    restantes, ignoradas = recortar_linhas_ja_cobertas(
+                        cur, account_id, fatura["linhas"],
+                        fatura["mes_referencia"], fatura["ano_referencia"],
+                    )
+                else:
+                    restantes, ignoradas = list(fatura["linhas"]), []
                 if ignoradas and not restantes:
                     donos = {d["id"]: d for _l, d in ignoradas}
                     nomes = ", ".join(
@@ -1290,7 +1308,10 @@ def conciliar_fatura():
                     )
                 if ignoradas:
                     # o documento passa a ser o que ele de fato tem: periodo,
-                    # total e mes de referencia saem das linhas que sobraram
+                    # total e mes de referencia saem das linhas que sobraram.
+                    # Reescrever a referencia so e aceitavel porque aqui e
+                    # EXTRATO, onde ela ja era deduzida das linhas; num documento
+                    # que traz o proprio ciclo isso o joga para cima do vizinho.
                     fatura["linhas"] = restantes
                     periodo_inicio = min(l["data"] for l in restantes)
                     periodo_fim = max(l["data"] for l in restantes)
