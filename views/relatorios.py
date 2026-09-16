@@ -320,6 +320,9 @@ def relatorios():
             ("receita", "Receitas"),
             ("investimento", "Investimentos e bens"),
             ("tudo", "Tudo (fluxo de caixa)"),
+            # fora do resultado por natureza (secao 1.1): so troca a forma do
+            # patrimonio. Fica por ultimo porque e conferencia, nao analise.
+            ("neutro", "Transferências e reembolsos"),
         ],
         agrupar=cfg["agrupar"],
         agrupar_opcoes=agrupar_opcoes,

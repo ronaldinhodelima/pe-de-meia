@@ -5907,7 +5907,7 @@ def _montar_filtro_relatorio(dimensoes):
     # visao do relatorio: o que estamos medindo. Por padrao, despesas (consumo real).
     # Investimentos, aquisicao de bens e transferencias NAO sao despesa - ver NATUREZAS.
     visao = request.args.get("visao") or "despesa"
-    if visao not in ("despesa", "receita", "investimento", "tudo"):
+    if visao not in ("despesa", "receita", "investimento", "tudo", "neutro"):
         visao = "despesa"
 
     where = ["COALESCE(t.duplicada, false) = false"]
@@ -5918,6 +5918,19 @@ def _montar_filtro_relatorio(dimensoes):
         where.append(NATUREZA_SQL + " = 'receita'")
     elif visao == "investimento":
         where.append(NATUREZA_SQL + " IN ('investimento', 'bem')")
+    elif visao == "neutro":
+        # O que so TROCA DE BOLSO: pagamento de fatura, transferencia entre
+        # contas proprias, adiantamento e reembolso. Nenhuma das outras quatro
+        # visoes enxerga isso - "tudo" exclui `transferencia` de proposito, e
+        # exclui com razao, porque somar isso ao fluxo de caixa contaria o mesmo
+        # dinheiro duas vezes. So que entao essas categorias nao apareciam em
+        # relatorio NENHUM, e era impossivel conferir se um adiantamento voltou.
+        #
+        # O sinal aqui e informacao, nao ruido: saida positiva, entrada
+        # negativa (`VAL_DESPESA`). Um par que fechou soma zero; o que sobrar e
+        # o que ainda esta em aberto. Por isso esta visao nao inverte o sinal
+        # como a de receita faz.
+        where.append(NATUREZA_SQL + " = 'transferencia'")
     else:  # tudo: mostra o fluxo de caixa completo, menos o que so troca de bolso
         where.append(NATUREZA_SQL + " <> 'transferencia'")
 

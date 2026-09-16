@@ -77,8 +77,12 @@ window.addEventListener('popstate', function () {
 function carregarDados(params) {
   fetch('/relatorios/dados?' + params.toString()).then(r => r.json()).then(renderResultado);
 }
+// "Saldo" e o nome certo da visao neutra: ali saida e entrada se somam com o
+// sinal, e o que sobra e o que ainda esta em aberto. Chamar de "total" sugeriria
+// volume, e zero passaria a parecer "nao houve nada" em vez de "fechou".
 const LABEL_VISAO = { despesa: 'Total de despesas', receita: 'Total de receitas',
-                      investimento: 'Investido / adquirido', tudo: 'Fluxo de caixa (líquido)' };
+                      investimento: 'Investido / adquirido', tudo: 'Fluxo de caixa (líquido)',
+                      neutro: 'Saldo em aberto (saídas − entradas)' };
 function renderResultado(data) {
   document.getElementById('totalGeral').textContent = fmtMoeda(data.total_geral);
   document.getElementById('labelTotal').textContent = LABEL_VISAO[data.visao] || 'Total no filtro';

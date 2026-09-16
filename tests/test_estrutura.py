@@ -1937,6 +1937,40 @@ def test_lancamento_manual_aceita_a_classificacao_inteira_e_trava_o_ok():
     assert "registrar_auditoria" in bloco
 
 
+def test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo():
+    """O seletor, a rota e o rotulo do JS falam da MESMA lista.
+
+    Oferecer uma visao que a rota nao aceita e o defeito da secao 7.1-C, de
+    novo: o valor cai no `else` e a tela mostra outra coisa dizendo que
+    filtrou. E visao sem rotulo no JS cai no generico "Total no filtro", que
+    nao diz o que aquele numero significa.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    core_py = (RAIZ / "core.py").read_text(encoding="utf-8")
+    js = (RAIZ / "static" / "relatorios.js").read_text(encoding="utf-8")
+
+    bloco = view.split("visao_opcoes=[", 1)[1].split("]", 1)[0]
+    oferecidas = set(re.findall(r'\("(\w+)"', bloco))
+    aceitas = set(re.findall(r'"(\w+)"', core_py.split("if visao not in (", 1)[1].split(")", 1)[0]))
+    rotulos = set(re.findall(r"(\w+):\s*'", js.split("LABEL_VISAO = {", 1)[1].split("};", 1)[0]))
+
+    assert oferecidas == aceitas, f"seletor e rota discordam: {oferecidas ^ aceitas}"
+    assert oferecidas <= rotulos, f"visao sem rotulo no JS: {oferecidas - rotulos}"
+
+
+def test_a_visao_neutra_e_a_unica_que_enxerga_transferencia():
+    """As outras quatro excluem `transferencia`, e isso e decisao (secao 1.1).
+
+    Sem esta visao, categoria neutra nao aparecia em relatorio nenhum e nao
+    havia como conferir se um adiantamento voltou.
+    """
+    core_py = (RAIZ / "core.py").read_text(encoding="utf-8")
+    bloco = core_py.split("visao = request.args.get", 1)[1].split("if categorias_sel", 1)[0]
+    codigo = re.sub(r"#[^\n]*", "", bloco)
+    assert "= 'transferencia'" in codigo, "a visao neutra traz o que so troca de bolso"
+    assert "<> 'transferencia'" in codigo, "'tudo' continua excluindo"
+
+
 def test_lancamento_manual_nasce_com_a_hora_real_e_nunca_com_hora_inventada():
     """Lancado hoje, a hora e agora; em data passada, 00:00 = "sem hora".
 

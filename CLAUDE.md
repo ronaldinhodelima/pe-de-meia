@@ -647,6 +647,26 @@ Regras:
 - **Despesas no DRE** é um subconjunto explicado por natureza. Exibir também **Fora do DRE** em
   vez de forçar os dois números a serem iguais.
 
+### A visão "Transferências e reembolsos" (16/09/2026)
+
+**Categoria neutra não aparecia em relatório nenhum.** As quatro visões de `/relatorios`
+(Despesas, Receitas, Investimentos e bens, Tudo) excluem `transferencia` — e **"Tudo" exclui com
+razão**: somar pagamento de fatura e transferência entre contas próprias ao fluxo de caixa contaria
+o mesmo dinheiro duas vezes. Só que o efeito colateral era não haver **onde** conferir se um
+adiantamento voltou.
+
+A quinta visão mostra exatamente o que as outras escondem: `natureza = 'transferencia'`. Com ela
+valem de graça o agrupamento por Categoria, por Período (mês), o gráfico e o clique para abrir os
+lançamentos do grupo.
+
+- **O sinal é a informação, e por isso ela NÃO inverte o sinal** como a visão de receita: saída
+  positiva, entrada negativa. Par que fechou soma **zero**; o que sobra é o que está em aberto.
+- O rótulo do total é **"Saldo em aberto (saídas − entradas)"**, não "Total": chamar de total
+  sugeriria volume, e aí zero passaria a parecer "não houve nada" em vez de "fechou".
+- `test_toda_visao_oferecida_em_relatorios_e_aceita_e_tem_rotulo` compara as três listas — o
+  seletor, o conjunto aceito na rota e o `LABEL_VISAO` do JS. Visão oferecida que a rota não aceita
+  cai no `else` e a tela mostra outra coisa dizendo que filtrou: é o defeito da §7.1-C.
+
 "Pagamento Recebido" é a fatura ANTERIOR sendo quitada; o próprio SALDO TOTAL da Unicred não a
 inclui. Fica fora das duas somas — se entrar em um lado só, a tela acusa diferença de dezenas de
 milhares sem erro nenhum (aconteceu: R$ 16.647,99 falsos). **Nunca vira lançamento e nunca trava
