@@ -2496,6 +2496,75 @@ def test_fim_do_ciclo_e_exclusivo_quando_o_arquivo_informa():
     assert "THEN f.periodo_fim - 1 ELSE f.periodo_fim END" in codigo
 
 
+def test_o_fim_exclusivo_nao_alcanca_extrato_de_conta_corrente():
+    """So a fatura de CARTAO tem o dia da virada compartilhado.
+
+    No extrato o `DTEND` e o ultimo dia do proprio extrato, e o arquivo traz
+    linha datada nele. Encolher a janela ali escondia o lancamento do ultimo dia
+    da lista de orfaos - no extrato 09/2026 o `Matrícula Amanda LIQ TIT - IB` de
+    R$ 550,00 existia no Pluggy, sem vinculo, e a tela dizia "ainda nao ha
+    lancamento do Pluggy associado" e oferecia CRIAR, que duplicaria o valor no
+    DRE. Mesma familia do recorte por data que nao pode alcancar cartao (6.8).
+    """
+    core = (RAIZ / "core.py").read_text(encoding="utf-8")
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    fn = core.split("def _ciclo_fim(fatura_row)", 1)[1].split("\ndef ", 1)[0]
+    assert 'fatura_row.get("tipo_documento") != "extrato"' in fn
+    # a copia em SQL da mesma regra tem que ter a mesma excecao, senao a lista
+    # de faturas conta orfaos por um criterio e a tela da fatura por outro
+    assert "COALESCE(f.tipo_documento,'fatura') <> 'extrato' " in view
+
+    from core import _ciclo_fim
+    from datetime import date
+    base = {"periodo_fim": date(2026, 9, 14), "ciclo_do_arquivo": True}
+    assert _ciclo_fim(dict(base, tipo_documento="extrato")) == date(2026, 9, 14)
+    assert _ciclo_fim(dict(base, tipo_documento="fatura")) == date(2026, 9, 13)
+
+
+def test_quem_calcula_ciclo_carrega_tambem_o_tipo_do_documento():
+    """`_ciclo_fim` decide pelo `tipo_documento`, e `.get()` de coluna ausente
+    devolve None - o extrato voltaria a perder o ultimo dia, sem erro nenhum.
+    E a mesma armadilha que ja custou tres correcoes de ciclo (secao 11.3-A)."""
+    codigo = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    for trecho in codigo.split("FROM cartao.fatura_importada")[:-1]:
+        select = trecho[trecho.rfind("SELECT"):]
+        if "periodo_fim" not in select:
+            continue
+        # a linha que chega em _ciclo_fim traz sempre as duas colunas que ele le;
+        # um SELECT so de periodo_fim (o encadeamento com o documento anterior)
+        # nao vira fatura_row nenhum
+        if "ciclo_do_arquivo" not in select and "SELECT *" not in select:
+            continue
+        if "MIN(periodo_inicio)" in select or "MAX(periodo_inicio)" in select:
+            continue
+        assert "tipo_documento" in select or "SELECT *" in select, (
+            "consulta que carrega periodo_fim precisa trazer tipo_documento:\n"
+            + select[:220]
+        )
+
+
+def test_o_matcher_nunca_escolhe_um_lancamento_ja_substituido():
+    """`substituido_por` diz que so o OUTRO conta (secao 4.3): a linha da fatura
+    e a cobranca e tem que apontar para quem conta. Sem este filtro o matcher
+    ligava a linha ao recolhido - o pendente do par pendente/confirmado - e o
+    lancamento que conta ia parar em "Lancamentos do Pluggy sem vinculo", com a
+    MESMA tela mostrando a linha como ja vinculada (extrato 09/2026: ARREC
+    CONVENIOS R$ 280,38 e IPVA do Jeep R$ 821,90).
+
+    `somente_conciliacao` fica de fora do filtro de proposito: o agregado de
+    parcelamento e exatamente a quem a linha deve se ligar (secao 4.5).
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    corpo = view.split("def _conciliar_linhas(", 1)[1].split("\ndef ", 1)[0]
+    candidatos = corpo.split("candidatos = [dict(r)", 1)[0]
+    assert 'f"AND t.substituido_por IS NULL "' in candidatos
+    # sem os comentarios: eles CITAM o nome para explicar por que ele nao entra,
+    # e um teste que le comentario acusa a volta do que nao existe (10.4 no 15)
+    candidatos = re.sub(r"#[^\n]*", "", candidatos)
+    assert "somente_conciliacao" not in candidatos, (
+        "o agregado de parcelamento PRECISA continuar candidato")
+
+
 def test_quem_calcula_ciclo_carrega_a_coluna_que_decide():
     """`_ciclo_inicio` e `_ciclo_fim` leem `ciclo_do_arquivo` do fatura_row.
 

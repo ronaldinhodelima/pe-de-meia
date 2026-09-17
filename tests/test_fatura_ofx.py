@@ -200,6 +200,22 @@ def test_ofx_em_utf8_nao_quebra_os_acentos():
     assert _extrato()["linhas"][0]["descricao"].startswith("Transferência enviada")
 
 
+def test_quem_decide_a_codificacao_sao_os_bytes_e_nao_o_cabecalho():
+    """O cabecalho do OFX MENTE, e obedece-lo grava mojibake no banco.
+
+    O extrato de conta corrente da Unicred declara `ENCODING:USASCII` e
+    `CHARSET:1252` e escreve `Í` como `c3 8d`, que e UTF-8. Lido pelo cabecalho,
+    saiu `MATRÃ?CULA AMANDA` e `ARRECADAÃ‡ÃƒO DE CONVÃŠNIOS` no extrato 09/2026.
+    E o arquivo REALMENTE cp1252 tem que continuar certo - senao a correcao so
+    troca de lado quem fica com o acento quebrado.
+    """
+    from fatura_ofx import _texto
+    mentiroso = OFX_NUBANK_CONTA.replace("ENCODING:UTF-8", "ENCODING:USASCII\nCHARSET:1252")
+    assert "Transferência enviada" in _texto(mentiroso.encode("utf-8"))
+    # e o caminho de volta: bytes cp1252 de verdade, com o cabecalho dizendo UTF-8
+    assert "Transferência enviada" in _texto(OFX_NUBANK_CONTA.encode("cp1252"))
+
+
 def test_ofx_de_banco_nao_homologado_e_recusado():
     from fatura_unicred import ArquivoNaoHomologado
     outro = OFX_NUBANK_CONTA.replace("NU PAGAMENTOS S.A.", "BANCO QUALQUER")

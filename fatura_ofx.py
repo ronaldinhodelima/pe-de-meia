@@ -36,18 +36,26 @@ BANCOS_HOMOLOGADOS = {"NU PAGAMENTOS S.A.", "UNICRED DO BRASIL"}
 
 
 def _texto(bruto):
-    """Bytes -> texto respeitando o cabecalho. O Nubank ja mandou CHARSET:1252
-    (fatura) e ENCODING:UTF-8 (extrato); ler UTF-8 como cp1252 escreve
-    "TransferÃªncia" na descricao."""
+    """Bytes -> texto. Quem decide sao os BYTES, nunca o cabecalho.
+
+    O Nubank manda CHARSET:1252 (fatura) e ENCODING:UTF-8 (extrato), e ler UTF-8
+    como cp1252 escreve "TransferÃªncia" na descricao. A primeira versao disto
+    obedecia ao cabecalho - e o cabecalho MENTE: o OFX da conta corrente Unicred
+    declara `ENCODING:USASCII` / `CHARSET:1252` e escreve `Í` como `c3 8d`, que e
+    UTF-8. Dai saiu `MATRÃ?CULA AMANDA` e `ARRECADAÃ‡ÃƒO DE CONVÃŠNIOS` gravados
+    no banco, no extrato 09/2026.
+
+    UTF-8 estrito primeiro: texto cp1252 com acento quase nunca forma sequencia
+    UTF-8 valida por acaso, e arquivo so-ASCII decodifica igual nos dois. Quando
+    falha, ai sim e' cp1252 de verdade - e um arquivo Unicred realmente 1252
+    continua sendo lido certo, sem depender de acertarmos o cabecalho.
+    """
     if not isinstance(bruto, bytes):
         return bruto
-    cabecalho = bruto[:512].upper()
-    if b"UTF-8" in cabecalho or b"UTF8" in cabecalho:
-        try:
-            return bruto.decode("utf-8")
-        except UnicodeDecodeError:
-            pass
-    return bruto.decode("cp1252", errors="replace")
+    try:
+        return bruto.decode("utf-8")
+    except UnicodeDecodeError:
+        return bruto.decode("cp1252", errors="replace")
 
 
 def tipo_do_ofx(texto):

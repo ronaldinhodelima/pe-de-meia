@@ -1285,9 +1285,23 @@ def _ciclo_fim(fatura_row):
     lancamento da parcela 5/10.
 
     No PDF da Unicred nao ha essa sobreposicao: o fim continua inclusivo.
+
+    E o EXTRATO de conta corrente tambem nao tem: o `DTEND` dele e o ultimo dia
+    do proprio extrato, nao a virada de um ciclo compartilhado com o documento
+    seguinte - o arquivo traz linha datada nesse dia. Aplicar a regra do cartao
+    ali encolhia a janela em um dia, e o lancamento do ultimo dia sumia da lista
+    de orfaos: em 09/2026 o `Matrícula Amanda LIQ TIT - IB` de R$ 550,00 existia
+    no Pluggy, sem vinculo, e a tela dizia "ainda nao ha lancamento do Pluggy
+    associado" e oferecia CRIAR - que teria duplicado R$ 550,00 no DRE. E a
+    mesma familia do recorte por data que nao pode alcancar fatura de cartao
+    (secao 6.8), agora no sentido inverso: regra de cartao pega o extrato.
     """
     fim = fatura_row.get("periodo_fim")
-    if fim and fatura_row.get("ciclo_do_arquivo"):
+    if (
+        fim
+        and fatura_row.get("ciclo_do_arquivo")
+        and fatura_row.get("tipo_documento") != "extrato"
+    ):
         return fim - timedelta(days=1)
     return fim
 

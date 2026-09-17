@@ -1041,6 +1041,50 @@ então a leitura natural virou "o OK voltou atrás". Não voltou: perder o vínc
 assinatura, e a auditoria do dia não tem um único evento retirando OK. O selo `conferido` (com o
 autor no tooltip) separa **"falta religar"** de **"falta conferir"**.
 
+### Três defeitos que o extrato 09/2026 revelou de uma vez (17/09/2026)
+
+O usuário mandou conferir a conciliação do extrato OFX da Conta Corrente Unicred de 08/09 a
+14/09/2026. Ele fecha centavo a centavo (soma das linhas = movimento = R$ 1.553,58), e mesmo assim
+**a tela contava três histórias erradas ao mesmo tempo**, todas da mesma família: regra escrita duas
+vezes, ou regra de cartão alcançando extrato.
+
+**1. O último dia do extrato sumia da lista de órfãos, e a tela oferecia CRIAR o que já existia.**
+`_ciclo_fim()` subtrai um dia quando `ciclo_do_arquivo` — regra do **cartão**, onde o `DTEND` de uma
+fatura é o `DTSTART` da seguinte (§11.3-A). **No extrato não há sobreposição**: o `DTEND` é o último
+dia do próprio extrato, e o arquivo traz linha datada nele. Resultado: o `Matrícula Amanda LIQ TIT -
+IB` de **R$ 550,00, 14/09**, existia no Pluggy, sem vínculo — e ficava **fora** da janela de órfãos.
+A linha aparecia em "Linhas da fatura sem vínculo" dizendo *"ainda não há lançamento do Pluggy
+associado… crie o lançamento pela fatura"*, com o botão **Criar** ao lado: um clique teria
+**duplicado R$ 550,00 no DRE**. É o espelho exato do recorte por data que não podia alcançar fatura
+de cartão (acima) — lá regra de extrato pegou cartão, aqui regra de cartão pegou extrato. Hoje
+`_ciclo_fim` pergunta o `tipo_documento`, **e a segunda cópia da regra, em SQL na contagem de órfãos
+da lista de faturas, ganhou a mesma exceção** — ela existe escrita duas vezes, e divergir aqui
+significa a lista contar órfão por um critério e a tela da fatura por outro. Teste novo cobra que
+todo `SELECT` que carrega `periodo_fim` + `ciclo_do_arquivo` traga também `tipo_documento`: sem a
+coluna, `.get()` devolve `None` e o extrato volta a perder o último dia **sem erro nenhum**
+(§11.3-A).
+
+**2. O matcher ligava a linha ao lançamento que NÃO conta.** Os candidatos de `_conciliar_linhas`
+filtravam `duplicada` e o que nasceu da fatura, mas **não `substituido_por`**. Num par
+pendente/confirmado (§4.3) ele escolhia o **recolhido** — e aí o lançamento que conta aparecia em
+"Lançamentos do Pluggy sem vínculo" enquanto a **mesma tela** mostrava a linha como "já vinculada".
+Dois casos no extrato: `ARREC CONVÊNIOS` R$ 280,38 e `Ipva jeep 3a parcela` R$ 821,90 — este último
+**com OK**, o que faz a lista parecer que a assinatura voltou atrás. **Nada duplicou no DRE**: o
+recolhido está fora do resultado por construção. Hoje o candidato exige `substituido_por IS NULL`,
+o mesmo critério que a lista de órfãos já aplicava — §6.5 nº 10 mais uma vez. **`somente_conciliacao`
+continua fora do filtro de propósito**, e há teste cobrando isso: o agregado de parcelamento é
+exatamente a quem a linha deve se ligar (§4.5).
+
+**3. O cabeçalho do OFX MENTE sobre a codificação.** O extrato da Unicred declara
+`ENCODING:USASCII` / `CHARSET:1252` e escreve `Í` como `c3 8d`, que é **UTF-8**. O `_texto()`
+obedecia ao cabeçalho e gravou `MATRÃ?CULA AMANDA` e `ARRECADAÃ‡ÃƒO DE CONVÃŠNIOS` no banco. Hoje
+**quem decide são os bytes**: UTF-8 estrito primeiro, cp1252 quando ele falha. Texto cp1252 com
+acento quase nunca forma sequência UTF-8 válida por acaso, e arquivo só-ASCII decodifica igual nos
+dois — então o arquivo realmente 1252 continua certo, sem depender de acertarmos o cabeçalho.
+**Lição:** metadado que o emissor escreve sobre o próprio arquivo é palpite dele; o dado é a prova.
+Documento já importado continua com o texto torto no banco — **reimportar o arquivo guardado
+corrige**, e o vínculo por valor/data nunca dependeu do acento.
+
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
 Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite

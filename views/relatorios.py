@@ -611,6 +611,17 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         # Pluggy e virar orfa.
         f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
         f"WHERE fl.transacao_id_criado = t.transacao_id) "
+        # `substituido_por` diz que ESTE registro e o mesmo evento que outro e
+        # que so o outro conta (secao 4.3). A linha da fatura e a cobranca: ela
+        # tem que apontar para quem conta. Sem este filtro o matcher escolhia o
+        # recolhido - o pendente do par pendente/confirmado - e entao o que
+        # conta aparecia em "Lancamentos do Pluggy sem vinculo", com a mesma
+        # tela mostrando a linha como "ja vinculada". Aconteceu no extrato
+        # 09/2026 com ARREC CONVENIOS R$ 280,38 e o IPVA do Jeep R$ 821,90.
+        # `somente_conciliacao` NAO entra aqui de proposito: o agregado de
+        # parcelamento e exatamente a quem a linha deve se ligar (secao 4.5).
+        # Mesmo criterio da lista de orfaos - a regra e uma so (secao 6.5 no 10).
+        f"AND t.substituido_por IS NULL "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
         (account_id, min(datas), fim_busca_sql),
     )
@@ -1485,7 +1496,7 @@ def conciliar_fatura():
                 # sozinho entre uma visita e outra.
                 cur.execute(
                     "SELECT id, account_id, ano_referencia, mes_referencia, "
-                    "periodo_inicio, periodo_fim, ciclo_do_arquivo "
+                    "periodo_inicio, periodo_fim, ciclo_do_arquivo, tipo_documento "
                     "FROM cartao.fatura_importada WHERE id = %s;",
                     (fatura_id,),
                 )
@@ -1585,7 +1596,7 @@ def conciliar_fatura():
     # enquanto o casamento usava o do arquivo, ou seja, mentia sobre o ciclo.
     cur.execute(
         f"SELECT f.id, f.account_id, f.mes_referencia, f.ano_referencia, f.total, f.importado_em, "
-        f"f.periodo_inicio, f.periodo_fim, f.vencimento, f.ciclo_do_arquivo, "
+        f"f.periodo_inicio, f.periodo_fim, f.vencimento, f.ciclo_do_arquivo, f.tipo_documento, "
         f"(SELECT COUNT(*) FROM cartao.fatura_linha fl WHERE fl.fatura_id = f.id "
         f" AND fl.descricao NOT ILIKE 'Pagamento Recebido%%' "
         f" AND fl.descricao NOT ILIKE 'Pag de Fatura%%' "
@@ -1600,7 +1611,12 @@ def conciliar_fatura():
         f"   WHERE ant.account_id = f.account_id AND ant.periodo_fim IS NOT NULL "
         f"   AND (ant.ano_referencia, ant.mes_referencia) < (f.ano_referencia, f.mes_referencia) "
         f"   ORDER BY ant.ano_referencia DESC, ant.mes_referencia DESC LIMIT 1), f.periodo_inicio) END "
-        f" AND CASE WHEN f.ciclo_do_arquivo THEN f.periodo_fim - 1 ELSE f.periodo_fim END "
+        # O ultimo dia so e' EXCLUSIVO na fatura de cartao, onde o DTEND de uma
+        # e o DTSTART da seguinte. No extrato de conta corrente o DTEND e o
+        # ultimo dia do proprio extrato - encolher ali escondia o orfao do
+        # ultimo dia (ver core._ciclo_fim). A regra e uma so, escrita aqui e la.
+        f" AND CASE WHEN f.ciclo_do_arquivo AND COALESCE(f.tipo_documento,'fatura') <> 'extrato' "
+        f"   THEN f.periodo_fim - 1 ELSE f.periodo_fim END "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
         f") AS orfaos, "
         # Quantos lancamentos DESTA fatura ainda esperam assinatura. COUNT
@@ -1914,7 +1930,7 @@ def _classificar_orfaos(cur, incluir_duplicadas=False):
     # na fatura seguinte, que ainda nao existe no sistema)
     cur.execute(
         "SELECT DISTINCT ON (account_id) account_id, periodo_inicio, periodo_fim, "
-        "ciclo_do_arquivo, mes_referencia, ano_referencia FROM cartao.fatura_importada "
+        "ciclo_do_arquivo, tipo_documento, mes_referencia, ano_referencia FROM cartao.fatura_importada "
         "WHERE periodo_fim IS NOT NULL "
         "ORDER BY account_id, ano_referencia DESC, mes_referencia DESC;"
     )
@@ -2777,7 +2793,7 @@ def vincular_automatico_fatura(fatura_id):
     try:
         cur.execute(
             "SELECT id, account_id, ano_referencia, mes_referencia, "
-            "periodo_inicio, periodo_fim, ciclo_do_arquivo "
+            "periodo_inicio, periodo_fim, ciclo_do_arquivo, tipo_documento "
             "FROM cartao.fatura_importada WHERE id = %s;",
             (fatura_id,),
         )
