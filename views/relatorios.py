@@ -1611,6 +1611,14 @@ def conciliar_fatura():
         f"  JOIN cartao.fatura_vinculo v ON v.fatura_linha_id = fl.id "
         f"  JOIN cartao.transacao t ON t.transacao_id = v.transacao_id "
         f" WHERE fl.fatura_id = f.id "
+        # "Pagamento Recebido" e a fatura ANTERIOR sendo quitada (secao 6.3):
+        # fica fora das somas, a tela de lancamentos nem oferece caixa de OK
+        # para ele, e ele nunca trava o "fecha 100%". Sem estas duas linhas a
+        # coluna contava esse lancamento como pendente e dizia "1" numa fatura
+        # com 214 de 214 conferidos. As MESMAS exclusoes do `linhas_sem_vinculo`
+        # logo acima - a regra e uma so.
+        f"   AND fl.descricao NOT ILIKE 'Pagamento Recebido%%' "
+        f"   AND fl.descricao NOT ILIKE 'Pag de Fatura%%' "
         f"   AND COALESCE(t.duplicada,false) = false AND t.substituido_por IS NULL "
         f"   AND COALESCE(t.somente_conciliacao,false) = false "
         f"   AND COALESCE(t.conferida,false) = false"
@@ -1631,22 +1639,19 @@ def conciliar_fatura():
             "importado_em": data_hora_local(r["importado_em"]),
             "periodo_inicio": _ciclo_inicio(cur, r),
             "fecha_100": fecha,
-            # "resolvida" e o cruzamento das duas coisas que essa tela cobra:
-            # conciliacao fechada E nada esperando assinatura. Uma fatura que
-            # fecha 100% mas tem lancamento sem OK ainda da trabalho.
-            "resolvida": fecha and not r["lancamentos_sem_ok"],
         })
 
-    # Por padrao a lista mostra so o que ainda da trabalho (pedido do usuario,
-    # 16/09/2026): com 61 documentos, as resolvidas empurravam as pendentes para
-    # fora da tela. `mostrar=todas` traz o historico inteiro.
-    # A fatura ABERTA fica sempre visivel, mesmo resolvida: escondê-la deixaria
-    # a tela sem a linha que o usuario acabou de clicar, e as setas de navegacao
-    # saem desta mesma lista.
+    # Por padrao a lista mostra so as que NAO TEM O ✓ (decisao do usuario,
+    # 16/09/2026, corrigindo o criterio do mesmo dia). A primeira versao escondia
+    # tambem as que fechavam 100% mas tinham lancamento sem OK, e ai a lista
+    # nao batia com o simbolo que a propria tela mostra - o filtro dizia uma
+    # coisa e o ✓ dizia outra. O criterio agora e exatamente o que se ve.
+    # A fatura ABERTA fica sempre visivel: escondê-la deixaria a tela sem a
+    # linha que o usuario acabou de clicar.
     mostrar_faturas = "todas" if request.args.get("mostrar") == "todas" else "pendentes"
     historico_completo = historico
     if mostrar_faturas == "pendentes":
-        historico = [h for h in historico if not h["resolvida"] or h["id"] == fatura_id]
+        historico = [h for h in historico if not h["fecha_100"] or h["id"] == fatura_id]
     historico_ocultas = len(historico_completo) - len(historico)
 
     # navegacao entre faturas: `historico` ja vem da mais nova para a mais

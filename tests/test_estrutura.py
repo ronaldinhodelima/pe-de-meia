@@ -2027,13 +2027,27 @@ def test_lista_de_faturas_mostra_so_as_pendentes_por_padrao():
     assert 'h["id"] == fatura_id' in bloco, "a fatura aberta fica visivel"
     assert "historico_completo" in bloco and "ids = [h[\"id\"] for h in historico_completo]" in bloco
 
-    # "resolvida" cruza as DUAS coisas: fecha 100% E nada esperando assinatura
-    resolvida = view.split('"resolvida":', 1)[1].split("\n", 1)[0]
-    assert "fecha" in resolvida and "lancamentos_sem_ok" in resolvida
+    # O criterio e exatamente o ✓ que a tabela mostra. Escondendo tambem a que
+    # fecha 100% com lancamento sem OK, a lista nao batia com o simbolo - o
+    # filtro dizia uma coisa e o ✓ dizia outra.
+    assert 'not h["fecha_100"] or h["id"] == fatura_id' in bloco
 
     # o contador nao pode contar a mesma transacao duas vezes: uma transacao
     # atende varias linhas num parcelamento que o Pluggy gravou de uma vez so
     assert "COUNT(DISTINCT t.transacao_id)" in view
+
+
+def test_contagem_de_sem_ok_ignora_o_pagamento_recebido():
+    """"Pagamento Recebido" e a fatura ANTERIOR sendo quitada (secao 6.3).
+
+    Ele fica fora das somas, a tela de lancamentos nem oferece caixa de OK para
+    ele e nunca trava o "fecha 100%". Contando-o, a coluna dizia "1 sem OK"
+    numa fatura com 214 de 214 conferidos. As exclusoes tem de ser as MESMAS do
+    `linhas_sem_vinculo`, que ja as aplicava - a regra e uma so.
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    bloco = view.split("COUNT(DISTINCT t.transacao_id)", 1)[1].split("lancamentos_sem_ok", 1)[0]
+    assert "Pagamento Recebido%%" in bloco and "Pag de Fatura%%" in bloco
 
 
 def test_orfao_conferido_aparece_com_o_selo_na_conciliacao():

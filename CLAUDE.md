@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 474 aprovados, 10 ignorados
+**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 475 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -1007,15 +1007,22 @@ arquivo (o "Apagar" da tela zera `pdf_arquivo` e não faz sentido guardar linha 
 própria, e não coluna: um documento pode ser substituído várias vezes.
 **Lição:** um aviso que diz o que saiu não substitui guardar o que saiu.
 
-**A lista de faturas mostra só o que falta resolver** (pedido do usuário, 16/09/2026). Com 61
-documentos, as resolvidas empurravam as pendentes para fora da tela. **"Resolvida" cruza as duas
-coisas que a tela cobra:** fecha 100% **e** nenhum lançamento esperando OK — fatura que fecha 100%
-com lançamento sem assinatura ainda dá trabalho, e pintá-la de verde diria que acabou. O seletor
-alterna para **Todas**, e a coluna **Sem OK** conta os lançamentos de cada fatura que ainda esperam
-assinatura (`COUNT DISTINCT`: no parcelamento que o Pluggy gravou de uma vez, a mesma transação
-atende várias linhas). Duas travas: **a fatura aberta nunca some da lista**, mesmo resolvida, senão
-a tela fica sem a linha que a pessoa acabou de clicar; e **as setas de navegação andam pelo
-histórico completo**, senão "fatura anterior" saltaria meses em silêncio.
+**A lista de faturas mostra por padrão as que não têm o ✓** (pedido do usuário, 16/09/2026). Com
+61 documentos, as fechadas empurravam as pendentes para fora da tela. **O critério é exatamente o
+símbolo que a tabela mostra** — a primeira versão escondia também a fatura que fechava 100% mas
+tinha lançamento sem OK, e aí a lista não batia com o ✓: o filtro dizia uma coisa e o símbolo dizia
+outra. Dois botões (`Sem o ✓` / `Todas`), não um seletor com frase: o critério se explica sozinho.
+Duas travas: **a fatura aberta nunca some da lista**, senão a tela fica sem a linha que a pessoa
+acabou de clicar; e **as setas de navegação andam pelo histórico completo**, senão "fatura anterior"
+saltaria meses em silêncio.
+
+**A coluna "Sem OK" é outra coisa, e não entra no ✓:** conta os lançamentos daquela fatura que ainda
+esperam assinatura. `COUNT DISTINCT` porque no parcelamento que o Pluggy gravou de uma vez a mesma
+transação atende várias linhas. E **exclui "Pagamento Recebido"/"Pag de Fatura"** — é a fatura
+anterior sendo quitada (§6.3), a tela de lançamentos nem oferece caixa de OK para ele. Sem essa
+exclusão a coluna dizia "1 sem OK" numa fatura com **214 de 214 conferidos**. São as MESMAS
+exclusões que o `linhas_sem_vinculo` ao lado já aplicava: a regra é uma só, e foi escrevê-la duas
+vezes que criou a divergência.
 
 **Órfão conferido ganhou selo na conciliação.** Com os vínculos destruídos, a lista "Lançamentos do
 Pluggy sem vínculo" encheu de lançamentos que **continuavam conferidos** — e a tela não dizia isso,
@@ -2947,7 +2954,7 @@ duplicidade/substituição só com decisão explícita ou prova segura.
 
 ## 10.1 Suíte
 
-**474 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
+**475 aprovados e 10 ignorados** (16/09/2026). Cobre a regra de ouro do DRE, helpers puros,
 segurança/XSS, permissões, estrutura de rotas/templates, concorrência, auditoria, regras
 automáticas, rateio, conciliação de fatura, consenso de classificação, o sistema de design (§7.8-A)
 e fluxos com PostgreSQL temporário. Os 6 ignorados dependem de serviços indisponíveis em toda execução — conferir o motivo

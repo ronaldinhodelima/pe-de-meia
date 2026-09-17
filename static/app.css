@@ -731,6 +731,10 @@
   }
   .chip-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
   .chip-btn.ativo { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: var(--peso-medio); }
+  /* Os dois botoes do filtro de faturas andam juntos e sao LINKS: sem isto eles
+     herdariam o sublinhado e o peso do <h3> que os contem. */
+  .filtro-faturas { display: inline-flex; gap: 6px; }
+  .filtro-faturas .chip-btn { text-decoration: none; font-size: var(--fonte-sm); font-weight: var(--peso-normal); }
   .chip-btn .chip-clear { margin-left: 2px; color: var(--ink-faint); font-weight: var(--peso-destaque); }
   .chip-btn .chip-clear:hover { color: var(--bad); }
   .menu-colunas .chip-panel { left: auto; right: 0; }

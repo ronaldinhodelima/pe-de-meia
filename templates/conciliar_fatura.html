@@ -49,32 +49,36 @@
        16/09/2026): com dezenas de documentos, as resolvidas empurravam as
        pendentes para fora da tela. "Resolvida" e o cruzamento das duas coisas
        que esta tela cobra - conciliacao fechada E nada esperando assinatura. #}
-    <h3 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    {# Dois botoes, e nao um seletor com frase: o criterio e exatamente o
+       simbolo que a propria tabela mostra (o ✓), entao o filtro se explica
+       sozinho. O seletor anterior escondia tambem fatura que fechava 100% mas
+       tinha lancamento sem OK, e ai a lista nao batia com o ✓ da tela. #}
+    <h3 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span>Faturas já importadas</span>
-      <select data-pdm-native class="campo-caixa" aria-label="Quais faturas mostrar"
-              style="font-size:var(--fonte-sm);font-weight:var(--peso-normal);width:auto"
-              onchange="location.assign(this.value)">
-        <option value="?{{ ('fatura_id=' ~ fatura_id ~ '&') if fatura_id }}mostrar=pendentes"
-                {{ 'selected' if mostrar_faturas == 'pendentes' }}>Só as que faltam resolver</option>
-        <option value="?{{ ('fatura_id=' ~ fatura_id ~ '&') if fatura_id }}mostrar=todas"
-                {{ 'selected' if mostrar_faturas == 'todas' }}>Todas</option>
-      </select>
+      <span class="filtro-faturas">
+        <a class="chip-btn {{ 'ativo' if mostrar_faturas == 'pendentes' }}"
+           href="?{{ ('fatura_id=' ~ fatura_id ~ '&') if fatura_id }}mostrar=pendentes"
+           data-tip="Esconde as que já fecham 100%">Sem o ✓</a>
+        <a class="chip-btn {{ 'ativo' if mostrar_faturas == 'todas' }}"
+           href="?{{ ('fatura_id=' ~ fatura_id ~ '&') if fatura_id }}mostrar=todas"
+           data-tip="Mostra o histórico inteiro">Todas</a>
+      </span>
     </h3>
     <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:10px">
       Clique para reabrir a conciliação com o estado atual do sistema, sem reenviar o arquivo.
       {% if mostrar_faturas == 'pendentes' and historico_ocultas %}
-        <strong>{{ historico_ocultas }}</strong> fatura(s) resolvida(s) estão ocultas — elas fecham
-        100% e não têm lançamento esperando OK.
+        <strong>{{ historico_ocultas }}</strong> fatura(s) com ✓ estão ocultas — nelas toda linha
+        tem vínculo e nada sobrou do Pluggy.
       {% endif %}
     </div>
     <table class="compacta"><thead><tr><th>Referência</th><th>Cartão</th><th style="text-align:right">Total</th><th>Sem OK</th><th>Importada em</th>
       <th>Início</th><th>Fim</th><th>Vencimento</th></tr></thead>
     <tbody>
       {% for h in historico %}
-        {# verde so na RESOLVIDA: fechar 100% com lancamento sem OK ainda da
-           trabalho, e pintar de verde diria que acabou #}
-        <tr style="{{ 'background:var(--good-soft);' if h.resolvida }}{{ 'outline:2px solid var(--ink-faint);outline-offset:-2px' if h.id == fatura_id }}"
-            title="{{ 'Resolvida: fecha 100% e nenhum lançamento espera OK' if h.resolvida else ('Fecha 100%, mas ainda há lançamento sem OK' if h.fecha_100 else 'Ainda há linha da fatura ou lançamento do Pluggy sem vínculo') }}">
+        {# verde = tem o ✓, o mesmo criterio do filtro: um so significado para a
+           cor, para o simbolo e para o que a lista mostra #}
+        <tr style="{{ 'background:var(--good-soft);' if h.fecha_100 }}{{ 'outline:2px solid var(--ink-faint);outline-offset:-2px' if h.id == fatura_id }}"
+            title="{{ ('Fecha 100%: toda linha tem vínculo e nada sobrou do Pluggy' ~ (' — mas ainda há lançamento sem OK' if h.lancamentos_sem_ok else '')) if h.fecha_100 else 'Ainda há linha da fatura ou lançamento do Pluggy sem vínculo' }}">
           <td><a href="/relatorios/conciliar-fatura?fatura_id={{ h.id }}">{{ '%02d'|format(h.mes_referencia) }}/{{ h.ano_referencia }}</a>
             {%- if h.fecha_100 %} <span style="color:var(--good)" title="Fecha 100%">✓</span>{% endif %}</td>
           <td>{{ h.conta_label }}</td>
@@ -88,9 +92,10 @@
       {% endfor %}
     </tbody></table>
     <div style="font-size:var(--fonte-xs);color:var(--ink-faint);margin-top:8px">
-      ✓ = a fatura fecha 100%: toda linha dela tem vínculo e nenhum lançamento do Pluggy sobrou no
-      ciclo. A coluna <strong>Sem OK</strong> conta os lançamentos dela que ainda esperam assinatura.
-      Linha em verde = resolvida, as duas coisas de uma vez.
+      ✓ e linha em verde = a fatura fecha 100%: toda linha dela tem vínculo e nenhum lançamento do
+      Pluggy sobrou no ciclo. A coluna <strong>Sem OK</strong> é outra coisa — conta os lançamentos
+      dela que ainda esperam assinatura, e não entra no ✓. O "Pagamento Recebido" fica de fora dessa
+      conta: ele é a fatura anterior sendo quitada e não recebe OK aqui.
       Essas datas vêm direto da fatura, não são editáveis aqui. O arquivo original de cada fatura fica salvo e pode ser
       baixado ou apagado em <a href="/configuracoes/faturas-pdf">Configurações → Arquivos de fatura</a>.
     </div>
