@@ -1075,6 +1075,20 @@ o mesmo critério que a lista de órfãos já aplicava — §6.5 nº 10 mais uma
 continua fora do filtro de propósito**, e há teste cobrando isso: o agregado de parcelamento é
 exatamente a quem a linha deve se ligar (§4.5).
 
+**Fechamento do 09/2026, por decisão do usuário (17/09/2026):** ele preferiu **não reimportar** os
+arquivos e pediu só o religamento. Desvinculadas as duas linhas do `ARREC CONVÊNIOS` e rodado o
+vínculo automático já corrigido: **3 vínculos criados**, os dois agora no lançamento que conta e o
+terceiro fechando a `MATRÍCULA AMANDA`. O extrato passou de `falta vincular R$ -550,00` para
+**R$ 0,00** — já vinculado = soma das linhas = movimento = R$ 1.553,58, **zero linha sem vínculo**.
+O DRE de 09/2026 ficou **idêntico** antes e depois (receitas R$ 20.865,91, despesas R$ 17.733,03,
+resultado R$ 3.132,88), como tem que ser: vínculo de documento não move resultado. Sobram **3
+órfãos legítimos** — `BRSIM` R$ 2.314,00 e dois `DEP EM ESPÉCIE` (R$ 1.858,87 e R$ 9.029,00), todos
+de 14/09 **depois das 08:34**, hora em que o OFX foi exportado (`DTSERVER`); eles entram no extrato
+seguinte. **O vínculo automático é POST, então ele assina** (§1.2): 3 lançamentos ganharam OK
+carimbado `fatura 09/2026`, nenhum OK foi retirado nem sobrescrito.
+**Os dois depósitos em espécie somam R$ 10.887,87 e caem na pendência da §11.3** — `Transfer - Cash`
+em natureza `fluxo` entra como receita sem origem identificada.
+
 **3. O cabeçalho do OFX MENTE sobre a codificação.** O extrato da Unicred declara
 `ENCODING:USASCII` / `CHARSET:1252` e escreve `Í` como `c3 8d`, que é **UTF-8**. O `_texto()`
 obedecia ao cabeçalho e gravou `MATRÃ?CULA AMANDA` e `ARRECADAÃ‡ÃƒO DE CONVÃŠNIOS` no banco. Hoje
