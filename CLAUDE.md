@@ -843,6 +843,17 @@ tipo é despesa dobrada, não uma escolha estética.
 **Cuidado com o rótulo da tela:** `registro técnico · somente leitura` é `tecnico = not principal`
 — posição na tela, não estado contábil. Ele não tira nada do resultado.
 
+**E o rótulo do outro lado dizia o contrário do que a própria linha dizia** (17/09/2026). O painel
+escrevia **`contabilizado e editável`** para todo `v.principal`, sem olhar mais nada — e `principal`
+é só "qual vínculo carrega a edição". Resultado: o agregado `Parcelado Lojista AZULPSZ9RH`,
+R$ 374,76, aparecia com o selo **"fora do resultado"** na linha e **"contabilizado"** no painel logo
+abaixo, na mesma tela. **A conta estava certa** — ele é `somente_conciliacao`, e as parcelas de
+R$ 93,69 é que contam, uma por fatura (§4.5), todas conferidas em 06, 07 e 08/2026. Errado era só o
+rótulo, que é o pior tipo de erro numa tela cujo trabalho é dizer o que conta. Hoje quem decide o
+texto é **`linha.fora_do_resultado`, o mesmo campo do selo da descrição** — a regra é uma só —, e o
+verde de "fechado/completo" (§7.6) só acende quando o lançamento entra no resultado. A legenda do
+rodapé dizia o mesmo, misturando "editável" com "usado no DRE", e foi reescrita junto.
+
 `GET /api/diagnostico/eco-3h` varre isso, somente leitura: linhas de fatura com dois ou mais
 lançamentos elegíveis, mesmo valor e mesmo cartão, separando os pares de **3h exatas** — que são a
 assinatura da normalização de horário da §4.6 alcançando um registro e não o outro. Ela **só

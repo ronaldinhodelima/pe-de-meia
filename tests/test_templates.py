@@ -1040,6 +1040,27 @@ class TestAcoesDoLancamento:
         # e nao ha mais tres caixas aninhadas
         assert "acoes-lancamento" not in html and "vinculo-grid" not in html
 
+    def test_o_painel_nao_diz_contabilizado_no_que_esta_fora_do_resultado(self, ctx):
+        """`principal` e posicao na tela, nao estado contabil (secao 6.7). O
+        painel escrevia "contabilizado e editável" DENTRO de um lancamento que a
+        linha acima marca como "fora do resultado" - caso real do agregado
+        `Parcelado Lojista AZULPSZ9RH` de R$ 374,76, cujas parcelas e que contam
+        (secao 4.5). Quem decide e o MESMO campo do selo da descricao."""
+        base = self.contexto()
+        base["linhas"][0]["fora_do_resultado"] = (
+            "Registro de conciliação (compra parcelada inteira) — as parcelas é que contam.")
+        html = render_template("lancamentos_fatura.html", **base)
+        faixa = html.split('class="vinculo-faixa principal"', 1)[1].split("</div>", 1)[0]
+        assert "contabilizado" not in faixa
+        assert "fora do resultado · editável" in faixa
+        # sem o verde de "fechado/completo" (secao 7.6)
+        assert "estado ok vinculo-estado" not in faixa
+        # e o caso normal continua dizendo o que dizia
+        painel_ok = render_template(
+            "lancamentos_fatura.html", **self.contexto()
+        ).split('class="vinculos-detalhe"', 1)[1]
+        assert "contabilizado e editável" in painel_ok
+
     def test_so_manual_e_importado_oferecem_excluir(self, ctx):
         """Lancamento do Pluggy nunca se apaga: a origem fica para auditoria
         (secao 9.3)."""

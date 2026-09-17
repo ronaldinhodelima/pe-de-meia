@@ -487,7 +487,17 @@
           e de classificacao - senao apagaria o "Faltam: Rateio". #}{% if v.principal and linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden><button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição deste lançamento manual. A de um lançamento do banco não se edita: ela pertence ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
         <span class="vinculo-quando">{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</span>
         <span class="valor vinculo-valor">{{ v.valor|moeda }}</span>
-        <span class="estado {{ 'ok' if v.principal else '' }} vinculo-estado">{{ 'contabilizado e editável' if v.principal else 'somente leitura' }}</span>
+        {# `principal` e POSICAO na tela - qual vinculo carrega a edicao -, nunca
+           estado contabil (a mesma armadilha do `registro tecnico` da secao 6.7).
+           Escrito como "contabilizado e editável" sem olhar mais nada, o painel
+           dizia "contabilizado" DENTRO de um lançamento que a propria linha
+           acima marca como "fora do resultado" - foi o que aconteceu com o
+           `Parcelado Lojista AZULPSZ9RH` de R$ 374,76, que e registro de
+           conciliacao e cujas parcelas e que contam (secao 4.5). Quem sabe se
+           conta e `linha.fora_do_resultado`, o mesmo campo do selo da descricao:
+           a regra e uma so. #}
+        <span class="estado {{ 'ok' if v.principal and not linha.fora_do_resultado else '' }} vinculo-estado"
+              {% if v.principal and linha.fora_do_resultado %}data-tip="{{ linha.fora_do_resultado }}"{% endif %}>{{ ('fora do resultado · editável' if linha.fora_do_resultado else 'contabilizado e editável') if v.principal else 'somente leitura' }}</span>
         {% if v.principal and pode_editar and linha.principal and not linha.pagamento %}
         <span class="vinculo-acoes">
           <button type="button" class="ver-btn" data-abrir-rateio="{{ linha.principal.transacao_id }}">{{ 'Rateio' if linha.rateios else 'Ratear' }}</button>
@@ -573,7 +583,7 @@
 </details>
 {% endif %}
 <div class="rodape-fatura">
-  <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo “contabilizado” identifica o único lançamento editável e usado no DRE; os demais são registros técnicos para auditoria.{% endif %}</div>
+  <div class="ajuda-fatura">{% if fatura.em_andamento %}Exibição provisória formada pelos lançamentos recebidos do Pluggy desde o encerramento da última fatura. Classificações e observações serão preservadas quando a fatura oficial for importada.{% else %}A fatura define quais cobranças pertencem à fatura. Use <b>+</b> para ver todos os registros agregados. O selo à direita identifica o único lançamento editável e diz se ele entra no resultado — “contabilizado” quando entra, “fora do resultado” quando não (o registro de conciliação de uma compra parcelada, por exemplo, não entra: quem conta são as parcelas). Os demais são registros técnicos para auditoria.{% endif %}</div>
   {# So com uma fatura OFICIAL em foco: a revisao de parcelamentos e sobre as
      linhas de um documento. No recorte por periodo o id da "fatura" e o falso
      `periodo`, e o JS pedia a previa com ele em toda abertura da tela - um 400
