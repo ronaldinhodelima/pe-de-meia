@@ -4219,10 +4219,21 @@ def api_diagnostico_casamento(fatura_id):
             f"AND COALESCE(t.duplicada, false) = false "
             f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
             f"WHERE fl.transacao_id_criado = t.transacao_id) "
+            # o mesmo filtro do matcher, senao o diagnostico explica um
+            # casamento diferente do que acontece de verdade (secao 6.5 no 10)
+            f"AND t.substituido_por IS NULL "
             f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s;",
             (str(fatura["account_id"]), min(datas), fim_busca + timedelta(days=3)),
         )
         candidatos = [dict(r) for r in cur.fetchall()]
+        # `_melhor_agregado` le estas chaves; montamos aqui para poder chamar a
+        # FUNCAO de verdade em vez de reescrever o criterio dela - uma segunda
+        # copia divergiria e o diagnostico passaria a mentir.
+        for c in candidatos:
+            c["_usado"] = False
+            c["_valor_centavos"] = _centavos(c["valor"])
+            c["_bloqueado"] = str(c["transacao_id"]) in bloqueadas
+            c["parcela_total"] = parcela_na_descricao(c["descricao"])[1]
         cur.close()
         conn.close()
 
@@ -4253,12 +4264,46 @@ def api_diagnostico_casamento(fatura_id):
                     "parcela_declarada": f"{c_atual}/{c_total}" if c_atual else None,
                     "recusado_por": motivos or None,
                 })
+            # PRIORIDADE 1 do matcher: o parcelamento que o Pluggy gravou como
+            # UMA transacao no valor cheio. Sem isto o diagnostico so olhava
+            # candidato de mesmo valor que a PARCELA, e a pergunta "por que a
+            # Parc.2/6 nao achou o agregado de 6x" nao tinha resposta nenhuma
+            # aqui - foi preciso adivinhar, que e' o que esta rota existe para
+            # evitar. Chama a propria `_melhor_agregado`, nunca uma copia.
+            agregado = None
+            if (l["parcela_total"] or 0) >= 2:
+                esperado = centavos_l * l["parcela_total"]
+                desc_norm = (l["descricao_base"] or l["descricao"]).upper()
+                tokens_linha = _tokens_significativos(desc_norm)
+                perto = []
+                for c in candidatos:
+                    if abs(c["_valor_centavos"] - esperado) > 100:
+                        continue
+                    comuns = tokens_linha & _tokens_significativos(c["descricao"])
+                    perto.append({
+                        "transacao_id": str(c["transacao_id"]),
+                        "descricao": c["descricao"],
+                        "data": c["data_local"].isoformat(),
+                        "valor": float(c["valor"]),
+                        "tokens_em_comum": sorted(comuns) or None,
+                        "recusado_por": None if comuns else
+                        ["nenhum token de estabelecimento em comum"],
+                    })
+                escolhido = _melhor_agregado(
+                    candidatos, esperado, l["parcela_total"], desc_norm)
+                agregado = {
+                    "valor_cheio_esperado": _reais(esperado),
+                    "tokens_da_linha": sorted(tokens_linha) or None,
+                    "candidatos_no_valor_cheio": perto,
+                    "escolhido": str(escolhido["transacao_id"]) if escolhido else None,
+                }
             saida.append({
                 "linha": l["descricao"], "data": l["data"].isoformat(),
                 "valor": float(l["valor"]),
                 "parcela": f"{l['parcela_atual']}/{l['parcela_total']}"
                            if l["parcela_atual"] else None,
                 "candidatos_de_mesmo_valor": vistos,
+                "agregado_do_parcelamento": agregado,
             })
         return jsonify({
             "ok": True,
