@@ -1099,6 +1099,46 @@ dois — então o arquivo realmente 1252 continua certo, sem depender de acertar
 Documento já importado continua com o texto torto no banco — **reimportar o arquivo guardado
 corrige**, e o vínculo por valor/data nunca dependeu do acento.
 
+### O que a tela de conciliação gravou fica escrito até sair dela (17/09/2026)
+
+**Pedido do usuário.** Toda ação dessa tela escreve no banco — importar documento, vincular,
+desvincular, criar lançamento pela fatura, conferir pela fatura, marcar cobrança repetida — e a
+confirmação **sumia em segundos**: ou era um toast de ~2,6s (§7.2), ou um texto ao lado do botão que
+o próprio `location.reload()` da ação varria 700–1200 ms depois. Numa tela de **conferência** isso é
+perder a auditoria na hora em que ela mais importa: o usuário não conseguia reler o que acabou de
+fazer.
+
+Agora existe **"O que foi feito nesta tela"**, no topo, uma linha por gravação com a hora, na ordem
+em que aconteceram — e ele **fica até o usuário sair da tela**.
+
+- **`sessionStorage`, não `localStorage`**: é o que foi feito *nesta visita*, não um estado do
+  usuário. E precisa sobreviver ao recarregamento que a própria ação dispara — mesmo motivo do
+  `pdmToastAposRecarregar()` (§7.2).
+- **Quem decide "continuo na tela" é uma marca gravada imediatamente antes de cada recarregamento
+  que a tela provoca** (`recarregarMantendoRegistro()`), inclusive no `submit` da importação, que é
+  POST de formulário. Sem a marca, a carga é chegada de vinda de fora e o registro nasce vazio.
+  **Olhar o `pathname` não serviria**: sair e voltar depois traria de volta o registro de uma visita
+  já encerrada. Por isso **nenhum caminho pode chamar `location.reload()` solto** — um só apagaria o
+  registro inteiro, em silêncio, e há teste varrendo isso.
+- **O texto entra por `textContent`**, nunca `innerHTML`: ali vão descrição de lojista e mensagem de
+  erro do servidor, e o Jinja não protege o que o JS monta (§2.2).
+- **O número de OK assinados aparece no registro**, tanto no "Conferir pela fatura" quanto no
+  vínculo automático — que é POST e portanto **também assina** (§1.2). Antes esse número piscava e
+  sumia: o OK acontecia sem o usuário ver quantos foram.
+- **Falha também entra**, em vermelho, dizendo que nada foi gravado — é a única pista do que houve.
+
+**Um defeito que a própria entrega criou e foi corrigido no mesmo dia:** o marcador
+`data-importada` existe em **toda** tela que abre uma fatura (é o alvo do "Abrir" da importação em
+lote), então reabrir uma conciliação por **GET** escrevia *"Documento importado"* no registro —
+afirmando uma gravação que não houve. Quem diz que este carregamento gravou é o **método**
+(`importou_agora`, só em POST bem-sucedido), e o JS exige `[data-importada][data-gravou]`.
+**Lição:** marcador que já existia para outra finalidade não vira prova de ação só por estar por
+perto.
+
+Conferido em produção **clicando**, não chamando a rota (§2.2): chegando de fora o bloco nasce
+escondido e vazio; a ação aparece na hora; sobrevive ao recarregamento da própria tela; o erro sai
+em vermelho; o botão *limpar* zera; e sair para Lançamentos e voltar deixa o registro limpo.
+
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
 Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite
