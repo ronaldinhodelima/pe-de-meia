@@ -3417,193 +3417,76 @@ blocos, sempre com prévia e decisão do usuário — **o OK continua sendo dele
 - filtro `status=despesa` incluir lançamentos fora do resultado;
 - log `regra_automatica` gravando `"erro":"0"` — abrir e achar a causa (§10.4 nº 11).
 
-## 11.2-A Vínculos que ligam estabelecimentos diferentes (varredura de 01/09/2026)
+## 11.2-A Vínculos que ligam estabelecimentos diferentes — fechado (migração 50)
 
-`GET /api/fatura/vinculos-suspeitos` lista, sem desfazer nada, os vínculos em que a linha da
-fatura e a transação não têm **um único termo do estabelecimento em comum**. É a armadilha nº 17
-da §6.5 aplicada para trás: a correção de lá passou a impedir vínculos novos, mas **não varreu os
-já gravados**.
+`GET /api/fatura/vinculos-suspeitos` varre, sem desfazer nada, vínculos onde a linha da fatura e a
+transação não têm um termo do estabelecimento em comum (armadilha nº 17 da §6.5, aplicada aos
+vínculos já gravados). Varredura de 01/09/2026: 3.058 avaliados, 33 suspeitos. A migração 50
+corrigiu os erros reais — SUPERVIZA e POSTOS NOTA (compras à vista que não podiam ser agregado,
+R$ 980,44 devolvidos ao DRE) e três pares trocados entre si (MERCEA POMARES↔MERCEARIA SOUZA,
+XIMANGO↔ALLPARK, SMARTYZRBSB↔PANIFICADORA) — sobre uma lista explícita de estabelecimentos, mantendo
+a trava de nunca desmarcar quem já gerou parcela (§6.6). As grafias coladas (ANJOS DE QUINTAL etc.)
+saíram da lista de suspeitos em 17/09/2026 com `tokens_em_comum` (§6.5 nº 18). O que resta de falso
+positivo é mojibake dos extratos com codificação errada (§6.8) — permanente, o usuário decidiu não
+reimportar esses arquivos.
 
-Resultado: 3.058 vínculos avaliados, **33 suspeitos**, 18 deles com agregado fora do DRE.
-
-**Três erros reais, todos com a mesma assinatura** — parcela × total bate com uma compra alheia
-dentro da tolerância de R$ 1,00:
-
-| Parcelas | Agregado a que grudaram | Diferença |
-|---|---|---|
-| TOTAL SPORTES 10 × R$ 44,99 = R$ 449,90 | ORAL UNIC ODONTOL R$ 450,00 | R$ 0,10 |
-| TOTAL SPORTES 10 × R$ 71,79 = R$ 717,90 | **SUPERVIZA R$ 718,40 (à vista)** | R$ 0,50 |
-| ATIVA 4 × R$ 65,62 = R$ 262,48 | **POSTOS NOTA LTDA R$ 262,04 (à vista)** | R$ 0,44 |
-
-SUPERVIZA e POSTOS NOTA são **"A vista sem juros"**: compra à vista não pode ser agregado de
-parcelamento de forma nenhuma, e as duas estão fora do resultado — **R$ 980,44**, mesma classe de
-defeito da §6.6. ORAL UNIC é "Parcelado Lojista", então pode ser agregado legítimo que ganhou
-vínculos errados **além** dos certos; conferir antes de concluir.
-
-**Três pares simplesmente trocados entre si**, mesmo valor, inócuos no total mas com a
-classificação indo para o lojista errado: MERCEA POMARES ↔ MERCEARIA SOUZA / Unicred TAG (R$ 3,50),
-XIMANGO ↔ ALLPARK (R$ 25,00), SMARTYZRBSB ↔ PANIFICADORA (R$ 40,00).
-
-**Falsos positivos conhecidos da varredura**, não mexer: `Pagamento Recebido` ↔ `Pag de Fatura Via
-Deb Aut` (§6.5 nº 12) e `Anuidade - bonificação` ↔ `Est.Tarifa manutencao de conta` (§8.3).
-
-**As grafias coladas saíram da lista em 17/09/2026** — `PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE
-QUINTAL` e `CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA` agora casam por `tokens_em_comum`
-(§6.5 nº 18). **E elas nunca foram só ruído de varredura:** a mesma deformação que as fazia parecer
-suspeitas **impedia o casamento**, e foi o que deixou a `Parc.2/6` do ANJOS DE QUINTAL sem vínculo
-na fatura 09/2026. Ninguém tinha feito essa ligação — ficou dois meses listado aqui como "não
-mexer".
-
-**O que restou de falso positivo é mojibake**, não tokenização: `DEPOSITO EM ESPÃ‰CIE` ↔ `DEP EM
-ESPÉCIE`, nos extratos da conta corrente Unicred que foram lidos com a codificação errada (§6.8).
-Some quando esses arquivos forem reimportados.
-
-**Os três pares trocados voltaram a trocar quando o vínculo automático rodou de novo** — a regra
-do token protegia o agregado e a substituição, **não** o casamento 1:1, que escolhia "o mais
-recente, sem motivo melhor pra escolher". Agora, entre candidatos de mesmo valor no ciclo, **o
-estabelecimento desempata primeiro** e a data só decide entre iguais. É preferência, não
-exigência: par legítimo sem palavra em comum existe (§6.5 nº 12) e continua casando.
-
-**Corrigido pela migração 50** (aprovada pelo usuário em 01/09/2026), sobre uma **lista explícita**
-de estabelecimentos — a varredura tem falsos positivos legítimos que não podem ser desfeitos. Ela
-apaga só os vínculos cruzados e depois reavalia quem ainda é agregado, mantendo a trava da §6.6:
-**nunca desmarcar quem já gerou parcela**. Os três pares trocados voltam a ficar sem vínculo; o
-vínculo automático da tela de conciliação os refaz certos, porque agora a regra do token existe.
-
-**Desfazer vínculo muda o que entra no DRE** — o agregado volta ou sai do resultado. É decisão do
-usuário, como a marcação de duplicidade (§1.3).
+**Em aberto:** ORAL UNIC ODONTOL ↔ TOTAL SPORTES (parcela 10× R$ 44,99 = R$ 449,90, contra
+R$ 450,00) — ORAL UNIC é "Parcelado Lojista", pode ser agregado legítimo que ganhou um vínculo
+errado a mais; nunca foi conferido linha a linha. Desfazer vínculo muda o que entra no DRE — é
+decisão do usuário, como marcar duplicidade (§1.3).
 
 ## 11.3 A validar com o usuário (dado que falta)
 
-**Andar de cima da residência alugado para a BRDrive — identificado em 07/09/2026.** A casa tem
-dois andares: a família mora no porão e a parte de cima é alugada para a BRDrive. São **13
-recebimentos mensais** `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX` na conta corrente: **R$ 1.600,00**
-de ago a dez/2025 e **R$ 1.680,00** a partir de jan/2026 (+5,0% de reajuste na virada do ano).
-
-Classificação: **Aluguel Recebido / Família / Casa / Imóveis**, observação
-`Aluguel escritório BRDrive Videira`. O padrão veio do único aluguel que o usuário já havia
-conferido — o do Apto Fiorentina, em `Família / Apto Fiorentina / Imóveis`: **o projeto identifica
-o imóvel que gera a renda, não o inquilino.** Por isso `Casa`, e não `BRDrive`.
-
-**A confusão com pró-labore era real e foi corrigida.** O recebimento de **06/07/2026** estava em
-`Pró-labore / Ronaldo / BRDrive / Empresas`, **com OK e observação do próprio usuário** — mesma
-descrição, mesmo valor e mesmo dia dos outros doze. Ele confirmou o engano em 07/09/2026 e o
-lançamento foi alinhado aos demais, **mantendo a assinatura dele intacta** (§1.2: o Claude ajusta
-categoria, dimensão e observação; o check não é dele). Em 2026: `Aluguel Recebido` passou a
-R$ 14.640,00 em 9 lançamentos e `Pró-labore` caiu para R$ 33.161,30 em 5.
-
-**A lição para casos parecidos:** um lançamento conferido não é necessariamente um lançamento
-certo — a assinatura diz que alguém olhou, não que acertou. Quando o conjunto contradiz o item
-isolado (doze meses idênticos contra um), vale evidenciar e perguntar, nunca sobrescrever sozinho.
-
-Não muda o total de receita: `Transfer - PIX` é natureza `fluxo` e, sendo crédito, já contava como
-receita. O que muda é a composição — R$ 11.760,00 saíram de `Transfer - PIX` para `Aluguel
-Recebido` em 2026.
-
-**A regra para os próximos só foi criada em 11/09/2026.** Em 07/09 os 13 recebimentos foram
-classificados, mas a regra ficou para trás, e o de 08/09/2026 chegou só com a categoria que o usuário
-pôs à mão. Hoje: `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX`, só na Conta Corrente Unicred, →
-Aluguel Recebido / Família / Casa / Imóveis. **Sem filtro de valor**, porque o aluguel reajusta
-todo ano (1.600 → 1.680), e a descrição exata só alcança o aluguel: o único outro lançamento da
-BRDrive na conta é `DEB PAGTO PIX TEF` (−R$ 1,00), que ela não pega. A observação
-`Aluguel escritório BRDrive Videira` a regra não grava — regra não escreve observação (§7.3).
-**Lição:** padronizar os antigos e criar a regra dos novos são duas entregas; conferir as duas.
-
-**Ainda em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
+**Aluguel BRDrive — fechado, padronizado (11/09/2026).** A casa tem dois andares: a família mora
+no porão e o de cima é alugado para a BRDrive. `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX`, Conta
+Corrente Unicred → **Aluguel Recebido / Família / Casa / Imóveis** (o projeto identifica o imóvel,
+não o inquilino — mesmo padrão do Apto Fiorentina), R$ 1.600,00 até dez/2025 e R$ 1.680,00 depois
+(+5%). Regra ativa, sem filtro de valor (reajusta todo ano). Um recebimento estava classificado
+como Pró-labore, com OK do próprio usuário — corrigido preservando a assinatura (§1.2: conferido
+não é necessariamente certo). Não muda receita total (`Transfer - PIX` já contava), só a composição.
+**Em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
 
 **Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
-de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Estão em natureza
-`fluxo`, então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não
-for caso a caso, podem estar inflando a receita.
+de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Natureza `fluxo`,
+então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não for caso a
+caso, podem estar inflando a receita.
 
-**Duplicidades: varridas em 03/09/2026** — `GET /api/diagnostico/suspeitas-duplicidade`, somente
-leitura. As 144 linhas que a tela lista em 2025+2026 são **58 grupos**, e a maioria não é
-duplicidade:
-
-| Balde | Grupos | O que é |
-|---|---|---|
-| Cobrança real da fatura | 26 | cada registro tem **linha própria no PDF** |
-| Já resolvido | 12 | sobrou um elegível só; excedente já fora do DRE |
-| Revisar | 17 | horários reais distintos — provavelmente compras separadas |
-| Eco instantâneo | 2 | Unicred TAG, mesmo instante, sem linha de PDF |
-| Eco de 3h | 1 | AÇOUGUE CARNE FRESCA 08/08/2026, R$ 257,00 |
-
-**A tela de Lançamentos superestima.** O filtro "Possíveis duplicidades" agrupa por conta + dia +
-valor + descrição e só exclui `duplicada` — **não exclui `substituido_por` nem
-`somente_conciliacao`**. É a §6.5 nº 10 do outro lado: par já resolvido continua listado como
-pendência.
-
-**Horário uniforme não é eco.** Os 26 legítimos apareciam todos às **09:00** porque a fatura só
-imprime o DIA, e o lançamento nascido dela recebe hora padrão. Três pedágios de R$ 8,40 num dia são
-uma viagem, não uma cópia — e a fatura é a autoridade sobre o que foi cobrado (§5). A evidência que
-decide é `fatura_linha.transacao_id_criado`, **não** `transacao.importado`, que é outra coisa e vale
-`false` nesses registros.
-
-**Fechado em 18/09/2026.** Reaberta a varredura depois de setembro/2026 importado: 16 dos 17
-"revisar" se resolveram sozinhos (a fatura seguinte trouxe a linha própria de cada um), e o eco de
-3h do açougue também — virou cobrança real, com duas linhas distintas no PDF. Sobrou só o
-**`Pagamento recebido` R$ 1.948,10 em 05/08/2026 na conta platinum**, com dois registros Pluggy
-contando o mesmo evento (um às 00:00, sem hora confiável; outro às 18:55). Fora do alcance de
-`_classificar_orfaos()` porque "Pagamento Recebido" nunca tem `fatura_linha` (§6.3). O usuário
-confirmou que é o mesmo pagamento; marcado pela via manual (`/api/duplicidades/marcar` com
-`substituto_id`), o de 00:00 recolhido sob o de 18:55. Natureza `transferencia`, fora do DRE nos
-dois lados — o DRE não mudou.
-
-**Horários 00:00 e diferença de três horas em conta corrente.** Não usar horário isoladamente para
-apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
-revisar e marcar manualmente.
+**Duplicidades — fechado em 18/09/2026.** `GET /api/diagnostico/suspeitas-duplicidade` varreu
+58 grupos em 03/09; a maioria eram cobranças reais (cada uma com linha própria no PDF) ou pares já
+resolvidos. Dois princípios que continuam valendo: **o filtro "Possíveis duplicidades" da tela de
+Lançamentos superestima** (agrupa por conta+dia+valor+descrição e só exclui `duplicada`, não
+`substituido_por` nem `somente_conciliacao` — §6.5 nº 10 do outro lado); e **horário uniforme não é
+eco** — lançamento nascido da fatura recebe hora padrão (09:00), então três cobranças no mesmo
+horário podem ser três eventos reais, não cópia. Reaberta a varredura com setembro/2026 importado:
+16 dos 17 "revisar" e o eco de 3h do açougue se resolveram sozinhos. Sobrou o `Pagamento recebido`
+R$ 1.948,10 de 05/08/2026 (conta platinum) — dois registros Pluggy do mesmo evento (00:00 sem hora
+confiável, e 18:55), fora do alcance da varredura automática porque "Pagamento Recebido" nunca tem
+`fatura_linha` (§6.3). Confirmado pelo usuário como mesmo evento e marcado manualmente
+(`/api/duplicidades/marcar` com `substituto_id`); natureza `transferencia`, DRE inalterado.
 
 **FARM GEREMIAS (Andrea)** 3× R$ 63,30 tem **dois agregados** (26/11/2025 e 10/07/2026, ambos
 R$ 189,90) e linhas duplicadas nas faturas. Pode ser duas compras iguais ou duplicidade da
 operadora.
 
-**Categorias que os OK do mesmo lojista contradizem.** `consenso-preview` devolve
-`categoria_divergente_entre_oks`. **A maioria é falso positivo**: o IOF chega com a mesma descrição
-do lojista, então `NOVOTEL` = Accomodation + `Tax on financial operations` são a compra e o IOF
-dela, ambos certos (§8.3). Divergências reais a decidir: AQUAMATER (Academia 14 × Shopping 1),
-AZULEQVY2E e LATAM AIR (Airport and airlines × Viagem), ORTOCLINICA (Healthcare × Hospital clinics
-and labs). MERCADO*MERCADOLIVRE (Houseware 13 × Vehicle maintenance 6) é divergência **legítima**:
-marketplace, e a §8.4 manda não automatizar.
+**Categorias que os OK do mesmo lojista contradizem** (`consenso-preview` →
+`categoria_divergente_entre_oks`). A maioria é falso positivo (IOF com a mesma descrição do
+lojista, §8.3). Divergências reais a decidir: AQUAMATER (Academia 14 × Shopping 1), AZULEQVY2E e
+LATAM AIR (Airport and airlines × Viagem), ORTOCLINICA (Healthcare × Hospital clinics and labs).
+MERCADO*MERCADOLIVRE (Houseware × Vehicle maintenance) é divergência **legítima** — marketplace,
+§8.4 manda não automatizar.
 
-**GUILHERMEDASILVA não é divergência** — corrigido em 02/09/2026, contra os 24 lançamentos de 2026.
-`Agua / Gas` é o nome interno da categoria que a tela mostra como **Gás**; a regra por valor da §8.4
-está aplicada e funcionando, e "Agua × Agua / Gas" é só Água × Gás. **Não tratar como resíduo.**
+**`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado, fechado (07/09/2026).** 13 lançamentos
+na conta corrente (o débito automático da fatura). `Pagamento de Fatura`, **só a categoria** — sem
+Responsável, senão o gasto conta duas vezes na visão por dimensão (§4.1). Esta descrição não contém
+"pagamento de fatura", então a migração 56 não a alcança; conferir a categoria se aparecer outra
+grafia.
 
-**Mas o corte de R$ 120,00 encostou no gás.** Os valores reais de 2026 são Água de R$ 17,00 a
-R$ 66,00 e Gás de R$ 114,99 a R$ 185,00 — o vão está entre 66 e 115, não em 120. O único lançamento
-que a regra classificaria errado é o de **R$ 114,99 (12/03/2026)**, hoje em Gás, que pela letra da
-regra deveria ser Água. **Corte movido para R$ 90,00 em 18/09/2026**, por decisão do usuário: Água
-`< R$ 90,00`, Gás `> R$ 90,00`. Nenhum dos 24 lançamentos existentes mudou de categoria — só o
-critério dos próximos.
-
-**`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado em 07/09/2026.** São 13 lançamentos
-(5 em 2025, 8 em 2026): o débito automático da fatura saindo da conta corrente. Todos já
-estavam em `Pagamento de Fatura` (natureza `transferencia`); dois tinham **Responsável =
-Ronaldo**, que foi retirado. Pela §4.1 a classificação certa aqui é **só a categoria** — o
-gasto foi das compras que a fatura cobrou, e essas já estão classificadas; preencher
-Responsável faria o mesmo dinheiro aparecer duas vezes na visão por dimensão. Os dois OK
-foram preservados com as assinaturas originais (`fatura 08/2026` e `ronaldo`). **Esta
-descrição não contém "pagamento de fatura", então a migração 56 não a alcançou** — se
-aparecer outra grafia, conferir a categoria antes de supor que já está coberta.
-
-**Colégio Salvatoriano — padronizado em 07/09/2026.** A mensalidade chega como boleto na conta
-corrente (`escola Amanda LIQ TIT - IB`), R$ 1.206,50 em 2025 e R$ 1.263,87 em 2026 (+4,76%).
-São 6 em 2025 (ago–dez, mais a matrícula) e 8 em 2026 (jan–ago). Todos em **Educação / Amanda
-/ Colégio Salvatoriano / Educação**, padrão que os próprios OK do usuário já traziam, unânime
-em 11 lançamentos escolares conferidos.
-
-Três coisas que só aparecem olhando o conjunto:
-
-- **O mês de julho/2026 parecia faltar e não faltava:** a descrição ficou com o CNPJ
-  (`86552809000222 - INS LIQ TIT - IB`). Mesmo valor, mesmo dia 10, mesma conta — e já
-  conferido pelo usuário. **Procurar por valor e dia antes de concluir que um mês sumiu.**
-- **Janeiro/2026 vem R$ 500,00 mais barato porque a escola abate a matrícula**, que foi paga
-  à parte (`matricula amanda`, 12/09/2025). Não é desconto nem erro.
-- **2025 só tem de agosto em diante** porque a conta corrente só passou a sincronizar em
-  **05/08/2025** — conferido mês a mês. Não há nada anterior a recuperar.
-
-`HOSPITAL SALVATORIANO` é a mesma instituição, **mas despesa diferente** (decisão do usuário):
-não herda o projeto do colégio. Os 6 lançamentos de 2025 seguem **sem categoria**.
+**Colégio Salvatoriano — padronizado, fechado (07/09/2026).** Boleto na conta corrente (`escola
+Amanda LIQ TIT - IB`), R$ 1.206,50 em 2025 → R$ 1.263,87 em 2026. **Educação / Amanda / Colégio
+Salvatoriano / Educação.** Três armadilhas se esse padrão for revisitado: a descrição às vezes vem
+só com o CNPJ da escola (procurar por valor+dia, não só texto); janeiro sai R$ 500 mais barato
+porque a matrícula é paga à parte; 2025 só tem dados a partir de agosto (a conta começou a
+sincronizar então, não é lacuna). `HOSPITAL SALVATORIANO` é outra despesa, não herda o projeto.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
@@ -3700,14 +3583,13 @@ fatura.
 
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Conta corrente — em andamento.** O extrato oficial já é conciliado (§6.8) e a primeira
-   importação fechou 100%. Falta ver o extrato de **setembro**, que trará como movimento realizado
-   os débitos hoje agendados — é aí que o vínculo automático será testado de verdade. Continuam em
-   aberto os fenômenos próprios da conta: PIX, transferência entre contas próprias e depósito em
-   espécie (§11.3).
+1. **Conta corrente — conciliação em produção, fenômenos próprios ainda abertos.** O extrato oficial
+   está conciliado desde agosto e setembro também fechou (§6.8). O que falta são os fenômenos da
+   própria conta corrente: transferência entre contas próprias e depósito em espécie sem origem
+   (§11.3) — não é mais sobre conciliar o documento, é sobre classificar o que ele já trouxe.
 2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
-3. **`/pendencias`**: os 1.135 lançamentos criados pela fatura nasceram sem categoria e o que
-   sobrou entra no DRE como despesa por padrão.
+3. **`/pendencias`**: 646 lançamentos sem categoria (conferido em 18/09/2026 — o número muda
+   conforme o Pluggy sincroniza e o usuário classifica; reconferir antes de agir).
 
 **Não transportar regras entre origens.** Criar regras e eventuais correções de horário
 específicas por origem; nunca copiar em massa a lógica da Unicred sem validação própria.
