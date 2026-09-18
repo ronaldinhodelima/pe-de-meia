@@ -233,6 +233,15 @@ atributo `style=` de cada `<input type=checkbox>`:** ele não tem chaves, então
 de regras CSS — foi por esse furo que a caixa "Marcar como duplicada" do modal de detalhes seguiu
 com desenho próprio (`accent-color`) no mesmo dia em que a regra foi declarada obrigatória.
 
+**Seletor sem opção vazia GRAVA a primeira da lista, e ninguém escolheu nada.** (17/09/2026) O
+`<select>` de categoria do botão "Criar" da conciliação não tinha `<option value="">`, então nascia
+com a primeira categoria em ordem alfabética já selecionada. O `ESTORNO - Ajuste a Credito` de
+R$ 283,04 virou lançamento em **"Academia"** — o usuário clicou em Criar e a tela gravou o que ela
+mesma tinha escolhido. **A validação existia e nunca era alcançada:** a rota recusa categoria vazia
+com "Escolha uma categoria", mas o valor nunca chegava vazio. **Todo seletor que decide um dado
+gravado começa vazio**, e quem recusa é o servidor *e* a tela. É a mesma família do config
+incompleto (§7.1): a interface parece funcionar e grava errado em silêncio.
+
 **O JS da visão detalhada usa parâmetro de versão no `src`.** Sempre renovar quando o
 comportamento mudar, evitando HTML novo com script antigo no cache.
 
@@ -1127,6 +1136,33 @@ dois — então o arquivo realmente 1252 continua certo, sem depender de acertar
 **Lição:** metadado que o emissor escreve sobre o próprio arquivo é palpite dele; o dado é a prova.
 Documento já importado continua com o texto torto no banco — **reimportar o arquivo guardado
 corrige**, e o vínculo por valor/data nunca dependeu do acento.
+
+### Extratos da Conta Corrente Nubank · Andrea (18/09/2026)
+
+Sete extratos OFX, de **02/2026 a 08/2026**, enviados de uma vez pelo usuário (01/2026 já estava).
+**Todos fecham 100%**: movimento = soma das linhas em todos, zero linha sem vínculo, zero órfão dos
+dois lados, 132 linhas no total. **Zero mojibake** — foram os primeiros a entrar depois da correção
+de codificação (acima), e provam que ela pegou.
+
+### O que a importação fez, em números (17/09/2026)
+
+**Pedido do usuário.** O registro da tela (acima) dizia o que aconteceu, uma linha por ação, mas
+importar oito arquivos de uma vez deixava a pergunta óbvia sem resposta: *quantos entraram, quantos
+OK saíram, deu erro?* Agora o bloco tem **cards de resumo** — documentos importados, OK assinados,
+vínculos, parcelas, lançamentos criados, vínculos desfeitos, erros — e o detalhe um a um logo
+abaixo, num `<details>` aberto por padrão.
+
+- **A importação passou a devolver o que fez**: linhas lidas, vínculos criados, parcelas geradas e
+  **OK assinados**, num `<script type="application/json">` — nunca em atributo, onde `|tojson` não
+  escapa aspas duplas e o handler quebra calado (§2.2). Ela é a ação com mais efeito da tela (lê o
+  arquivo, vincula, gera parcela e assina) e até aqui devolvia só "importado".
+- **Os contadores somam o que cada ação DECLARA**, nunca o resultado de procurar palavra no texto:
+  a primeira mensagem reescrita daria número errado sem nenhum aviso.
+- **Zero não vira card.** Um "0 erros" permanente é ruído, e ruído é o que faz parar de ler.
+
+**E o botão "Conciliação de Lançamentos"** (pedido do usuário) fica no topo e volta ao estado
+inicial da tela, igual ao item do menu. É um **link** para a rota sem parâmetro, não um `reload()`:
+recarregar manteria o `fatura_id` da URL e não levaria a lugar nenhum.
 
 ### O que a tela de conciliação gravou fica escrito até sair dela (17/09/2026)
 
