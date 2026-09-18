@@ -36,8 +36,17 @@ Na prática:
 
 ## 1.2 Quem pode assinar o OK
 
-**O Claude nunca marca nem desmarca o "conferido".** Ele pode ajustar categoria, dimensão,
-natureza e observação; o check não é dele. Lançamento manual criado pelo Claude nasce desmarcado.
+**O Claude nunca assina por juízo próprio.** Ele pode ajustar categoria, dimensão, natureza e
+observação; marcar o check "porque parece certo" não é dele. Lançamento manual criado pelo Claude
+nasce desmarcado.
+
+**Mas ele PODE executar as ações em que quem assina é o documento** (decisão do usuário,
+17/09/2026): importar a fatura ou o extrato, rodar o vínculo automático, clicar em "Conferir o que
+a fatura confirma". Ali a assinatura não é opinião de ninguém — é o banco dizendo o que cobrou, com
+o valor batendo ao centavo e a classificação completa (as três condições abaixo). **A fonte real é
+a fatura ou o extrato**, e é por isso que o OK automático vale tanto quanto o manual. O que continua
+proibido é o Claude marcar o check na mão, ou disparar a assinatura como efeito colateral de uma
+ação que o usuário não pediu — o critério é a **ação**, não o OK que ela produz.
 
 **Três fontes podem assinar: o usuário, a fatura e as partes de um rateio.** A segunda foi decidida em 05/09/2026, quando
 a base já estava consistente e com centenas de OK conferidos — a fatura é a autoridade sobre o que
@@ -132,7 +141,9 @@ Todo deploy atualiza este arquivo com decisões, comportamento entregue, migraç
 pendências. Antes de publicar: suíte pytest completa, `py_compile`, `git diff --check` e
 `git add` com a **lista explícita de arquivos** — nunca `git add -A` (§10.2 nº 3). Depois do
 deploy: conferir os logs, abrir a tela afetada em produção e comparar os números anotados antes.
-**Não marcar/desmarcar OK real apenas para testar.**
+**Não marcar nem desmarcar OK na mão para testar** — mas exercitar um botão cuja assinatura vem do
+documento é legítimo (§1.2): ali quem assina é a fatura, sobre evidência que continua verdadeira
+depois do teste. O que não se faz é inventar um OK para ver a tela mudar.
 
 ---
 
@@ -762,7 +773,13 @@ Cada uma tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer em `_concil
 10. **Cada tela tem que aplicar os MESMOS filtros de "já resolvido".** A lista de órfãos não
     excluía `substituido_por` nem `somente_conciliacao`: 57 falsos pendentes em 08/2026 enquanto a
     outra tela dizia "nada pendente". **Ao criar um estado novo, procurar TODAS as consultas que
-    listam pendência.**
+    listam pendência.** Em 17/09/2026 a mesma lista apareceu de novo, agora sem a exclusão do nº 3:
+    o `ESTORNO - Ajuste a Credito` de R$ 283,04, **criado pela própria fatura**, era listado como
+    "lançamento do Pluggy sem vínculo" — duas inverdades na mesma linha, e um convite a ligá-lo a
+    uma segunda linha da fatura. O `transacao_id_criado` é gravado na hora do "Criar", mas a linha
+    de `fatura_vinculo` só nasce quando a sincronização de parcelas roda, e é nesse intervalo que
+    ele aparecia. A exclusão entrou **nas duas** consultas: a lista da tela e a contagem de órfãos
+    do histórico de faturas.
 11. **Eco de parcelamento NOVO precisa de regra própria.** Enquanto o agregado atende UMA linha
     só, ele não é reconhecido como agregado e o eco escapa das outras regras. A regra: existe
     linha de fatura do mesmo estabelecimento **já vinculada**, e o órfão vale a parcela dela ou o
@@ -1165,13 +1182,11 @@ classificação herdada do agregado: **Natação / Família / Saúde / Vida Fami
 vínculo: 5 → 4, e as 4 que sobram são as que o Pluggy nunca manda (bonificação de anuidade, IOF) e
 o ESTORNO de R$ 283,04, que espera decisão.
 
-**Um OK foi assinado por descuido meu, e fica registrado aqui.** Depois de aplicar, cliquei no botão
-"Vincular automaticamente" **para testar o handler novo** — e ele é POST, então a fatura assinou
-(§1.2): o lançamento do ANJOS ficou `conferida_por = fatura 09/2026`. A §1.6 diz, com todas as
-letras, **"não marcar/desmarcar OK real apenas para testar"**, e foi exatamente o que aconteceu.
-A assinatura é legítima pela regra — linha vinculada, valor ao centavo, classificação completa — mas
-quem decide que ela devia acontecer agora é o usuário. **Para validar botão que grava, usar uma
-fatura sem nada pendente**, onde a ação é comprovadamente inócua.
+O lançamento recebeu **OK carimbado `fatura 09/2026`** no vínculo automático seguinte, e isso é o
+sistema funcionando: linha vinculada, valor ao centavo, classificação completa. Eu havia registrado
+isso aqui como descuido meu; **o usuário corrigiu a leitura em 17/09/2026** e dela saiu a regra que
+hoje está na §1.2 — a assinatura vinda da fatura ou do extrato vale tanto quanto a manual, porque a
+fonte é o documento do banco, não um juízo de quem clicou.
 
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 

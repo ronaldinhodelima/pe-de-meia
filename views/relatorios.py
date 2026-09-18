@@ -1033,6 +1033,17 @@ def _estado_fatura(cur, fatura_row):
         f"AND COALESCE(t.somente_conciliacao, false) = false "
         f"AND ({DATA_LOCAL_SQL})::date BETWEEN %s AND %s "
         f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id) "
+        # Lancamento que NASCEU da fatura nao e' orfao do Pluggy - ele nem e do
+        # Pluggy: ele E' a fatura (secao 6.5 no 3, o mesmo filtro do matcher).
+        # O botao "Criar" grava `transacao_id_criado` na linha, e e por ele que
+        # a propria tela ja diz "0 sem vinculo"; a linha de `fatura_vinculo` so
+        # aparece depois, quando a sincronizacao de parcelas roda. Nesse meio
+        # tempo o lancamento caia na lista de baixo dizendo duas inverdades na
+        # mesma linha: que e do Pluggy e que esta sem vinculo - e convidava a
+        # liga-lo a uma segunda linha da fatura. Aconteceu com o
+        # `ESTORNO - Ajuste a Credito` de R$ 283,04 na fatura 09/2026.
+        f"AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl "
+        f"WHERE fl.transacao_id_criado = t.transacao_id) "
         f"ORDER BY 4, 2;",
         (account_id, periodo_inicio, periodo_fim),
     )
@@ -1621,6 +1632,11 @@ def conciliar_fatura():
         f" AND CASE WHEN f.ciclo_do_arquivo AND COALESCE(f.tipo_documento,'fatura') <> 'extrato' "
         f"   THEN f.periodo_fim - 1 ELSE f.periodo_fim END "
         f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_vinculo v WHERE v.transacao_id = t.transacao_id)"
+        # a MESMA exclusao da lista de orfaos da tela da fatura: lancamento que
+        # nasceu da fatura nao e orfao do Pluggy. Escrita so la, esta contagem
+        # diria "1 orfao" numa fatura que a outra tela mostra fechada.
+        f" AND NOT EXISTS (SELECT 1 FROM cartao.fatura_linha fl2 "
+        f"  WHERE fl2.transacao_id_criado = t.transacao_id)"
         f") AS orfaos, "
         # Quantos lancamentos DESTA fatura ainda esperam assinatura. COUNT
         # DISTINCT porque uma transacao pode atender varias linhas (parcelamento

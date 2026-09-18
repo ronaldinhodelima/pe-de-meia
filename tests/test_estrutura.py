@@ -2543,6 +2543,27 @@ def test_quem_calcula_ciclo_carrega_tambem_o_tipo_do_documento():
         )
 
 
+def test_lancamento_criado_pela_fatura_nunca_e_orfao_do_pluggy():
+    """Ele nem e do Pluggy: ele E' a fatura (secao 6.5 no 3).
+
+    O botao "Criar" grava `transacao_id_criado` na linha - e e por ele que a
+    tela ja conta a linha como vinculada -, mas a linha de `fatura_vinculo` so
+    aparece quando a sincronizacao de parcelas roda. Sem esta exclusao, nesse
+    meio tempo o lancamento caia em "Lancamentos do Pluggy sem vinculo" dizendo
+    duas inverdades de uma vez, e convidando a liga-lo a outra linha da fatura.
+    Caso real: `ESTORNO - Ajuste a Credito` R$ 283,04, fatura 09/2026.
+
+    As DUAS consultas precisam da exclusao - a lista de orfaos da tela e a
+    contagem por fatura do historico -, senao uma diz "1 orfao" numa fatura que
+    a outra mostra fechada (secao 6.5 no 10).
+    """
+    view = (RAIZ / "views" / "relatorios.py").read_text(encoding="utf-8")
+    orfas = view.split("# orfas: no ciclo desta fatura", 1)[1].split("orfas = [{", 1)[0]
+    assert "fl.transacao_id_criado = t.transacao_id" in orfas
+    contagem = view.split(") AS linhas_sem_vinculo, ", 1)[1].split(") AS orfaos, ", 1)[0]
+    assert "transacao_id_criado = t.transacao_id" in contagem
+
+
 def test_o_matcher_nunca_escolhe_um_lancamento_ja_substituido():
     """`substituido_por` diz que so o OUTRO conta (secao 4.3): a linha da fatura
     e a cobranca e tem que apontar para quem conta. Sem este filtro o matcher
