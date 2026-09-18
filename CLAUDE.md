@@ -3413,9 +3413,13 @@ blocos, sempre com prévia e decisão do usuário — **o OK continua sendo dele
 - BRsim R$ 60.038,73 e R$ 189.961,27 (30/12/2025), sem classificação;
 - os 31 créditos `Transferência Recebida|BRSIM` na conta Nubank da Andrea (§8.4);
 - Projeto `BRDrive` × BRsim nos relatórios (§8.4);
-- travas de exclusão de categoria/dimensão contando pela view (defeito latente, §8.4);
-- filtro `status=despesa` incluir lançamentos fora do resultado;
-- log `regra_automatica` gravando `"erro":"0"` — abrir e achar a causa (§10.4 nº 11).
+- travas de exclusão de categoria/dimensão contando pela view — defeito latente confirmado
+  **inativo** (0 casos na varredura de 07/09/2026, §8.4), sem urgência.
+
+**Conferido em 18/09/2026, já resolvido — tirado da lista:** o filtro `status=despesa` incluir
+lançamentos fora do resultado (corrigido em 08/09/2026, commit `16cf81fb`, com teste) e o log
+`regra_automatica` gravando `"erro":"0"` (mesmo incidente do `_campo()`, §10.4 nº 11 — a causa já
+tinha sido achada e corrigida, só a pendência aqui não tinha sido riscada).
 
 ## 11.2-A Vínculos que ligam estabelecimentos diferentes — fechado (migração 50)
 
