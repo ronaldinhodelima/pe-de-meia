@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% block conteudo %}
 
+{# Registro do que esta tela GRAVOU no banco (pedido do usuario, 17/09/2026).
+   Toda acao aqui escreve: importar documento, vincular, desvincular, criar
+   lancamento, conferir pela fatura. O aviso vinha por toast ou por um texto ao
+   lado do botao - e sumia em segundos, ou era varrido pelo `location.reload()`
+   que a propria acao dispara. Numa tela de conferencia isso e' perda de
+   auditoria na hora em que ela mais importa: o usuario nao consegue conferir
+   depois o que acabou de fazer. O registro fica ate ele SAIR da tela. #}
+<div id="registro-acoes" class="cat-breakdown" hidden
+     style="border-left:3px solid var(--accent);margin-bottom:16px">
+  <h3 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span>O que foi feito nesta tela</span>
+    <button type="button" class="ver-btn" id="registro-limpar">limpar</button>
+  </h3>
+  <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:8px">
+    Cada linha é uma gravação no banco, na ordem em que aconteceu. Fica aqui
+    enquanto você estiver nesta tela; o histórico permanente está em
+    <a href="/logs">Logs</a>.
+  </div>
+  <ol id="registro-lista" style="margin:0;padding-left:20px;font-size:var(--fonte-sm);line-height:1.8"></ol>
+</div>
+
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
   Envie a fatura do cartão de crédito ou o extrato da conta corrente — o arquivo que o banco fornece, em <strong>PDF</strong> ou <strong>OFX</strong>
   (Nubank e outros bancos) — e o sistema confere, lançamento a lançamento, se o que a operadora
@@ -443,6 +464,9 @@
   const lista = document.getElementById('lote-importacao');
   form.addEventListener('submit', async function (e) {
     const arquivos = Array.from(campo.files || []);
+    // importar recarrega a tela (POST de formulario): o registro do que ja foi
+    // feito nesta visita nao pode morrer no caminho
+    try { sessionStorage.setItem('pdm_conciliacao_continua', '1'); } catch (err) {}
     if (arquivos.length < 2) return;           // um arquivo: envio normal
     e.preventDefault();
     const botao = form.querySelector('button[type=submit]');
@@ -468,6 +492,7 @@
         const importada = doc.querySelector('[data-importada]');
         if (resp.ok && importada && !erro) {
           ok++;
+          registrarAcao('Documento importado: ' + arq.name + '.');
           item.textContent = arq.name + ' — importado. ';
           const link = document.createElement('a');
           link.href = '/relatorios/conciliar-fatura?fatura_id=' + encodeURIComponent(importada.dataset.importada);
@@ -477,6 +502,7 @@
           item.className = 'err';
           item.textContent = arq.name + ' — ' + (erro ? erro.textContent.trim()
             : 'não consegui importar (resposta ' + resp.status + ').');
+          registrarAcao(item.textContent, 'erro');
         }
       } catch (err) {
         item.className = 'err';
@@ -524,7 +550,11 @@ function marcarRepetidaConferida(chk) {
       if (!d.ok) {
         chk.checked = !conferida;
         alert(d.erro || 'Não consegui salvar.');
+        registrarAcao('Falha ao marcar a revisão da cobrança repetida.', 'erro');
+        return;
       }
+      registrarAcao('Cobrança repetida ' + (conferida ? 'marcada' : 'desmarcada')
+        + ' como revisada (' + ids.length + ' linha(s)).');
     })
     .catch(() => {
       chk.disabled = false;
@@ -532,6 +562,103 @@ function marcarRepetidaConferida(chk) {
       alert('Não consegui salvar.');
     });
 }
+
+// ---- Registro das gravacoes desta tela (pedido do usuario, 17/09/2026) ------
+// A confirmacao morava presa ao lugar da acao e sumia: o toast some em ~2,6s e
+// o texto ao lado do botao e' varrido pelo `location.reload()` que a propria
+// acao dispara 700-1200ms depois. Aqui ela fica ate o usuario SAIR da tela.
+//
+// `sessionStorage` porque o registro tem de sobreviver ao reload da propria
+// tela - e' o mesmo motivo do `pdmToastAposRecarregar()` (secao 7.2). Nao e'
+// `localStorage`: e' o que foi feito nesta visita, nao um estado do usuario.
+//
+// Quem decide "continuo na tela" e uma MARCA gravada imediatamente antes de
+// cada recarregamento que a tela provoca. Sem ela, a carga e' chegada de fora e
+// o registro comeca limpo. Olhar o `pathname` nao serviria: sair e voltar
+// depois traria de volta o registro de uma visita encerrada.
+const REGISTRO_CHAVE = 'pdm_conciliacao_acoes';
+const REGISTRO_MARCA = 'pdm_conciliacao_continua';
+
+function registroLer() {
+  try { return JSON.parse(sessionStorage.getItem(REGISTRO_CHAVE) || '[]'); }
+  catch (err) { return []; }
+}
+
+function registroGravar(itens) {
+  try { sessionStorage.setItem(REGISTRO_CHAVE, JSON.stringify(itens)); } catch (err) {}
+}
+
+function registroDesenhar() {
+  const caixa = document.getElementById('registro-acoes');
+  const lista = document.getElementById('registro-lista');
+  if (!caixa || !lista) return;
+  const itens = registroLer();
+  caixa.hidden = itens.length === 0;
+  lista.textContent = '';
+  itens.forEach(it => {
+    const li = document.createElement('li');
+    const hora = document.createElement('span');
+    hora.style.color = 'var(--ink-faint)';
+    hora.textContent = it.hora + ' · ';
+    const texto = document.createElement('span');
+    // textContent, nunca innerHTML: descricao de lojista e mensagem de erro do
+    // servidor entram aqui, e o Jinja nao protege o que o JS monta (secao 2.2)
+    texto.textContent = it.texto;
+    if (it.tipo === 'erro') texto.style.color = 'var(--bad)';
+    li.appendChild(hora);
+    li.appendChild(texto);
+    lista.appendChild(li);
+  });
+}
+
+function registrarAcao(texto, tipo) {
+  const itens = registroLer();
+  const agora = new Date();
+  const dois = n => String(n).padStart(2, '0');
+  itens.push({
+    hora: dois(agora.getHours()) + ':' + dois(agora.getMinutes()) + ':' + dois(agora.getSeconds()),
+    texto: texto,
+    tipo: tipo || 'ok',
+  });
+  registroGravar(itens);
+  registroDesenhar();
+}
+
+// Recarregar a tela por acao dela mesma NAO encerra a visita.
+function recarregarMantendoRegistro() {
+  try { sessionStorage.setItem(REGISTRO_MARCA, '1'); } catch (err) {}
+  window.location.reload();
+}
+
+(function iniciarRegistro() {
+  let continua = null;
+  try {
+    continua = sessionStorage.getItem(REGISTRO_MARCA);
+    sessionStorage.removeItem(REGISTRO_MARCA);
+  } catch (err) {}
+  if (!continua) registroGravar([]);
+  window.addEventListener('DOMContentLoaded', function () {
+    registroDesenhar();
+    const limpar = document.getElementById('registro-limpar');
+    if (limpar) limpar.addEventListener('click', function () {
+      registroGravar([]);
+      registroDesenhar();
+    });
+    // A importacao e um POST de formulario: quem sabe o que aconteceu e o
+    // SERVIDOR, e ele ja marca a fatura importada no proprio HTML.
+    const importada = document.querySelector('[data-importada]');
+    if (importada && !importada.dataset.registrado) {
+      importada.dataset.registrado = '1';
+      registrarAcao('Documento importado e conciliado (fatura ' + importada.dataset.importada + ').');
+    }
+    const erroImport = document.querySelector('#form-importar ~ .err, .cat-breakdown > .err');
+    if (erroImport && erroImport.textContent.trim() && !erroImport.dataset.registrado) {
+      erroImport.dataset.registrado = '1';
+      registrarAcao('Importação recusada: ' + erroImport.textContent.trim(), 'erro');
+    }
+  });
+})();
+// ---------------------------------------------------------------------------
 
 function postJSON(url, corpo) {
   return fetch(url, {
@@ -560,12 +687,18 @@ function conferirPelaFatura(faturaId, btn) {
       status.textContent = d.marcados
         ? d.marcados + ' lançamento(s) conferido(s) pela ' + d.rotulo + '.'
         : 'Nada a conferir: ou já está tudo assinado, ou falta classificação ou vínculo.';
-      if (d.marcados > 0) setTimeout(() => location.reload(), 1200);
+      // OK e' assinatura (secao 1.2): quantos e por conta de quem tem de ficar
+      // escrito, nao piscar por um segundo e sumir no reload
+      registrarAcao(d.marcados
+        ? 'OK assinado pela ' + d.rotulo + ' em ' + d.marcados + ' lançamento(s).'
+        : 'Conferir pela fatura: nada a assinar (tudo já assinado, ou falta classificação ou vínculo).');
+      if (d.marcados > 0) setTimeout(recarregarMantendoRegistro, 1200);
     })
     .catch(() => {
       btn.disabled = false;
       status.style.color = 'var(--bad)';
       status.textContent = 'Não consegui conferir.';
+      registrarAcao('Falha ao conferir pela fatura — nada foi gravado.', 'erro');
     });
 }
 
@@ -584,19 +717,29 @@ function vincularAutomatico(faturaId, btn) {
       }
       status.style.color = 'var(--good)';
       status.textContent = d.criados + ' vínculo(s) criado(s).';
-      if (d.criados > 0) setTimeout(() => location.reload(), 900);
+      // o vinculo automatico e' POST, entao ele tambem ASSINA (secao 1.2) - e
+      // esse numero precisa aparecer, senao o OK acontece sem o usuario ver
+      registrarAcao('Vínculo automático: ' + d.criados + ' vínculo(s) criado(s)'
+        + (d.removidos ? ', ' + d.removidos + ' removido(s)' : '')
+        + (d.ok_automatico ? ' — e a fatura assinou o OK de ' + d.ok_automatico + ' lançamento(s)' : '')
+        + '.');
+      if (d.criados > 0) setTimeout(recarregarMantendoRegistro, 900);
     })
     .catch(() => {
       btn.disabled = false;
       status.style.color = 'var(--bad)';
       status.textContent = 'Não consegui vincular.';
+      registrarAcao('Falha no vínculo automático — nada foi gravado.', 'erro');
     });
 }
 
 function vincularLinha(btn) {
   const linha = btn.closest('tr');
   const linhaId = linha.dataset.linhaId;
-  const transacaoId = linha.querySelector('.vincular-orfa').value;
+  const alvo = linha.querySelector('.vincular-orfa');
+  const transacaoId = alvo.value;
+  const rotulo = alvo.options[alvo.selectedIndex] ? alvo.options[alvo.selectedIndex].text : '';
+  const descLinha = (linha.cells[1] ? linha.cells[1].textContent : '').trim();
   const status = linha.querySelector('.fatura-status');
   if (!transacaoId) {
     status.style.color = 'var(--bad)';
@@ -616,19 +759,24 @@ function vincularLinha(btn) {
       }
       status.style.color = 'var(--good)';
       status.textContent = 'Vinculado.';
-      setTimeout(() => location.reload(), 700);
+      registrarAcao('Linha da fatura "' + descLinha + '" vinculada ao lançamento ' + rotulo + '.');
+      setTimeout(recarregarMantendoRegistro, 700);
     })
     .catch(() => {
       btn.disabled = false;
       status.style.color = 'var(--bad)';
       status.textContent = 'Falha ao vincular.';
+      registrarAcao('Falha ao vincular a linha "' + descLinha + '" — nada foi gravado.', 'erro');
     });
 }
 
 function vincularOrfa(btn) {
   const linha = btn.closest('tr');
   const transacaoId = linha.dataset.transacaoId;
-  const linhaId = linha.querySelector('.vincular-linha-alvo').value;
+  const alvo = linha.querySelector('.vincular-linha-alvo');
+  const linhaId = alvo.value;
+  const rotulo = alvo.options[alvo.selectedIndex] ? alvo.options[alvo.selectedIndex].text : '';
+  const descOrfa = (linha.cells[1] ? linha.cells[1].textContent : '').trim();
   const status = linha.querySelector('.orfa-status');
   if (!linhaId) {
     status.style.color = 'var(--bad)';
@@ -648,12 +796,14 @@ function vincularOrfa(btn) {
       }
       status.style.color = 'var(--good)';
       status.textContent = 'Vinculado.';
-      setTimeout(() => location.reload(), 700);
+      registrarAcao('Lançamento "' + descOrfa + '" vinculado à linha ' + rotulo + '.');
+      setTimeout(recarregarMantendoRegistro, 700);
     })
     .catch(() => {
       btn.disabled = false;
       status.style.color = 'var(--bad)';
       status.textContent = 'Falha ao vincular.';
+      registrarAcao('Falha ao vincular "' + descOrfa + '" — nada foi gravado.', 'erro');
     });
 }
 
@@ -671,6 +821,8 @@ function desvincular(btn) {
   }
   const linhaId = btn.dataset.linhaId;
   const transacaoId = btn.dataset.transacaoId;
+  const alvo = btn.closest('tr');
+  const desc = alvo ? (alvo.textContent || '').replace(/\s+/g, ' ').replace('desvincular', '').trim() : '';
   btn.disabled = true;
   btn.textContent = 'desvinculando…';
   postJSON('/api/fatura-linha/' + encodeURIComponent(linhaId) + '/desvincular', { transacao_id: transacaoId })
@@ -679,14 +831,17 @@ function desvincular(btn) {
         btn.disabled = false;
         btn.textContent = 'desvincular';
         alert(d.erro || 'Não consegui desvincular.');
+        registrarAcao('Falha ao desvincular — nada foi gravado.', 'erro');
         return;
       }
-      location.reload();
+      registrarAcao('Vínculo desfeito: ' + desc + '.');
+      recarregarMantendoRegistro();
     })
     .catch(() => {
       btn.disabled = false;
       btn.textContent = 'desvincular';
       alert('Não consegui desvincular.');
+      registrarAcao('Falha ao desvincular — nada foi gravado.', 'erro');
     });
 }
 
@@ -694,6 +849,8 @@ function criarLancamentoFatura(btn) {
   const linha = btn.closest('tr');
   const linhaId = linha.dataset.linhaId;
   const categoria = linha.querySelector('.fatura-categoria').value;
+  const descLinha = (linha.cells[1] ? linha.cells[1].textContent : '').trim();
+  const valorLinha = (linha.querySelector('.valor') || {}).textContent || '';
   const status = linha.querySelector('.fatura-status');
   btn.disabled = true;
   status.style.color = 'var(--ink-faint)';
@@ -708,17 +865,24 @@ function criarLancamentoFatura(btn) {
       if (!d.ok) {
         status.style.color = 'var(--bad)';
         status.textContent = d.erro || 'Falha ao salvar.';
+        registrarAcao('Falha ao criar lançamento para "' + descLinha + '" — nada foi gravado.', 'erro');
         btn.disabled = false;
         return;
       }
       status.style.color = 'var(--good)';
       status.textContent = 'Criado.';
+      // criar lancamento pela fatura MEXE NO DRE (secao 5) - e a acao desta
+      // tela com mais consequencia, e era a que menos deixava rastro: ela nem
+      // recarrega, entao so o "Criado." minusculo no fim da linha aparecia
+      registrarAcao('Lançamento criado pela fatura: "' + descLinha + '" '
+        + valorLinha.trim() + ', categoria ' + (categoria || '(sem categoria)') + '.');
       linha.style.opacity = '0.5';
       linha.querySelector('.fatura-categoria').disabled = true;
     })
     .catch(() => {
       status.style.color = 'var(--bad)';
       status.textContent = 'Falha ao salvar.';
+      registrarAcao('Falha ao criar lançamento para "' + descLinha + '" — nada foi gravado.', 'erro');
       btn.disabled = false;
     });
 }

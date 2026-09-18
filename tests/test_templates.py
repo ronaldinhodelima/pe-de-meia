@@ -116,6 +116,47 @@ class TestConciliacaoFatura:
         assert "Fora do DRE" in html
         assert "R$ 80,00" in html and "R$ 20,00" in html
 
+    def test_toda_acao_que_grava_deixa_rastro_que_fica_na_tela(self):
+        """Pedido do usuario (17/09/2026): a confirmacao sumia em segundos.
+
+        Ela morava presa ao lugar da acao - um toast de ~2,6s, ou um texto ao
+        lado do botao que o proprio `location.reload()` da acao varria 700ms
+        depois. Numa tela de conferencia isso e' perder a auditoria na hora em
+        que ela mais importa. Agora toda gravacao entra num registro que fica
+        ate SAIR da tela, e por isso NENHUM caminho pode recarregar sem antes
+        marcar que a visita continua - um `location.reload()` solto apaga o
+        registro inteiro, em silencio.
+        """
+        template = (
+            Path(__file__).parent.parent / "templates" / "conciliar_fatura.html"
+        ).read_text(encoding="utf-8")
+        # sem comentario nenhum: eles CITAM `location.reload()` para explicar
+        # por que ele saiu, e teste que le comentario acusa a volta do que nao
+        # existe mais (secao 10.4 no 15)
+        import re as _re
+        script = _re.sub(r"\{#[\s\S]*?#\}", "", template)
+        script = "\n".join(
+            l for l in script.splitlines() if not l.strip().startswith("//"))
+
+        # o registro sobrevive ao reload que a propria tela dispara
+        assert "sessionStorage" in script and "pdm_conciliacao_acoes" in script
+        assert "function recarregarMantendoRegistro" in script
+        assert "location.reload()" not in script.replace(
+            "window.location.reload();", ""), "reload solto apaga o registro"
+
+        # uma entrada por acao que escreve no banco
+        for acao in ("/vincular'", "/desvincular'", "/criar-lancamento'",
+                     "/conferir-pela-fatura'", "/vincular-automatico'",
+                     "/api/fatura-linha/marcar-conferida-repeticao'"):
+            i = script.find(acao)
+            assert i > 0, acao
+            assert "registrarAcao" in script[i:i + 2600], acao
+
+        # o texto vem de dado do servidor e de descricao de lojista: innerHTML
+        # ali seria XSS, e o Jinja nao protege o que o JS monta (secao 2.2)
+        bloco = script.split("function registroDesenhar", 1)[1].split("\nfunction ", 1)[0]
+        assert "innerHTML" not in bloco and "textContent" in bloco
+
     def test_setas_de_mes_guardam_a_posicao_da_pagina(self):
         template = (
             Path(__file__).parent.parent / "templates" / "conciliar_fatura.html"
