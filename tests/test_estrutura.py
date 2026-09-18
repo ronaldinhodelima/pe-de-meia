@@ -238,6 +238,25 @@ def test_cards_da_fatura_explicam_valores_e_filtram_divergencias():
     assert 'total_pendente_ok' in view
 
 
+def test_selo_fp_da_fatura_oficial_enxerga_a_fatura_inteira_nao_so_a_linha():
+    """O mesmo lancamento nao pode levar F numa linha e P noutra (17/09/2026).
+
+    `Anuidade - bonificacao` e criada pela fatura (sua propria linha), mas um
+    vinculo automatico grudou ela TAMBEM na linha `Anuidade - parcela` como
+    registro tecnico. Ali o selo comparava so contra o `transacao_id_criado`
+    DAQUELA linha - contradizia a si mesmo, porque a mesma transacao aparecia
+    corretamente como "F" na propria linha e errada como "P" na outra.
+    """
+    view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
+    trecho = view.split('def lancamentos_por_fatura', 1)[1].split('@bp.route("/api/fatura-linha', 1)[0]
+    assert "criados_pela_fatura = {" in trecho
+    assert 'str(l["transacao_id_criado"]) for l in linhas if l["transacao_id_criado"]' in trecho
+    assert 'v["transacao_id"] in criados_pela_fatura' in trecho
+    assert 'v["transacao_id"] == criado)' not in trecho.split(
+        "procedencia_do_registro(", 1
+    )[1][:120]
+
+
 def test_compra_agregada_nao_vira_falsa_divergencia_de_valor():
     from views.lancamentos import (
         _candidatos_fatura_equivalentes,

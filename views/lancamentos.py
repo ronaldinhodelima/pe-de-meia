@@ -1900,6 +1900,15 @@ def lancamentos_por_fatura():
     }
     tolerancia_valor = Decimal("0.01")
     conta_da_fatura = contas_by_id.get(account_id) or {}
+    # F/P tem que valer para a fatura INTEIRA, nao so para a linha onde o
+    # registro esta sendo mostrado. Um vinculo espurio (a mesma transacao
+    # ligada, por engano, a uma segunda linha alem da propria) fazia o mesmo
+    # ID levar o selo F numa linha e o P na outra - o selo contradizia a si
+    # mesmo, porque so comparava contra o `transacao_id_criado` da linha
+    # local. Ver secao 6.5.
+    criados_pela_fatura = {
+        str(l["transacao_id_criado"]) for l in linhas if l["transacao_id_criado"]
+    }
     for linha in linhas:
         linha["pagamento"] = _eh_pagamento_fatura(linha["descricao"])
         # Toda linha nasce com o contrato completo: o template percorre
@@ -1923,7 +1932,7 @@ def lancamentos_por_fatura():
             v["principal"] = bool(principal and v["transacao_id"] == principal["transacao_id"])
             v["tecnico"] = not v["principal"]
             v["fonte"], v["fonte_nome"] = procedencia_do_registro(
-                conta_da_fatura, v.get("importado"), v["transacao_id"] == criado)
+                conta_da_fatura, v.get("importado"), v["transacao_id"] in criados_pela_fatura)
         linha["vinculos"] = vinculos
         linha["principal"] = principal
         linha["multiplos"] = len(vinculos) > 1

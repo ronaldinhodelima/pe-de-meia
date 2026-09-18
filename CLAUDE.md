@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 16/09/2026 · **Schema:** migração 67 · **Testes:** 475 aprovados, 10 ignorados
+**Última revisão:** 18/09/2026 · **Schema:** migração 67 · **Testes:** 485 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -821,6 +821,21 @@ Cada uma tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer em `_concil
     casamento 1:1, pela varredura de vínculos suspeitos e pelo diagnóstico, **para os quatro
     contarem a mesma história**: uma varredura mais estrita que o matcher acusaria como suspeito o
     par que o próprio sistema acabou de ligar.
+19. **Cobrança e bonificação com o mesmo valor absoluto podem se grudar na linha errada.**
+    (18/09/2026) A `Anuidade - bonificação` (criada pela própria fatura, §5) tinha vínculo
+    `origem='manual'` **também** na linha `Anuidade - parcela` do mesmo dia, além do seu vínculo
+    correto na própria linha — os dois valem R$ 79,16 em módulo. O usuário percebeu porque o selo
+    da tela contradizia a si mesmo: **"F" na linha própria e "P" na linha alheia**, para o mesmo ID.
+    Não inflava o DRE (a transação conta uma vez, o vínculo N:N é só bookkeeping de conciliação),
+    mas gerava "Validar: mais de um lançamento possível" na linha da parcela. Corrigido pela mão —
+    `desvincular` na linha errada, `vincular` de volta na própria — e o selo passou a comparar
+    contra **todas** as linhas da fatura (`criados_pela_fatura`, um `set` construído uma vez), não
+    só contra a linha onde o registro está sendo mostrado (§7.1-A tinha esse ponto certo no recorte
+    por período; só a fatura oficial comparava local). **Ao desvincular por script, escopar a busca
+    do botão pelo `linha_id`** — um `document.querySelector` só pelo `transacao_id`, sem o `linha_id`
+    junto, pode achar o botão da linha ERRADA quando a mesma transação aparece em duas linhas; foi
+    assim que uma segunda chamada, sem querer, desvinculou também o vínculo correto — refeito na
+    hora com o mesmo `/api/fatura-linha/<id>/vincular`.
 
 ## 6.6 A marca de agregado sem caminho de volta (migração 44)
 
