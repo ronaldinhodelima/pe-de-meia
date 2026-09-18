@@ -57,6 +57,34 @@ def test_agregado_exige_estabelecimento_compativel_e_nao_so_valor():
     assert _melhor_agregado([pizzaria], 16400, 5, "MERCADOLIVRE*COMPRAS") is None
 
 
+def test_agregado_reconhece_o_mesmo_lojista_escrito_de_jeitos_diferentes():
+    """Os dois lados deformam o nome, e nenhum token batia letra por letra.
+
+    A fatura da Unicred cola o codigo do parcelamento no lojista e ainda trunca
+    o nome - `PARC=106ANJOS DE QUINTA` -, enquanto o Pluggy grava `ANJOS DE
+    QUINTAL VIDEIRA BR`. Os tokens da linha sao `PARC`, `106ANJOS`, `QUINTA`;
+    os do candidato, `ANJOS`, `QUINTAL`, `VIDEIRA`. Intersecao exata: vazia.
+    Com isso a `Parc.2/6` de R$ 360,00 ficou sem o agregado de R$ 2.160,00 na
+    fatura 09/2026 e a despesa do mes nao entrou no DRE. A §11.2-A ja listava
+    esse par como falso positivo da varredura - ninguem tinha visto que a mesma
+    deformacao IMPEDIA o casamento.
+    """
+    from core import tokens_em_comum
+    anjos = {
+        "_usado": False, "parcela_total": None, "_valor_centavos": 216000,
+        "descricao": "Parcelado Lojista - Visa - ANJOS DE QUINTAL VIDEIRA      BR",
+    }
+    assert _melhor_agregado([anjos], 216000, 6, "PARC=106ANJOS DE QUINTA") is anjos
+    assert tokens_em_comum("PARC=106ANJOS DE QUINTA",
+                           "ANJOS DE QUINTAL VIDEIRA BR") == {"106ANJOS", "QUINTA"}
+
+    # e a regra que separa compras diferentes de mesmo valor continua de pe
+    assert tokens_em_comum("MERCADOLIVRE*COMPRAS",
+                           "YELLOW BOX PIZZARIA VIDEIRA BR") == set()
+    # conter exige 4 caracteres no menor: um naco de tres letras casaria tudo
+    assert tokens_em_comum("ABC LOJA", "ABCDEFGH MERCADO") == set()
+
+
 class CursorFake:
     """Devolve sempre a mesma lista de candidatos, no formato da consulta real."""
 

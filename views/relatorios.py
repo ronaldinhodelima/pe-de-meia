@@ -60,6 +60,7 @@ from core import (
     aplicar_consenso_classificacao,
     _normalizar_desc,
     _tokens_significativos,
+    tokens_em_comum,
     _ciclo_fim,
     _ciclo_inicio,
     _ciclo_inicio_encadeado,
@@ -546,15 +547,17 @@ def _melhor_agregado(candidatos, valor_esperado_centavos, parcela_total, desc_no
     uma linha por mes, em faturas diferentes - e' o unico caso em que reusar
     transacao ja vinculada e' correto."""
     tolerancia_centavos = 100
-    tokens_linha = _tokens_significativos(desc_norm)
     candidatos_valor = [
         c for c in candidatos
         if not c["_usado"]
         and abs(c["_valor_centavos"] - valor_esperado_centavos) <= tolerancia_centavos
         # Valor cheio igual nao basta: duas compras diferentes podem ter o
         # mesmo total (caso real: MERCADOLIVRE 5x32,80 e YELLOW BOX 164,00).
-        # Exigimos ao menos um token de estabelecimento em comum.
-        and bool(tokens_linha & _tokens_significativos(c.get("descricao")))
+        # Exigimos ao menos um token de estabelecimento em comum - por
+        # `tokens_em_comum`, que aceita token contido em token: os dois lados
+        # deformam o mesmo nome e quase nunca coincidem letra por letra
+        # (`PARC=106ANJOS DE QUINTA` x `ANJOS DE QUINTAL`).
+        and bool(tokens_em_comum(desc_norm, c.get("descricao")))
     ]
     if not candidatos_valor:
         return None
@@ -736,7 +739,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
         for l in linhas_grupo:
             melhor_linha = None
             melhor_chave = None
-            tokens_l = _tokens_significativos(l.get("descricao_base") or l["descricao"])
+            desc_l = l.get("descricao_base") or l["descricao"]
             for c in candidatos:
                 if (c["_usado"] or c["_bloqueado"]
                         or c["_valor_centavos"] != l["_valor_centavos"]):
@@ -773,7 +776,7 @@ def _conciliar_linhas(cur, account_id, linhas, fatura_linha_ids=None, todos_fatu
                 casa_parcela = bool(
                     mesma_familia and c_atual and c_atual == l.get("parcela_atual")
                 )
-                casa_lojista = bool(tokens_l and (tokens_l & _tokens_significativos(c["descricao"])))
+                casa_lojista = bool(tokens_em_comum(desc_l, c["descricao"]))
                 # a parcela certa vence o lojista, que vence a data
                 chave = (casa_parcela, casa_lojista, c["_data_local"])
                 if melhor_chave is None or chave > melhor_chave:
@@ -3572,7 +3575,12 @@ def api_vinculos_suspeitos():
         # nao gerar falso positivo em descricao curta ou toda generica.
         if not tokens_linha or not tokens_trans:
             continue
-        if tokens_linha & tokens_trans:
+        # Mesmo criterio do matcher (`tokens_em_comum`): esta varredura procura
+        # vinculo entre estabelecimentos DIFERENTES, e se ela fosse mais estrita
+        # que quem cria o vinculo, acusaria como suspeito o par que o proprio
+        # sistema acabou de ligar - a §11.2-A ja listava `PARC=106ANJOS DE
+        # QUINTA` x `ANJOS DE QUINTAL` como falso positivo conhecido daqui.
+        if tokens_em_comum(r["linha_base"], r["transacao_descricao"]):
             continue
         suspeitos.append({
             "vinculo_id": r["vinculo_id"], "origem": r["origem"],
@@ -4279,7 +4287,7 @@ def api_diagnostico_casamento(fatura_id):
                 for c in candidatos:
                     if abs(c["_valor_centavos"] - esperado) > 100:
                         continue
-                    comuns = tokens_linha & _tokens_significativos(c["descricao"])
+                    comuns = tokens_em_comum(desc_norm, c["descricao"])
                     perto.append({
                         "transacao_id": str(c["transacao_id"]),
                         "descricao": c["descricao"],

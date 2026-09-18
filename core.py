@@ -1236,6 +1236,38 @@ def _tokens_significativos(descricao):
     return {t for t in brutos if t not in _TOKENS_GENERICOS and not t.isdigit()}
 
 
+def tokens_em_comum(desc_a, desc_b):
+    """Tokens de estabelecimento que as duas descricoes compartilham.
+
+    Igualdade exata nao basta, porque os dois lados DEFORMAM o mesmo nome de
+    jeitos diferentes: a fatura da Unicred cola o codigo do parcelamento no
+    lojista (`PARC=106ANJOS DE QUINTA`) e ainda trunca o nome, enquanto o Pluggy
+    grava `ANJOS DE QUINTAL VIDEIRA BR`. Nenhum token bate letra por letra -
+    `106ANJOS` nao e `ANJOS`, `QUINTA` nao e `QUINTAL` - e o par legitimo era
+    recusado. Foi o que deixou a `Parc.2/6` de R$ 360,00 sem o agregado de
+    R$ 2.160,00 na fatura 09/2026, com a despesa do mes faltando no DRE.
+
+    Por isso um token tambem casa quando esta CONTIDO no outro, exigindo
+    **4 caracteres** no menor: e' o mesmo minimo que `_tokens_significativos`
+    ja usa para considerar um pedaco significativo, e sem ele um naco de tres
+    letras casaria meio cadastro.
+
+    Isto NAO afrouxa a regra que existe para separar compras diferentes de mesmo
+    valor (secao 6.5 no 17: MERCADOLIVRE 5x32,80 ligado a YELLOW BOX 164,00) -
+    ali nenhum token esta contido no outro, e a recusa continua.
+    """
+    tokens_a = _tokens_significativos(desc_a)
+    tokens_b = _tokens_significativos(desc_b)
+    comuns = tokens_a & tokens_b
+    for a in tokens_a - comuns:
+        for b in tokens_b:
+            menor, maior = (a, b) if len(a) <= len(b) else (b, a)
+            if len(menor) >= 4 and menor in maior:
+                comuns.add(a)
+                break
+    return comuns
+
+
 def _ciclo_inicio_encadeado(cur, fatura_row):
     """Inicio real do ciclo = fim da fatura do mes anterior + 1 dia, calculado
     na LEITURA e nao congelado no import.
