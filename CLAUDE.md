@@ -783,6 +783,18 @@ Cada uma tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer em `_concil
 17. **Coincidência de valor total nunca é prova de família.** A parcela 1/5 de MERCADOLIVRE foi
     ligada a YELLOW BOX PIZZARIA porque ambas davam R$ 164,00. O matcher agora exige, além do
     valor, ao menos um token significativo do estabelecimento em comum.
+18. **Token igual letra por letra é exigência demais: os dois lados deformam o mesmo nome.**
+    (17/09/2026) A fatura da Unicred cola o código do parcelamento no lojista e ainda trunca —
+    `PARC=106ANJOS DE QUINTA` —, enquanto o Pluggy grava `ANJOS DE QUINTAL VIDEIRA BR`. Tokens da
+    linha: `PARC`, `106ANJOS`, `QUINTA`; do candidato: `ANJOS`, `QUINTAL`, `VIDEIRA`. **Interseção
+    exata: vazia** — e a regra nº 17, criada em 01/09/2026 para impedir vínculo errado, passou a
+    impedir também este, que é certo. **`core.tokens_em_comum()` é o ponto único**: além da
+    igualdade, um token casa quando está **contido** no outro, com **4 caracteres no menor** (o
+    mesmo mínimo que `_tokens_significativos` já usa). MERCADOLIVRE × YELLOW BOX continua recusado —
+    ali nenhum token está contido no outro. Usado pelo agregado, pelo desempate de lojista no
+    casamento 1:1, pela varredura de vínculos suspeitos e pelo diagnóstico, **para os quatro
+    contarem a mesma história**: uma varredura mais estrita que o matcher acusaria como suspeito o
+    par que o próprio sistema acabou de ligar.
 
 ## 6.6 A marca de agregado sem caminho de volta (migração 44)
 
@@ -3345,9 +3357,18 @@ classificação indo para o lojista errado: MERCEA POMARES ↔ MERCEARIA SOUZA /
 XIMANGO ↔ ALLPARK (R$ 25,00), SMARTYZRBSB ↔ PANIFICADORA (R$ 40,00).
 
 **Falsos positivos conhecidos da varredura**, não mexer: `Pagamento Recebido` ↔ `Pag de Fatura Via
-Deb Aut` (§6.5 nº 12), `Anuidade - bonificação` ↔ `Est.Tarifa manutencao de conta` (§8.3), e
-grafias coladas que o tokenizador não casa (`PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE QUINTAL`,
-`CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA`).
+Deb Aut` (§6.5 nº 12) e `Anuidade - bonificação` ↔ `Est.Tarifa manutencao de conta` (§8.3).
+
+**As grafias coladas saíram da lista em 17/09/2026** — `PARC=106ANJOS DE QUINTA` ↔ `ANJOS DE
+QUINTAL` e `CRISTIANZANELATTO` ↔ `CristianZanelattoVIDEIRA` agora casam por `tokens_em_comum`
+(§6.5 nº 18). **E elas nunca foram só ruído de varredura:** a mesma deformação que as fazia parecer
+suspeitas **impedia o casamento**, e foi o que deixou a `Parc.2/6` do ANJOS DE QUINTAL sem vínculo
+na fatura 09/2026. Ninguém tinha feito essa ligação — ficou dois meses listado aqui como "não
+mexer".
+
+**O que restou de falso positivo é mojibake**, não tokenização: `DEPOSITO EM ESPÃ‰CIE` ↔ `DEP EM
+ESPÉCIE`, nos extratos da conta corrente Unicred que foram lidos com a codificação errada (§6.8).
+Some quando esses arquivos forem reimportados.
 
 **Os três pares trocados voltaram a trocar quando o vínculo automático rodou de novo** — a regra
 do token protegia o agregado e a substituição, **não** o casamento 1:1, que escolhia "o mais
@@ -3547,6 +3568,15 @@ por linha sem vínculo, cada candidato de mesmo valor com o veredito de cada fil
 mostrou o candidato certo com `recusado_por: null` enquanto a linha seguia pendente — duas leituras
 da mesma fatura chegando a janelas diferentes. **Usar antes de mexer no matcher**, em vez de
 tentativa e erro sobre dado real.
+
+**Ele só olhava a PRIORIDADE 2, e por isso não respondia a pergunta mais importante** (17/09/2026).
+Listava apenas candidato de mesmo valor que a **parcela**, então "por que a `Parc.2/6` de R$ 360,00
+não achou o agregado de R$ 2.160,00?" não tinha resposta ali — e a investigação virou justamente o
+adivinhar que esta rota existe para evitar. Hoje cada linha com `parcela_total >= 2` traz também
+`agregado_do_parcelamento`: valor cheio esperado, os tokens da linha, os candidatos no valor cheio
+com o motivo da recusa, e o escolhido. Ele **chama `_melhor_agregado` de verdade**, nunca uma cópia
+do critério — uma segunda escrita divergiria e o diagnóstico passaria a explicar um casamento
+diferente do que acontece. Foi assim que a §6.5 nº 18 ficou provada em uma consulta.
 
 Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **16 fecham 100%**, restando
 R$ 1.018,50 sem vínculo (09/2025 R$ 819,26 · 05 e 07/2026 R$ 99,16 cada · 08/2026 R$ 0,92). As 8 de
