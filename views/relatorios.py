@@ -1746,6 +1746,12 @@ def conciliar_fatura():
         mostrar_faturas=mostrar_faturas,
         historico_ocultas=historico_ocultas,
         fatura_id=fatura_id,
+        # `data-importada` existe em toda tela que abre uma fatura - e' o alvo
+        # do "Abrir" na importacao em lote. Quem diz que ESTE carregamento
+        # gravou alguma coisa e' o metodo: sem isto, reabrir uma conciliacao por
+        # GET escrevia "Documento importado" no registro da tela, afirmando uma
+        # gravacao que nao houve.
+        importou_agora=(request.method == "POST" and bool(resultado) and not erro),
         pode_editar_conciliacao=pode("conciliacao_editar"),
         pode_criar_lancamento=pode("lancamentos_manual"),
     )

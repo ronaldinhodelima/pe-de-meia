@@ -152,6 +152,14 @@ class TestConciliacaoFatura:
             assert i > 0, acao
             assert "registrarAcao" in script[i:i + 2600], acao
 
+        # abrir uma conciliacao por GET nao e' gravacao: o marcador de
+        # importacao existe em toda tela com fatura aberta, e sozinho ele fazia
+        # o registro afirmar "Documento importado" sem ninguem ter importado
+        assert "[data-importada][data-gravou]" in script
+        assert "importou_agora" in (
+            Path(__file__).parent.parent / "views" / "relatorios.py"
+        ).read_text(encoding="utf-8")
+
         # o texto vem de dado do servidor e de descricao de lojista: innerHTML
         # ali seria XSS, e o Jinja nao protege o que o JS monta (secao 2.2)
         bloco = script.split("function registroDesenhar", 1)[1].split("\nfunction ", 1)[0]

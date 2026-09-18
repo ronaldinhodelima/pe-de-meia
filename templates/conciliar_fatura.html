@@ -60,7 +60,8 @@
     </div>
   {% endif %}
   {% if erro %}<p class="err">{{ erro }}</p>{% endif %}
-  {% if resultado and fatura_id %}<span hidden data-importada="{{ fatura_id }}"></span>{% endif %}
+  {% if resultado and fatura_id %}<span hidden data-importada="{{ fatura_id }}"
+        {{ 'data-gravou' if importou_agora }}></span>{% endif %}
   <ul id="lote-importacao" hidden style="margin:10px 0 0;padding-left:18px;font-size:var(--fonte-sm)"></ul>
 </div>
 
@@ -646,7 +647,10 @@ function recarregarMantendoRegistro() {
     });
     // A importacao e um POST de formulario: quem sabe o que aconteceu e o
     // SERVIDOR, e ele ja marca a fatura importada no proprio HTML.
-    const importada = document.querySelector('[data-importada]');
+    // so registra quando ESTE carregamento gravou (POST de importacao): o
+    // `data-importada` sozinho existe tambem quando se reabre a conciliacao
+    // por GET, e ali nao houve gravacao nenhuma
+    const importada = document.querySelector('[data-importada][data-gravou]');
     if (importada && !importada.dataset.registrado) {
       importada.dataset.registrado = '1';
       registrarAcao('Documento importado e conciliado (fatura ' + importada.dataset.importada + ').');
