@@ -3539,10 +3539,15 @@ uma viagem, não uma cópia — e a fatura é a autoridade sobre o que foi cobra
 decide é `fatura_linha.transacao_id_criado`, **não** `transacao.importado`, que é outra coisa e vale
 `false` nesses registros.
 
-Pendente de decisão do usuário (a marcação é dele, §1.3): os 17 de "revisar", com destaque para
-**`Pagamento recebido` R$ 1.948,10 em 05/08/2026 na conta platinum**, com dois registros contando —
-de longe o maior item. E o eco de 3h do açougue, que a varredura da §6.7 não pegou porque **ela só
-enxerga par ligado à mesma linha de fatura**.
+**Fechado em 18/09/2026.** Reaberta a varredura depois de setembro/2026 importado: 16 dos 17
+"revisar" se resolveram sozinhos (a fatura seguinte trouxe a linha própria de cada um), e o eco de
+3h do açougue também — virou cobrança real, com duas linhas distintas no PDF. Sobrou só o
+**`Pagamento recebido` R$ 1.948,10 em 05/08/2026 na conta platinum**, com dois registros Pluggy
+contando o mesmo evento (um às 00:00, sem hora confiável; outro às 18:55). Fora do alcance de
+`_classificar_orfaos()` porque "Pagamento Recebido" nunca tem `fatura_linha` (§6.3). O usuário
+confirmou que é o mesmo pagamento; marcado pela via manual (`/api/duplicidades/marcar` com
+`substituto_id`), o de 00:00 recolhido sob o de 18:55. Natureza `transferencia`, fora do DRE nos
+dois lados — o DRE não mudou.
 
 **Horários 00:00 e diferença de três horas em conta corrente.** Não usar horário isoladamente para
 apagar/mesclar: pode ser ausência de horário na origem ou conversão de fuso. Ronaldo decidiu
@@ -3567,8 +3572,9 @@ está aplicada e funcionando, e "Agua × Agua / Gas" é só Água × Gás. **Nã
 **Mas o corte de R$ 120,00 encostou no gás.** Os valores reais de 2026 são Água de R$ 17,00 a
 R$ 66,00 e Gás de R$ 114,99 a R$ 185,00 — o vão está entre 66 e 115, não em 120. O único lançamento
 que a regra classificaria errado é o de **R$ 114,99 (12/03/2026)**, hoje em Gás, que pela letra da
-regra deveria ser Água. Mover o corte para **R$ 90,00** acerta esse e não move nenhum dos outros 23.
-Pendente de decisão do usuário.
+regra deveria ser Água. **Corte movido para R$ 90,00 em 18/09/2026**, por decisão do usuário: Água
+`< R$ 90,00`, Gás `> R$ 90,00`. Nenhum dos 24 lançamentos existentes mudou de categoria — só o
+critério dos próximos.
 
 **`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado em 07/09/2026.** São 13 lançamentos
 (5 em 2025, 8 em 2026): o débito automático da fatura saindo da conta corrente. Todos já
