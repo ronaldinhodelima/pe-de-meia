@@ -1151,6 +1151,28 @@ Conferido em produção **clicando**, não chamando a rota (§2.2): chegando de 
 escondido e vazio; a ação aparece na hora; sobrevive ao recarregamento da própria tela; o erro sai
 em vermelho; o botão *limpar* zera; e sair para Lançamentos e voltar deixa o registro limpo.
 
+### O ANJOS DE QUINTAL fechado (17/09/2026)
+
+Com a §6.5 nº 18 no ar, a `Parc.2/6` achou o agregado e o ciclo se completou, autorizado pelo
+usuário. Vínculo automático: **1 vínculo criado**; "Revisar parcelamentos": prévia de **1 parcela
+pendente** (112 agregados, nenhum marcado ou desmarcado) e **1 parcela criada**. O lançamento nasceu
+datado em **11/09/2026** — o `periodo_fim` da fatura, não a data impressa (§4.5) —, com a
+classificação herdada do agregado: **Natação / Família / Saúde / Vida Familiar**.
+
+**Despesa de 09/2026: R$ 22.174,33 → R$ 22.534,33**, exatamente os R$ 360,00 previstos; resultado
+−R$ 1.308,42 → −R$ 1.668,42. Na fatura, "Despesas no DRE" foi de R$ 16.221,20 para R$ 16.581,20 e
+"Fora do DRE" de R$ 457,79 para R$ 97,79 — a soma segue os R$ 16.678,99 impressos. Linhas sem
+vínculo: 5 → 4, e as 4 que sobram são as que o Pluggy nunca manda (bonificação de anuidade, IOF) e
+o ESTORNO de R$ 283,04, que espera decisão.
+
+**Um OK foi assinado por descuido meu, e fica registrado aqui.** Depois de aplicar, cliquei no botão
+"Vincular automaticamente" **para testar o handler novo** — e ele é POST, então a fatura assinou
+(§1.2): o lançamento do ANJOS ficou `conferida_por = fatura 09/2026`. A §1.6 diz, com todas as
+letras, **"não marcar/desmarcar OK real apenas para testar"**, e foi exatamente o que aconteceu.
+A assinatura é legítima pela regra — linha vinculada, valor ao centavo, classificação completa — mas
+quem decide que ela devia acontecer agora é o usuário. **Para validar botão que grava, usar uma
+fatura sem nada pendente**, onde a ação é comprovadamente inócua.
+
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
 Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite
