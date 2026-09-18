@@ -160,10 +160,31 @@ class TestConciliacaoFatura:
             Path(__file__).parent.parent / "views" / "relatorios.py"
         ).read_text(encoding="utf-8")
 
+        # o resumo em numeros sai do que cada acao DECLARA ter somado, nunca de
+        # procurar palavra no texto - a primeira mensagem reescrita daria numero
+        # errado sem nenhum aviso
+        assert "REGISTRO_CONTADORES" in script and "it.numeros" in script
+        assert "resumo-importacao" in script, "os numeros da importacao vem do servidor"
+
         # o texto vem de dado do servidor e de descricao de lojista: innerHTML
         # ali seria XSS, e o Jinja nao protege o que o JS monta (secao 2.2)
         bloco = script.split("function registroDesenhar", 1)[1].split("\nfunction ", 1)[0]
         assert "innerHTML" not in bloco and "textContent" in bloco
+
+    def test_criar_lancamento_nao_grava_a_primeira_categoria_da_lista(self):
+        """Sem opcao vazia, o seletor nasce com a primeira categoria alfabetica
+        ja escolhida e o "Criar" grava essa em silencio. Foi assim que o
+        `ESTORNO - Ajuste a Credito` de R$ 283,04 virou lancamento em
+        "Academia" - ninguem escolheu, era so a primeira da lista. A rota ja
+        recusava categoria vazia; a validacao e' que nunca era alcancada."""
+        template = (
+            Path(__file__).parent.parent / "templates" / "conciliar_fatura.html"
+        ).read_text(encoding="utf-8")
+        bloco = template.split('class="fatura-categoria"', 1)[1].split("</select>", 1)[0]
+        assert '<option value="">' in bloco
+        # e a tela recusa antes de gastar um POST
+        corpo = template.split("function criarLancamentoFatura", 1)[1].split("\nfunction ", 1)[0]
+        assert "if (!categoria)" in corpo
 
     def test_setas_de_mes_guardam_a_posicao_da_pagina(self):
         template = (

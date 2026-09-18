@@ -1179,6 +1179,8 @@ def conciliar_fatura():
     # aviso de importacao parcial: o arquivo pegou um pedaco ja coberto e
     # so o que faltava entrou. O base.html renderiza `aviso` sozinho.
     recorte_aviso = None
+    # numeros do que a importacao desta requisicao fez; None em qualquer GET
+    resumo_importacao = None
     resultado = None
     fatura_meta = None
     account_id = request.form.get("account_id") if request.method == "POST" else None
@@ -1518,7 +1520,8 @@ def conciliar_fatura():
                 # reenviar o PDF recria as linhas com ids novos e o CASCADE
                 # leva os vinculos junto - inclusive o da parcela ja gerada
                 _revincular_lancamentos_da_fatura(cur, session.get("user"))
-                _vincular_automatico(cur, fatura_para_vincular, session.get("user"))
+                vinculos_criados = _vincular_automatico(
+                    cur, fatura_para_vincular, session.get("user"))
                 # A propria importacao conclui o regime de caixa. Assim uma
                 # compra total do Pluggy nunca espera outra acao manual para
                 # virar parcelas mensais oficiais.
@@ -1541,6 +1544,21 @@ def conciliar_fatura():
                         detalhes={"fatura_id": fatura_id, "rotulo": ok_automatico["rotulo"],
                                   "lancamentos": ok_automatico["marcados"]},
                     )
+                # O que ESTA importacao fez, para a tela dizer em numeros
+                # (pedido do usuario, 17/09/2026). A importacao e a acao com
+                # mais efeito da tela - le o arquivo, vincula, gera parcela e
+                # ASSINA OK -, e ate aqui o unico retorno era "importado".
+                resumo_importacao = {
+                    "arquivo": arquivo.filename,
+                    "referencia": f"{fatura['mes_referencia']:02d}/{fatura['ano_referencia']}",
+                    "documento": "extrato" if fatura.get("extrato") else "fatura",
+                    "linhas": len(fatura["linhas"]),
+                    "vinculos": vinculos_criados,
+                    "parcelas": resumo_parcelas.get("parcelas_criadas") or 0,
+                    "ok": ok_automatico["marcados"],
+                    "ok_rotulo": ok_automatico["rotulo"],
+                    "substituiu": substituido["arquivo_nome"] if substituido else None,
+                }
                 conn.commit()
                 registrar_auditoria(
                     "alteracao", "relatorios.conciliar_fatura_importar", sucesso=True,
@@ -1549,6 +1567,7 @@ def conciliar_fatura():
                         "mes_referencia": fatura["mes_referencia"], "ano_referencia": fatura["ano_referencia"],
                         "linhas": len(fatura["linhas"]),
                         "parcelas": resumo_parcelas,
+                        "vinculos": vinculos_criados, "ok": ok_automatico["marcados"],
                     },
                 )
               except FaturaInvalida as exc:
@@ -1771,6 +1790,7 @@ def conciliar_fatura():
         # GET escrevia "Documento importado" no registro da tela, afirmando uma
         # gravacao que nao houve.
         importou_agora=(request.method == "POST" and bool(resultado) and not erro),
+        resumo_importacao=resumo_importacao,
         pode_editar_conciliacao=pode("conciliacao_editar"),
         pode_criar_lancamento=pode("lancamentos_manual"),
     )

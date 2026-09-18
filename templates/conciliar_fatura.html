@@ -8,19 +8,46 @@
    que a propria acao dispara. Numa tela de conferencia isso e' perda de
    auditoria na hora em que ela mais importa: o usuario nao consegue conferir
    depois o que acabou de fazer. O registro fica ate ele SAIR da tela. #}
+{# "Conciliação de Lançamentos" (pedido do usuario, 17/09/2026): volta ao
+   estado inicial da tela, igual a clicar no item do menu. E um LINK para a
+   propria rota sem parametro nenhum - nao um botao que chama `reload()`:
+   recarregar manteria o `fatura_id` da URL e nao levaria a lugar nenhum. #}
+<div style="margin-bottom:14px">
+  <a class="btn-primario" href="/relatorios/conciliar-fatura"
+     data-tip="Recarrega a tela no estado inicial, como pelo menu">Conciliação de Lançamentos</a>
+</div>
+
 <div id="registro-acoes" class="cat-breakdown" hidden
      style="border-left:3px solid var(--accent);margin-bottom:16px">
   <h3 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span>O que foi feito nesta tela</span>
     <button type="button" class="ver-btn" id="registro-limpar">limpar</button>
   </h3>
+  {# O resumo em numeros vem ANTES do detalhe: depois de importar oito
+     arquivos de uma vez, a pergunta e "quantos entraram, quantos OK saíram,
+     deu erro?" - e nao reler oito linhas para contar na mao. O detalhe fica
+     logo abaixo, um a um, aberto por padrao (foi a falta dele que originou
+     este bloco); quem quiser so o panorama fecha. #}
+  <div id="registro-resumo" class="cards" style="margin-bottom:10px"></div>
   <div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:8px">
     Cada linha é uma gravação no banco, na ordem em que aconteceu. Fica aqui
     enquanto você estiver nesta tela; o histórico permanente está em
     <a href="/logs">Logs</a>.
   </div>
-  <ol id="registro-lista" style="margin:0;padding-left:20px;font-size:var(--fonte-sm);line-height:1.8"></ol>
+  <details id="registro-detalhe" open>
+    <summary style="cursor:pointer;font-size:var(--fonte-sm);color:var(--ink-soft)">
+      ver uma a uma (<span id="registro-qtd">0</span>)
+    </summary>
+    <ol id="registro-lista" style="margin:8px 0 0;padding-left:20px;font-size:var(--fonte-sm);line-height:1.8"></ol>
+  </details>
 </div>
+
+{# Os numeros da importacao saem do SERVIDOR, num bloco JSON - nunca em
+   atributo, onde `|tojson` nao escapa aspas duplas e o handler quebra em
+   silencio (secao 2.2). #}
+{% if resumo_importacao %}
+<script type="application/json" id="resumo-importacao">{{ resumo_importacao|tojson }}</script>
+{% endif %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px;line-height:1.6">
   Envie a fatura do cartão de crédito ou o extrato da conta corrente — o arquivo que o banco fornece, em <strong>PDF</strong> ou <strong>OFX</strong>
@@ -329,7 +356,15 @@
                 <button type="button" class="ver-btn" onclick="vincularLinha(this)">Vincular</button>
                 {% endif %}
                 {% if pode_criar_lancamento %}
+                {# A opcao vazia NAO e enfeite: sem ela o seletor nasce com a
+                   primeira categoria em ordem alfabetica ja escolhida, e o
+                   "Criar" grava essa em silencio. Foi assim que o
+                   `ESTORNO - Ajuste a Credito` de R$ 283,04 virou lancamento na
+                   categoria "Academia" - ninguem escolheu, era so a primeira da
+                   lista. A rota ja recusava categoria vazia com "Escolha uma
+                   categoria", mas a validacao nunca era alcancada. #}
                 <select data-pdm-combobox aria-label="Categoria" class="fatura-categoria" style="padding:5px 7px;font-size:var(--fonte-sm)">
+                  <option value="">escolha a categoria…</option>
                   {% for c in categorias %}<option value="{{ c.chave }}">{{ c.nome }}</option>{% endfor %}
                 </select>
                 <button type="button" class="ver-btn fatura-criar-btn" onclick="criarLancamentoFatura(this)">Criar</button>
@@ -493,7 +528,7 @@
         const importada = doc.querySelector('[data-importada]');
         if (resp.ok && importada && !erro) {
           ok++;
-          registrarAcao('Documento importado: ' + arq.name + '.');
+          registrarAcao("Documento importado: " + arq.name + ".", "ok", {importacoes: 1});
           item.textContent = arq.name + ' — importado. ';
           const link = document.createElement('a');
           link.href = '/relatorios/conciliar-fatura?fatura_id=' + encodeURIComponent(importada.dataset.importada);
@@ -589,12 +624,50 @@ function registroGravar(itens) {
   try { sessionStorage.setItem(REGISTRO_CHAVE, JSON.stringify(itens)); } catch (err) {}
 }
 
+// O resumo em numeros. Cada acao declara o que somou; aqui so se totaliza -
+// contar por texto ("procurar a palavra OK na frase") daria numero errado na
+// primeira mensagem reescrita.
+const REGISTRO_CONTADORES = [
+  ['importacoes', 'documento importado', 'documentos importados'],
+  ['ok', 'OK assinado pelo documento', 'OK assinados pelo documento'],
+  ['vinculos', 'vínculo feito', 'vínculos feitos'],
+  ['parcelas', 'parcela gerada', 'parcelas geradas'],
+  ['criados', 'lançamento criado pela fatura', 'lançamentos criados pela fatura'],
+  ['desvinculos', 'vínculo desfeito', 'vínculos desfeitos'],
+  ['erros', 'erro', 'erros'],
+];
+
+function registroResumo(itens) {
+  const caixa = document.getElementById('registro-resumo');
+  if (!caixa) return;
+  caixa.textContent = '';
+  REGISTRO_CONTADORES.forEach(([chave, singular, plural]) => {
+    const total = itens.reduce((s, it) => s + ((it.numeros || {})[chave] || 0), 0);
+    if (!total) return;                      // zero nao vira card: so ruido
+    const card = document.createElement('div');
+    card.className = 'card';
+    const val = document.createElement('div');
+    val.className = 'val';
+    val.textContent = total;
+    if (chave === 'erros') val.style.color = 'var(--bad)';
+    const rot = document.createElement('div');
+    rot.className = 'rot';
+    rot.textContent = total === 1 ? singular : plural;
+    card.appendChild(val);
+    card.appendChild(rot);
+    caixa.appendChild(card);
+  });
+}
+
 function registroDesenhar() {
   const caixa = document.getElementById('registro-acoes');
   const lista = document.getElementById('registro-lista');
   if (!caixa || !lista) return;
   const itens = registroLer();
   caixa.hidden = itens.length === 0;
+  registroResumo(itens);
+  const qtd = document.getElementById('registro-qtd');
+  if (qtd) qtd.textContent = itens.length;
   lista.textContent = '';
   itens.forEach(it => {
     const li = document.createElement('li');
@@ -612,17 +685,51 @@ function registroDesenhar() {
   });
 }
 
-function registrarAcao(texto, tipo) {
+function registrarAcao(texto, tipo, numeros) {
   const itens = registroLer();
   const agora = new Date();
   const dois = n => String(n).padStart(2, '0');
+  const conta = numeros || {};
+  if (tipo === 'erro' && !conta.erros) conta.erros = 1;
   itens.push({
     hora: dois(agora.getHours()) + ':' + dois(agora.getMinutes()) + ':' + dois(agora.getSeconds()),
     texto: texto,
     tipo: tipo || 'ok',
+    numeros: conta,
   });
   registroGravar(itens);
   registroDesenhar();
+}
+
+// Os numeros da importacao vem do servidor, que e quem sabe o que aconteceu:
+// quantas linhas leu, quantos vinculos criou, quantas parcelas gerou e quantos
+// OK a fatura assinou. Contar isso no cliente seria adivinhar.
+function lerResumoImportacao() {
+  const bloco = document.getElementById('resumo-importacao');
+  if (!bloco) return null;
+  try { return JSON.parse(bloco.textContent); } catch (err) { return null; }
+}
+
+function textoDaImportacao(r) {
+  if (!r) return 'Documento importado e conciliado.';
+  const partes = [r.documento === 'extrato' ? 'Extrato' : 'Fatura', r.referencia,
+                  'importado de "' + r.arquivo + '": ' + r.linhas + ' linha(s)'];
+  if (r.vinculos) partes.push(r.vinculos + ' vínculo(s) criado(s)');
+  if (r.parcelas) partes.push(r.parcelas + ' parcela(s) gerada(s)');
+  // OK e assinatura: quantos e por conta de quem tem de estar escrito (secao 1.2)
+  partes.push(r.ok ? r.ok + ' OK assinado(s) pela ' + r.ok_rotulo
+                   : 'nenhum OK assinado');
+  const texto = partes.join(' · ') + '.';
+  return r.substituiu ? texto + ' Substituiu "' + r.substituiu + '".' : texto;
+}
+
+function numerosDaImportacao(r) {
+  return {
+    importacoes: 1,
+    ok: r ? (r.ok || 0) : 0,
+    vinculos: r ? (r.vinculos || 0) : 0,
+    parcelas: r ? (r.parcelas || 0) : 0,
+  };
 }
 
 // Recarregar a tela por acao dela mesma NAO encerra a visita.
@@ -653,7 +760,8 @@ function recarregarMantendoRegistro() {
     const importada = document.querySelector('[data-importada][data-gravou]');
     if (importada && !importada.dataset.registrado) {
       importada.dataset.registrado = '1';
-      registrarAcao('Documento importado e conciliado (fatura ' + importada.dataset.importada + ').');
+      registrarAcao(textoDaImportacao(lerResumoImportacao()), 'ok',
+                    numerosDaImportacao(lerResumoImportacao()));
     }
     const erroImport = document.querySelector('#form-importar ~ .err, .cat-breakdown > .err');
     if (erroImport && erroImport.textContent.trim() && !erroImport.dataset.registrado) {
@@ -695,7 +803,8 @@ function conferirPelaFatura(faturaId, btn) {
       // escrito, nao piscar por um segundo e sumir no reload
       registrarAcao(d.marcados
         ? 'OK assinado pela ' + d.rotulo + ' em ' + d.marcados + ' lançamento(s).'
-        : 'Conferir pela fatura: nada a assinar (tudo já assinado, ou falta classificação ou vínculo).');
+        : "Conferir pela fatura: nada a assinar (tudo já assinado, ou falta classificação ou vínculo).",
+        "ok", {ok: d.marcados || 0});
       if (d.marcados > 0) setTimeout(recarregarMantendoRegistro, 1200);
     })
     .catch(() => {
@@ -726,7 +835,7 @@ function vincularAutomatico(faturaId, btn) {
       registrarAcao('Vínculo automático: ' + d.criados + ' vínculo(s) criado(s)'
         + (d.removidos ? ', ' + d.removidos + ' removido(s)' : '')
         + (d.ok_automatico ? ' — e a fatura assinou o OK de ' + d.ok_automatico + ' lançamento(s)' : '')
-        + '.');
+        + '.', 'ok', {vinculos: d.criados || 0, ok: d.ok_automatico || 0});
       if (d.criados > 0) setTimeout(recarregarMantendoRegistro, 900);
     })
     .catch(() => {
@@ -763,7 +872,8 @@ function vincularLinha(btn) {
       }
       status.style.color = 'var(--good)';
       status.textContent = 'Vinculado.';
-      registrarAcao('Linha da fatura "' + descLinha + '" vinculada ao lançamento ' + rotulo + '.');
+      registrarAcao('Linha da fatura "' + descLinha + '" vinculada ao lançamento ' + rotulo + '.',
+                    'ok', {vinculos: 1});
       setTimeout(recarregarMantendoRegistro, 700);
     })
     .catch(() => {
@@ -800,7 +910,8 @@ function vincularOrfa(btn) {
       }
       status.style.color = 'var(--good)';
       status.textContent = 'Vinculado.';
-      registrarAcao('Lançamento "' + descOrfa + '" vinculado à linha ' + rotulo + '.');
+      registrarAcao('Lançamento "' + descOrfa + '" vinculado à linha ' + rotulo + '.',
+                    'ok', {vinculos: 1});
       setTimeout(recarregarMantendoRegistro, 700);
     })
     .catch(() => {
@@ -838,7 +949,7 @@ function desvincular(btn) {
         registrarAcao('Falha ao desvincular — nada foi gravado.', 'erro');
         return;
       }
-      registrarAcao('Vínculo desfeito: ' + desc + '.');
+      registrarAcao('Vínculo desfeito: ' + desc + '.', "ok", {desvinculos: 1});
       recarregarMantendoRegistro();
     })
     .catch(() => {
@@ -856,6 +967,12 @@ function criarLancamentoFatura(btn) {
   const descLinha = (linha.cells[1] ? linha.cells[1].textContent : '').trim();
   const valorLinha = (linha.querySelector('.valor') || {}).textContent || '';
   const status = linha.querySelector('.fatura-status');
+  if (!categoria) {
+    // o servidor tambem recusa; aqui a recusa chega antes e sem gastar um POST
+    status.style.color = 'var(--bad)';
+    status.textContent = 'Escolha a categoria.';
+    return;
+  }
   btn.disabled = true;
   status.style.color = 'var(--ink-faint)';
   status.textContent = 'Salvando…';
@@ -879,7 +996,7 @@ function criarLancamentoFatura(btn) {
       // tela com mais consequencia, e era a que menos deixava rastro: ela nem
       // recarrega, entao so o "Criado." minusculo no fim da linha aparecia
       registrarAcao('Lançamento criado pela fatura: "' + descLinha + '" '
-        + valorLinha.trim() + ', categoria ' + (categoria || '(sem categoria)') + '.');
+        + valorLinha.trim() + ', categoria ' + (categoria || '(sem categoria)') + '.', "ok", {criados: 1});
       linha.style.opacity = '0.5';
       linha.querySelector('.fatura-categoria').disabled = true;
     })
