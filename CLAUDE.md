@@ -2175,9 +2175,13 @@ de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde
 
 ## 7.6 Semântica visual
 
-- **Verde** apenas para fechado/completo; **amarelo** para revisão humana pendente; **vermelho**
-  para divergência real; **roxo** para investimento ou natureza fora do DRE; **neutro** para
-  totais informativos. Despesa normal não deve parecer erro só por ser despesa.
+- **Token `--good` é cinza moderno, não verde** (decisão do usuário, 19/09/2026 — antes era
+  `#059669`/`#34d399`). "Fechado/completo" deixou de ter cor de sucesso em todo o sistema:
+  fatura que fecha 100%, vínculo principal, receita e resultado positivo no DRE, tag ativa. Um
+  único ponto de troca (`:root`, os dois blocos de tema escuro) — todo uso do token mudou junto,
+  sem precisar caçar tela por tela. **Amarelo** para revisão humana pendente; **vermelho** para
+  divergência real; **roxo** para investimento ou natureza fora do DRE; **neutro** para totais
+  informativos. Despesa normal não deve parecer erro só por ser despesa.
 - **Cor nunca é a única explicação de estado:** tooltip com todas as situações na célula de data,
   selo de *fora do resultado* na descrição, e os atalhos de filtro por situação no rodapé.
 - **Não existem pontos coloridos no início da linha** (decisão do usuário, 09/09/2026, depois de os
@@ -2188,7 +2192,8 @@ de expressão Jinja autoescapada — produz `&amp;` literal no endereço e perde
   seria referência a coisa nenhuma. Não reintroduzir sem ele pedir.
 - **Linha com OK fica cinza; o que FALTA conferir é transparente** (invertido em 12/09/2026,
   pedido do usuário — até 11/09/2026 era o contrário: cinza no pendente, para destacar "o que
-  falta"). Verde continua proibido aqui: despesa normal não pode parecer erro nem sucesso.
+  falta"). O cinza do OK é o mesmo `--raise` de sempre, não o token `--good`: despesa normal não
+  pode parecer erro nem sucesso.
   Pendente no banco **não** colore o fundo (bloqueia o OK e aparece na legenda/dica).
 - **Os botões `+`/`−` de rateio e de registros técnicos ficam DEPOIS da descrição.** Antes dela,
   empurravam o texto e as linhas com e sem botão começavam em colunas diferentes.
