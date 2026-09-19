@@ -2868,6 +2868,16 @@ em "Transferências e reembolsos" e **não** em Despesas, e foi apagado em segui
 **Contextos que exigem decisão antes de virar regra** — não automatizar por descrição: Apple,
 Google, Mercado Livre (marketplace), combustível, mecânica, estorno e IOF.
 
+**Categoria `Veículos` criada em 19/09/2026** (natureza `bem`) — compra de veículo, não existia
+antes (só `Manutenção Veículo`, despesa). Achada ao conferir o DRE mês a mês (§11.4): fevereiro/2026
+tinha R$ 128.613,21 de despesa, +425% sobre janeiro, porque a compra do Jeep Tracker
+(`INESIO LUIZ GIRARDELLO DEBITO TRANSF PIX` R$ 98.000,00 + `CHAPECO CAMINHOES E IMPLEMENTOS LTDA
+DEBITO TRANSF PIX` R$ 1.000,00, ambos 05–06/02/2026, R$ 99.000,00 no total) estava em `Manutenção
+Veículo`. Movidos para `Veículos` — fevereiro caiu para R$ 29.613,21, em linha com os outros meses.
+Responsável/Projeto/Portfólio já estavam corretos (Andrea / Tracker / Veículos) e não precisaram de
+ajuste. **Lição:** compra de bem alto valor pode entrar pela mesma categoria da manutenção de
+rotina — vale olhar o maior lançamento de cada categoria de vez em quando, não só o total.
+
 
 ---
 
@@ -3433,7 +3443,12 @@ não produz linha de fatura.
 1. **Conta corrente — conciliação em produção, fechada.** O extrato oficial está conciliado desde
    agosto, setembro também fechou (§6.8), e os depósitos em espécie sem origem foram classificados
    em 19/09/2026 (§11.3). Sobra em aberto só a manutenção da casa atribuível ao aluguel BRDrive.
-2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
+2. **Conferir o DRE mês a mês — em andamento (iniciado 19/09/2026).** Evolução mês a mês de
+   Despesas (`/relatorios`, agrupado por Período) rodada em 2026: fevereiro tinha um pico de +425%
+   (achado e corrigido, categoria `Veículos` acima). Os demais meses de 2026 ficaram dentro de uma
+   faixa razoável (~R$20-32k) e ainda não foram abertos um a um linha por linha — só o pico saltou
+   aos olhos no gráfico. Retomar abrindo cada mês e conferindo os maiores lançamentos, não só picos
+   no total.
 3. **`/pendencias` — fechado em 18/09/2026.** Os 646 sem categoria eram quase todos histórico
    pré-2026 (migração 68 + corte em `levantar_pendencias()`, acima); zeraram sozinhos. A única
    categoria sem natureza (`Energia`) foi confirmada como Despesa. Hoje a tela diz "Nenhuma
