@@ -3623,8 +3623,11 @@ fatura.
    própria conta corrente: transferência entre contas próprias e depósito em espécie sem origem
    (§11.3) — não é mais sobre conciliar o documento, é sobre classificar o que ele já trouxe.
 2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
-3. **`/pendencias`**: 646 lançamentos sem categoria (conferido em 18/09/2026 — o número muda
-   conforme o Pluggy sincroniza e o usuário classifica; reconferir antes de agir).
+3. **`/pendencias` — fechado em 18/09/2026.** Os 646 sem categoria eram quase todos histórico
+   pré-2026 (migração 68 + corte em `levantar_pendencias()`, acima); zeraram sozinhos. A única
+   categoria sem natureza (`Energia`) foi confirmada como Despesa. Hoje a tela diz "Nenhuma
+   pendência de classificação" — reconferir só quando o Pluggy trouxer categoria nova ou
+   sincronizar lançamento sem classificação.
 
 **Não transportar regras entre origens.** Criar regras e eventuais correções de horário
 específicas por origem; nunca copiar em massa a lógica da Unicred sem validação própria.
