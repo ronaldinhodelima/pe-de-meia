@@ -5490,6 +5490,44 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (67);")
             conn.commit()
 
+        if versao_atual < 68:
+            # Decisao do usuario (18/09/2026): lancamento anterior a 2026 fica
+            # de fora do resultado. Nao e' apagar historico - a tela de
+            # Lancamentos e a conciliacao continuam lendo cartao.transacao
+            # direto (secao 7.1-A) e mostram 2025 pra tras normalmente, so' pra
+            # consulta. O que muda e' quem CONTA: DRE, relatorios, totais de
+            # Lancamentos e pendencias passam pela view financeira (secao 4.2),
+            # entao um corte ali vale pra todos de uma vez, sem duplicar regra.
+            cur.execute(
+                "CREATE OR REPLACE VIEW cartao.lancamento_financeiro AS "
+                "SELECT t.transacao_id::text AS linha_id, NULL::bigint AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, t.categoria, "
+                "t.valor_brl, t.valor_original, t.moeda_original, t.status, t.tipo, "
+                "t.numero_cartao_final, t.conferida, COALESCE(t.duplicada,false) AS duplicada, "
+                "t.natureza, t.observacao "
+                "FROM cartao.transacao t "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false) "
+                "AND t.substituido_por IS NULL "
+                "AND t.data_transacao >= '2026-01-01'::date AND NOT EXISTS ("
+                "SELECT 1 FROM cartao.transacao_rateio r WHERE r.transacao_id=t.transacao_id) "
+                "UNION ALL "
+                "SELECT t.transacao_id::text || ':' || r.id::text AS linha_id, r.id AS rateio_id, "
+                "t.transacao_id, t.account_id, t.data_transacao, t.descricao, r.categoria, "
+                "r.valor_brl, r.valor_brl AS valor_original, 'BRL'::text AS moeda_original, "
+                "t.status, t.tipo, t.numero_cartao_final, t.conferida, "
+                "COALESCE(t.duplicada,false) AS duplicada, NULL::text AS natureza, r.observacao "
+                "FROM cartao.transacao t JOIN cartao.transacao_rateio r ON r.transacao_id=t.transacao_id "
+                "WHERE NOT COALESCE(t.somente_conciliacao,false) AND t.substituido_por IS NULL "
+                "AND t.data_transacao >= '2026-01-01'::date;"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Lancamento anterior a 2026 fora do resultado',"
+                "jsonb_build_object('versao',68));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (68);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:

@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 18/09/2026 · **Schema:** migração 67 · **Testes:** 485 aprovados, 10 ignorados
+**Última revisão:** 18/09/2026 · **Schema:** migração 68 · **Testes:** 485 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -406,10 +406,11 @@ com natureza `despesa`.
 
 ## 4.2 O que entra no DRE
 
-- **Todo lançamento real do período**, independentemente de `POSTED` ou da data atual. Foi
-  desfeita a tentativa de limitar a `POSTED` até hoje.
-- **Não entram:** duplicados confirmados, registros `somente_conciliacao`, lançamentos
-  `substituido_por` e naturezas neutras.
+- **Todo lançamento real do período, a partir de 01/01/2026.** Foi desfeita a tentativa de
+  limitar a `POSTED` até hoje (isso continua valendo — `POSTED` não é critério).
+- **Não entram:** lançamento **anterior a 2026** (decisão do usuário, 18/09/2026 — abaixo),
+  duplicados confirmados, registros `somente_conciliacao`, lançamentos `substituido_por` e
+  naturezas neutras.
 - Um lançamento rateado conta **uma vez**: as partes substituem o pai.
 - Os cards de receitas/despesas/resultado usam exatamente essa mesma regra.
 
@@ -417,6 +418,24 @@ com natureza `despesa`.
 relatórios, totais de Lançamentos e pendências — mexer lá vale para todos de uma vez. As telas de
 Lançamentos e de conciliação leem `cartao.transacao` direto, por isso mostram também o que a view
 exclui (ver §7.4).
+
+### 2025 para trás é histórico, não conta (18/09/2026)
+
+**Decisão do usuário.** "Quem vive de passado é museu" — 2026 é o ano corrente da contabilização;
+tudo anterior fica fora de DRE, relatórios, cards e pendências, e existe só como **consulta**. A
+migração 68 pôs `t.data_transacao >= '2026-01-01'` nas duas pernas da view `lancamento_financeiro`
+— o mesmo ponto único de sempre, então DRE, relatórios, totais de Lançamentos e `/pendencias` já
+aplicam o corte sem regra escrita duas vezes.
+
+**O que NÃO muda:** a tela de Lançamentos (recorte por período) e a conciliação de fatura/extrato
+continuam lendo `cartao.transacao` direto (§7.1-A) — 2025 para trás continua visível, navegável e
+editável ali, só não soma em nada financeiro. Nenhum dado foi apagado; nenhuma classificação de
+2025 precisa mais ser perseguida (os itens do Track A que eram só de 2025 saíram da fila, ver
+§11.2/§11.3).
+
+**Consequência prática:** todo número histórico deste arquivo que fala de DRE 2025 (resultado,
+receita, despesa) é o valor que existiu **antes** desta decisão — não recalcular, não é erro se um
+`/relatorios` filtrado em 2025 mostrar zero a partir de agora.
 
 Distinguir sempre **"recebidos"** (todos os registros do banco) de **"contabilizados"** (os que
 participam do resultado).
@@ -3410,11 +3429,14 @@ blocos, sempre com prévia e decisão do usuário — **o OK continua sendo dele
 **Anotado para depois, a pedido do usuário** (não mexer sem ele retomar):
 
 - custo da casa atribuível ao aluguel da BRDrive (§11.3);
-- BRsim R$ 60.038,73 e R$ 189.961,27 (30/12/2025), sem classificação;
-- os 31 créditos `Transferência Recebida|BRSIM` na conta Nubank da Andrea (§8.4);
 - Projeto `BRDrive` × BRsim nos relatórios (§8.4);
 - travas de exclusão de categoria/dimensão contando pela view — defeito latente confirmado
   **inativo** (0 casos na varredura de 07/09/2026, §8.4), sem urgência.
+
+**Descartado em 18/09/2026 — 2025 é histórico, não entra mais em DRE/relatórios (acima):**
+BRsim R$ 60.038,73 e R$ 189.961,27 (30/12/2025, sem classificação) e os 31 créditos `Transferência
+Recebida|BRSIM` na conta Nubank da Andrea, datas irregulares em 2025/2026 a conferir data a data se
+algum for de 2026. Não classificar os de 2025; são consulta, não contam.
 
 **Conferido em 18/09/2026, já resolvido — tirado da lista:** o filtro `status=despesa` incluir
 lançamentos fora do resultado (corrigido em 08/09/2026, commit `16cf81fb`, com teste) e o log
@@ -3648,3 +3670,4 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 65 | centro de custo vira REGRA (categoria + dimensão opcional, §7.11); `categoria_subgrupo` sai, `categoria_subgrupo_backup_v65` |
 | 66 | `acao_desfazivel`: o botão Desfazer do topbar (§9.4) |
 | 67 | `fatura_arquivo_backup`: a versão anterior do arquivo, guardada a cada substituição (§6.8) |
+| 68 | lançamento anterior a 2026 sai do resultado — corte de data na view `lancamento_financeiro` (§4.2) |
