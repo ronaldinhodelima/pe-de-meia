@@ -588,9 +588,6 @@ parcelas serão afetadas e exige confirmação explícita. É limitada ao cartã
 Responsável, Projeto, Portfólio, observação, OK, duplicidade, rateio, `somente_conciliacao` ou
 `substituido_por`.
 
-Verificado em 29/08/2026 (2.336 transações atualizadas, 0 novas): DRE, vínculos, duplicidades e
-conciliação idênticos antes/depois.
-
 **Atenção:** `data_transacao` PODE mudar se o Pluggy corrigir fuso/data, e isso move o lançamento
 para dentro ou fora do ciclo de uma fatura. Os vínculos não se perdem (são por id), mas a lista de
 órfãos pode oscilar — se acontecer, rodar o vínculo automático de novo.
@@ -614,9 +611,8 @@ com a flag já pronta — **nunca exercitava quem calcula a flag**. Hoje `_corri
 é função com nome e teste próprio. **Lição:** testar o efeito e não a decisão deixa a decisão sem
 rede, e aqui ela ficou errada por duas semanas sem uma linha vermelha em lugar nenhum.
 
-**Três lançamentos mudaram de mês ao ser corrigidos** — 31/10/2025 21:00, 31/12/2025 21:00 e
-28/02/2026 22:19. Não é defeito: eles aconteceram mesmo no fim daqueles dias e estavam datados no
-dia 1º do mês seguinte. O DRE desses meses se move um pouco, na direção certa.
+**Lançamento perto da virada do dia pode mudar de mês ao ser corrigido** — não é defeito, é o
+evento tendo acontecido mesmo no fim daquele dia, com o Pluggy datando no dia seguinte.
 
 **A correção é idempotente:** o valor gravado é sempre `valor do Pluggy − 3h`, nunca
 `valor gravado − 3h`. Sincronizar de novo não subtrai outra vez. **Horários exatamente 00:00 são preservados** — representam data sem hora
@@ -867,25 +863,16 @@ Cada uma tem teste em `tests/test_fatura_vinculo.py`. Antes de mexer em `_concil
 
 ## 6.6 A marca de agregado sem caminho de volta (migração 44)
 
-**O defeito.** `somente_conciliacao` só era POSTA, nunca retirada. Quando o conjunto de vínculos
-mudava depois (refazer vínculos, reenvio de PDF, desvincular na mão), a transação deixava de ser
-agregado e **continuava fora do resultado para sempre**, sem nenhuma parcela ocupando o lugar
-dela.
+`somente_conciliacao` só era POSTA, nunca retirada. Quando o conjunto de vínculos mudava depois
+(refazer vínculos, reenvio de PDF, desvincular na mão), a transação deixava de ser agregado e
+**continuava fora do resultado para sempre**, sem nenhuma parcela ocupando o lugar dela — a
+detalhada mostrava "Validar: falta vínculo", mensagem enganosa (não faltava vínculo, faltava
+lançamento **contabilizável**).
 
-**O estrago.** Cinco compras **à vista** sumiram do DRE — R$ 1.167,38: SUPERVIZA R$ 584,83
-(jan/2026), DELTA VIDEIRA R$ 83,30 (dez/2025), SUPERVIZA R$ 268,75 e MP *PRODUTOS R$ 105,00
-(out/2025), POSTO CANOAS R$ 125,50 (set/2025).
-
-**Como se manifestava.** A linha do PDF *tinha* vínculo, com um lançamento correto do Pluggy. Mas
-esse único vínculo era inelegível, então a detalhada não achava lançamento principal e escrevia
-**"Validar: falta vínculo"** — mensagem enganosa: não faltava vínculo, faltava um lançamento
-**contabilizável**.
-
-**A correção.** A sincronização agora desmarca, com a trava: **nunca desmarcar quem já teve
-parcela gerada** a partir das suas linhas — se as parcelas existem, são elas que contam. O retorno
-antecipado "sem agregado nenhum" vale só para a prévia, porque sem agregado ainda pode haver marca
-obsoleta a retirar. Migração 44 corrigiu o dado, backup em `cartao.agregado_backup_v44`,
-**5 lançamentos devolvidos — exatamente os 5 previstos**.
+**A correção, que continua valendo:** a sincronização desmarca, com a trava de **nunca desmarcar
+quem já teve parcela gerada** a partir das suas linhas — se as parcelas existem, são elas que
+contam. O retorno antecipado "sem agregado nenhum" vale só para a prévia, porque sem agregado
+ainda pode haver marca obsoleta a retirar.
 
 ## 6.7 Duplicidades — `/relatorios/duplicidades-fatura`
 
@@ -902,11 +889,9 @@ próxima fatura* (compra perto do fechamento — não é duplicidade, não tem a
   **Nenhuma existe antes de junho/2026** — o Pluggy mudou o comportamento nessa conta e passou a
   emitir as parcelas mensais **além** do agregado.
 
-Caso exemplar: OTICA CALLIARI, 10× R$316 = R$3.160, comprado em 02/11/2025. A fatura cobrou as 10
-parcelas certinho; o Pluggy mandou o agregado **mais** R$316 em 12/06, 12/07 e 12/08.
-
-Aplicado em 29/08/2026: 74 parcelas repetidas + 35 ecos vinculados via `substituido_por`. Despesa
-de 2026 caiu de R$ 493.358,27 para **R$ 474.442,56** (−R$ 18.915,71). 2025 não mudou.
+Caso exemplar: OTICA CALLIARI, 10× R$316, comprado em 02/11/2025 — a fatura cobrou as 10 parcelas
+certinho, e o Pluggy mandou o agregado **mais** R$316 solto em três meses seguintes. Resolvido via
+`substituido_por` em ambos os mecanismos.
 
 **Eco técnico não é divergência:** dois registros Pluggy com o mesmo instante, cartão e valor,
 para uma única cobrança oficial no PDF — um contabilizado, o outro preservado para auditoria. A
@@ -926,33 +911,20 @@ tipo é despesa dobrada, não uma escolha estética.
 
 **E o rótulo do outro lado dizia o contrário do que a própria linha dizia** (17/09/2026). O painel
 escrevia **`contabilizado e editável`** para todo `v.principal`, sem olhar mais nada — e `principal`
-é só "qual vínculo carrega a edição". Resultado: o agregado `Parcelado Lojista AZULPSZ9RH`,
-R$ 374,76, aparecia com o selo **"fora do resultado"** na linha e **"contabilizado"** no painel logo
-abaixo, na mesma tela. **A conta estava certa** — ele é `somente_conciliacao`, e as parcelas de
-R$ 93,69 é que contam, uma por fatura (§4.5), todas conferidas em 06, 07 e 08/2026. Errado era só o
-rótulo, que é o pior tipo de erro numa tela cujo trabalho é dizer o que conta. Hoje quem decide o
-texto é **`linha.fora_do_resultado`, o mesmo campo do selo da descrição** — a regra é uma só —, e o
-verde de "fechado/completo" (§7.6) só acende quando o lançamento entra no resultado. A legenda do
-rodapé dizia o mesmo, misturando "editável" com "usado no DRE", e foi reescrita junto.
+é só "qual vínculo carrega a edição", não estado contábil. Um agregado `somente_conciliacao`
+aparecia com o selo "fora do resultado" na linha e "contabilizado" no painel logo abaixo, na mesma
+tela. Hoje quem decide o texto é **`linha.fora_do_resultado`, o mesmo campo do selo da descrição**
+— a regra é uma só —, e o verde de "fechado/completo" (§7.6) só acende quando o lançamento entra no
+resultado.
 
 `GET /api/diagnostico/eco-3h` varre isso, somente leitura: linhas de fatura com dois ou mais
 lançamentos elegíveis, mesmo valor e mesmo cartão, separando os pares de **3h exatas** — que são a
 assinatura da normalização de horário da §4.6 alcançando um registro e não o outro. Ela **só
-enxerga fatura com PDF**: o ciclo em andamento fica fora do alcance.
-
-Resultado de 02/09/2026: 2.681 vínculos avaliados, **2 casos**, R$ 255,00 inflados —
-GUILHERMEDASILVA R$ 185,00 e MP*REGIBARBERSHOP R$ 70,00, ambos na fatura 08/2026, ambos já com OK
-assinado. Corrigidos pela migração 51 com `substituido_por` (mesmo evento, não cobrança em dobro),
-mantendo o registro de horário já normalizado — que é o principal da tela e carrega a
-classificação. Backup em `cartao.eco_backup_v51`. Depois: DRE da fatura = R$ 18.821,76 = total do
-PDF, centavo a centavo.
-
-**A causa continua desconhecida, e por isso pode voltar.** Duas hipóteses foram descartadas com
-dado: os quatro registros têm `importado=false` (nenhum escapou por ter vindo da fatura, que é o
-que a migração 43 excluiu) e a conexão se chama "Unicred", então a condição do worker
-(`"unicred" in nome_conexao.lower()`) está válida. **Reabrir a varredura quando a fatura de
-setembro/2026 for importada** — os dois casos estavam na fatura mais recente que existia, então
-pode ser a borda de um fenômeno contínuo, não o fim dele.
+enxerga fatura com PDF**: o ciclo em andamento fica fora do alcance. Resolvido pela migração 51 com
+`substituido_por` (mesmo evento, não cobrança em dobro). **A causa continua desconhecida** — a
+conexão se chama "Unicred" (condição do worker válida) e nenhum caso veio da fatura (`importado`
+sempre `false`) — então pode voltar; rodar `/api/diagnostico/eco-3h` de novo se aparecer "Validar:
+mais de um lançamento possível" numa fatura nova.
 
 
 ## 6.8 Extrato de conta corrente (05/09/2026)
@@ -1051,76 +1023,41 @@ o período que se pedir, e recusar faz **perder a parte nova — que é dado rea
   só criaria ruído.
 - A tela diz **quantas linhas ficaram de fora e de qual documento**, e quantas entraram.
 
-**Medido com o arquivo real do usuário** (01/08 a 14/09, 35 linhas), com agosto já importado: 28
-linhas de agosto ignoradas, **7 de setembro importadas**, documento novo de 08/09 a 14/09 —
-e ele não encosta mais no de agosto.
-
 ### O recorte NUNCA pode rodar sobre fatura de cartão (16/09/2026)
 
-**Ele apagou quatro faturas da Andrea.** O usuário reimportou as faturas 06, 07 e 08/2026 do Nubank
-e "vários lançamentos sumiram". O que sumiu foram as **linhas dos documentos**, e o mecanismo é
-exatamente a premissa do recorte: *"cada transação pertence a um documento só, então a data da
-linha diz qual é"*. **Numa fatura de cartão isso é falso** — duas faturas seguidas compartilham o
-dia da virada do ciclo (`DTEND` de uma = `DTSTART` da outra) e o Nubank data **toda parcela** nesse
-dia (§11.3-A, que já registrava o fato).
+**Apagou quatro faturas da Andrea.** O recorte por data (premissa: "cada transação pertence a um
+documento só, a data da linha diz qual é") é falso em fatura de cartão: duas faturas seguidas
+compartilham o dia da virada do ciclo, e o Nubank data **toda parcela** nesse dia (§11.3-A). O
+recorte descartava as linhas da borda, o mês de referência era recalculado pelo que sobrava, e o
+arquivo acabava substituindo o mês **anterior** — em cadeia, quatro documentos sobrescritos.
 
-Resultado, para o arquivo de 06/2026 (ciclo 02/05 a 02/06, 17 linhas):
-
-- as linhas de **02/05** caíam dentro do período da fatura de 05/2026 → descartadas;
-- as linhas de **02/06** caíam dentro do período da de 07/2026 → descartadas;
-- sobravam as 4 do meio do mês, e então o código **recalculava o mês de referência pelas linhas
-  restantes** → o arquivo virava **05/2026** e **substituía a fatura de maio**, de 18 para 4 linhas.
-
-O mesmo empurrão de um mês aconteceu em cadeia: 07 virou 06, 08 virou 07, e o arquivo de 01/2026
-virou 12/2025. Quatro documentos sobrescritos.
-
-**A correção:** o recorte só roda quando `fatura.get("extrato")`. Fatura de cartão entra inteira — o
-ciclo dela vem do arquivo e a chave `(conta, mês, ano)` já resolve substituição.
+**A correção:** o recorte só roda quando `fatura.get("extrato")`. Fatura de cartão entra inteira —
+o ciclo vem do arquivo e a chave `(conta, mês, ano)` já resolve substituição.
 `test_o_recorte_por_data_so_alcanca_extrato_nunca_fatura_de_cartao` cobra a guarda.
 
-**Nenhum LANÇAMENTO foi perdido, e isso não foi sorte:** importar documento nunca cria nem apaga
-lançamento. A auditoria das oito importações mostra `parcelas_criadas: 0`, `agregados: 0`,
-`marcados_agora: 0`, `desmarcados_agora: 0` e zero classificações sobrescritas. O estrago ficou em
-`fatura_linha` e `fatura_vinculo`.
-
-**A recuperação veio do próprio banco:** `pdf_arquivo` guarda o arquivo enviado, e ele **não** é
-recortado — só as linhas são. Então os documentos errados continham os arquivos **certos**, um mês
-fora do lugar, e bastou reenviá-los pela mesma rota depois do conserto. 06/2026 voltou de 6 para 17
-linhas e 07/2026 de 8 para 20, fechando centavo a centavo com o total impresso.
-
-**O que NÃO voltou:** 05/2026 e 12/2025. Os arquivos originais desses dois meses foram
-sobrescritos, e não havia backup — só o usuário reexportando do app do Nubank.
+**Nenhum lançamento foi perdido** (importar documento nunca cria nem apaga lançamento — o estrago
+ficou em `fatura_linha`/`fatura_vinculo`), e a recuperação veio do próprio `pdf_arquivo` guardado
+(não é recortado, só as linhas são) — bastou reenviar pela mesma rota. Dois meses não tinham como
+voltar porque o arquivo original já tinha sido sobrescrito sem backup.
 
 **Daí saiu a migração 67:** `cartao.fatura_arquivo_backup` guarda a versão ANTERIOR a cada
-substituição, e `/configuracoes/faturas-pdf` ganhou a seção **"Versões anteriores"**, com o arquivo
-para baixar e reenviar. A cópia é feita **antes** do `INSERT ... ON CONFLICT DO UPDATE` — depois
-dele já seria o arquivo novo —, só quando existe documento sendo trocado e só quando ele ainda tem
-arquivo (o "Apagar" da tela zera `pdf_arquivo` e não faz sentido guardar linha vazia). Tabela
-própria, e não coluna: um documento pode ser substituído várias vezes.
-**Lição:** um aviso que diz o que saiu não substitui guardar o que saiu.
+substituição de documento, e `/configuracoes/faturas-pdf` tem a seção **"Versões anteriores"** para
+baixar e reenviar. Cópia feita **antes** do `INSERT ... ON CONFLICT DO UPDATE`, só quando existe
+documento sendo trocado e só quando ele ainda tem arquivo. Tabela própria (um documento pode ser
+substituído várias vezes). **Lição: um aviso que diz o que saiu não substitui guardar o que saiu.**
 
-**A lista de faturas mostra por padrão as que não têm o ✓** (pedido do usuário, 16/09/2026). Com
-61 documentos, as fechadas empurravam as pendentes para fora da tela. **O critério é exatamente o
-símbolo que a tabela mostra** — a primeira versão escondia também a fatura que fechava 100% mas
-tinha lançamento sem OK, e aí a lista não batia com o ✓: o filtro dizia uma coisa e o símbolo dizia
-outra. Dois botões (`Sem o ✓` / `Todas`), não um seletor com frase: o critério se explica sozinho.
-Duas travas: **a fatura aberta nunca some da lista**, senão a tela fica sem a linha que a pessoa
-acabou de clicar; e **as setas de navegação andam pelo histórico completo**, senão "fatura anterior"
-saltaria meses em silêncio.
+**A lista de faturas mostra por padrão as que não têm o ✓** (pedido do usuário, 16/09/2026) — o
+critério é exatamente o símbolo que a tabela mostra, não uma heurística à parte. Dois botões
+(`Sem o ✓` / `Todas`). A fatura aberta nunca some da lista, e as setas de navegação andam pelo
+histórico completo.
 
-**A coluna "Sem OK" é outra coisa, e não entra no ✓:** conta os lançamentos daquela fatura que ainda
-esperam assinatura. `COUNT DISTINCT` porque no parcelamento que o Pluggy gravou de uma vez a mesma
-transação atende várias linhas. E **exclui "Pagamento Recebido"/"Pag de Fatura"** — é a fatura
-anterior sendo quitada (§6.3), a tela de lançamentos nem oferece caixa de OK para ele. Sem essa
-exclusão a coluna dizia "1 sem OK" numa fatura com **214 de 214 conferidos**. São as MESMAS
-exclusões que o `linhas_sem_vinculo` ao lado já aplicava: a regra é uma só, e foi escrevê-la duas
-vezes que criou a divergência.
+**A coluna "Sem OK" exclui "Pagamento Recebido"/"Pag de Fatura"** — é a fatura anterior sendo
+quitada (§6.3), sem caixa de OK na tela de lançamentos. Mesma exclusão que `linhas_sem_vinculo` ao
+lado já aplica: escrever a regra duas vezes é o que gera divergência.
 
-**Órfão conferido ganhou selo na conciliação.** Com os vínculos destruídos, a lista "Lançamentos do
-Pluggy sem vínculo" encheu de lançamentos que **continuavam conferidos** — e a tela não dizia isso,
-então a leitura natural virou "o OK voltou atrás". Não voltou: perder o vínculo não retira a
-assinatura, e a auditoria do dia não tem um único evento retirando OK. O selo `conferido` (com o
-autor no tooltip) separa **"falta religar"** de **"falta conferir"**.
+**Órfão conferido ganha selo de `conferido` na conciliação** (com autor no tooltip): perder o
+vínculo não retira a assinatura, e sem o selo a leitura natural virava "o OK voltou atrás". Separa
+**"falta religar"** de **"falta conferir"**.
 
 ### Três defeitos que o extrato 09/2026 revelou de uma vez — todos corrigidos (17/09/2026)
 
@@ -1144,20 +1081,12 @@ Mesma família nos três: regra escrita duas vezes, ou regra de cartão alcança
    sobre o próprio arquivo é palpite dele, o dado é a prova. Documento já importado antes da
    correção continua torto no banco — reimportar o arquivo guardado resolve.
 
-### Extratos da Conta Corrente Nubank · Andrea (18/09/2026)
-
-Sete extratos OFX, de **02/2026 a 08/2026**, enviados de uma vez pelo usuário (01/2026 já estava).
-**Todos fecham 100%**: movimento = soma das linhas em todos, zero linha sem vínculo, zero órfão dos
-dois lados, 132 linhas no total. **Zero mojibake** — foram os primeiros a entrar depois da correção
-de codificação (acima), e provam que ela pegou.
-
 ### O que a importação fez, em números (17/09/2026)
 
-**Pedido do usuário.** O registro da tela (acima) dizia o que aconteceu, uma linha por ação, mas
-importar oito arquivos de uma vez deixava a pergunta óbvia sem resposta: *quantos entraram, quantos
-OK saíram, deu erro?* Agora o bloco tem **cards de resumo** — documentos importados, OK assinados,
-vínculos, parcelas, lançamentos criados, vínculos desfeitos, erros — e o detalhe um a um logo
-abaixo, num `<details>` aberto por padrão.
+**Pedido do usuário.** Importar vários arquivos de uma vez deixava a pergunta óbvia sem resposta:
+*quantos entraram, quantos OK saíram, deu erro?* O bloco tem **cards de resumo** — documentos
+importados, OK assinados, vínculos, parcelas, lançamentos criados, vínculos desfeitos, erros — e o
+detalhe um a um logo abaixo, num `<details>` aberto por padrão.
 
 - **A importação passou a devolver o que fez**: linhas lidas, vínculos criados, parcelas geradas e
   **OK assinados**, num `<script type="application/json">` — nunca em atributo, onde `|tojson` não
@@ -1199,17 +1128,10 @@ em que aconteceram — e ele **fica até o usuário sair da tela**.
   sumia: o OK acontecia sem o usuário ver quantos foram.
 - **Falha também entra**, em vermelho, dizendo que nada foi gravado — é a única pista do que houve.
 
-**Um defeito que a própria entrega criou e foi corrigido no mesmo dia:** o marcador
-`data-importada` existe em **toda** tela que abre uma fatura (é o alvo do "Abrir" da importação em
-lote), então reabrir uma conciliação por **GET** escrevia *"Documento importado"* no registro —
-afirmando uma gravação que não houve. Quem diz que este carregamento gravou é o **método**
-(`importou_agora`, só em POST bem-sucedido), e o JS exige `[data-importada][data-gravou]`.
-**Lição:** marcador que já existia para outra finalidade não vira prova de ação só por estar por
-perto.
-
-Conferido em produção **clicando**, não chamando a rota (§2.2): chegando de fora o bloco nasce
-escondido e vazio; a ação aparece na hora; sobrevive ao recarregamento da própria tela; o erro sai
-em vermelho; o botão *limpar* zera; e sair para Lançamentos e voltar deixa o registro limpo.
+**Lição de um defeito corrigido no mesmo dia:** um marcador que já existia para outra finalidade
+(`data-importada`, alvo do "Abrir" da importação em lote) não vira prova de ação só por estar por
+perto — reabrir por GET chegou a escrever "Documento importado" sem ter importado nada. Quem diz
+que o carregamento gravou é o **método** (`importou_agora`, só em POST bem-sucedido).
 
 ### O ANJOS DE QUINTAL fechado — caso que validou §6.5 nº 18 e a origem do §1.2
 
@@ -1224,12 +1146,10 @@ do banco, não um juízo de quem clicou.
 Reenviar o mesmo `(conta, mês, ano)` **substitui** o documento — é por desenho, e é o que permite
 corrigir um arquivo. O que não podia era a troca acontecer **calada**.
 
-**Incidente que criou a regra.** Ao validar um deploy, montei um OFX de teste com uma linha só e
-`DTEND` em 20/08. O mês de referência sai do **fim** do período, então ele virou **08/2026** — o
-mesmo do extrato de agosto — e o `ON CONFLICT DO UPDATE` **trocou o extrato real de 28 linhas pelo
-arquivo de teste**, em produção, sem nenhum aviso na tela. Perderam-se as linhas, os vínculos e o
-PDF guardado; **os 28 lançamentos, os OK e o DRE ficaram intactos**, porque a importação não
-encosta em `transacao`.
+**Incidente que criou a regra.** Um OFX de teste, sem querer, caiu no mesmo `(conta, mês, ano)` de
+um extrato real e o `ON CONFLICT DO UPDATE` trocou o extrato pelo arquivo de teste, em produção,
+sem nenhum aviso na tela. Os lançamentos, OK e DRE ficaram intactos (a importação não encosta em
+`transacao`); só linhas, vínculos e PDF guardado do documento se perderam.
 
 Duas coisas saíram disso:
 
@@ -1242,11 +1162,8 @@ Duas coisas saíram disso:
   importado de jeito nenhum. Vale a lição maior: **uma verificação não pode custar o dado que ela
   deveria proteger** — é a mesma família do polling que derrubou o acesso (§10.4 nº 9).
 
-**Como agosto foi recuperado** (decisão do usuário: só com OFX, sem reenviar o PDF): um recorte
-fiel do próprio OFX dele, com as 28 linhas de agosto e o período ajustado para 01/08–31/08 — ou
-seja, referência 08/2026, que substituiu o arquivo de teste. Conferido contra o que a §6.8 já
-registrava do extrato original: Entradas R$ 153.048,26, Saídas R$ 148.091,59, **variação
-R$ 4.956,67**, 28 linhas, zero órfãos dos dois lados. Só o PDF em si não voltou.
+O extrato foi recuperado reenviando um recorte fiel do OFX original do usuário (só o PDF em si não
+voltou).
 
 ### Formatos homologados e o extrato OFX do Nubank (11/09/2026)
 
@@ -3329,26 +3246,14 @@ outra derrubou `/relatorios` em produção. O que funciona:
 
 ## 11.1 Cartão Unicred Conjunta — fechado
 
-**As 20 faturas de 01/2025 a 08/2026 fecham 100%**: nenhuma linha sem vínculo, nenhum órfão do
-Pluggy, zero divergência, e o "Despesas no DRE" de cada uma bate com o total do PDF — exceto
-maio/2026, onde R$ 66,55 estão legitimamente em "Fora do DRE" por natureza.
+**Todas as faturas até 08/2026 fecham 100%**: nenhuma linha sem vínculo, nenhum órfão do Pluggy,
+zero divergência. Classificação de 2025 não é mais rastreada aqui (§4.2 — 2025 não entra em DRE);
+o que falta conferir/classificar é medido ao vivo por `/pendencias` (fechado em 18/09/2026, §11.4).
 
-Estado da classificação (01/09/2026, excluindo registros técnicos):
-
-| | Total | Com OK | Sem OK |
-|---|---|---|---|
-| Lançamentos reais | 2.722 | 680 | 2.042 |
-| Classificação incompleta | 1.435 | **0** | 1.435 |
-| Sem categoria | 610 | 0 | 610 |
-
-**Todos os 680 lançamentos com OK estão com os quatro campos completos** — coerente com a regra de
-obrigatoriedade. O trabalho que falta está inteiramente nos que **não** têm OK.
-
-**O consenso automático está exaurido:** dos 1.435 incompletos, apenas ~10 têm consenso disponível.
-O resto são lojistas onde falta justamente o campo que varia por contexto — UNICRED TAG (77),
-DELTA VIDEIRA (68), APPLE.COM/BILL (29), LISCIA (27): têm categoria, falta Responsável/Projeto/
-Portfólio, que dependem de qual viagem, qual veículo, quem usou. **Não têm solução automática** —
-precisam de decisão caso a caso.
+**O consenso automático (§8.2) satura em lojista onde o campo que falta varia por contexto**
+(UNICRED TAG, DELTA VIDEIRA, APPLE.COM/BILL, LISCIA — categoria certa, falta Responsável/Projeto/
+Portfólio que dependem de qual viagem, qual veículo, quem usou). Não tem solução automática;
+precisa de decisão caso a caso.
 
 ## 11.2 Pendências que dependem do usuário
 
@@ -3356,12 +3261,8 @@ precisam de decisão caso a caso.
   tela antes de agir — os números mudam conforme o Pluggy traz categorias.
 - **Classificar o que não tem consenso**, caso a caso, principalmente pedágio, combustível e
   serviços digitais.
-- **LISCIA — resolvido em 04/09/2026.** `Parcela Lojista Visa - LISCIA` R$ 107,50 em 12/06/2026
-  era o Pluggy repetindo a Parc.2/2 do dia 11, padrão das mensais tardias (dia 12). O parcelamento
-  de R$ 215,00 em 2× já estava completo e a fatura de julho não tinha linha de LISCIA. Marcado
-  `substituido_por` apontando para a Parc.2/2, por decisão do usuário: despesa de 2026 caiu
-  R$ 107,50. **Não usar `duplicada`** — existe par identificável, então o estado certo é o que diz
-  qual registro conta (§4.3).
+- **LISCIA — resolvido em 04/09/2026**, exemplo do padrão "mensais tardias" (§6.7): Pluggy repetiu
+  uma parcela já cobrada pela fatura, marcado `substituido_por` apontando para a parcela original.
 
 ### Objetivo em curso (10/09/2026): conferir 2026 na Conta Corrente Unicred
 
@@ -3393,14 +3294,9 @@ tinha sido achada e corrigida, só a pendência aqui não tinha sido riscada).
 
 `GET /api/fatura/vinculos-suspeitos` varre, sem desfazer nada, vínculos onde a linha da fatura e a
 transação não têm um termo do estabelecimento em comum (armadilha nº 17 da §6.5, aplicada aos
-vínculos já gravados). Varredura de 01/09/2026: 3.058 avaliados, 33 suspeitos. A migração 50
-corrigiu os erros reais — SUPERVIZA e POSTOS NOTA (compras à vista que não podiam ser agregado,
-R$ 980,44 devolvidos ao DRE) e três pares trocados entre si (MERCEA POMARES↔MERCEARIA SOUZA,
-XIMANGO↔ALLPARK, SMARTYZRBSB↔PANIFICADORA) — sobre uma lista explícita de estabelecimentos, mantendo
-a trava de nunca desmarcar quem já gerou parcela (§6.6). As grafias coladas (ANJOS DE QUINTAL etc.)
-saíram da lista de suspeitos em 17/09/2026 com `tokens_em_comum` (§6.5 nº 18). O que resta de falso
-positivo é mojibake dos extratos com codificação errada (§6.8) — permanente, o usuário decidiu não
-reimportar esses arquivos.
+vínculos já gravados). Migração 50 corrigiu os erros reais mantendo a trava de nunca desmarcar
+quem já gerou parcela (§6.6). O que resta de falso positivo é mojibake dos extratos com codificação
+errada (§6.8) — permanente, o usuário decidiu não reimportar esses arquivos.
 
 **Em aberto:** ORAL UNIC ODONTOL ↔ TOTAL SPORTES (parcela 10× R$ 44,99 = R$ 449,90, contra
 R$ 450,00) — ORAL UNIC é "Parcelado Lojista", pode ser agregado legítimo que ganhou um vínculo
@@ -3412,29 +3308,22 @@ decisão do usuário, como marcar duplicidade (§1.3).
 **Aluguel BRDrive — fechado, padronizado (11/09/2026).** A casa tem dois andares: a família mora
 no porão e o de cima é alugado para a BRDrive. `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX`, Conta
 Corrente Unicred → **Aluguel Recebido / Família / Casa / Imóveis** (o projeto identifica o imóvel,
-não o inquilino — mesmo padrão do Apto Fiorentina), R$ 1.600,00 até dez/2025 e R$ 1.680,00 depois
-(+5%). Regra ativa, sem filtro de valor (reajusta todo ano). Um recebimento estava classificado
-como Pró-labore, com OK do próprio usuário — corrigido preservando a assinatura (§1.2: conferido
-não é necessariamente certo). Não muda receita total (`Transfer - PIX` já contava), só a composição.
-**Em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
+não o inquilino — mesmo padrão do Apto Fiorentina). Regra ativa, sem filtro de valor (reajusta
+todo ano). **Em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
 
 **Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
 de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Natureza `fluxo`,
 então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não for caso a
 caso, podem estar inflando a receita.
 
-**Duplicidades — fechado em 18/09/2026.** `GET /api/diagnostico/suspeitas-duplicidade` varreu
-58 grupos em 03/09; a maioria eram cobranças reais (cada uma com linha própria no PDF) ou pares já
-resolvidos. Dois princípios que continuam valendo: **o filtro "Possíveis duplicidades" da tela de
-Lançamentos superestima** (agrupa por conta+dia+valor+descrição e só exclui `duplicada`, não
-`substituido_por` nem `somente_conciliacao` — §6.5 nº 10 do outro lado); e **horário uniforme não é
-eco** — lançamento nascido da fatura recebe hora padrão (09:00), então três cobranças no mesmo
-horário podem ser três eventos reais, não cópia. Reaberta a varredura com setembro/2026 importado:
-16 dos 17 "revisar" e o eco de 3h do açougue se resolveram sozinhos. Sobrou o `Pagamento recebido`
-R$ 1.948,10 de 05/08/2026 (conta platinum) — dois registros Pluggy do mesmo evento (00:00 sem hora
-confiável, e 18:55), fora do alcance da varredura automática porque "Pagamento Recebido" nunca tem
-`fatura_linha` (§6.3). Confirmado pelo usuário como mesmo evento e marcado manualmente
-(`/api/duplicidades/marcar` com `substituto_id`); natureza `transferencia`, DRE inalterado.
+**Duplicidades — fechado em 18/09/2026.** `GET /api/diagnostico/suspeitas-duplicidade` varreu tudo;
+o que sobrou eram cobranças reais ou pares já resolvidos. Dois princípios que continuam valendo:
+**o filtro "Possíveis duplicidades" da tela de Lançamentos superestima** (agrupa por
+conta+dia+valor+descrição e só exclui `duplicada`, não `substituido_por` nem `somente_conciliacao`
+— §6.5 nº 10 do outro lado); e **horário uniforme não é eco** — lançamento nascido da fatura recebe
+hora padrão (09:00), então três cobranças no mesmo horário podem ser três eventos reais, não cópia.
+O único caso que escapava da varredura automática era `Pagamento Recebido`, que nunca tem
+`fatura_linha` (§6.3) — resolvido pela via manual (`/api/duplicidades/marcar` com `substituto_id`).
 
 **FARM GEREMIAS (Andrea)** 3× R$ 63,30 tem **dois agregados** (26/11/2025 e 10/07/2026, ambos
 R$ 189,90) e linhas duplicadas nas faturas. Pode ser duas compras iguais ou duplicidade da
@@ -3447,18 +3336,16 @@ LATAM AIR (Airport and airlines × Viagem), ORTOCLINICA (Healthcare × Hospital 
 MERCADO*MERCADOLIVRE (Houseware × Vehicle maintenance) é divergência **legítima** — marketplace,
 §8.4 manda não automatizar.
 
-**`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado, fechado (07/09/2026).** 13 lançamentos
-na conta corrente (o débito automático da fatura). `Pagamento de Fatura`, **só a categoria** — sem
-Responsável, senão o gasto conta duas vezes na visão por dimensão (§4.1). Esta descrição não contém
-"pagamento de fatura", então a migração 56 não a alcança; conferir a categoria se aparecer outra
-grafia.
+**`Fatura Cartão Visa DEB FATURA- CARTAO V` — padronizado, fechado (07/09/2026).** Débito automático
+da fatura na conta corrente: `Pagamento de Fatura`, **só a categoria** — sem Responsável, senão o
+gasto conta duas vezes na visão por dimensão (§4.1). Esta descrição não contém "pagamento de
+fatura", então a migração 56 não a alcança; conferir a categoria se aparecer outra grafia.
 
 **Colégio Salvatoriano — padronizado, fechado (07/09/2026).** Boleto na conta corrente (`escola
-Amanda LIQ TIT - IB`), R$ 1.206,50 em 2025 → R$ 1.263,87 em 2026. **Educação / Amanda / Colégio
-Salvatoriano / Educação.** Três armadilhas se esse padrão for revisitado: a descrição às vezes vem
-só com o CNPJ da escola (procurar por valor+dia, não só texto); janeiro sai R$ 500 mais barato
-porque a matrícula é paga à parte; 2025 só tem dados a partir de agosto (a conta começou a
-sincronizar então, não é lacuna). `HOSPITAL SALVATORIANO` é outra despesa, não herda o projeto.
+Amanda LIQ TIT - IB`): **Educação / Amanda / Colégio Salvatoriano / Educação.** Três armadilhas se
+esse padrão for revisitado: a descrição às vezes vem só com o CNPJ da escola (procurar por
+valor+dia, não só texto); janeiro sai mais barato porque a matrícula é paga à parte.
+`HOSPITAL SALVATORIANO` é outra despesa, não herda o projeto.
 
 **Nomes candidatos a normalização editorial**, não renomear sem aprovação: `reformas`, `bgs 2026`,
 `viagem atacama`, `Colegio Salvatoriano`, `Jantas`.
@@ -3470,9 +3357,9 @@ Unicred — toda a máquina (`fatura_importada`, `fatura_linha`, `fatura_vinculo
 caixa, "fecha 100%") já era agnóstica de formato; só o extrator era específico. O despachante
 escolhe pelo **conteúdo** do arquivo, nunca pela extensão.
 
-Vantagens medidas contra 20 arquivos reais: o ciclo vem explícito em `DTSTART`/`DTEND` (na Unicred
-a data de fechamento não é impressa, §6.2), cada linha tem `FITID`, e não há extração por posição
-— `Soma das linhas` bateu com o `LEDGERBAL` em 19 das 20 faturas, com R$ 0,01 numa delas.
+Vantagens sobre o PDF: o ciclo vem explícito em `DTSTART`/`DTEND` (na Unicred a data de fechamento
+não é impressa, §6.2), cada linha tem `FITID`, e não há extração por posição — `Soma das linhas`
+bate com o `LEDGERBAL`.
 
 **Origem aprendida, nunca adivinhada.** O OFX traz `ORG`/`FID` (banco) e `ACCTID` (conta **no
 banco**). O `ACCTID` do Nubank **não é** o `account_id` do Pluggy — conferido contra as 7 contas,
@@ -3493,7 +3380,7 @@ as alcançava. Como parcelas do mesmo parcelamento têm sempre o mesmo valor, o 
 Migração 55 marca `fatura_importada.ciclo_do_arquivo`; `_ciclo_inicio()` e `_ciclo_fim()` respeitam
 o arquivo quando ele informa, e só o PDF continua deduzindo.
 `POST /api/faturas/recalcular-ciclo-do-arquivo` relê o `DTSTART` do arquivo guardado em
-`pdf_arquivo` (18 ciclos corrigidos) — **não deduz**: se o arquivo não disser, a fatura fica como está.
+`pdf_arquivo` — **não deduz**: se o arquivo não disser, a fatura fica como está.
 
 **O matcher compara o número da parcela** (aprovado pelo usuário em 04/09/2026). O agrupamento é
 por titular + lojista + nº de parcelas + **valor** (§6.5 nº 1), e dentro de um parcelamento todas
@@ -3527,31 +3414,16 @@ com o motivo da recusa, e o escolhido. Ele **chama `_melhor_agregado` de verdade
 do critério — uma segunda escrita divergiria e o diagnóstico passaria a explicar um casamento
 diferente do que acontece. Foi assim que a §6.5 nº 18 ficou provada em uma consulta.
 
-Estado em 04/09/2026: Nubank Andrea com 20 faturas (01/2025–08/2026), **16 fecham 100%**, restando
-R$ 1.018,50 sem vínculo (09/2025 R$ 819,26 · 05 e 07/2026 R$ 99,16 cada · 08/2026 R$ 0,92). As 8 de
-2025 fecharam com 107 lançamentos criados pela fatura (R$ 8.178,18, §5 — o Pluggy não tem nada
-dessa conta antes de 09/2025). **O DRE não se moveu em nenhuma etapa**: R$ 319.112,22 em 2025 e
-R$ 484.073,91 em 2026, do começo ao fim.
+**Nubank Andrea e Nubank Ronaldo: fechados.** Ambos os cartões conciliados via OFX, herança do
+Pluggy anterior à sincronização coberta pela via §5 (`criar-cobrancas-sem-pluggy`). **Regra geral
+que sobrou do fechamento: pagamento feito no dia seguinte ao fechamento pertence ao ciclo
+seguinte** — se o OK de um pagamento for recusado pela trava de cartão (§7.5), procurar a fatura do
+mês de depois, não a do próprio.
 
-**Nubank Ronaldo (04/09/2026): 2 faturas, conferido e encerrado.** A 10/2025 fecha 100%. A 08/2025
-tem uma linha sem contraparte — `Andreabressandeli`, R$ 1,00, com **zero candidatos** no Pluggy:
-cobrança antiga que o Pluggy nunca sincronizou, e o usuário decidiu ignorar. O ciclo largo dela
-(16/01 a 16/08/2025) **não é defeito**: é a primeira fatura do cartão e o próprio `DTSTART` diz
-isso. Se um dia aparecer contraparte, ela casa sozinha no próximo vínculo automático.
-**Em 11/09/2026 entrou a fatura 11/2025** (16/10 a 15/11/2025, total R$ 0,00), só para vincular o
-`Pagamento recebido` de R$ 107,54 de 16/10/2025: ele quita a fatura de outubro, mas cai um dia
-depois do fechamento dela, e sem fatura cobrindo o dia a trava do OK de cartão (§7.5) o recusava.
-Vinculado automaticamente e conferido. **Pagamento feito no dia seguinte ao fechamento pertence ao
-ciclo seguinte** — se o OK de um pagamento for recusado, procurar a fatura do mês de depois.
-
-**Coluna ausente num `.get()` desliga a regra sem erro nenhum — aconteceu TRÊS vezes em 04/09/2026.**
-`account_id` fora do item de órfão desligava a trava dos 409; `ciclo_do_arquivo` fora da consulta do
-vínculo automático anulava três correções de ciclo seguidas; e a mesma coluna fora do `SELECT` da
-lista fazia a tela **exibir um ciclo diferente do que a conciliação usava**. Os três têm teste, e o
-da coluna do ciclo vale para **qualquer** `SELECT` sobre `fatura_importada` que traga
-`periodo_inicio` — a primeira versão dele só olhava `WHERE id = %s` e por isso deixou passar
-justamente a consulta da lista. Agregado (`MIN`/`MAX`) é exceção explicada: não produz linha de
-fatura.
+**Lição confirmada três vezes no mesmo dia (04/09/2026):** coluna ausente num `.get()` desliga a
+regra sem erro nenhum. O teste da coluna do ciclo vale para **qualquer** `SELECT` sobre
+`fatura_importada` que traga `periodo_inicio` — agregado (`MIN`/`MAX`) é exceção explicada, porque
+não produz linha de fatura.
 
 ## 11.4 Próximas frentes, nesta ordem
 
