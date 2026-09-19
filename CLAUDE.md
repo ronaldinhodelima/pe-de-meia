@@ -3443,12 +3443,16 @@ não produz linha de fatura.
 1. **Conta corrente — conciliação em produção, fechada.** O extrato oficial está conciliado desde
    agosto, setembro também fechou (§6.8), e os depósitos em espécie sem origem foram classificados
    em 19/09/2026 (§11.3). Sobra em aberto só a manutenção da casa atribuível ao aluguel BRDrive.
-2. **Conferir o DRE mês a mês — em andamento (iniciado 19/09/2026).** Evolução mês a mês de
-   Despesas (`/relatorios`, agrupado por Período) rodada em 2026: fevereiro tinha um pico de +425%
-   (achado e corrigido, categoria `Veículos` acima). Os demais meses de 2026 ficaram dentro de uma
-   faixa razoável (~R$20-32k) e ainda não foram abertos um a um linha por linha — só o pico saltou
-   aos olhos no gráfico. Retomar abrindo cada mês e conferindo os maiores lançamentos, não só picos
-   no total.
+2. **Conferir o DRE mês a mês — fechado em 19/09/2026.** Os 9 meses de 2026 (jan-set) foram abertos
+   um a um pelo "Gasto por categoria (mês)" de Lançamentos, olhando a categoria líder de cada mês.
+   Só fevereiro destoava (pico de +425%, corrigido — categoria `Veículos`, acima). Dois valores altos
+   isolados foram checados e confirmados **corretos, sem mudança**: os R$ 92.000,00 de Distribuição
+   de Lucros em agosto (já documentado em §8.4/§11.3) e o ITBI de R$ 6.248,10 em junho — são **dois
+   imóveis diferentes**, cada um com seu ITBI e Projeto já certos (`itbi LIQ TIT` 12/02, R$ 2.548,10,
+   Projeto `Lote Rio Das Pedras`; `MUNICIPIO DE VIDEIRA` 09/06, R$ 6.248,10, Projeto
+   `Apto Fiorentina`) — decisão do usuário: ITBI fica em `Impostos e Taxas` (despesa), não vira custo
+   do imóvel, porque é imposto sobre a transação, dinheiro que saiu de verdade (§1.1, mesma lógica de
+   juros e tarifas). Resultado: nenhum outro mês de 2026 tem distorção visível na categoria líder.
 3. **`/pendencias` — fechado em 18/09/2026.** Os 646 sem categoria eram quase todos histórico
    pré-2026 (migração 68 + corte em `levantar_pendencias()`, acima); zeraram sozinhos. A única
    categoria sem natureza (`Energia`) foi confirmada como Despesa. Hoje a tela diz "Nenhuma
