@@ -3311,10 +3311,13 @@ Corrente Unicred → **Aluguel Recebido / Família / Casa / Imóveis** (o projet
 não o inquilino — mesmo padrão do Apto Fiorentina). Regra ativa, sem filtro de valor (reajusta
 todo ano). **Em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
 
-**Depósitos em espécie sem origem identificada.** `Transfer - Cash` tem 32 lançamentos; os maiores
-de 2026 são +R$ 16.197,64 (13/07), +R$ 12.029,00 (10/08) e +R$ 8.072,30 (21/07). Natureza `fluxo`,
-então **entram como receita**. Ronaldo não soube dizer a origem de cabeça — enquanto não for caso a
-caso, podem estar inflando a receita.
+**Depósitos em espécie — fechado em 19/09/2026.** Com o corte de 2026 (migração 68), só sobravam 2
+lançamentos em `Transfer - Cash`, ambos de 14/09/2026: R$ 9.029,00 (retirada de lucros da BRsim) e
+R$ 1.858,87 (reembolso BRDrive). Reclassificados por decisão do usuário: **Distribuição de Lucros /
+Ronaldo / BRDrive / Empresas** e **BRDrive / Ronaldo / BRDrive / Empresas** — o segundo é o mesmo
+padrão de "Despesa da BRDrive paga com dinheiro pessoal" (§8.4). Categoria `Transfer - Cash` ficou
+vazia em 2026; Receitas no DRE caiu R$ 1.858,87 (o depósito BRDrive é `transferência`, fora do
+DRE — a Distribuição de Lucros já era neutra também).
 
 **Duplicidades — fechado em 18/09/2026.** `GET /api/diagnostico/suspeitas-duplicidade` varreu tudo;
 o que sobrou eram cobranças reais ou pares já resolvidos. Dois princípios que continuam valendo:
@@ -3427,10 +3430,9 @@ não produz linha de fatura.
 
 ## 11.4 Próximas frentes, nesta ordem
 
-1. **Conta corrente — conciliação em produção, fenômenos próprios ainda abertos.** O extrato oficial
-   está conciliado desde agosto e setembro também fechou (§6.8). O que falta são os fenômenos da
-   própria conta corrente: transferência entre contas próprias e depósito em espécie sem origem
-   (§11.3) — não é mais sobre conciliar o documento, é sobre classificar o que ele já trouxe.
+1. **Conta corrente — conciliação em produção, fechada.** O extrato oficial está conciliado desde
+   agosto, setembro também fechou (§6.8), e os depósitos em espécie sem origem foram classificados
+   em 19/09/2026 (§11.3). Sobra em aberto só a manutenção da casa atribuível ao aluguel BRDrive.
 2. **Conferir o DRE mês a mês** agora que a base do cartão está consistente.
 3. **`/pendencias` — fechado em 18/09/2026.** Os 646 sem categoria eram quase todos histórico
    pré-2026 (migração 68 + corte em `levantar_pendencias()`, acima); zeraram sozinhos. A única
