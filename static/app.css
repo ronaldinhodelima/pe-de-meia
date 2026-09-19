@@ -25,9 +25,9 @@
     --tooltip-fundo: #1f2126;
     --tooltip-texto: #fff;
     --field-soft: var(--bg);
-    --good: #059669;
-    --good-soft: #e4f5ee;
-    --good-line: #cfe9d9;
+    --good: #52606d;
+    --good-soft: #eaedf1;
+    --good-line: #d3d9e0;
     --bad: #dc2626;
     --bad-soft: #fbe7e6;
     --bad-line: #efb3ae;
@@ -106,9 +106,9 @@
     --tooltip-fundo: #e7ebf6;
     --tooltip-texto: #0a0f1e;
       --field-soft: var(--bg);
-      --good: #34d399;
-      --good-soft: rgba(52,211,153,.14);
-      --good-line: rgba(52,211,153,.38);
+      --good: #94a3b8;
+      --good-soft: rgba(148,163,184,.16);
+      --good-line: rgba(148,163,184,.38);
       --bad: #f87171;
       --bad-soft: rgba(248,113,113,.14);
       --bad-line: rgba(248,113,113,.38);
@@ -153,9 +153,9 @@
     --tooltip-fundo: #e7ebf6;
     --tooltip-texto: #0a0f1e;
     --field-soft: var(--bg);
-    --good: #34d399;
-    --good-soft: rgba(52,211,153,.14);
-      --good-line: rgba(52,211,153,.38);
+    --good: #94a3b8;
+    --good-soft: rgba(148,163,184,.16);
+      --good-line: rgba(148,163,184,.38);
     --bad: #f87171;
     --bad-soft: rgba(248,113,113,.14);
     --bad-line: rgba(248,113,113,.38);
