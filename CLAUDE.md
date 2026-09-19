@@ -437,6 +437,15 @@ editável ali, só não soma em nada financeiro. Nenhum dado foi apagado; nenhum
 receita, despesa) é o valor que existiu **antes** desta decisão — não recalcular, não é erro se um
 `/relatorios` filtrado em 2025 mostrar zero a partir de agora.
 
+**`/pendencias` tinha a mesma falha da §4.2 antiga, e apareceu no mesmo dia.**
+`levantar_pendencias()` lê "sem categoria" e "natureza manual" **direto de `cartao.transacao`**,
+não pela view — de propósito, porque precisa enxergar o lançamento **antes** de ele ganhar
+categoria. Sem o corte, a tela continuava listando lançamento de 2025 como risco de DRE depois da
+migração 68, quando ele já nem entra no resultado mais, categoria nenhuma. `core.DATA_INICIO_DRE`
+(`"2026-01-01"`) é o ponto único para quem lê `cartao.transacao` direto e precisa do mesmo corte
+que a view já aplica — as outras duas consultas de `levantar_pendencias` (sem natureza, despesa sem
+centro de custo) já passam pela view e não precisaram de nada.
+
 Distinguir sempre **"recebidos"** (todos os registros do banco) de **"contabilizados"** (os que
 participam do resultado).
 

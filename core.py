@@ -345,6 +345,15 @@ JOIN_NATUREZA = (
 FINANCEIRO_TABELA = "cartao.lancamento_financeiro"
 FINANCEIRO_DIM_TABELA = "cartao.lancamento_financeiro_dimensao"
 
+# Decisao do usuario (18/09/2026): lancamento anterior a 2026 fica de fora do
+# resultado (secao 4.2). A migracao 68 ja poe esse corte dentro da propria
+# view financeira, entao toda consulta que le FINANCEIRO_TABELA ja o recebe
+# de graca. Mas quem le cartao.transacao DIRETO - como o levantamento de
+# pendencias, que precisa enxergar o lancamento sem categoria ANTES dele
+# ganhar uma - precisa repetir o corte na mao, senao alerta sobre um
+# lancamento de 2025 que nunca mais vai distorcer DRE nenhum.
+DATA_INICIO_DRE = "2026-01-01"
+
 
 VAL_DESPESA = (
     "(CASE WHEN c.tipo = 'CREDIT' THEN COALESCE(t.valor_brl, t.valor_original) "
@@ -6578,7 +6587,9 @@ def levantar_pendencias(cur):
         "SELECT t.transacao_id, t.data_transacao, t.descricao, "
         "COALESCE(t.valor_brl, t.valor_original) AS valor "
         "FROM cartao.transacao t WHERE t.categoria IS NULL "
-        "AND COALESCE(t.duplicada, false) = false ORDER BY t.data_transacao DESC;"
+        "AND COALESCE(t.duplicada, false) = false "
+        "AND t.data_transacao >= %s ORDER BY t.data_transacao DESC;",
+        (DATA_INICIO_DRE,),
     )
     sem_categoria_db = cur.fetchall()
 
@@ -6613,7 +6624,8 @@ def levantar_pendencias(cur):
         "SELECT t.transacao_id, t.data_transacao, t.descricao, t.categoria, t.natureza, "
         "COALESCE(t.valor_brl, t.valor_original) AS valor "
         "FROM cartao.transacao t WHERE t.natureza IS NOT NULL "
-        "ORDER BY t.data_transacao DESC;"
+        "AND t.data_transacao >= %s ORDER BY t.data_transacao DESC;",
+        (DATA_INICIO_DRE,),
     )
     manuais = cur.fetchall()
 
