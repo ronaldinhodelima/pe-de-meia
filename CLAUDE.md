@@ -3285,10 +3285,18 @@ blocos, sempre com prévia e decisão do usuário — **o OK continua sendo dele
 
 **Anotado para depois, a pedido do usuário** (não mexer sem ele retomar):
 
-- custo da casa atribuível ao aluguel da BRDrive (§11.3);
-- Projeto `BRDrive` × BRsim nos relatórios (§8.4);
 - travas de exclusão de categoria/dimensão contando pela view — defeito latente confirmado
   **inativo** (0 casos na varredura de 07/09/2026, §8.4), sem urgência.
+
+**Fechados em 19/09/2026, sem ação — decisão do usuário:**
+
+- **Manutenção da casa × aluguel BRDrive.** `Manutenção Imóvel` tem só 4 lançamentos e
+  R$ 1.217,00 no ano; nenhum se identifica como obra do andar alugado. Não é material o
+  suficiente para uma regra de rateio.
+- **Projeto `BRDrive` × BRsim nos relatórios.** `Pró-labore` e `Distribuição de Lucros` (91% da
+  receita de 2026) misturam BRSIM, depósitos em espécie sem origem identificada e outras
+  empresas (Ultratelecom, TI na Prática) sob o mesmo Projeto `BRDrive` — decisão do usuário:
+  ficam como estão.
 
 **Descartado em 18/09/2026 — 2025 é histórico, não entra mais em DRE/relatórios (acima):**
 BRsim R$ 60.038,73 e R$ 189.961,27 (30/12/2025, sem classificação) e os 31 créditos `Transferência
@@ -3319,7 +3327,7 @@ decisão do usuário, como marcar duplicidade (§1.3).
 no porão e o de cima é alugado para a BRDrive. `BRDRIVE TECNOLOGIA LTDA TRANSF TEF PIX`, Conta
 Corrente Unicred → **Aluguel Recebido / Família / Casa / Imóveis** (o projeto identifica o imóvel,
 não o inquilino — mesmo padrão do Apto Fiorentina). Regra ativa, sem filtro de valor (reajusta
-todo ano). **Em aberto:** parte da manutenção da casa é custo desse aluguel, não despesa doméstica.
+todo ano). Manutenção da casa atribuível ao aluguel — fechado sem ação em 19/09/2026, acima.
 
 **Depósitos em espécie — fechado em 19/09/2026.** Com o corte de 2026 (migração 68), só sobravam 2
 lançamentos em `Transfer - Cash`, ambos de 14/09/2026: R$ 9.029,00 (retirada de lucros da BRsim) e
@@ -3442,7 +3450,7 @@ não produz linha de fatura.
 
 1. **Conta corrente — conciliação em produção, fechada.** O extrato oficial está conciliado desde
    agosto, setembro também fechou (§6.8), e os depósitos em espécie sem origem foram classificados
-   em 19/09/2026 (§11.3). Sobra em aberto só a manutenção da casa atribuível ao aluguel BRDrive.
+   em 19/09/2026 (§11.3), sem pendência restante.
 2. **Conferir o DRE mês a mês — fechado em 19/09/2026.** Os 9 meses de 2026 (jan-set) foram abertos
    um a um pelo "Gasto por categoria (mês)" de Lançamentos, olhando a categoria líder de cada mês.
    Só fevereiro destoava (pico de +425%, corrigido — categoria `Veículos`, acima). Dois valores altos
