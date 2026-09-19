@@ -1122,63 +1122,27 @@ então a leitura natural virou "o OK voltou atrás". Não voltou: perder o vínc
 assinatura, e a auditoria do dia não tem um único evento retirando OK. O selo `conferido` (com o
 autor no tooltip) separa **"falta religar"** de **"falta conferir"**.
 
-### Três defeitos que o extrato 09/2026 revelou de uma vez (17/09/2026)
+### Três defeitos que o extrato 09/2026 revelou de uma vez — todos corrigidos (17/09/2026)
 
-O usuário mandou conferir a conciliação do extrato OFX da Conta Corrente Unicred de 08/09 a
-14/09/2026. Ele fecha centavo a centavo (soma das linhas = movimento = R$ 1.553,58), e mesmo assim
-**a tela contava três histórias erradas ao mesmo tempo**, todas da mesma família: regra escrita duas
-vezes, ou regra de cartão alcançando extrato.
+Mesma família nos três: regra escrita duas vezes, ou regra de cartão alcançando extrato.
 
-**1. O último dia do extrato sumia da lista de órfãos, e a tela oferecia CRIAR o que já existia.**
-`_ciclo_fim()` subtrai um dia quando `ciclo_do_arquivo` — regra do **cartão**, onde o `DTEND` de uma
-fatura é o `DTSTART` da seguinte (§11.3-A). **No extrato não há sobreposição**: o `DTEND` é o último
-dia do próprio extrato, e o arquivo traz linha datada nele. Resultado: o `Matrícula Amanda LIQ TIT -
-IB` de **R$ 550,00, 14/09**, existia no Pluggy, sem vínculo — e ficava **fora** da janela de órfãos.
-A linha aparecia em "Linhas da fatura sem vínculo" dizendo *"ainda não há lançamento do Pluggy
-associado… crie o lançamento pela fatura"*, com o botão **Criar** ao lado: um clique teria
-**duplicado R$ 550,00 no DRE**. É o espelho exato do recorte por data que não podia alcançar fatura
-de cartão (acima) — lá regra de extrato pegou cartão, aqui regra de cartão pegou extrato. Hoje
-`_ciclo_fim` pergunta o `tipo_documento`, **e a segunda cópia da regra, em SQL na contagem de órfãos
-da lista de faturas, ganhou a mesma exceção** — ela existe escrita duas vezes, e divergir aqui
-significa a lista contar órfão por um critério e a tela da fatura por outro. Teste novo cobra que
-todo `SELECT` que carrega `periodo_fim` + `ciclo_do_arquivo` traga também `tipo_documento`: sem a
-coluna, `.get()` devolve `None` e o extrato volta a perder o último dia **sem erro nenhum**
-(§11.3-A).
-
-**2. O matcher ligava a linha ao lançamento que NÃO conta.** Os candidatos de `_conciliar_linhas`
-filtravam `duplicada` e o que nasceu da fatura, mas **não `substituido_por`**. Num par
-pendente/confirmado (§4.3) ele escolhia o **recolhido** — e aí o lançamento que conta aparecia em
-"Lançamentos do Pluggy sem vínculo" enquanto a **mesma tela** mostrava a linha como "já vinculada".
-Dois casos no extrato: `ARREC CONVÊNIOS` R$ 280,38 e `Ipva jeep 3a parcela` R$ 821,90 — este último
-**com OK**, o que faz a lista parecer que a assinatura voltou atrás. **Nada duplicou no DRE**: o
-recolhido está fora do resultado por construção. Hoje o candidato exige `substituido_por IS NULL`,
-o mesmo critério que a lista de órfãos já aplicava — §6.5 nº 10 mais uma vez. **`somente_conciliacao`
-continua fora do filtro de propósito**, e há teste cobrando isso: o agregado de parcelamento é
-exatamente a quem a linha deve se ligar (§4.5).
-
-**Fechamento do 09/2026, por decisão do usuário (17/09/2026):** ele preferiu **não reimportar** os
-arquivos e pediu só o religamento. Desvinculadas as duas linhas do `ARREC CONVÊNIOS` e rodado o
-vínculo automático já corrigido: **3 vínculos criados**, os dois agora no lançamento que conta e o
-terceiro fechando a `MATRÍCULA AMANDA`. O extrato passou de `falta vincular R$ -550,00` para
-**R$ 0,00** — já vinculado = soma das linhas = movimento = R$ 1.553,58, **zero linha sem vínculo**.
-O DRE de 09/2026 ficou **idêntico** antes e depois (receitas R$ 20.865,91, despesas R$ 17.733,03,
-resultado R$ 3.132,88), como tem que ser: vínculo de documento não move resultado. Sobram **3
-órfãos legítimos** — `BRSIM` R$ 2.314,00 e dois `DEP EM ESPÉCIE` (R$ 1.858,87 e R$ 9.029,00), todos
-de 14/09 **depois das 08:34**, hora em que o OFX foi exportado (`DTSERVER`); eles entram no extrato
-seguinte. **O vínculo automático é POST, então ele assina** (§1.2): 3 lançamentos ganharam OK
-carimbado `fatura 09/2026`, nenhum OK foi retirado nem sobrescrito.
-**Os dois depósitos em espécie somam R$ 10.887,87 e caem na pendência da §11.3** — `Transfer - Cash`
-em natureza `fluxo` entra como receita sem origem identificada.
-
-**3. O cabeçalho do OFX MENTE sobre a codificação.** O extrato da Unicred declara
-`ENCODING:USASCII` / `CHARSET:1252` e escreve `Í` como `c3 8d`, que é **UTF-8**. O `_texto()`
-obedecia ao cabeçalho e gravou `MATRÃ?CULA AMANDA` e `ARRECADAÃ‡ÃƒO DE CONVÃŠNIOS` no banco. Hoje
-**quem decide são os bytes**: UTF-8 estrito primeiro, cp1252 quando ele falha. Texto cp1252 com
-acento quase nunca forma sequência UTF-8 válida por acaso, e arquivo só-ASCII decodifica igual nos
-dois — então o arquivo realmente 1252 continua certo, sem depender de acertarmos o cabeçalho.
-**Lição:** metadado que o emissor escreve sobre o próprio arquivo é palpite dele; o dado é a prova.
-Documento já importado continua com o texto torto no banco — **reimportar o arquivo guardado
-corrige**, e o vínculo por valor/data nunca dependeu do acento.
+1. **`_ciclo_fim()` aplicava a regra do cartão a extrato.** No cartão, `DTEND` de uma fatura é o
+   `DTSTART` da seguinte, então subtrai um dia (§11.3-A); no extrato não há sobreposição, e subtrair
+   fazia a última linha do arquivo sumir da lista de órfãos e a tela oferecer **Criar** um
+   lançamento que já existia — clicar teria duplicado no DRE. Hoje `_ciclo_fim` pergunta o
+   `tipo_documento`, nos dois lugares que calculam ciclo (a fatura e a contagem de órfãos da
+   lista). Teste cobra que todo `SELECT` de `periodo_fim`+`ciclo_do_arquivo` traga também
+   `tipo_documento`.
+2. **O matcher podia ligar a linha ao lado `substituido_por` de um par pendente/confirmado**
+   (§4.3), que não conta no DRE — a linha aparecia "vinculada" enquanto o lançamento que
+   realmente conta seguia listado como órfão. Hoje o candidato exige `substituido_por IS NULL`,
+   mesmo critério de §6.5 nº 10. `somente_conciliacao` continua fora do filtro, de propósito: é
+   a ele que a linha deve se ligar (§4.5).
+3. **O cabeçalho do OFX mente sobre a codificação.** A Unicred declara `CHARSET:1252` mas grava
+   UTF-8 de verdade — `_texto()` obedecia ao cabeçalho e gravava acento quebrado. Hoje **os bytes
+   decidem**: UTF-8 estrito primeiro, cp1252 só se falhar. Lição: metadado que o emissor escreve
+   sobre o próprio arquivo é palpite dele, o dado é a prova. Documento já importado antes da
+   correção continua torto no banco — reimportar o arquivo guardado resolve.
 
 ### Extratos da Conta Corrente Nubank · Andrea (18/09/2026)
 
@@ -1247,25 +1211,13 @@ Conferido em produção **clicando**, não chamando a rota (§2.2): chegando de 
 escondido e vazio; a ação aparece na hora; sobrevive ao recarregamento da própria tela; o erro sai
 em vermelho; o botão *limpar* zera; e sair para Lançamentos e voltar deixa o registro limpo.
 
-### O ANJOS DE QUINTAL fechado (17/09/2026)
+### O ANJOS DE QUINTAL fechado — caso que validou §6.5 nº 18 e a origem do §1.2
 
-Com a §6.5 nº 18 no ar, a `Parc.2/6` achou o agregado e o ciclo se completou, autorizado pelo
-usuário. Vínculo automático: **1 vínculo criado**; "Revisar parcelamentos": prévia de **1 parcela
-pendente** (112 agregados, nenhum marcado ou desmarcado) e **1 parcela criada**. O lançamento nasceu
-datado em **11/09/2026** — o `periodo_fim` da fatura, não a data impressa (§4.5) —, com a
-classificação herdada do agregado: **Natação / Família / Saúde / Vida Familiar**.
-
-**Despesa de 09/2026: R$ 22.174,33 → R$ 22.534,33**, exatamente os R$ 360,00 previstos; resultado
-−R$ 1.308,42 → −R$ 1.668,42. Na fatura, "Despesas no DRE" foi de R$ 16.221,20 para R$ 16.581,20 e
-"Fora do DRE" de R$ 457,79 para R$ 97,79 — a soma segue os R$ 16.678,99 impressos. Linhas sem
-vínculo: 5 → 4, e as 4 que sobram são as que o Pluggy nunca manda (bonificação de anuidade, IOF) e
-o ESTORNO de R$ 283,04, que espera decisão.
-
-O lançamento recebeu **OK carimbado `fatura 09/2026`** no vínculo automático seguinte, e isso é o
-sistema funcionando: linha vinculada, valor ao centavo, classificação completa. Eu havia registrado
-isso aqui como descuido meu; **o usuário corrigiu a leitura em 17/09/2026** e dela saiu a regra que
-hoje está na §1.2 — a assinatura vinda da fatura ou do extrato vale tanto quanto a manual, porque a
-fonte é o documento do banco, não um juízo de quem clicou.
+Com a §6.5 nº 18 no ar, o parcelamento fechou sozinho pelo vínculo automático e a parcela gerada
+recebeu **OK carimbado `fatura 09/2026`** — o sistema funcionando: linha vinculada, valor ao
+centavo, classificação completa. Foi esse caso que puxou a regra que hoje está no §1.2: a
+assinatura vinda da fatura ou do extrato vale tanto quanto a manual, porque a fonte é o documento
+do banco, não um juízo de quem clicou.
 
 ### Substituir documento avisa o que saiu do lugar (14/09/2026)
 
@@ -2907,11 +2859,9 @@ projeto nem portfólio, e as regras novas não os alcançam mais.
 
 **Reembolso — natureza `transferencia` desde 11/09/2026** (decisão do usuário). A categoria
 `Reembolso de Despesa` (chave interna mantida) foi renomeada para **Reembolso** e saiu de `fluxo`:
-dinheiro adiantado por outro e devolvido não é receita nem despesa. Eram 30 lançamentos, todos com
-OK — saídas no cartão pagas por terceiros (diesel do gerador, correio BRDrive, conserto da cafeteira)
-e entradas de amigos e da ACIAV (jantas, AGO). DRE: 2025 receita −951,46 e despesa −186,67
-(resultado 110.183,99 → 109.419,20); 2026 receita −2.953,58 e despesa −1.132,04 (−28.236,72 →
-−30.058,26), batendo centavo a centavo com a soma prévia.
+dinheiro adiantado por outro e devolvido não é receita nem despesa — saídas no cartão pagas por
+terceiros (diesel do gerador, correio BRDrive, conserto da cafeteira) e entradas de amigos e da
+ACIAV (jantas, AGO).
 
 **Decidido pelo usuário em 11/09/2026:** o `DEP EM ESPÉCIE` de R$ 1.495,81 (17/08/2026) é
 reembolso, e as saídas pagas pela BRDrive (diesel, correio, cafeteira) já foram devolvidas — os
@@ -2923,16 +2873,12 @@ cashback) não vai para esta categoria: o crédito vai para a categoria da despe
 **Consórcio do Apto Fiorentina — padronizado em 11/09/2026.** O débito mensal
 `I0240/492/0056386796 DEB PORTO SEGURO CO` na Conta Corrente Unicred é a parcela do consórcio da
 Porto Seguro que comprou o Apto Fiorentina: **Consorcio parcela / Família / Apto Fiorentina /
-Imóveis**, o padrão que o usuário já tinha conferido em jul e ago/2026. Estavam em **Seguros**
-(despesa) os 11 débitos de ago/2025 a jun/2026 e o boleto `porto seguro LIQ TIT - IB` de
-25/06/2026 (R$ 2.918,67, confirmado pelo usuário como consórcio). A parcela subiu de R$ 1.607 para
-R$ 2.240 (dez/2025) e R$ 2.366 (mar/2026).
+Imóveis**, o padrão que o usuário já tinha conferido em jul e ago/2026. Estava em **Seguros**
+(despesa) — corrigido para todos os débitos e o boleto avulso `porto seguro LIQ TIT - IB`.
 
 **DRE:** `Consorcio parcela` tem natureza `bem` — a parcela forma o patrimônio do imóvel, não é
-despesa. Despesa de 2025 caiu R$ 8.668,42 (301.656,91 → 292.988,49) e a de 2026, R$ 16.868,57
-(463.698,28 → 446.829,71), batendo com a soma prévia. **Simplificação consciente:** a parcela
-também carrega taxa de administração e seguro, que a rigor são despesa; separar exigiria o extrato
-do consórcio.
+despesa. **Simplificação consciente:** a parcela também carrega taxa de administração e seguro,
+que a rigor são despesa; separar exigiria o extrato do consórcio.
 
 **Regra:** pelo **código do contrato**, `I0240/492/0056386796 DEB PORTO SEGURO`, só na Conta
 Corrente Unicred, sem filtro de valor (a parcela reajusta). "PORTO SEGURO" sozinho não serve: a
@@ -2940,16 +2886,12 @@ mesma empresa vende seguro de carro. O boleto avulso ficou sem regra pelo mesmo 
 
 **Lote Sta Lúcia — padronizado em 11/09/2026.** O boleto mensal de R$ 2.359,61
 (`cond sta lucia DEBITO DE COBRANCA` e grafias parecidas) na Conta Corrente Unicred **não é
-condomínio**: é a parcela de aquisição do terreno, que o usuário quitou em 19/08/2026 (R$ 8.840,00
-de quitação + R$ 81.498,00 em dinheiro). Padrão: **Imóveis / Terrenos / Família / Lote Sta Lucia /
-Imóveis**, o mesmo que ele conferiu em jul/2026. 10 parcelas estavam em `Transfers` (fluxo — saída
-vira despesa) ou `Condomínio` (despesa); a despesa caiu R$ 11.798,05 em 2025 (292.988,49 →
-281.190,44) e R$ 11.798,05 em 2026 (446.829,71 → 435.031,66). **Sem regra**: o financiamento acabou.
-**Maio/2026 existia e escapou da primeira busca**: a descrição veio cortada (`boleto cond sta luci
-DEBITO DE COBRANCA`). O critério certo, dado pelo usuário, é **`DEBITO DE COBRANCA` + R$ 2.359,61**,
-valor que nunca mudou — não o nome, que o banco grafa de seis jeitos. Ajustado no mesmo dia (despesa
-de 2026 −R$ 2.359,61). **Buscar por nome de estabelecimento na conta corrente perde grafia; quando
-o valor é fixo, procurar pelo valor.**
+condomínio**: é a parcela de aquisição do terreno, que o usuário quitou em 19/08/2026. Padrão:
+**Imóveis / Terrenos / Família / Lote Sta Lucia / Imóveis**. Estava em `Transfers` ou `Condomínio`
+(despesa); corrigido para `bem`. **Sem regra**: o financiamento acabou. O critério certo, dado pelo
+usuário, é **`DEBITO DE COBRANCA` + R$ 2.359,61** (valor que nunca mudou) — não o nome do
+estabelecimento, que o banco grafa de seis jeitos diferentes. **Lição geral: quando o valor é fixo,
+procurar pelo valor, não pelo nome.**
 
 **Despesa da BRDrive paga com dinheiro pessoal — padrão criado em 16/09/2026** (decisão do
 usuário). Todo mês o Ronaldo paga contas da BRDrive com cartão, PIX ou dinheiro, e na metade do mês
@@ -2963,9 +2905,9 @@ inflaria os dois lados do DRE com dinheiro que nunca foi da família (§1.1).
 desenho do mesmo dia). Nasceram duas categorias — `BRDrive Pago` e `BRDrive Recebido` — e elas
 obrigavam a escolher o lado na mão, sendo que o valor já diz: compra no cartão e PIX enviado saem
 **positivos** em `VAL_DESPESA`, crédito na conta corrente sai **negativo**. As duas foram unidas em
-`BRDrive` (48 lançamentos movidos, DRE inalterado) e o relatório passou a somar os dois lados
-separados (§6.3). **Não é `fluxo`:** ali a direção decide entre receita e despesa e o lançamento
-**entra** no DRE, que é exatamente o que não pode acontecer aqui.
+`BRDrive`, e o relatório passou a somar os dois lados separados (§6.3). **Não é `fluxo`:** ali a
+direção decide entre receita e despesa e o lançamento **entra** no DRE, que é exatamente o que não
+pode acontecer aqui.
 
 Isso mantém o acerto fora da categoria `Reembolso` genérica, que está contaminada (abaixo).
 
@@ -2986,19 +2928,14 @@ contamina qualquer conferência de saldo feita por ali. **Aguardando decisão do
 
 **Duas categorias chamadas "Transferência Interna" — resolvido em 16/09/2026, e não era o que
 parecia.** `Same person transfer` e `Transfer - Internal` mostravam duas linhas com o mesmo nome na
-visão nova. Abrindo as duas, **não eram a mesma coisa**: a segunda tinha só **3 lançamentos, todos
-`Pag de Fatura Via Deb Aut`** (mai, jun e jul/2026, R$ 51.849,48 no cartão Unicred Ronaldo) — o lado
-do **cartão** do pagamento da fatura, que pela §4.1 pertence a **Pagamento de Fatura**. Escaparam da
-migração 56 porque estavam em `Transfer - Internal`, e não em `Transfers`.
-
-Juntar as duas teria enterrado três pagamentos de fatura dentro de transferência entre contas. Os 3
-foram para `Credit card payment` e `Transfer - Internal` foi excluída. **O DRE não se moveu** (as
-três categorias são `transferencia`): 2026 despesa R$ 352.100,54 e receita R$ 444.421,57; 2025
-R$ 262.033,67 e R$ 225.442,90, idênticos antes e depois.
-
-**A prova de que a classificação estava mesmo errada veio do saldo:** `Pagamento de Fatura` em 2026
-foi de **R$ 52.629,79 para R$ 780,31**. Os dois lados agora se anulam, que é o que tem de acontecer
-— faltavam justamente os três créditos do lado do cartão. É a visão nova fazendo o trabalho dela.
+visão nova. Abrindo as duas, **não eram a mesma coisa**: a segunda só tinha `Pag de Fatura Via Deb
+Aut` — o lado do **cartão** do pagamento da fatura, que pela §4.1 pertence a **Pagamento de
+Fatura**. Escaparam da migração 56 porque estavam em `Transfer - Internal`, não em `Transfers`.
+Juntar as duas teria enterrado pagamento de fatura dentro de transferência entre contas; foram
+movidos para `Credit card payment` e `Transfer - Internal` foi excluída.
+**A prova de que a classificação estava errada veio do saldo:** `Pagamento de Fatura` passou a
+fechar perto de zero — os dois lados se anulando é o que tem de acontecer, e faltavam justamente
+esses créditos do lado do cartão. É a visão nova (§6.3) fazendo o trabalho dela.
 
 **Excluir categoria APAGA a natureza dela, e isso é uma mina** quando o Pluggy ainda manda aquela
 chave. `Transfer - Internal` chegou a ser sincronizada em 21/07/2026; sem a linha em
