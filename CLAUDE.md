@@ -2844,10 +2844,8 @@ categoria real. Sem isso, ou a despesa da família infla, ou uma despesa real so
 despesa nunca foi dela. E reembolso de despesa da própria família continua voltando para a
 categoria da despesa (§8.3).
 
-**Pendência que a visão nova deixou à vista:** a categoria `Reembolso` tem **46 lançamentos e
-−R$ 201.952,53**, quase tudo em um item só — `BRSIM LTDA CRED RECEBIMENTO PIX`, 30/12/2025,
-**R$ 189.961,27**, que a §11.2 já listava como sem classificação. Não infla o DRE (é neutra), mas
-contamina qualquer conferência de saldo feita por ali. **Aguardando decisão do usuário.**
+**O item que contaminava `Reembolso`** (`BRSIM LTDA CRED RECEBIMENTO PIX`, R$ 189.961,27) era de
+30/12/2025 — descartado com o corte de 2026 (§4.2, §11.2): não entra mais em relatório nenhum.
 
 **Duas categorias chamadas "Transferência Interna" — resolvido em 16/09/2026, e não era o que
 parecia.** `Same person transfer` e `Transfer - Internal` mostravam duas linhas com o mesmo nome na
