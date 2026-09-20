@@ -1209,10 +1209,11 @@ leva o sinal do banco**: saída é `DEBIT` e a nota diz "Criado a partir do extr
 regra da fatura, negativo = crédito, rotulava PIX enviado como crédito). Nasceram sem OK; os dois PIX
 da Amanda foram classificados como mesada (§8.4) e o resto pelo usuário.
 
-**A regra da mesada não pega a grafia do extrato:** o OFX escreve `Transferência enviada pelo Pix -
-Amanda Bressan de Lima - …` e a regra procura a do Pluggy (`Transferência enviada|Amanda Bressan`).
-Lançamento que entrar pelo extrato nasce sem categoria. Segunda regra oferecida, **aguardando o
-usuário**.
+**A regra da mesada não pegava a grafia do extrato — segunda regra criada em 20/09/2026.** O OFX
+escreve `Transferência enviada pelo Pix - Amanda Bressan de Lima - …` e a regra original só
+procurava a do Pluggy (`Transferência enviada|Amanda Bressan`). Lançamento que entrasse pelo
+extrato nascia sem categoria. Nova regra, mesma origem (Conta Corrente Nubank · Ronaldo), mesmo
+destino (Mesada / Amanda / Compras Pessoais / Vida Familiar).
 
 **O centavo da fatura 08/2025 do cartão Nubank Ronaldo não fecha, e não se inventa:** o arquivo traz
 uma compra de R$ 1,00 e saldo R$ 0,99, sem linha de R$ 0,01 (§1.4). O R$ 1,00 já existia, criado pela
@@ -3320,10 +3321,13 @@ vínculos já gravados). Migração 50 corrigiu os erros reais mantendo a trava 
 quem já gerou parcela (§6.6). O que resta de falso positivo é mojibake dos extratos com codificação
 errada (§6.8) — permanente, o usuário decidiu não reimportar esses arquivos.
 
-**Em aberto:** ORAL UNIC ODONTOL ↔ TOTAL SPORTES (parcela 10× R$ 44,99 = R$ 449,90, contra
-R$ 450,00) — ORAL UNIC é "Parcelado Lojista", pode ser agregado legítimo que ganhou um vínculo
-errado a mais; nunca foi conferido linha a linha. Desfazer vínculo muda o que entra no DRE — é
-decisão do usuário, como marcar duplicidade (§1.3).
+**ORAL UNIC ODONTOL ↔ TOTAL SPORTES — conferido linha a linha, fechado sem alteração
+(20/09/2026).** Os dois totais são parecidos (10× R$ 44,99 = R$ 449,90 contra R$ 450,00) mas
+**não batem ao centavo** — são duas compras diferentes (dentista × vestuário), decisão do
+usuário. Checados os vínculos das 8 faturas envolvidas: cada linha já está ligada ao lançamento
+certo (ORAL UNIC → suas 3 parcelas de R$ 150,00 = R$ 450,00 exatos; TOTAL SPORTES → seu
+parcelamento próprio). Não havia vínculo cruzado a desfazer — o alerta original era só a
+semelhança de valor pegando um falso positivo.
 
 ## 11.3 A validar com o usuário (dado que falta)
 
