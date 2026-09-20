@@ -1,7 +1,11 @@
   :root {
     /* Paleta alinhada ao padrao visual adotado em 01/09/2026 (mesma familia de
        tokens do CRM BRDrive): tres camadas de superficie (bg/surface/raise),
-       acento teal, cantos mais arredondados, sombras mais suaves. */
+       cantos mais arredondados, sombras mais suaves. Acento, raio e fonte
+       trocados em 20/09/2026 para o tema "Sky" do shadcn/ui (preset
+       b1YmuKuwq, base neutra, fonte Geist) - decisao do usuario. Os valores
+       vieram do preview real do preset (oklch convertido para hex por
+       canvas), nao de tabela de cores generica. */
     --bg: #f4f5fa;
     --surface: #ffffff;
     --raise: #eef0f7;
@@ -14,13 +18,13 @@
     --ink-faint: #5d6880;
     --line: #d9dce8;
     --line-soft: #e7eaf3;
-    --accent: #0e7490;
-    --accent-strong: #0b5b73;
-    --accent-soft: #e0f4f6;
-    --accent-line: #b9dfe4;
-    --selecao: #52a7ba;
-    --selecao-forte: #3f93a6;
-    --selecao-suave: rgba(82, 167, 186, .18);
+    --accent: #0069a8;
+    --accent-strong: #00598a;
+    --accent-soft: #e2eef8;
+    --accent-line: #b7d3e8;
+    --selecao: #4f8fbd;
+    --selecao-forte: #3d7aa8;
+    --selecao-suave: rgba(79, 143, 189, .18);
     --selecao-simbolo: #fff;
     --tooltip-fundo: #1f2126;
     --tooltip-texto: #fff;
@@ -35,11 +39,12 @@
     --warn-soft: #fbf0dd;
     --neutro: #6d5fd6;
     --neutro-soft: #eeecfb;
-    --radius: 14px;
-    --radius-sm: 9px;
+    --font-sans: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    --radius: 10px;
+    --radius-sm: 8px;
     --radius-xs: 6px;
     --radius-xxs: 4px;
-    --radius-lg: 20px;
+    --radius-lg: 14px;
     --radius-pill: 999px;
     --peso-normal: 400;
     --peso-medio: 500;
@@ -95,13 +100,13 @@
       --ink-faint: #8f9cb8;
       --line: #313d64;
       --line-soft: #202a4a;
-      --accent: #2dd4bf;
-      --accent-strong: #5eead4;
-      --accent-soft: rgba(45,212,191,.16);
-      --accent-line: rgba(45,212,191,.40);
-      --selecao: #4bbccd;
-      --selecao-forte: #6fd0de;
-      --selecao-suave: rgba(75, 188, 205, .20);
+      --accent: #4da3ff;
+      --accent-strong: #8ec5ff;
+      --accent-soft: rgba(77,163,255,.16);
+      --accent-line: rgba(77,163,255,.40);
+      --selecao: #5b9bd6;
+      --selecao-forte: #82b6e2;
+      --selecao-suave: rgba(91, 155, 214, .20);
       --selecao-simbolo: #08121f;
     --tooltip-fundo: #e7ebf6;
     --tooltip-texto: #0a0f1e;
@@ -142,13 +147,13 @@
     --ink-faint: #8f9cb8;
     --line: #313d64;
     --line-soft: #202a4a;
-    --accent: #2dd4bf;
-    --accent-strong: #5eead4;
-    --accent-soft: rgba(45,212,191,.16);
-      --accent-line: rgba(45,212,191,.40);
-    --selecao: #4bbccd;
-    --selecao-forte: #6fd0de;
-    --selecao-suave: rgba(75, 188, 205, .20);
+    --accent: #4da3ff;
+    --accent-strong: #8ec5ff;
+    --accent-soft: rgba(77,163,255,.16);
+      --accent-line: rgba(77,163,255,.40);
+    --selecao: #5b9bd6;
+    --selecao-forte: #82b6e2;
+    --selecao-suave: rgba(91, 155, 214, .20);
     --selecao-simbolo: #08121f;
     --tooltip-fundo: #e7ebf6;
     --tooltip-texto: #0a0f1e;
@@ -176,9 +181,25 @@
       --shadow-1: 0 1px 2px rgba(0,0,0,.3);
     --shadow-2: 0 16px 32px rgba(0,0,0,.45);
   }
+  @font-face {
+    font-family: "Geist Sans"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("fonts/geist-sans-400.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Geist Sans"; font-style: normal; font-weight: 500; font-display: swap;
+    src: url("fonts/geist-sans-500.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Geist Sans"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("fonts/geist-sans-600.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "Geist Sans"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("fonts/geist-sans-700.woff2") format("woff2");
+  }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     margin: 0;
     color: var(--ink);

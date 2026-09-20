@@ -32,8 +32,12 @@ COR_NEUTRA = re.compile(r"^(transparent|inherit|currentColor|none|unset|initial)
 
 def sem_definicao_de_tokens(texto):
     """O :root e onde os tokens NASCEM - valor cru ali e a definicao, nao a
-    violacao. Sem isto a ferramenta acusaria o proprio sistema de design."""
-    return re.sub(r":root[^{]*\{[^}]*\}", lambda m: "\n" * m.group(0).count("\n"), texto)
+    violacao. Sem isto a ferramenta acusaria o proprio sistema de design.
+    @font-face e a mesma familia: font-weight ali escolhe qual ARQUIVO de
+    fonte carregar (400/500/600/700), um descritor que nao aceita var() por
+    especificacao - nao tem token possivel."""
+    texto = re.sub(r":root[^{]*\{[^}]*\}", lambda m: "\n" * m.group(0).count("\n"), texto)
+    return re.sub(r"@font-face\s*\{[^}]*\}", lambda m: "\n" * m.group(0).count("\n"), texto)
 
 
 def sem_comentarios(texto):
