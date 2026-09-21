@@ -4,7 +4,7 @@ import time
 
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, redirect, session, render_template
+from flask import Blueprint, jsonify, request, redirect, session, render_template
 
 from core import (
     URL_LANCAMENTOS,
@@ -13,6 +13,7 @@ from core import (
     get_conn,
     permissoes_do_perfil,
     senha_confere,
+    validar_sessao_atual,
 )
 
 bp = Blueprint("auth", __name__)
@@ -117,3 +118,23 @@ def login():
 def logout():
     session.clear()
     return redirect("/login")
+
+
+@bp.route("/api/sessao")
+def sessao():
+    """Quem esta logado, para os servicos irmaos (Node) validarem o mesmo login.
+
+    O cookie de sessao do Flask e assinado com a SECRET_KEY deste app; o outro
+    servico nao recria essa criptografia - ele repassa o cookie do navegador
+    para ca e recebe o resultado. Assim a fonte unica de verdade sobre quem
+    esta logado (e quais permissoes tem) continua sendo validar_sessao_atual().
+    """
+    if not validar_sessao_atual():
+        return jsonify({"ok": False, "erro": "Sessão inválida ou expirada."}), 401
+    return jsonify({
+        "ok": True,
+        "usuario": session["user"],
+        "nome": session.get("nome") or session["user"],
+        "perfil": session.get("perfil"),
+        "permissoes": list(session.get("permissoes") or []),
+    })

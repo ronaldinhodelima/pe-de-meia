@@ -135,7 +135,7 @@ def test_todas_as_rotas_continuam_registradas():
 
     rotas = {str(r) for r in app.app.url_map.iter_rules() if r.endpoint != "static"}
     esperadas = {
-        "/", "/lancamentos/resumida", "/login", "/logout", "/health", "/favicon.ico",
+        "/", "/lancamentos/resumida", "/login", "/logout", "/api/sessao", "/health", "/favicon.ico",
         "/api/sync-status", "/api/sync-agora", "/api/transacao/<transacao_id>",
         "/api/transacao/<transacao_id>/rateios",
         "/api/lancamento-manual", "/api/lancamento-manual/<transacao_id>",

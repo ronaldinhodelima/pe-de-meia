@@ -305,3 +305,32 @@ def test_falha_ao_criar_lancamento_manual_libera_o_banco(monkeypatch):
     assert conexao.rollback_chamado is True
     assert conexao.cursor_criado.fechado is True
     assert conexao.fechado is True
+
+
+def test_api_sessao_sem_login_valido_devolve_401_sem_vazar_nada(monkeypatch):
+    monkeypatch.setattr(auth, "validar_sessao_atual", lambda: False)
+    resposta = app.app.test_client().get("/api/sessao")
+    assert resposta.status_code == 401
+    corpo = resposta.get_json()
+    assert corpo["ok"] is False
+    assert "usuario" not in corpo and "permissoes" not in corpo
+
+
+def test_api_sessao_com_login_valido_devolve_quem_e_e_o_que_pode(monkeypatch):
+    monkeypatch.setattr(auth, "validar_sessao_atual", lambda: True)
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "andrea"
+        sessao["nome"] = "Andrea"
+        sessao["perfil"] = "operador"
+        sessao["permissoes"] = ["lancamentos_ver", "lancamentos_manual"]
+    resposta = cliente.get("/api/sessao")
+    assert resposta.status_code == 200
+    assert resposta.get_json() == {
+        "ok": True,
+        "usuario": "andrea",
+        "nome": "Andrea",
+        "perfil": "operador",
+        "permissoes": ["lancamentos_ver", "lancamentos_manual"],
+    }
+    assert resposta.headers["Cache-Control"] == "no-store, private"
