@@ -1,5 +1,5 @@
 """Healthcheck e sincronizacao com o Pluggy."""
-from flask import Blueprint, jsonify
+from flask import Blueprint, Response, jsonify, request
 
 from core import (
     disparar_sincronizacao,
@@ -8,6 +8,7 @@ from core import (
     get_ultima_sincronizacao,
     login_required,
     requer,
+    topbar_html,
     vincular_pendentes_confirmados,
 )
 
@@ -50,3 +51,25 @@ def api_sync_agora():
 @bp.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+# Paginas de OUTROS servicos (Node) que exibem a barra do sistema. Lista fechada, e
+# o titulo nunca vem da URL: `titulo` entra no HTML sem escape, e aceitar texto
+# livre aqui seria XSS refletido na origem principal.
+_PAGINAS_DA_BARRA = {"compras-futuras": ("Compras futuras", "compras-futuras")}
+
+
+@bp.route("/api/topbar")
+@requer("lancamentos_ver")
+def barra_superior():
+    """A barra de menus do sistema, para uma tela servida por outro servico.
+
+    A barra (menus, Desfazer, tema, sincronizar) e UMA so, escrita aqui: quem a
+    duplicasse em React teria duas implementacoes do Desfazer e do menu por
+    permissao. Vai SEM o <script>: HTML injetado por innerHTML nao executa
+    script, entao o outro servico carrega /static/topbar.js por conta propria.
+    """
+    pagina = _PAGINAS_DA_BARRA.get(request.args.get("pagina", ""))
+    if not pagina:
+        return jsonify({"ok": False, "erro": "Página desconhecida."}), 404
+    return Response(topbar_html(*pagina, com_script=False), mimetype="text/html")

@@ -5912,7 +5912,7 @@ DESFAZER_BOTAO_HTML = (
 )
 
 
-def topbar_html(titulo, ativo=None):
+def topbar_html(titulo, ativo=None, com_script=True):
     def cls(nome):
         return "ativo" if ativo == nome else ""
     return f"""
@@ -5966,7 +5966,7 @@ def topbar_html(titulo, ativo=None):
           <a href="/logout">Sair</a>
         </div>
       </div>
-      <script src="/static/topbar.js?v=20260915-1"></script>
+      {'<script src="/static/topbar.js?v=20260915-1"></script>' if com_script else ""}
     """
 
 

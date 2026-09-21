@@ -339,3 +339,26 @@ def test_api_sessao_com_login_valido_devolve_quem_e_e_o_que_pode(monkeypatch):
         "permissoes": ["lancamentos_ver", "lancamentos_manual"],
     }
     assert resposta.headers["Cache-Control"] == "no-store, private"
+
+
+def test_api_topbar_entrega_a_barra_sem_script_e_so_para_paginas_conhecidas(monkeypatch):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: True)
+    cliente = app.app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao["user"] = "andrea"
+        sessao["permissoes"] = ["lancamentos_ver", "lancamentos_editar"]
+    ok = cliente.get("/api/topbar?pagina=compras-futuras")
+    assert ok.status_code == 200
+    html = ok.get_data(as_text=True)
+    assert 'class="topbar"' in html and "Compras futuras · andrea" in html
+    assert 'id="desfazerBtn"' in html, "o Desfazer precisa vir na barra"
+    assert "<script" not in html, "innerHTML nao executa script; quem carrega e o outro servico"
+    # o titulo nunca vem da URL: aceitar texto livre seria XSS refletido
+    assert cliente.get("/api/topbar?pagina=<script>x</script>").status_code == 404
+    assert cliente.get("/api/topbar").status_code == 404
+
+
+def test_api_topbar_exige_login(monkeypatch):
+    monkeypatch.setattr(core, "validar_sessao_atual", lambda: False)
+    resposta = app.app.test_client().get("/api/topbar?pagina=compras-futuras")
+    assert resposta.status_code == 401
