@@ -2224,8 +2224,10 @@ def test_descricao_so_muda_em_lancamento_manual():
     """
     view = (RAIZ / "views" / "lancamentos.py").read_text(encoding="utf-8")
     bloco = view.split("def update_transacao", 1)[1]
-    assert 'escopo = " AND account_id = %s" if "descricao" in data else ""' in bloco
-    assert "extra = [CONTA_MANUAL_ID]" in bloco
+    # descricao e valor (21/09/2026) compartilham a mesma trava no WHERE
+    assert 'so_manual = "descricao" in data or novo_valor is not None' in bloco
+    assert 'escopo = " AND account_id = %s" if so_manual else ""' in bloco
+    assert "extra = [CONTA_MANUAL_ID] if so_manual else []" in bloco
     assert "{escopo}" in bloco
 
 

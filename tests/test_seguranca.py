@@ -130,8 +130,13 @@ def test_editor_sem_permissao_de_conferir_ainda_edita_categoria(monkeypatch):
             self.sql = args[0] if args else ""
 
         def fetchone(self):
-            if "COUNT(*), COALESCE(SUM(valor_brl),0)" in getattr(self, "sql", ""):
+            sql = getattr(self, "sql", "")
+            if "COUNT(*), COALESCE(SUM(valor_brl),0)" in sql:
                 return (0, 0, 0)
+            if "SELECT descricao, COALESCE(categoria_manual, false), account_id" in sql:
+                return ("descricao", False, "conta", None, None)
+            if "SELECT categoria, COALESCE(categoria_manual,false)" in sql:
+                return ("Groceries", False, None, "descricao", False, None, False, None, None, None)
             return (False, None, False, "Groceries", None, None, None, "POSTED", None)
 
         def fetchall(self):

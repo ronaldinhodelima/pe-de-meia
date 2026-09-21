@@ -89,6 +89,32 @@ def _valor_manual(valor, direcao):
     return numero if direcao == "entrada" else -numero
 
 
+def _dec_str(valor):
+    """Valor em texto com duas casas - a forma que vai para o jsonb do desfazer
+    (Decimal nao serializa) e que permite comparar antes e depois sem ruido de
+    escala."""
+    if valor is None:
+        return None
+    return format(Decimal(str(valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f")
+
+
+def _valor_editado(texto, valor_atual):
+    """Novo valor de um lancamento manual EXISTENTE, mantendo entrada/saida.
+
+    A tela edita so o modulo ("1174,00"); quem diz se e entrada ou saida e o
+    sinal que o lancamento ja tinha. Trocar o sentido e outra decisao (muda o
+    DRE de um lado para o outro) e nao passa por aqui.
+    """
+    try:
+        numero = Decimal(str(texto or "").strip().replace(",", "."))
+    except InvalidOperation as exc:
+        raise ValueError("valor invalido") from exc
+    if not numero.is_finite() or numero <= 0:
+        raise ValueError("valor invalido")
+    numero = numero.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return -numero if Decimal(str(valor_atual or 0)) < 0 else numero
+
+
 def _normalizar_rateios(valor_pai, partes):
     """Valida um rateio completo e devolve valores com o sinal do lancamento."""
     try:
@@ -2656,10 +2682,12 @@ def _registrar_desfazer_da_edicao(cur, transacao_id, antes, dim_antes):
     usuario nem estava olhando seria pior que nao ter desfazer.
     """
     campos = ("categoria", "categoria_manual", "observacao", "descricao",
-              "conferida", "conferida_por", "duplicada", "natureza")
+              "conferida", "conferida_por", "duplicada", "natureza",
+              "valor_brl", "valor_original")
     cur.execute(
         "SELECT categoria, COALESCE(categoria_manual,false), observacao, descricao, "
-        "conferida, conferida_por, COALESCE(duplicada,false), natureza "
+        "conferida, conferida_por, COALESCE(duplicada,false), natureza, "
+        "valor_brl, valor_original "
         "FROM cartao.transacao WHERE transacao_id = %s;",
         (transacao_id,),
     )
@@ -2667,13 +2695,17 @@ def _registrar_desfazer_da_edicao(cur, transacao_id, antes, dim_antes):
     if not linha:
         return
     depois = dict(zip(campos, linha))
+    # Decimal nao vira jsonb, e "12.5" x "12.50" nao pode contar como mudanca
+    for coluna in ("valor_brl", "valor_original"):
+        depois[coluna] = _dec_str(depois[coluna])
     mudou = {c: antes[c] for c in campos if antes.get(c) != depois.get(c)}
 
     # `categoria_manual` e `conferida_por` acompanham a reversao (para devolver o
     # estado fiel), mas NAO bastam para criar uma acao: marcar a mesma categoria
     # de novo muda so o `categoria_manual` por baixo, e virava um "Desfazer"
     # que, clicado, nao mexia em nada que o usuario visse.
-    visiveis = {"categoria", "observacao", "descricao", "conferida", "duplicada", "natureza"}
+    visiveis = {"categoria", "observacao", "descricao", "conferida", "duplicada", "natureza",
+                "valor_brl"}
     passos, rotulos = [], []
     if mudou and (set(mudou) & visiveis):
         passos.append({
@@ -2685,6 +2717,8 @@ def _registrar_desfazer_da_edicao(cur, transacao_id, antes, dim_antes):
         for campo in ("categoria", "observacao", "descricao", "duplicada", "natureza"):
             if campo in mudou:
                 rotulos.append(campo.capitalize())
+        if "valor_brl" in mudou:
+            rotulos.append("Valor")
 
     # so as dimensoes que esta edicao tocou: `dim_antes` ja vem filtrado por
     # elas, e olhar as outras faria o desfazer reescrever o que ninguem mexeu
@@ -2824,8 +2858,8 @@ def update_transacao(transacao_id):
     # ja vem prontas em `dimensoes_validadas` - nao custam consulta nova.
     _dim_antes = {d: antigo for d, _novo, _nome, antigo, _va, _vn in dimensoes_validadas}
     cur.execute(
-        "SELECT descricao, COALESCE(categoria_manual, false) FROM cartao.transacao "
-        "WHERE transacao_id = %s;",
+        "SELECT descricao, COALESCE(categoria_manual, false), account_id, valor_brl, "
+        "valor_original FROM cartao.transacao WHERE transacao_id = %s;",
         (transacao_id,),
     )
     _extra = cur.fetchone()
@@ -2834,7 +2868,37 @@ def update_transacao(transacao_id):
         "categoria": transacao[3], "observacao": transacao[4], "natureza": transacao[5],
         "descricao": _extra[0] if _extra else None,
         "categoria_manual": _extra[1] if _extra else False,
+        "valor_brl": _dec_str(_extra[3]) if _extra else None,
+        "valor_original": _dec_str(_extra[4]) if _extra else None,
     }
+
+    # VALOR: so de lancamento manual. O valor de um lancamento do banco pertence
+    # ao banco (secao 4.6) - editar ali falsificaria o registro e a proxima
+    # sincronizacao desfaria. Rateado tambem fica de fora: as partes somam
+    # exatamente o total (secao 4.4), e mexer no pai quebraria a soma em
+    # silencio - o rateio se desfaz antes.
+    novo_valor = None
+    if "valor" in data:
+        erro_valor = None
+        if not _extra or str(_extra[2]) != CONTA_MANUAL_ID:
+            erro_valor = "Só o valor de um lançamento manual pode ser editado."
+        else:
+            cur.execute(
+                "SELECT COUNT(*) FROM cartao.transacao_rateio WHERE transacao_id = %s;",
+                (transacao_id,),
+            )
+            if cur.fetchone()[0]:
+                erro_valor = "Desfaça o rateio antes de alterar o valor."
+        if not erro_valor:
+            try:
+                base = _extra[3] if _extra[3] is not None else _extra[4]
+                novo_valor = _valor_editado(data.get("valor"), base)
+            except ValueError:
+                erro_valor = "Informe um valor maior que zero."
+        if erro_valor:
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "erro": erro_valor}), 400
 
     for dim_id, valor_id_int, _nome_dimensao, _valor_id_antigo, _valor_antigo, _valor_novo in dimensoes_validadas:
         cur.execute(
@@ -2969,6 +3033,10 @@ def update_transacao(transacao_id):
         if nova_descricao:
             sets.append("descricao = %s")
             valores.append(nova_descricao)
+    if novo_valor is not None:
+        # os dois valores andam juntos: o manual nasce com valor_brl = valor_original
+        sets.extend(["valor_brl = %s", "valor_original = %s"])
+        valores.extend([novo_valor, novo_valor])
     if "categoria" in data:
         # Uma escolha humana, mesmo antes de marcar OK, não pode ser desfeita
         # por uma regra automática criada posteriormente.
@@ -2983,8 +3051,9 @@ def update_transacao(transacao_id):
         # A trava da descricao vai no WHERE, e nao so na tela: assim uma chamada
         # direta a API tambem nao consegue reescrever a descricao de um
         # lancamento do Pluggy.
-        escopo = " AND account_id = %s" if "descricao" in data else ""
-        extra = [CONTA_MANUAL_ID] if "descricao" in data else []
+        so_manual = "descricao" in data or novo_valor is not None
+        escopo = " AND account_id = %s" if so_manual else ""
+        extra = [CONTA_MANUAL_ID] if so_manual else []
         # Sem isto, "Ultima alteracao" no modal mostrava a hora de CRIACAO para
         # sempre: migracoes e rotinas em lote gravam `atualizado_em`, mas a rota
         # que o usuario usa para editar nunca gravava. O campo dizia a verdade
@@ -3064,6 +3133,8 @@ def update_transacao(transacao_id):
         )
     if "natureza" in data:
         registrar_mudanca_auditoria("Natureza", transacao[5], natureza)
+    if novo_valor is not None:
+        registrar_mudanca_auditoria("Valor", _estado_antes["valor_brl"], _dec_str(novo_valor))
     for _dim_id, valor_id, nome_dimensao, valor_id_antigo, valor_antigo, valor_novo in dimensoes_validadas:
         registrar_mudanca_auditoria(
             nome_dimensao,

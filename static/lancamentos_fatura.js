@@ -1278,12 +1278,16 @@
   });
 
 
-  // ---- Descricao do lancamento manual ---------------------------------------
+  // ---- Descricao e valor do lancamento manual -------------------------------
   // Se edita no PAINEL, por um botao, e nunca na linha (decisao do usuario,
   // 10/09/2026): a linha e para ler e classificar, e um campo aberto ali se
-  // alterava sem querer. Grava pelo MESMO salvarEditor da linha - nao existe
-  // segundo caminho de gravacao - e o servidor recusa a descricao de qualquer
-  // lancamento que nao seja manual (secao 4.6).
+  // alterava sem querer. O VALOR entrou no mesmo lugar em 21/09/2026: os dois
+  // campos abrem juntos e gravam so o que mudou. Grava pelo MESMO salvarEditor
+  // da linha - nao existe segundo caminho de gravacao - e o servidor recusa a
+  // descricao/valor de qualquer lancamento que nao seja manual (secao 4.6) e o
+  // valor de um rateado (secao 4.4).
+  const CAMPOS_MANUAL = 'input[data-campo="descricao"], input[data-campo="valor"]';
+
   document.addEventListener('click', evento => {
     const botao = evento.target.closest('[data-editar-descricao]');
     if (!botao) return;
@@ -1296,56 +1300,83 @@
     texto.hidden = true;
     botao.hidden = true;
     campo.hidden = false;
+    const valor = faixa.querySelector('input[data-campo="valor"]');
+    if (valor) {
+      valor.value = valor.dataset.valorAtual || '';
+      valor.hidden = false;
+    }
     campo.focus();
     campo.select();
   });
 
-  async function concluirDescricao(campo, gravar) {
-    if (campo.dataset.concluindo) return;
-    campo.dataset.concluindo = '1';
-    const faixa = campo.closest('.vinculo-quem');
+  async function concluirEdicao(faixa, gravar) {
+    if (faixa.dataset.concluindo) return;
+    faixa.dataset.concluindo = '1';
     const texto = faixa.querySelector('.vinculo-desc');
     const botao = faixa.querySelector('[data-editar-descricao]');
-    const nova = campo.value.trim();
+    const campoDesc = faixa.querySelector('input[data-campo="descricao"]');
+    const campoValor = faixa.querySelector('input[data-campo="valor"]');
+    const novaDesc = campoDesc.value.trim();
     // o rateado nao tem `data-editor` na linha, so `data-id`
-    const alvo = CSS.escape(campo.dataset.editorDe);
+    const alvo = CSS.escape(campoDesc.dataset.editorDe);
     const linha = document.querySelector('tr[data-editor="' + alvo + '"]')
       || document.querySelector('tr[data-linha][data-id="' + alvo + '"]');
+    let recarregar = false;
     try {
-      if (gravar && linha && nova && nova !== texto.textContent) {
-        await salvarEditor(linha, campo);
-        const aviso = linha.querySelector('[data-status]');
-        // so troca o texto na tela se o servidor aceitou: mostrar uma descricao
-        // que nao foi gravada seria a tela mentindo sobre o dado
-        if (!(aviso && aviso.classList.contains('erro'))) {
-          texto.textContent = nova;
-          const loja = linha.querySelector('.desc-loja');
-          if (loja) { loja.textContent = nova; loja.dataset.tip = nova; }
+      if (gravar && linha) {
+        const aviso = () => linha.querySelector('[data-status]');
+        const falhou = () => { const a = aviso(); return !!(a && a.classList.contains('erro')); };
+        if (novaDesc && novaDesc !== texto.textContent) {
+          await salvarEditor(linha, campoDesc);
+          // so troca o texto na tela se o servidor aceitou: mostrar uma
+          // descricao que nao foi gravada seria a tela mentindo sobre o dado
+          if (!falhou()) {
+            texto.textContent = novaDesc;
+            const loja = linha.querySelector('.desc-loja');
+            if (loja) { loja.textContent = novaDesc; loja.dataset.tip = novaDesc; }
+          }
+        }
+        const novoValor = campoValor ? campoValor.value.trim() : '';
+        if (campoValor && novoValor && novoValor !== (campoValor.dataset.valorAtual || '')) {
+          await salvarEditor(linha, campoValor);
+          // O valor alimenta a celula da linha, os cards e o DRE: recarrega
+          // mantendo a posicao, em vez de remendar cada numero na tela.
+          if (!falhou()) recarregar = true;
         }
       }
     } finally {
-      campo.hidden = true;
+      campoDesc.hidden = true;
+      if (campoValor) campoValor.hidden = true;
       texto.hidden = false;
       if (botao) botao.hidden = false;
-      delete campo.dataset.concluindo;
+      delete faixa.dataset.concluindo;
+    }
+    if (recarregar) {
+      if (typeof guardarPosicaoAtual === 'function') guardarPosicaoAtual();
+      window.location.reload();
     }
   }
 
   document.addEventListener('keydown', evento => {
-    const campo = evento.target.closest && evento.target.closest('input[data-campo="descricao"]');
+    const campo = evento.target.closest && evento.target.closest(CAMPOS_MANUAL);
     if (!campo) return;
-    if (evento.key === 'Enter') { evento.preventDefault(); concluirDescricao(campo, true); }
+    const faixa = campo.closest('.vinculo-quem');
+    if (evento.key === 'Enter') { evento.preventDefault(); concluirEdicao(faixa, true); }
     else if (evento.key === 'Escape') {
       // o Esc e do campo aqui: sem isto, ele tambem fecharia a barra de lote
       evento.preventDefault();
       evento.stopPropagation();
-      concluirDescricao(campo, false);
+      concluirEdicao(faixa, false);
     }
   });
-  // `blur` nao borbulha
+  // `blur` nao borbulha. Passar de um campo para o outro DENTRO da faixa nao
+  // conclui nada - so sair dela.
   document.addEventListener('focusout', evento => {
-    const campo = evento.target.closest && evento.target.closest('input[data-campo="descricao"]');
-    if (campo && !campo.hidden) concluirDescricao(campo, true);
+    const campo = evento.target.closest && evento.target.closest(CAMPOS_MANUAL);
+    if (!campo || campo.hidden) return;
+    const faixa = campo.closest('.vinculo-quem');
+    if (evento.relatedTarget && faixa.contains(evento.relatedTarget)) return;
+    concluirEdicao(faixa, true);
   });
 
 

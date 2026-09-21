@@ -414,19 +414,31 @@ def test_descricao_do_manual_se_edita_no_painel_por_um_botao(ctx):
             painel = html.split('class="vinculo-quem"', 1)[1].split("</span>", 1)[0]
             assert 'data-campo="descricao"' in painel and " hidden>" in painel, (
                 "o campo nasce escondido e so o botao o libera")
+            # o VALOR mora no mesmo lugar (21/09/2026): escondido, e so quando
+            # o lancamento nao e rateado - o rateado nao pode mudar o valor do pai
+            # sem quebrar a soma das partes (secao 4.4)
+            if not rateado:
+                assert 'data-campo="valor"' in painel, rotulo
 
     view = (raiz / "views" / "lancamentos.py").read_text(encoding="utf-8")
     assert '"descricao_editavel": str(row["account_id"]) == CONTA_MANUAL_ID' in view
-    assert "escopo = \" AND account_id = %s\" if \"descricao\" in data" in view
+    # descricao E valor so alcancam conta manual, e o filtro vai no proprio UPDATE
+    assert 'so_manual = "descricao" in data or novo_valor is not None' in view
+    assert 'escopo = " AND account_id = %s" if so_manual' in view
+    template = (raiz / "templates" / "lancamentos_fatura.html").read_text(encoding="utf-8")
+    assert "{% if not linha.rateios %}<input" in template and 'data-campo="valor"' in template
     js = (raiz / "static" / "lancamentos_fatura.js").read_text(encoding="utf-8")
     # a gravacao automatica da linha nao alcanca mais a descricao
     assert "descricao" not in js.split("const SELETOR_TEXTO", 1)[1].split(";", 1)[0]
     # e o botao grava pelo MESMO salvarEditor - nao ha segundo caminho
-    fluxo = js.split("async function concluirDescricao(", 1)[1].split("\n  }\n", 1)[0]
-    assert "await salvarEditor(linha, campo)" in fluxo
+    fluxo = js.split("async function concluirEdicao(", 1)[1].split("\n  }\n", 1)[0]
+    assert "await salvarEditor(linha, campoDesc)" in fluxo
+    assert "await salvarEditor(linha, campoValor)" in fluxo
     assert "fetch(" not in fluxo, "segundo caminho de gravacao"
     # so troca o texto na tela se o servidor aceitou
     assert "classList.contains('erro')" in fluxo
+    # o valor mexe em cards e DRE: recarrega guardando a posicao, nunca `reload()` solto
+    assert "guardarPosicaoAtual" in fluxo
     # a linha do rateado nao tem data-editor: a gravacao a acha pelo data-id
     assert 'tr[data-linha][data-id="' in fluxo
     gravacao = js.split("function salvarEditor(editor, alterado)", 1)[1].split("\n  }\n", 1)[0]

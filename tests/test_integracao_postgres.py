@@ -758,3 +758,71 @@ def test_desfazer_em_lote_alcanca_exatamente_os_lancamentos_movidos(sistema_real
     conn.commit()
     cur.close()
     conn.close()
+
+
+def test_editar_valor_de_lancamento_manual_no_postgres_real(sistema_real):
+    """O valor de um manual se edita: mantem entrada/saida, tem desfazer, e recusa
+    o que nao pode (valor invalido, rateado)."""
+    _worker, core, webapp = sistema_real
+    cliente = webapp.app.test_client()
+    _login(cliente)
+    descricao = f"INTEGRACAO VALOR {uuid.uuid4()}"
+    resposta = cliente.post(
+        "/api/lancamento-manual",
+        json={"data": "2026-08-23", "descricao": descricao, "direcao": "saida", "valor": "100,00"},
+    )
+    assert resposta.status_code == 200
+
+    def estado():
+        conn = core.get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT transacao_id, valor_brl, valor_original, tipo "
+            "FROM cartao.transacao WHERE descricao = %s;", (descricao,),
+        )
+        linha = cur.fetchone()
+        cur.close()
+        conn.close()
+        return linha
+
+    transacao_id, *_ = estado()
+    url = f"/api/transacao/{transacao_id}"
+
+    # editar: o modulo muda, o SINAL (saida) fica, os dois valores andam juntos
+    resposta = cliente.post(url, json={"valor": "250,5"})
+    assert resposta.status_code == 200, resposta.get_json()
+    _id, brl, original, tipo = estado()
+    assert float(brl) == float(original) == -250.50
+    assert tipo == "DEBIT"
+
+    # valor invalido nao grava nada
+    for ruim in ("0", "abc", "-5", ""):
+        r = cliente.post(url, json={"valor": ruim})
+        assert r.status_code == 400, ruim
+    assert float(estado()[1]) == -250.50
+
+    # o desfazer devolve o valor de antes (Decimal nao pode ter quebrado o jsonb)
+    conn = core.get_conn()
+    cur = conn.cursor()
+    rotulo, afetadas = core.desfazer_ultima_acao(cur, "integracao")
+    conn.commit()
+    cur.close()
+    conn.close()
+    assert "Valor" in rotulo and afetadas >= 1
+    assert float(estado()[1]) == float(estado()[2]) == -100.00
+
+    # rateado: o valor do pai nao pode mudar sem quebrar a soma das partes
+    conn = core.get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO cartao.transacao_rateio (transacao_id, ordem, valor_brl, categoria) "
+        "VALUES (%s, 1, -60.00, 'Groceries'), (%s, 2, -40.00, 'Groceries');",
+        (transacao_id, transacao_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    r = cliente.post(url, json={"valor": "300,00"})
+    assert r.status_code == 400
+    assert "rateio" in r.get_json()["erro"].lower()
+    assert float(estado()[1]) == -100.00

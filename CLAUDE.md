@@ -1634,6 +1634,21 @@ descrição e observação não mudam pendência nenhuma. Enter ou sair do campo
 servidor aceitou; o toast diz "Salvo · Descrição" pelo `aria-label`. O servidor continua recusando no
 próprio `UPDATE` a descrição de qualquer outra origem (§4.6).
 
+**O VALOR do lançamento manual também se edita ali (pedido do usuário, 21/09/2026).** O "Editar"
+abre descrição e valor juntos; grava só o que mudou, e passar de um campo para o outro dentro da
+faixa não conclui nada (só sair dela ou Enter). Regras, todas no servidor (`update_transacao`):
+**só conta manual** (o valor do banco pertence ao banco, §4.6 — o filtro vai no `WHERE` do `UPDATE`,
+o mesmo da descrição); **rateado fica de fora** (as partes somam o total, §4.4: "Desfaça o rateio
+antes de alterar o valor"); **o sinal é mantido** — a tela edita o módulo e quem diz entrada ou
+saída é o que o lançamento já era (trocar o sentido muda o DRE de lado e é outra decisão); valor
+zero, negativo ou ilegível é recusado. `valor_brl` e `valor_original` andam juntos, como na criação.
+**Não mexe no OK**: editar campo nunca altera assinatura (§1.2) — quem quiser retirar o OK usa a
+confirmação de sempre. Entra no desfazer (§9.4; `valor_brl` já estava na lista branca, o valor vai
+como texto com duas casas porque `Decimal` não vira jsonb) e na auditoria (`Valor`). Depois de
+gravar a tela recarrega guardando a posição: o valor alimenta a célula, os cards e o DRE, e remendar
+cada número seria escrever a regra duas vezes. Coberto por `test_editar_valor_de_lancamento_manual_
+no_postgres_real` (sinal, inválidos, desfazer, rateado).
+
 **Procedência tem quatro letras, num ponto único (`procedencia_do_registro`).** `M` lançamento manual
 (pela conta), `F` criado pela fatura, **`I` "Importado de arquivo"** e `P` Pluggy. O `I` é
 `transacao.importado`: a marca do importador de OFX/CSV que existiu de 18 a 21/08/2026 (commits

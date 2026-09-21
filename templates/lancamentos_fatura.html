@@ -134,6 +134,7 @@
      quanto a tabela o "Excluir" passava do limite visivel. */
   .vinculo-quem{flex:0 1 auto;max-width:55%;min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}
   .vinculo-quem .desc-input{width:28ch;max-width:100%}
+  .vinculo-quem .valor-input{width:12ch;text-align:right}
   .fonte-badge.manual{background:var(--raise);color:var(--ink-soft)}
   .fonte-badge.arquivo{background:var(--selecao-suave);color:var(--selecao-simbolo)}
   .vinculo-quem b{font-weight:var(--peso-forte);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -484,7 +485,7 @@
           um campo aberto ali se alterava sem querer. Vale tambem no RATEADO:
           a linha dele nao tem editor proprio, entao a gravacao acha a linha
           pelo `data-id`, e o JS so repinta pendencia quando o campo alterado
-          e de classificacao - senao apagaria o "Faltam: Rateio". #}{% if v.principal and linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden><button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição deste lançamento manual. A de um lançamento do banco não se edita: ela pertence ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
+          e de classificacao - senao apagaria o "Faltam: Rateio". #}{% if v.principal and linha.descricao_editavel and pode_editar %}<input class="obs-input desc-input" type="text" data-campo="descricao" data-editor-de="{{ linha.principal.transacao_id }}" maxlength="500" aria-label="Descrição" hidden>{% if not linha.rateios %}<input class="obs-input desc-input valor-input" type="text" inputmode="decimal" data-campo="valor" data-editor-de="{{ linha.principal.transacao_id }}" data-valor-atual="{{ ('%.2f'|format(v.valor|abs))|replace('.', ',') }}" maxlength="14" aria-label="Valor (R$)" hidden>{% endif %}<button type="button" class="ver-btn editar-desc" data-editar-descricao title="Editar a descrição e o valor deste lançamento manual. Os de um lançamento do banco não se editam: pertencem ao banco.">Editar</button>{% endif %}<small>{{ linha.procedencia if v.principal else 'registro técnico' }}</small><button type="button" class="info-toggle" data-info-target="info-{{ linha.id }}-{{ loop.index }}" aria-expanded="false" title="Abrir detalhes da transação" aria-label="Abrir detalhes da transação">⌄</button></span>
         <span class="vinculo-quando">{{ v.data_local.strftime('%d/%m/%Y %H:%M') if v.data_local else '-' }}</span>
         <span class="valor vinculo-valor">{{ v.valor|moeda }}</span>
         {# `principal` e POSICAO na tela - qual vinculo carrega a edicao -, nunca
@@ -605,4 +606,4 @@
 {% endif %}
 {% endblock %}
 
-{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260916-1"></script>{% endblock %}
+{% block scripts %}<script src="/static/lote.js?v=20260907-2"></script><script src="/static/rateio.js?v=20260910-1"></script><script src="/static/manual.js?v=20260912-1"></script><script src="/static/lancamentos_fatura.js?v=20260921-1"></script>{% endblock %}
