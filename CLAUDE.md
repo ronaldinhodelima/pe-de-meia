@@ -3544,3 +3544,55 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 66 | `acao_desfazivel`: o botão Desfazer do topbar (§9.4) |
 | 67 | `fatura_arquivo_backup`: a versão anterior do arquivo, guardada a cada substituição (§6.8) |
 | 68 | lançamento anterior a 2026 sai do resultado — corte de data na view `lancamento_financeiro` (§4.2) |
+
+---
+
+# 13. Serviços Node (migração gradual da stack) — Compras Futuras (21/09/2026)
+
+**Decisão do usuário:** migrar aos poucos para a stack do Centralizador da BRDrive (Node 24, TypeScript,
+Fastify, Next.js, Drizzle, shadcn/Tailwind, Vitest, Biome, pnpm), uma tela por vez. **Compras Futuras é o
+piloto** — tabela própria, fora do DRE por desenho (§7.10). O código mora em **outro repositório
+(privado): `ronaldinhodelima/pe-de-meia-node`** (monorepo pnpm: `apps/api`, `apps/web`,
+`packages/shared-types`). O Flask continua dono de tudo o mais — **e do schema**.
+
+**Como as duas stacks convivem, na mesma URL:**
+
+- **`pedemeia.brdrive.net/compras-futuras` é servido pelo Next** (app Coolify `pe-de-meia-web-img`); todo o
+  resto é do Flask. O roteamento é por caminho no Traefik do Coolify: domínio `pedemeia.brdrive.net` +
+  path `/compras-futuras` e **"Path prefixes: Keep paths as-is"** — com "Strip prefixes" o Next receberia
+  `/` e quebraria (`basePath` dele é `/compras-futuras`). **Rollback:** apagar esse domínio do app e
+  redeploy; a rota antiga do Flask (`views/compras.py`) continua no código e volta sozinha.
+- **`pe-de-meia-api`** (Fastify + Drizzle) **não tem domínio público**; só o `web` o chama, por
+  `http://pe-de-meia-api:3001` (alias de rede fixo — o nome interno padrão do Coolify leva o timestamp do
+  deploy e muda a cada redeploy). Mesmo Postgres, mesmas tabelas `cartao.compra_futura*`.
+- **Login compartilhado sem recriar a criptografia do Flask:** a API repassa o cookie do navegador para
+  **`GET /api/sessao`** (Flask, `views/auth.py`), que devolve usuário, perfil e permissões — a fonte única
+  continua sendo `validar_sessao_atual()`. **A API chama o Flask por dentro:** `SESSAO_URL=
+  http://pe-de-meia-flask:8000/api/sessao` (alias `pe-de-meia-flask` no app Flask). Com a URL pública, o
+  container não alcançava o próprio servidor e **toda pessoa logada caía no login** — e a falha era
+  invisível, porque o código devolvia "não logado" sem log. Hoje ele registra o motivo. **Lição:** o teste
+  "sem cookie → 401" nem chegava a exercitar essa chamada; só um login real provou o caminho.
+- Permissões são as mesmas strings: `lancamentos_ver` (ver) e `lancamentos_manual` (escrever). Escrita
+  exige `Origin` do próprio site (a mesma regra do Flask, no Next) e a CSP do Next replica a do Flask.
+- **Auditoria e Desfazer têm o mesmo contrato do Flask** (`cartao.audit_log`, `cartao.acao_desfazivel`, passos
+  `update`/`insert`/`delete`, valores como texto). O teste da API recria uma compra excluída aplicando a
+  reversão como o Flask faz. A invariante "compra futura nunca vira resultado" ganhou teste próprio no Node
+  (nenhum código escreve em `cartao.transacao` nem toca `lancamento_financeiro`).
+- **Drizzle só DESCREVE o schema; o Python migra.** Nunca rodar `drizzle-kit push/migrate` contra este banco.
+  Mudou coluna em `core.py`? Atualize `apps/api/src/db/schema.ts` junto.
+
+**Build fora do servidor — regra permanente.** O build do Next.js **no servidor de produção derrubou o
+host inteiro por ~17 min** (21/09/2026, 15:48–16:05: Coolify e `pedemeia` sem responder; voltou quando o
+build terminou — esgotamento de memória/CPU, sem staging para absorver). Por isso as imagens
+(`ghcr.io/ronaldinhodelima/pe-de-meia-web` e `-api`) são construídas no **GitHub Actions**
+(`.github/workflows/imagens.yml`) e o Coolify só baixa a imagem pronta (app "Docker Image"). As imagens
+são **públicas** (decisão do usuário: sem segredo dentro — senhas ficam nas variáveis do Coolify — e o
+Coolify puxa sem credencial). **Não disparar build pesado no servidor.**
+
+**Coolify — armadilhas já pagas:** apagar recurso pela interface exige o modal em duas etapas (desmarcar
+"redes" para não tocar rede compartilhada, depois digitar o nome); botões de modal às vezes precisam de
+clique real, não de script. Edição de variáveis: "Developer View", uma linha `CHAVE=valor` por variável.
+
+**Pendências:** o app antigo `pe-de-meia-web` (build por Git) ficou parado ao lado do novo e deve ser
+apagado; a `pe-de-meia-api` ainda faz build por Git no servidor (leve, mas o certo é migrá-la também para a
+imagem); a rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável.
