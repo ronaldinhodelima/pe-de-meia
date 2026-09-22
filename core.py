@@ -5902,9 +5902,12 @@ URL_RESUMIDA = "/lancamentos/resumida"
 # O icone e uma seta curva SOLIDA. O glifo anterior (U+21B6) era um traco fino
 # que o usuario leu como "chuveiro" - desenho de linha nesse tamanho perde a
 # forma, e o que se reconhece de longe e a silhueta cheia.
+# Versao do script num ponto so: a barra do Flask e a de outros servicos (Next) leem daqui.
+TOPBAR_JS = "/static/topbar.js?v=20260921-1"
+
 DESFAZER_BOTAO_HTML = (
     '<button type="button" class="desfazer-btn" id="desfazerBtn" onclick="pdmDesfazer()"'
-    ' title="Desfazer a última alteração" aria-label="Desfazer a última alteração" disabled>'
+    ' data-tip="Desfazer a última alteração" aria-label="Desfazer a última alteração" disabled>'
     '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">'
     '<path d="M12.5 8H6.83l1.88-1.88a1 1 0 1 0-1.42-1.41L3.17 8.83a1 1 0 0 0 0 1.41l4.12 4.12'
     'a1 1 0 0 0 1.42-1.41L6.83 11h5.67a4.5 4.5 0 0 1 0 9H9a1 1 0 1 0 0 2h3.5a6.5 6.5 0 0 0 0-13z"/>'
@@ -5966,7 +5969,7 @@ def topbar_html(titulo, ativo=None, com_script=True):
           <a href="/logout">Sair</a>
         </div>
       </div>
-      {'<script src="/static/topbar.js?v=20260915-1"></script>' if com_script else ""}
+      {f'<script src="{TOPBAR_JS}"></script>' if com_script else ""}
     """
 
 

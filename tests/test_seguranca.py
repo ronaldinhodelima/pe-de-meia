@@ -353,6 +353,10 @@ def test_api_topbar_entrega_a_barra_sem_script_e_so_para_paginas_conhecidas(monk
     assert 'class="topbar"' in html and "Compras futuras · andrea" in html
     assert 'id="desfazerBtn"' in html, "o Desfazer precisa vir na barra"
     assert "<script" not in html, "innerHTML nao executa script; quem carrega e o outro servico"
+    assert ok.headers["X-Topbar-Script"].startswith("/static/topbar.js?v=")
+    # um tooltip so: `title` junto com `data-tip` abria dois baloes (21/09/2026)
+    botao = html.split('id="desfazerBtn"', 1)[1].split(">", 1)[0]
+    assert "data-tip=" in botao and " title=" not in botao
     # o titulo nunca vem da URL: aceitar texto livre seria XSS refletido
     assert cliente.get("/api/topbar?pagina=<script>x</script>").status_code == 404
     assert cliente.get("/api/topbar").status_code == 404

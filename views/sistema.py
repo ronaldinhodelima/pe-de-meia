@@ -7,6 +7,7 @@ from core import (
     get_conn,
     get_ultima_sincronizacao,
     login_required,
+    TOPBAR_JS,
     requer,
     topbar_html,
     vincular_pendentes_confirmados,
@@ -72,4 +73,7 @@ def barra_superior():
     pagina = _PAGINAS_DA_BARRA.get(request.args.get("pagina", ""))
     if not pagina:
         return jsonify({"ok": False, "erro": "Página desconhecida."}), 404
-    return Response(topbar_html(*pagina, com_script=False), mimetype="text/html")
+    resposta = Response(topbar_html(*pagina, com_script=False), mimetype="text/html")
+    # quem exibe a barra carrega o script pela URL versionada DAQUI, nunca uma copia
+    resposta.headers["X-Topbar-Script"] = TOPBAR_JS
+    return resposta

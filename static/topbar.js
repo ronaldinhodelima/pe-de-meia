@@ -250,10 +250,15 @@ atualizarIconeTema();
   function pintar(proxima) {
     proximaAcao = proxima || null;
     botao.disabled = !proxima;
-    botao.title = proxima
+    const texto = proxima
       ? 'Desfazer: ' + proxima.rotulo + ' (' + proxima.quando + ')'
       : 'Nada para desfazer';
-    botao.setAttribute('data-tip', botao.title);
+    // UM tooltip so: o do sistema (data-tip). Com `title` junto, o navegador abria
+    // o balao nativo POR CIMA do nosso - dois baloes, piscando ao mexer o mouse
+    // (visto em 21/09/2026). O texto acessivel vai em aria-label.
+    botao.removeAttribute('title');
+    botao.setAttribute('data-tip', texto);
+    botao.setAttribute('aria-label', texto);
   }
 
   window.pdmAtualizarDesfazer = function () {
