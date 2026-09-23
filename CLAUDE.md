@@ -3589,10 +3589,34 @@ build terminou — esgotamento de memória/CPU, sem staging para absorver). Por 
 são **públicas** (decisão do usuário: sem segredo dentro — senhas ficam nas variáveis do Coolify — e o
 Coolify puxa sem credencial). **Não disparar build pesado no servidor.**
 
-**Coolify — armadilhas já pagas:** apagar recurso pela interface exige o modal em duas etapas (desmarcar
-"redes" para não tocar rede compartilhada, depois digitar o nome); botões de modal às vezes precisam de
-clique real, não de script. Edição de variáveis: "Developer View", uma linha `CHAVE=valor` por variável.
+**Coolify — armadilhas já pagas:** apagar recurso pela interface exige o modal em **três** etapas
+(desmarcar "redes" para não tocar rede compartilhada quando fizer sentido; digitar o nome exato; e por
+fim a **senha da conta** — essa última etapa só o usuário pode completar, o Claude não tem a senha e não
+deve pedir); botões de modal às vezes precisam de clique real, não de script — e o próprio "Continue"
+pode não registrar da primeira vez, vale conferir a lista de recursos depois pra confirmar. Edição de
+variáveis: "Developer View", uma linha `CHAVE=valor` por variável — **ao copiar valor sensível de uma tela
+para o campo de outra, usar `document.querySelector('textarea').value` via JS em vez de digitar à mão**:
+uma senha com caracteres ambíguos (`I` maiúsculo vs `l` minúsculo) foi digitada errada na migração da API
+(abaixo) e só apareceu como `password authentication failed` nos logs, não no deploy.
 
-**Pendências:** o app antigo `pe-de-meia-web` (build por Git) ficou parado ao lado do novo e deve ser
-apagado; a `pe-de-meia-api` ainda faz build por Git no servidor (leve, mas o certo é migrá-la também para a
-imagem); a rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável.
+**`pe-de-meia-web` (app antigo, Git build) apagado em 22/09/2026** — sem tráfego (só respondia no
+subdomínio automático, nunca teve o domínio de produção nem o path `/compras-futuras`). Nada foi afetado.
+
+**`bussola-financeira-app` apagado em 22/09/2026** — resource órfão de outro projeto (status `Exited`,
+"No deployed container found", zero domínio). **O banco `bussola-financeira` (Postgres) foi mantido
+intocado**, é um recurso separado.
+
+**`pe-de-meia-api` migrada de Git build para imagem pronta em 23/09/2026**, mesmo padrão do `-web`:
+1. App novo `pe-de-meia-api-img` (tipo "Docker Image", `ghcr.io/ronaldinhodelima/pe-de-meia-api:latest`),
+   porta 3001, mesmas env vars (`SESSAO_URL`, `PORT`, `PGDATABASE`, `DATABASE_URL`) do app antigo.
+2. Validado com alias temporário antes de qualquer corte: `GET /compras-futuras` sem cookie devolveu
+   `401 Sessão inválida ou expirada` — prova que a nova API já falava com o Flask (`SESSAO_URL`) e
+   estava saudável, sem precisar expor nada publicamente.
+3. Corte: **parar** o app antigo (libera o network alias `pe-de-meia-api` na hora, sem precisar editar
+   nem redeployar ele) → mudar o alias do app novo para `pe-de-meia-api` → redeploy do app novo (o alias
+   só é aplicado ao container quando ele (re)inicia).
+4. Testado `/compras-futuras` de ponta a ponta em produção, confirmado ok, e só então o app antigo foi
+   apagado.
+
+A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
+é a única pendência real que resta desta seção.
