@@ -54,9 +54,11 @@ def _carregar_dimensoes(cur):
     return dimensoes, valores
 
 
-@bp.route("/compras-futuras")
+@bp.route("/legado/compras-futuras")
 @requer("lancamentos_ver")
 def compras_futuras():
+    # Rota antiga: so consulta, mantida como referencia agora que /compras-futuras
+    # e servido pelo Next (CLAUDE.md secao 13). Nao editar dado por aqui.
     situacao = request.args.get("situacao") or "aberta"
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)

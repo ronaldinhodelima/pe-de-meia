@@ -7,6 +7,7 @@
       <h3 style="margin:0">Histórico de auditoria</h3>
       <div style="color:var(--ink-faint);font-size:var(--fonte-sm);margin-top:3px">
         Acessos, autenticações, alterações, exclusões e sincronizações. Senhas e chaves nunca são armazenadas.
+        Versão de referência (Flask) — a atual é <a href="/logs">/logs</a>.
       </div>
     </div>
     <strong style="margin-left:auto">{{ total }} evento{{ '' if total == 1 else 's' }}</strong>
@@ -38,7 +39,7 @@
       <input name="busca" value="{{ filtros.busca }}" placeholder="rota, recurso ou conteúdo" style="width:100%">
     </label>
     <button type="submit">Filtrar</button>
-    <a href="/logs" class="ver-btn" style="text-decoration:none">Limpar</a>
+    <a href="/legado/logs" class="ver-btn" style="text-decoration:none">Limpar</a>
   </form>
 </div>
 

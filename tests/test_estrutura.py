@@ -143,7 +143,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/classificacao/consenso-preview",
         "/api/classificacao/reaplicar-consenso",
         "/api/fatura/vinculos-suspeitos",
-        "/compras-futuras", "/api/compra-futura",
+        "/legado/compras-futuras", "/api/compra-futura",
         "/api/compra-futura/<int:compra_id>",
         "/api/diagnostico/eco-3h",
         "/api/diagnostico/classificacao-ok",
@@ -171,7 +171,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
         "/dimensoes", "/regras", "/contas", "/pendencias",
         "/configuracoes/faturas-pdf",
-        "/usuarios", "/logs",
+        "/usuarios", "/legado/logs",
     }
     assert rotas == esperadas
 

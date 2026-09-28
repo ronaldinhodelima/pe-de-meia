@@ -3639,5 +3639,28 @@ se houver outra gravação no meio (outra aba), é ela que volta.
 própria em `situacao = 'aberta'`. Herdado do Flask, eles eram somados sobre a lista FILTRADA e caíam para
 R$ 0,00 em "Compradas"/"Canceladas".
 
+**Logs de auditoria migrados em 28/09/2026** — segundo piloto, mesmo padrão do Compras Futuras: tela
+Next (`/logs`, `apps/web/src/app/logs/page.tsx`) lendo `GET /logs` do Fastify (`apps/api/src/routes/
+logs.ts`), somente leitura, mesmos filtros e paginação de `views/logs.py`. **`basePath` foi removido**
+do `next.config.mjs` porque o app passou a servir duas páginas de topo (`/compras-futuras`, `/logs`),
+não mais uma só — sem ele, os arquivos do Next voltam a ser pedidos em `/_next/...`, sem prefixo.
+
+**Domínios do Coolify — três caminhos, não um.** O app `pe-de-meia-web-img` responde por
+`pedemeia.brdrive.net` nos caminhos `/compras-futuras`, `/logs` e `/_next` (path prefix, "keep as-is"
+— mesma regra da §13 acima). **Esqueceu o `/_next` e a tela sobe sem estilo nenhum**: foi por isso que
+o corte do `basePath` esperou a rota existir antes do redeploy. `www.pedemeia.brdrive.net` ficou com
+"DNS mismatch" nos três caminhos (nunca teve registro próprio) — não é usado em produção, só o
+`pedemeia.brdrive.net` sem `www`.
+
+**As rotas antigas do Flask viraram `/legado/compras-futuras` e `/legado/logs`** — não apagadas, só
+tiradas do caminho, porque o Traefik intercepta `/compras-futuras` e `/logs` antes de chegarem ao
+Flask e a rota original ficaria inalcançável do jeito que estava (sem aviso nenhum: o clique simplesmente
+cairia no Next). A tela de legado ganhou um aviso linkando para a versão atual. `views/compras.py`
+continua escrevendo em `cartao.compra_futura` normalmente ali — é a mesma tabela do Next, então nada
+duplica; é só uma segunda porta de entrada que ninguém mais usa no dia a dia. O menu do Flask
+(`core.py`, `cls("compras-futuras")`/`cls("logs")`) **continua apontando para `/compras-futuras` e
+`/logs`** de propósito: como o Traefik decide por domínio+caminho, clicar nesses links de dentro do
+Flask já leva para a versão nova — não havia nada para corrigir ali.
+
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.

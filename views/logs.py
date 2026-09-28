@@ -23,9 +23,11 @@ ROTULOS_ACAO = {
 }
 
 
-@bp.route("/logs")
+@bp.route("/legado/logs")
 @requer("usuarios")
 def logs_view():
+    # Rota antiga: so consulta, mantida como referencia agora que /logs e servido
+    # pelo Next (CLAUDE.md secao 13).
     acao = (request.args.get("acao") or "").strip()
     usuario = (request.args.get("usuario") or "").strip()
     resultado = (request.args.get("resultado") or "").strip()
@@ -119,7 +121,7 @@ def logs_view():
     }
 
     def url_pagina(numero):
-        return "/logs?" + urlencode({**filtros, "pagina": numero})
+        return "/legado/logs?" + urlencode({**filtros, "pagina": numero})
 
     return render_template(
         "logs.html",
