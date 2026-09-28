@@ -3618,5 +3618,26 @@ intocado**, é um recurso separado.
 4. Testado `/compras-futuras` de ponta a ponta em produção, confirmado ok, e só então o app antigo foi
    apagado.
 
+**O Desfazer passa pelo Next, nunca direto do navegador ao Flask** (27/09/2026). No iPhone, o
+`fetch('/api/desfazer')` feito pela tela Next **não chegava ao Flask**: nenhuma linha no audit log, e a
+tela recebia uma resposta que não era JSON do Flask. Enquanto isso, tudo o que passava pelo Next
+funcionava (a exclusão, por exemplo). A causa exata não foi achada. A saída foi o mesmo caminho do login:
+navegador → Next (`/compras-futuras/api/desfazer`, com checagem de Origin) → API (`routes/desfazer.ts`)
+→ Flask pela rede interna (`new URL('/api/desfazer', SESSAO_URL)`), levando o cookie de quem pediu e
+`Origin` = host interno, que é o que `_proteger_requisicoes_mutaveis` compara. **A regra continua toda no
+Flask** — a API só repassa. O nome no painel lateral (`GET /api/sessao`) ainda vai direto do navegador;
+se sumir no iPhone, é a mesma causa e o mesmo remédio.
+
+**Aviso de confirmação (toast) da tela Node:** `components/compras/aviso.tsx`. Canto superior direito,
+título + nome do item + "Desfazer", **some em 4s** (decisão do usuário) e **o tempo para com o mouse em
+cima ou o foco dentro** — sem isso o aviso sumia no meio do clique no Desfazer. Erro fica até fechar, e o
+resultado do Desfazer vira aviso novo ("Desfeito" / "Não foi possível desfazer" com o status HTTP). O
+"Desfazer" do aviso desfaz a **última ação da fila do usuário**, não a daquele aviso especificamente —
+se houver outra gravação no meio (outra aba), é ela que volta.
+
+**Totais da tela independem do filtro** (26/09/2026): "Total em aberto" e "Previsto para" vêm de consulta
+própria em `situacao = 'aberta'`. Herdado do Flask, eles eram somados sobre a lista FILTRADA e caíam para
+R$ 0,00 em "Compradas"/"Canceladas".
+
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.
