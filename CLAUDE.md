@@ -3673,5 +3673,31 @@ código continua lá (rotas de saúde e `curl` nos Dockerfiles), então religar 
 religar o healthcheck, descobrir por que a troca de container derrubava o acesso — suspeita: retries/
 start period mal ajustados no web (ficaram em 10 e 5s, não nos valores pretendidos).
 
+**Deploy automático e padrão visual do Node (29/09/2026).**
+
+- **Push no `pe-de-meia-node` publica sozinho:** o job `publicar` do `imagens.yml` chama a API do Coolify
+  (`POST /api/v1/deploy?uuid=...`, segredo `COOLIFY_TOKEN` do GitHub, token só com permissão de deploy)
+  depois de gerar as imagens — sem isso a imagem ficava pronta e ninguém a publicava. **Só reinicia o app
+  que mudou** (web: `apps/web`, `packages`, `pnpm-lock`; api: `apps/api`, `packages`, `pnpm-lock`); sem como
+  comparar (primeiro push, execução manual), publica os dois. Uuids: web `6egfcvbmxm5cyyh8accotlcr`, api
+  `guc9jmplti7eulpybpaar4tm`. Entra no ar ~3 min após o push. O deploy **não espera os testes** (decisão do
+  usuário): teste quebrado avisa por e-mail do GitHub, mas a versão sobe.
+- **Telas Node ficam alinhadas à esquerda:** `<main>` sem `mx-auto`, com `max-w-*` mantido (o usuário
+  recusou tirar a largura máxima). Vale para toda tela nova.
+- **Altura de controle é 30px** (`h-7.5`): botões de barra (`BOTAO_CONTORNO` em `ui/button.tsx`, o mesmo em
+  Filtros, Visualizar, Novo item e Limpar), campos, seletores, pesquisa e `Button` padrão. Margem lateral do
+  botão de barra 8px, texto 14px. Peso de fonte normal nos botões.
+- **Valores em card:** "R$" a 80% e centavos a 60% de opacidade, na cor do número; número de 30px (34px em
+  tela muito larga). Mês de card abreviado ("set/2026") com o número (09/2026) na dica.
+- **Dicas (tooltip)** aparecem em 150 ms e não prendem ao trocar de botão; linhas divisórias do shell têm
+  respiro nas pontas.
+- **Logs:** tabela em 13px; data, origem e ids em monoespaçada 12px. "Visualizar" aplica na hora, "Salvar"
+  grava por navegador e "Resetar" volta ao padrão.
+
+**Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
+(e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
+como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
+§9.4; (5) começar pelas que só leem — Lançamentos é a mais arriscada; (6) validar clicando em produção.
+
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.
