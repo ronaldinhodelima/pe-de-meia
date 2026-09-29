@@ -3662,5 +3662,15 @@ duplica; é só uma segunda porta de entrada que ninguém mais usa no dia a dia.
 `/logs`** de propósito: como o Traefik decide por domínio+caminho, clicar nesses links de dentro do
 Flask já leva para a versão nova — não havia nada para corrigir ali.
 
+**CI e healthcheck do Node (29/09/2026).** O workflow `imagens.yml` do `pe-de-meia-node` roda primeiro
+o job `testes` (Biome, `tsc` da API e do web, Vitest da API contra um Postgres temporário na porta
+55432) e só então gera as imagens (`needs: testes`) — código quebrado não vira imagem, e a falha chega
+por e-mail pelo GitHub. Em pull request só roda o teste. No Coolify, os dois apps têm healthcheck:
+API em `:3001/health` (faz `SELECT 1`; 503 sem banco) e web em `:3000/api/saude` (só "ok", **sem**
+chamar API nem Flask, para uma queda da API não reiniciar o web em cascata). As imagens `node:24-slim`
+não traziam `curl`, que o Coolify usa para checar — foi instalado nos dois Dockerfiles. **Se um
+healthcheck falhar, o Coolify tira o app do ar**: para voltar rápido, desligar em Configuration →
+Healthcheck e Redeploy.
+
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.
