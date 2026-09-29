@@ -3662,15 +3662,16 @@ duplica; é só uma segunda porta de entrada que ninguém mais usa no dia a dia.
 `/logs`** de propósito: como o Traefik decide por domínio+caminho, clicar nesses links de dentro do
 Flask já leva para a versão nova — não havia nada para corrigir ali.
 
-**CI e healthcheck do Node (29/09/2026).** O workflow `imagens.yml` do `pe-de-meia-node` roda primeiro
-o job `testes` (Biome, `tsc` da API e do web, Vitest da API contra um Postgres temporário na porta
-55432) e só então gera as imagens (`needs: testes`) — código quebrado não vira imagem, e a falha chega
-por e-mail pelo GitHub. Em pull request só roda o teste. No Coolify, os dois apps têm healthcheck:
-API em `:3001/health` (faz `SELECT 1`; 503 sem banco) e web em `:3000/api/saude` (só "ok", **sem**
-chamar API nem Flask, para uma queda da API não reiniciar o web em cascata). As imagens `node:24-slim`
-não traziam `curl`, que o Coolify usa para checar — foi instalado nos dois Dockerfiles. **Se um
-healthcheck falhar, o Coolify tira o app do ar**: para voltar rápido, desligar em Configuration →
-Healthcheck e Redeploy.
+**CI e healthcheck do Node (29/09/2026).** O workflow `imagens.yml` do `pe-de-meia-node` tem o job
+`testes` (Biome, `tsc` da API e do web, Vitest da API contra Postgres temporário na porta 55432) rodando
+**em paralelo** com a geração das imagens — a falha chega por e-mail pelo GitHub, mas não trava a imagem.
+A primeira versão travava (`needs: testes`) e o **healthcheck do Coolify** estava ligado nos dois apps
+(API `:3001/health` com `SELECT 1`; web `:3000/api/saude`). Resultado: publicação lenta e o site ficando
+2–3 minutos instável a cada deploy — **os dois foram desligados no mesmo dia** a pedido do usuário. O
+código continua lá (rotas de saúde e `curl` nos Dockerfiles), então religar é só: `needs: testes` no job
+`imagem` e **Enable** em Configuration → Healthcheck de cada app (porta, caminho, intervalo 15s). Antes de
+religar o healthcheck, descobrir por que a troca de container derrubava o acesso — suspeita: retries/
+start period mal ajustados no web (ficaram em 10 e 5s, não nos valores pretendidos).
 
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.
