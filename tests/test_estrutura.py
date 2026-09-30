@@ -167,7 +167,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/api/faturas/ok-pendente",
         "/api/fatura/<int:fatura_id>/conferir-pela-fatura",
         "/relatorios/fatura-anterior/<int:backup_id>/arquivo",
-        "/dre", "/investimentos",
+        "/dre", "/legado/investimentos",
         "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
         "/dimensoes", "/regras", "/contas", "/legado/pendencias",
         "/configuracoes/faturas-pdf",

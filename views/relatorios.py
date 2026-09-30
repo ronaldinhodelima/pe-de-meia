@@ -3233,7 +3233,8 @@ def baixar_fatura_anterior(backup_id):
     )
 
 
-@bp.route("/investimentos")
+# /investimentos e servido pelo Next (CLAUDE.md secao 13); esta fica so como referencia.
+@bp.route("/legado/investimentos")
 @requer("relatorios")
 def investimentos_view():
     conn = get_conn()

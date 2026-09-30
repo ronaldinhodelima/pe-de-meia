@@ -3706,6 +3706,17 @@ que leva para lá, e a legada avisa que a consulta mudou. **A API repete duas ta
 arquivo nunca escreve no banco; o teste "compra futura nunca vira resultado" deixou de proibir a leitura da
 view `lancamento_financeiro` apenas neste arquivo. Próximo passo natural: mover as ações, uma a uma.
 
+**Investimentos migrada em 30/09/2026 — leitura pura.** `/investimentos` é servido pelo Next
+(`apps/web/src/app/investimentos`, API `GET /investimentos` em `apps/api/src/routes/investimentos.ts`,
+permissão `relatorios`); a rota do Flask virou `/legado/investimentos` e o path foi adicionado ao domínio
+do app web no Coolify. Não há ação de gravação nesta tela, então nada ficou para trás. A conta é a mesma
+da `investimentos_view()`: posição = `cartao.investimento` com saldo > 0; evolução = a **última posição de
+cada investimento em cada mês** (uma data máxima única do mês omitiria produtos e reduziria o patrimônio),
+recentes primeiro, com a variação no mês mais novo. **Saldo é patrimônio e não entra no DRE** (§1.1);
+só rendimento e IR entram. `MESES_ABREV` está repetido no TypeScript. O componente de tabela de leitura
+(`ui/tabela-simples.tsx`) e o de valor com "R$" e centavos apagados (`Valor`) são reaproveitados de Pendências
+e Compras Futuras.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
