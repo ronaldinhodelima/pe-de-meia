@@ -3694,6 +3694,18 @@ start period mal ajustados no web (ficaram em 10 e 5s, não nos valores pretendi
 - **Logs:** tabela em 13px; data, origem e ids em monoespaçada 12px. "Visualizar" aplica na hora, "Salvar"
   grava por navegador e "Resetar" volta ao padrão.
 
+**Pendências migrada em 29/09/2026 — só a LEITURA.** `/pendencias` é servido pelo Next
+(`apps/web/src/app/pendencias`, API `GET /pendencias` em `apps/api/src/routes/pendencias.ts`, permissão
+`cadastros`); o caminho foi adicionado ao domínio `pedemeia.brdrive.net` do app web no Coolify (Domains →
+Add domain, domínio + path; o `www` nasce junto). As **ações** (definir natureza, em lote, vincular centro
+de custo, ocultar, definir categoria, "seguir a categoria", consenso) **ficam no Flask em
+`/legado/pendencias`**, porque gravam com Desfazer (§9.4); a tela nova tem o botão "Resolver pendências"
+que leva para lá, e a legada avisa que a consulta mudou. **A API repete duas tabelas do `core.py`**:
+`CATEGORIA_PT` (nomes em português) e `NATUREZAS` (rótulos) — mudou uma no Flask, mude a outra em
+`pendencias.ts` (os apelidos gravados em `cartao.categoria` já valem sozinhos). Teste da API garante que o
+arquivo nunca escreve no banco; o teste "compra futura nunca vira resultado" deixou de proibir a leitura da
+view `lancamento_financeiro` apenas neste arquivo. Próximo passo natural: mover as ações, uma a uma.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da

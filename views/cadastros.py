@@ -1400,7 +1400,9 @@ def _volta_da_natureza(cur, categoria):
             "onde": {"categoria": categoria}}
 
 
-@bp.route("/pendencias", methods=["GET", "POST"])
+# /pendencias e servido pelo Next (CLAUDE.md secao 13), so leitura. As ACOES (natureza,
+# centro de custo, ocultar, consenso) continuam aqui, com Desfazer.
+@bp.route("/legado/pendencias", methods=["GET", "POST"])
 @requer("cadastros")
 def pendencias_view():
     conn = get_conn()

@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block conteudo %}
 
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  A consulta desta tela mudou para a <a href="/pendencias">versão nova</a>. As ações continuam aqui.
+</div>
+
 {% if not pend.total %}
   <div style="font-size:var(--fonte-md);color:var(--good);margin-bottom:16px">
     ✓ Nenhuma pendência de classificação. Os números do DRE estão consistentes.

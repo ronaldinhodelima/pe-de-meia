@@ -169,7 +169,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/relatorios/fatura-anterior/<int:backup_id>/arquivo",
         "/dre", "/investimentos",
         "/categorias", "/grupos", "/api/centro-custo", "/api/desfazer",
-        "/dimensoes", "/regras", "/contas", "/pendencias",
+        "/dimensoes", "/regras", "/contas", "/legado/pendencias",
         "/configuracoes/faturas-pdf",
         "/usuarios", "/legado/logs",
     }
