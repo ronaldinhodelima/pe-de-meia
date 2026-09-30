@@ -1129,7 +1129,9 @@ def api_centro_custo():
     return jsonify({"ok": True, "aviso": aviso, "estado": estado})
 
 
-@bp.route("/contas", methods=["GET", "POST"])
+# /contas e servido pelo Next (CLAUDE.md secao 13), com as mesmas tres gravacoes e Desfazer.
+# Esta fica como referencia e continua gravando igual (mesmas tabelas).
+@bp.route("/legado/contas", methods=["GET", "POST"])
 @requer("cadastros")
 def contas_view():
     """Configuracoes de Contas / Cartao - centraliza tudo que descreve a origem do

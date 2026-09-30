@@ -3730,6 +3730,20 @@ Paulo (`make_timestamptz`), como `intervalo_ano_local`. **`apps/api/src/categori
 `CATEGORIA_PT` e o carregamento de apelidos/ocultas, usados por Pendências e DRE (antes só Pendências).
 A tela "Centro de Custos" propriamente dita (`/grupos`, arrastar e soltar) segue no Flask.
 
+**Contas e cartões migrada em 30/09/2026 — primeira tela COM gravação.** `/contas` é servido pelo Next
+(`apps/web/src/app/contas`, API `GET /contas` e `PUT /contas/{titular,nome-curto,cartao}` em
+`apps/api/src/routes/contas.ts`, permissão `cadastros`); a rota do Flask virou `/legado/contas` e continua
+gravando igual nas mesmas tabelas. **As três gravações seguem o contrato do Flask:** cada uma entra na fila
+do Desfazer (§9.4) com a volta do estado ANTERIOR (sem apelido anterior, desfazer é `delete`, nunca um
+valor inventado; titular tem `insert` + `update` porque a ação pode ter apagado a linha) e na auditoria com
+antes/depois. **O Desfazer é executado pelo Flask** (`/compras-futuras/api/desfazer` → API → Flask), por isso
+a lista branca do Node (`audit.ts`) precisa ter as tabelas `cartao_nome`, `item_titular` e `conta` — e a do
+Flask já tinha. Melhoria sobre o Flask: gravar o MESMO valor não registra nada (não enche a fila do
+Desfazer nem a auditoria). Testado em produção: gravei um nome curto, e o Desfazer devolveu o dado.
+`apps/api/src/origens.ts` porta `detectar_banco`, `nome_curto_origem`, `origem_label`, `carregar_origens` e
+a tabela de selos — **mudou o selo ou o nome padrão no Flask, mude lá também**. Menu: o item "Contas e
+cartões" (antes "Configurações") agora é tela interna, visível só para `cadastros`.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
