@@ -121,7 +121,8 @@ def _montar_historico_investimentos(historico):
     return list(reversed(linhas))
 
 
-@bp.route("/dre")
+# /dre e servido pelo Next (CLAUDE.md secao 13); esta fica so como referencia.
+@bp.route("/legado/dre")
 @requer("relatorios")
 def dre():
     ano = request.args.get("ano") or str(datetime.now().year)

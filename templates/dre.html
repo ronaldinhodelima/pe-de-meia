@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
 {% block conteudo %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou de lugar. A versão atual é <a href="/dre">DRE / Centro de Custos</a>; esta fica só como referência.
+</div>
 {% if pendencias and pendencias.total %}
   <div style="background:var(--bad-soft);border:1px solid var(--bad);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:var(--fonte-md);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span>⚠</span>
@@ -23,7 +26,7 @@
 {% endif %}
 
 <div class="filters">
-  <form action="/dre" method="get">
+  <form action="/legado/dre" method="get">
     <label>Ano</label>
     <select name="ano" onchange="this.form.submit()">
       {% for a in anos %}

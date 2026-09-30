@@ -334,7 +334,7 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
     # "/" so redireciona desde que a Resumida saiu (10/09/2026); a tela de
     # lancamentos e /lancamentos/fatura - que nem estava nesta lista.
     rotas = (
-        "/lancamentos/fatura", "/relatorios", "/dre", "/legado/investimentos", "/legado/logs",
+        "/lancamentos/fatura", "/relatorios", "/legado/dre", "/legado/investimentos", "/legado/logs",
         "/legado/pendencias", "/categorias", "/grupos", "/dimensoes", "/contas",
         "/regras", "/usuarios",
     )

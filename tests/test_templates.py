@@ -74,7 +74,7 @@ class TestDRE:
 
     def test_filtro_de_ano_envia_formulario_sem_montar_url_no_javascript(self, ctx):
         html = render_template("dre.html", **{**self.BASE, "pendencias": None})
-        assert '<form action="/dre" method="get">' in html
+        assert '<form action="/legado/dre" method="get">' in html
         assert 'name="ano"' in html
         assert "window.location" not in html
 

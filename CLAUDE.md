@@ -3717,6 +3717,19 @@ só rendimento e IR entram. `MESES_ABREV` está repetido no TypeScript. O compon
 (`ui/tabela-simples.tsx`) e o de valor com "R$" e centavos apagados (`Valor`) são reaproveitados de Pendências
 e Compras Futuras.
 
+**DRE / Centro de Custos migrada em 30/09/2026 — leitura pura.** `/dre` é servido pelo Next
+(`apps/web/src/app/dre`, API `GET /dre?ano=` em `apps/api/src/routes/dre.ts`, permissão `relatorios`; o
+alerta de pendências só vai a quem tem `cadastros`); a rota do Flask virou `/legado/dre` e o path foi
+adicionado ao domínio do app web no Coolify. **A API repete as regras de dinheiro do `core.py`:**
+`JOIN_NATUREZA`, `VAL_DESPESA`, `NATUREZA_SQL` (fluxo vira receita/despesa pela direção) e
+`CENTRO_REGRA_RESOLVIDA_SQL` (vence a regra mais específica; empate pelo id). Mexeu em qualquer uma no
+Flask, mude em `dre.ts` — o DRE é onde classificação errada vira número errado (§1.1). Conferido em
+produção contra a tela antiga: receitas R$ 449.192,53, despesas R$ 260.326,78, resultado R$ 188.865,75,
+investido R$ 285.865,28 (2026) e todos os meses, dimensões e centros idênticos. O ano civil é o de São
+Paulo (`make_timestamptz`), como `intervalo_ano_local`. **`apps/api/src/categorias.ts`** guarda
+`CATEGORIA_PT` e o carregamento de apelidos/ocultas, usados por Pendências e DRE (antes só Pendências).
+A tela "Centro de Custos" propriamente dita (`/grupos`, arrastar e soltar) segue no Flask.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
