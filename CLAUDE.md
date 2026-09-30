@@ -3744,6 +3744,17 @@ Desfazer nem a auditoria). Testado em produção: gravei um nome curto, e o Desf
 a tabela de selos — **mudou o selo ou o nome padrão no Flask, mude lá também**. Menu: o item "Contas e
 cartões" (antes "Configurações") agora é tela interna, visível só para `cadastros`.
 
+**Padrão de campos e botões do Next (30/09/2026) — definido por Logs e Compras futuras.** Uma família só,
+30px de altura, cantos `rounded-lg`, texto 14px: **campo** (`ui/input`, `Select`, `campo-data`,
+`selecao-multipla`, busca) com borda leve e **10px de respiro** (antes o `Input` tinha 6px e o `Select` 10px,
+dentro das próprias telas-modelo), placeholder `text-dica`; **botão de contorno** (`BOTAO_CONTORNO`) para
+ações da barra e "Novo item"/"Adicionar"; **botão primário** (`Button`) para enviar formulário, um por tela;
+**ghost** para "Fechar"; **botão só-ícone** (`ui/botao-icone`, `BotaoIcone`) de 30px e contorno colorido para
+ação em linha — inclusive **salvar (check verde) e cancelar (X) de edição em linha**; **pílula**
+(`ui/pilula`) para alternar filtro (situação, ano do DRE); ícone-botão do shell com 30px. Em formulário o
+rótulo vai acima do campo (`compras/campo.tsx`). **Tela nova usa esses componentes; não escreve classe de
+campo ou botão à mão.** Fica de fora de propósito o Flask e as colunas/controles internos da tabela de Logs.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
