@@ -3775,6 +3775,16 @@ recolhido, com resumo (conta = só conta corrente) e lápis só com o card abert
 para depois: hoje só existe a conta fixa `CONTA_MANUAL_ID`, e uma segunda exigiria mexer no lançamento manual
 do Flask.
 
+**Padrão de acesso pelo celular — tabela que não cabe (02/10/2026, decisão do usuário).** Toda tabela
+mais larga que a tela rola de lado DENTRO do próprio bloco (a página nunca rola) e mostra uma **sombra na
+borda direita** enquanto há colunas escondidas, que some ao chegar no fim. Componente único:
+`ui/rolagem-lateral.tsx` (`RolagemLateral`), já embutido em `ui/tabela-simples.tsx` (com a 1ª coluna fixa
+no celular), em `ui/table.tsx` e na tabela de Logs — **tabela nova usa um desses, nunca
+`overflow-x-auto` solto.** O `min-w-0` do componente é o que faz a rolagem existir: dentro de grid/flex,
+sem ele o bloco cresce até a largura da tabela e o card (`overflow-hidden`) só corta as colunas — foi
+assim que a tabela do DRE ficou sem rolar no celular. Transformar tabela em cartões no celular foi
+recusado (28/09/2026).
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
