@@ -3775,6 +3775,17 @@ recolhido, com resumo (conta = só conta corrente) e lápis só com o card abert
 para depois: hoje só existe a conta fixa `CONTA_MANUAL_ID`, e uma segunda exigiria mexer no lançamento manual
 do Flask.
 
+**Dimensões migrada em 02/10/2026.** `/dimensoes` é servido pelo Next (`apps/web/src/app/dimensoes`, API
+`apps/api/src/routes/dimensoes.ts`, permissão `cadastros`); a rota do Flask virou `/legado/dimensoes`.
+Criar/renomear/excluir dimensão e valor, teto mensal/anual com barra de gasto, ícone, portfólio padrão (só
+na dimensão Projeto) e a lista dos lançamentos que travam a exclusão (`GET /dimensoes/lancamentos`, porte de
+`/api/dimensao-lancamentos`). Mesmo SQL e mesma volta no Desfazer do Flask, com duas melhorias: gravar o
+mesmo valor não registra nada, e excluir valor guarda também o `portfolio_valor_id` na volta. A trava de
+exclusão conta pela view financeira, igual ao Flask (defeito latente da §8.4, mantido de propósito). O
+gasto do teto usa o mês/ano de São Paulo (o Flask usava o relógio do servidor). `JOIN_NATUREZA`,
+`VAL_DESPESA` e `NATUREZA_SQL` agora são exportados de `dre.ts` — não copiar uma terceira vez. Conferido em
+produção: os 43 números de uso e o teto de Viagens idênticos aos do Flask.
+
 **Padrão de acesso pelo celular — tabela que não cabe (02/10/2026, decisão do usuário).** Toda tabela
 mais larga que a tela rola de lado DENTRO do próprio bloco (a página nunca rola) e mostra uma **sombra na
 borda direita** enquanto há colunas escondidas, que some ao chegar no fim. Componente único:
