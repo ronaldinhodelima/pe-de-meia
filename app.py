@@ -17,6 +17,7 @@ from core import (
     registrar_auditoria,
     rotulo_valor_dimensao,
     sanitizar_dados_auditoria,
+    recarregar_categorias_db,
 )
 from views import auth, sistema, lancamentos, relatorios, cadastros, compras, usuarios, logs
 
@@ -56,6 +57,22 @@ def _recusar_corpo_excessivo_antes_de_processar():
     if limite and request.content_length and request.content_length > limite:
         return _arquivo_grande(None)
     return None
+
+
+# Apelidos e categorias ocultas moram em memoria (secao 2.2) e so eram relidos
+# quando o PROPRIO Flask gravava. O servico Node (Pendencias) e o Desfazer tambem
+# gravam essas tabelas; sem reler, o Flask seguiria mostrando categoria ocultada.
+# Releitura a cada 15 s: duas consultas pequenas, so na requisicao que vencer o prazo.
+_CATEGORIAS_RELIDAS_EM = [time.monotonic()]
+_CATEGORIAS_PRAZO_S = 15
+
+
+@app.before_request
+def _reler_categorias_de_tempos_em_tempos():
+    agora = time.monotonic()
+    if agora - _CATEGORIAS_RELIDAS_EM[0] >= _CATEGORIAS_PRAZO_S:
+        _CATEGORIAS_RELIDAS_EM[0] = agora
+        recarregar_categorias_db()
 
 
 @app.route("/favicon.ico")

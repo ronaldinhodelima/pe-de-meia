@@ -3704,7 +3704,14 @@ que leva para lá, e a legada avisa que a consulta mudou. **A API repete duas ta
 `CATEGORIA_PT` (nomes em português) e `NATUREZAS` (rótulos) — mudou uma no Flask, mude a outra em
 `pendencias.ts` (os apelidos gravados em `cartao.categoria` já valem sozinhos). Teste da API garante que o
 arquivo nunca escreve no banco; o teste "compra futura nunca vira resultado" deixou de proibir a leitura da
-view `lancamento_financeiro` apenas neste arquivo. Próximo passo natural: mover as ações, uma a uma.
+view `lancamento_financeiro` apenas neste arquivo. **Ações migradas em 02/10/2026** (`apps/api/src/routes/pendencias-acoes.ts`, tela com seletor + ✓):
+definir natureza (uma e "todas como"), vincular centro de custo padrão, limpar natureza manual, definir
+categoria de lançamento sem categoria e ocultar — mesmo SQL e mesma volta no Desfazer de
+`pendencias_view()`. Em `cartao.transacao` só tocam `categoria`/`categoria_manual`/`regra_aplicada_id`
+(de quem está SEM categoria) e `natureza`; teste da API proíbe tocar OK, valor e data. **Fica no Flask
+só o consenso** ("Completar pela conferência", botão leva a `/legado/pendencias`). Como agora o Node
+grava `categoria_oculta`, o Flask passou a reler apelidos e ocultas **a cada 15 s** (`before_request`
+em `app.py`) — antes só relia quando ele mesmo gravava, e nem o Desfazer de "ocultar" atualizava a memória.
 
 **Investimentos migrada em 30/09/2026 — leitura pura.** `/investimentos` é servido pelo Next
 (`apps/web/src/app/investimentos`, API `GET /investimentos` em `apps/api/src/routes/investimentos.ts`,
