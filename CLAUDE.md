@@ -3755,6 +3755,19 @@ ação em linha — inclusive **salvar (check verde) e cancelar (X) de edição 
 rótulo vai acima do campo (`compras/campo.tsx`). **Tela nova usa esses componentes; não escreve classe de
 campo ou botão à mão.** Fica de fora de propósito o Flask e as colunas/controles internos da tabela de Logs.
 
+**Cards, dicas e Contas (01–02/10/2026).** Todo card de valor usa `ui/cartao-valor.tsx` (`CartaoValor`,
+desenho exato de Compras: `Card size="sm"`, texto e ícone de 40px a 13px da borda) e todo card de seção usa
+`ui/cartao-secao.tsx`; Investimentos tem "Posição" e "Evolução" sem moldura, só linha em cima. **Dica (tooltip)
+é sempre `ui/dica.tsx` (150 ms) — atributo `title` está proibido no Next** (o nativo leva >1 s). Contas: cada
+banco é lido por padrão e editado pelo lápis (um ✓ salva o card inteiro, cada campo vira uma ação no Desfazer);
+cartões desenhados como cartão de crédito (135px, cor do banco), verso na edição; cartão sem apelido mostra o
+nome da conta; **cartão "antigo" = sem compra nova há 30 dias** (parcela futura e parcela 2/N em diante não
+contam; se nenhum cartão da conta tiver uso, todos ficam "em uso") e vai para "Cartões antigos". Não há mais
+cadastro de cartão avulso no Next (cartões vêm do Pluggy; a rota da API continua). No celular cada banco nasce
+recolhido, com resumo (conta = só conta corrente) e lápis só com o card aberto. "Adicionar conta manual" ficou
+para depois: hoje só existe a conta fixa `CONTA_MANUAL_ID`, e uma segunda exigiria mexer no lançamento manual
+do Flask.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
