@@ -335,7 +335,7 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
     # lancamentos e /lancamentos/fatura - que nem estava nesta lista.
     rotas = (
         "/lancamentos/fatura", "/relatorios", "/legado/dre", "/legado/investimentos", "/legado/logs",
-        "/legado/pendencias", "/categorias", "/grupos", "/dimensoes", "/legado/contas",
+        "/legado/pendencias", "/categorias", "/grupos", "/legado/dimensoes", "/legado/contas",
         "/regras", "/usuarios",
     )
 
@@ -373,14 +373,14 @@ def test_renomear_dimensao_trata_nome_repetido_sem_erro_500(sistema_real):
     cliente = webapp.app.test_client()
     _login(cliente)
     resposta = cliente.post(
-        "/dimensoes",
+        "/legado/dimensoes",
         data={"acao": "editar_dimensao", "dimensao_id": dimensao_a, "nome": nome_b},
     )
     assert resposta.status_code == 200
     assert "Já existe uma dimensão" in resposta.get_data(as_text=True)
 
     resposta = cliente.post(
-        "/dimensoes",
+        "/legado/dimensoes",
         data={"acao": "editar_dimensao", "dimensao_id": dimensao_a, "nome": nome_novo},
     )
     assert resposta.status_code == 200

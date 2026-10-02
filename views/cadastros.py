@@ -109,7 +109,7 @@ def _categorias_para_regras():
     )
 
 
-@bp.route("/dimensoes", methods=["GET", "POST"])
+@bp.route("/legado/dimensoes", methods=["GET", "POST"])
 @requer("cadastros")
 def dimensoes_view():
     conn = get_conn()
