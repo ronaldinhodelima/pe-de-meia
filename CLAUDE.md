@@ -3834,7 +3834,7 @@ aberto" de Compras futuras saiu do verde. O Flask segue com a §7.6 antiga.
 
 **Lista longa = busca no próprio campo (decisão do usuário, 03/10/2026).** `ui/selecao-busca.tsx`
 (`SelecaoBusca`): o campo vira a busca, filtra ao digitar ignorando acento e caixa, setas andam, Enter
-escolhe, Esc fecha. Destaque da opção sob o cursor/teclado: cinza escuro suave com barra cinza escura à
+escolhe, Esc fecha. Destaque da opção sob o cursor/teclado: fundo cinza a 9% com barra cinza (35%) à
 esquerda (`DESTAQUE_OPCAO`, o mesmo nos filtros de várias opções de Logs); a escolhida leva ✓ cinza à
 direita. Lista curta (natureza, 6 opções) continua no `Select` comum; acima de 10 opções, `SelecaoBusca`.
 
