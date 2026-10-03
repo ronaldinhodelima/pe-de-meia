@@ -3786,6 +3786,25 @@ gasto do teto usa o mês/ano de São Paulo (o Flask usava o relógio do servidor
 `VAL_DESPESA` e `NATUREZA_SQL` agora são exportados de `dre.ts` — não copiar uma terceira vez. Conferido em
 produção: os 43 números de uso e o teto de Viagens idênticos aos do Flask.
 
+**Categorias migrada em 03/10/2026.** `/categorias` é servido pelo Next (`apps/web/src/app/categorias`, API
+`apps/api/src/routes/categorias.ts`, permissão `cadastros`); a rota do Flask virou `/legado/categorias`.
+Um card por natureza (Despesa, Receita, Depende da direção, Investimento, Aquisição de bem, Transferência),
+com quantidade e total no resultado; o lápis edita nome, natureza e "mover lançamentos para" na própria
+tabela; lançamentos em sub-linha (todos os usos, marcando os fora do resultado); "+" no fim cria com nome
+**e natureza**. Mesmo SQL e mesma volta no Desfazer do Flask (mover guarda os ids lidos ANTES), com três
+diferenças, todas para o lado seguro: (1) a trava de exclusão conta TODO uso (2025, duplicado, partes de
+rateio) — o Flask contava só o resultado e deixaria lançamento antigo com categoria oculta; (2) excluir NÃO
+apaga a natureza (a categoria fica oculta com a natureza guardada, o problema da §8.4 não volta); (3)
+renomear categoria que não tinha apelido desfaz apagando o apelido, em vez de gravar a tradução. A API
+repete `CATEGORIAS_EXTRA` e `chave_alfa` do `core.py` (`apps/api/src/categorias.ts`) — mudou lá, mude
+aqui. Conferido em produção: as 76 categorias com o mesmo grupo, quantidade e total do Flask.
+
+**Lista de lançamentos de um valor/categoria mostra TODOS os usos.** A view
+`lancamento_financeiro_dimensao` não tem filtro nenhum (2025, duplicado, substituído entram), e a §8.4
+dizia o contrário. Contar por ela e listar pelo resultado dava "2 lançamentos" com lista vazia (Apto
+Curitiba Metropolitan, só boletos de 2025). Hoje contagem e lista usam a mesma base, com a etiqueta "fora
+do resultado". A trava de exclusão ficou mais rígida que o descrito na §8.4 — o lado seguro.
+
 **Padrão de acesso pelo celular — tabela que não cabe (02/10/2026, decisão do usuário).** Toda tabela
 mais larga que a tela rola de lado DENTRO do próprio bloco (a página nunca rola) e mostra uma **sombra na
 borda direita** enquanto há colunas escondidas, que some ao chegar no fim. Componente único:
