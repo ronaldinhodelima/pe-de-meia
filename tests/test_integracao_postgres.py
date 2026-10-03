@@ -336,7 +336,7 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
     rotas = (
         "/lancamentos/fatura", "/relatorios", "/legado/dre", "/legado/investimentos", "/legado/logs",
         "/legado/pendencias", "/legado/categorias", "/grupos", "/legado/dimensoes", "/legado/contas",
-        "/regras", "/usuarios",
+        "/legado/regras", "/usuarios",
     )
 
     for rota in rotas:

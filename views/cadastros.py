@@ -395,7 +395,7 @@ def dimensoes_view():
     )
 
 
-@bp.route("/regras", methods=["GET", "POST"])
+@bp.route("/legado/regras", methods=["GET", "POST"])
 @requer("cadastros")
 def regras_view():
     conn = get_conn()

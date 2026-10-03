@@ -3862,6 +3862,18 @@ Desfazer ao gravar, e isso atualiza o número junto.
 `:3001/health`, intervalo 15 s, timeout 5 s, **3 tentativas, carência inicial 30 s** (antes 5 s e 10
 tentativas — a suspeita da instabilidade de 29/09). O job `imagem` do CI voltou a ter `needs: testes`.
 
+**Regras automáticas migrada em 03/10/2026.** `/regras` é servido pelo Next (`apps/web/src/app/regras`, API
+`apps/api/src/routes/regras.ts`, permissão `cadastros`); a rota do Flask virou `/legado/regras` e o path foi
+adicionado ao domínio do app web no Coolify. Criar, editar (no lugar, na própria tabela), excluir e reaplicar,
+com a prévia ao vivo (`GET /regras/previa`) usando a MESMA conta de `aplicar_regras` — texto, valor, origem,
+só pendente, nunca conferido nem categoria manual (§8.1). **A aplicação das regras continua no Flask**
+(`aplicar_regras`, roda ao abrir Lançamentos); o Node só cadastra e "reaplicar" apenas libera os pendentes
+marcados. Mesmo Desfazer do Flask (editar = apagar + recriar a regra com as dimensões) e a exclusão vai para a
+lixeira. Diferença deliberada: categoria é obrigatória (seletor que decide dado gravado começa vazio, §2.2).
+O botão `+` de Lançamentos abre `/regras?transacao=<id>`, que o Next preenche (origem do lançamento incluída).
+A lista de categorias oferecidas repete `_categorias_para_regras()` usando a natureza GRAVADA (sem
+transferência nem bem; investimento entra) em vez da semente do `core.py`.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da

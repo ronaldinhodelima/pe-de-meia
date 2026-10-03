@@ -58,6 +58,9 @@
 {% endmacro %}
 
 {% block conteudo %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="/regras">versão nova</a>. Esta cópia continua funcionando.
+</div>
 {% set novo = prefill|default({'padrao':'','valor_operador':'','valor_limite':'','categoria':'','dimensoes':{}}, true) %}
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px">
   Quando a descrição de um lançamento <strong>pendente</strong> (não conferido) contiver o texto cadastrado aqui,
@@ -108,7 +111,7 @@
             </div>
             {{ sel_dimensoes(r.dims_selecionadas) }}
             <button type="submit" class="btn-primario">Salvar</button>
-            <a href="/regras" class="ver-btn" style="text-decoration:none">Cancelar</a>
+            <a href="/legado/regras" class="ver-btn" style="text-decoration:none">Cancelar</a>
           </form>
         </td></tr>
       {% else %}
@@ -119,7 +122,7 @@
           <td>{{ r.categoria_nome }}</td>
           <td>{{ r.dims_txt }}</td>
           <td style="white-space:nowrap">
-            <a href="/regras?editar={{ r.id }}" class="ver-btn" style="text-decoration:none">Editar</a>
+            <a href="/legado/regras?editar={{ r.id }}" class="ver-btn" style="text-decoration:none">Editar</a>
             <form method="post" style="display:inline" onsubmit="return confirm('Reaplicar essa regra aos lancamentos pendentes?')">
               <input type="hidden" name="acao" value="reaplicar_regra">
               <input type="hidden" name="regra_id" value="{{ r.id }}">

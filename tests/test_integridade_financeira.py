@@ -86,7 +86,7 @@ def test_regra_permite_investimento_mas_nao_transferencia_neutra():
     assert "Credit card payment" not in categorias
 
     texto = (Path(__file__).parent.parent / "views" / "cadastros.py").read_text(encoding="utf-8")
-    trecho_regras = texto.split('@bp.route("/regras"', 1)[1].split('@bp.route("/api/regras/preview"', 1)[0]
+    trecho_regras = texto.split('@bp.route("/legado/regras"', 1)[1].split('@bp.route("/api/regras/preview"', 1)[0]
     assert "todas_categorias = _categorias_para_regras()" in trecho_regras
 
 
