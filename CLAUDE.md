@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 18/09/2026 · **Schema:** migração 69 · **Testes:** 485 aprovados, 10 ignorados
+**Última revisão:** 18/09/2026 · **Schema:** migração 70 · **Testes:** 485 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -3552,6 +3552,7 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 67 | `fatura_arquivo_backup`: a versão anterior do arquivo, guardada a cada substituição (§6.8) |
 | 68 | lançamento anterior a 2026 sai do resultado — corte de data na view `lancamento_financeiro` (§4.2) |
 | 69 | troca as descrições que o Pluggy inverteu na compra PAYPAL *LINANTO de 13/06/2026 (compra × IOF), por decisão do usuário; só a descrição (o valor a sincronização reescreve); `descricao_backup_v69` |
+| 70 | `cartao.lixeira`: o que é excluído nas telas do Next, com os passos que o recriam; sai em 30 dias |
 
 ---
 
@@ -3845,6 +3846,21 @@ aberto" de Compras futuras saiu do verde. O Flask segue com a §7.6 antiga.
 escolhe, Esc fecha. Destaque da opção sob o cursor/teclado: fundo cinza a 9% com barra cinza (35%) à
 esquerda (`DESTAQUE_OPCAO`, o mesmo nos filtros de várias opções de Logs); a escolhida leva ✓ cinza à
 direita. Lista curta (natureza, 6 opções) continua no `Select` comum; acima de 10 opções, `SelecaoBusca`.
+
+**Lixeira (03/10/2026, decisão do usuário).** Ícone na barra de cima, ao lado do Desfazer, com o número em
+azul discreto; abre uma gaveta com busca, agrupada por tela. Todo item excluído **numa tela do Next** vai para
+`cartao.lixeira` (migração 70) com os passos que o RECRIAM — o mesmo formato e a mesma lista branca do Desfazer
+(§9.4), gravados na mesma transação da exclusão (`registrarLixeira`, `apps/api/src/lixeira.ts`). Restaurar
+reexecuta os passos (mesmo id); "excluir de vez" só tira a linha da lixeira (o dado já saiu da tabela).
+Sai sozinho em **30 dias** (cada leitura apaga o vencido). **Administrador vê tudo; os demais, só o que
+excluíram.** Se o item já voltou pelo Desfazer, restaurar avisa que nada foi recriado. As exclusões que
+ainda moram no Flask (lançamento manual, regra, usuário) **não** passam pela lixeira (decisão do usuário):
+cada tela migrada entra nela. O contador usa a chave `["desfazer","lixeira"]` — toda tela já avisa o
+Desfazer ao gravar, e isso atualiza o número junto.
+
+**Healthcheck e testes religados (03/10/2026, pedido do usuário).** Web `:3000/api/saude` e API
+`:3001/health`, intervalo 15 s, timeout 5 s, **3 tentativas, carência inicial 30 s** (antes 5 s e 10
+tentativas — a suspeita da instabilidade de 29/09). O job `imagem` do CI voltou a ter `needs: testes`.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral

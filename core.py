@@ -5583,6 +5583,28 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (69);")
             conn.commit()
 
+        if versao_atual < 70:
+            # Lixeira (decisao do usuario, 03/10/2026): todo item excluido nas telas do
+            # Next vai para ca, com os passos que o RECRIAM (mesmo formato do Desfazer,
+            # secao 9.4), e sai sozinho em 30 dias. Restaurar replays os passos; excluir
+            # de vez so' apaga a linha daqui (o dado ja saiu da tabela de origem).
+            # Administrador ve tudo; os demais, so' o que excluiram.
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.lixeira ("
+                "id bigserial PRIMARY KEY, usuario text NOT NULL, tela text NOT NULL, "
+                "rotulo text NOT NULL, detalhe text, restauracao jsonb NOT NULL, "
+                "excluido_em timestamptz NOT NULL DEFAULT now());"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS lixeira_usuario_idx ON cartao.lixeira (usuario, excluido_em DESC);"
+            )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Lixeira',jsonb_build_object('versao',70));"
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (70);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
