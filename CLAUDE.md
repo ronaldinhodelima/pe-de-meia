@@ -1,6 +1,6 @@
 # Pé de Meia — contexto do projeto
 
-**Última revisão:** 18/09/2026 · **Schema:** migração 68 · **Testes:** 485 aprovados, 10 ignorados
+**Última revisão:** 18/09/2026 · **Schema:** migração 69 · **Testes:** 485 aprovados, 10 ignorados
 · **Produção:** https://pedemeia.brdrive.net
 
 Sistema financeiro pessoal/familiar da família Ronaldo. Sincroniza cartão de crédito e conta
@@ -2874,6 +2874,13 @@ movidos para `Credit card payment` e `Transfer - Internal` foi excluída.
 fechar perto de zero — os dois lados se anulando é o que tem de acontecer, e faltavam justamente
 esses créditos do lado do cartão. É a visão nova (§6.3) fazendo o trabalho dela.
 
+**O Pluggy pode trocar as descrições entre duas linhas da mesma compra (03/10/2026).** Na PAYPAL *LINANTO
+de 13/06/2026, "Compra Exterior" veio com R$ 41,99 (o IOF, 3,5% de R$ 1.199,66) e "IOF" com R$ 1.199,66 (a
+compra), os dois com valor original 233,07 USD — e foram conferidos assim. A migração 69 trocou as
+**descrições** (exceção à §4.6, decidida pelo usuário). O **valor** não se troca: a sincronização o reescreve
+de hora em hora; a descrição o UPSERT do worker não toca. Pista para achar outros: IOF de valor maior que a
+própria compra no mesmo instante.
+
 **Excluir categoria APAGA a natureza dela, e isso é uma mina** quando o Pluggy ainda manda aquela
 chave. `Transfer - Internal` chegou a ser sincronizada em 21/07/2026; sem a linha em
 `categoria_natureza`, o próximo lançamento dela cairia em `NATUREZA_PADRAO` = **despesa**
@@ -3544,6 +3551,7 @@ Consultar `cartao.schema_version` e o audit log para o estado real. Migração *
 | 66 | `acao_desfazivel`: o botão Desfazer do topbar (§9.4) |
 | 67 | `fatura_arquivo_backup`: a versão anterior do arquivo, guardada a cada substituição (§6.8) |
 | 68 | lançamento anterior a 2026 sai do resultado — corte de data na view `lancamento_financeiro` (§4.2) |
+| 69 | troca as descrições que o Pluggy inverteu na compra PAYPAL *LINANTO de 13/06/2026 (compra × IOF), por decisão do usuário; só a descrição (o valor a sincronização reescreve); `descricao_backup_v69` |
 
 ---
 

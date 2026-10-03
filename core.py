@@ -5537,6 +5537,52 @@ def migrate():
             cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (68);")
             conn.commit()
 
+        if versao_atual < 69:
+            # Decisao do usuario (03/10/2026): o Pluggy mandou as duas linhas da
+            # compra PAYPAL *LINANTO de 13/06/2026 com as DESCRICOES trocadas -
+            # "Compra Exterior" com R$ 41,99 (que e' o IOF: 3,5% de 1.199,66) e
+            # "IOF" com R$ 1.199,66 (que e' a compra). O valor nao pode ser trocado
+            # (a sincronizacao o reescreve de hora em hora); a descricao pode, porque
+            # o UPSERT do worker nao a toca. Excecao deliberada a regra de que a
+            # descricao do banco pertence ao banco (secao 4.6), decidida pelo
+            # usuario. So' troca se as duas ainda estiverem como vieram; backup
+            # antes, e o OK assinado nao e' tocado.
+            compra = "255b69f2-d72d-476a-aefc-8ad7cf8ad03e"
+            iof = "453762a8-5c44-48e5-97cd-b4b834c8afd6"
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS cartao.descricao_backup_v69 AS "
+                "SELECT transacao_id, descricao, now() AS copiado_em "
+                "FROM cartao.transacao WHERE transacao_id::text = ANY(%s);",
+                ([compra, iof],),
+            )
+            cur.execute(
+                "SELECT transacao_id::text, descricao FROM cartao.transacao "
+                "WHERE transacao_id::text = ANY(%s);",
+                ([compra, iof],),
+            )
+            atual = {r[0]: r[1] or "" for r in cur.fetchall()}
+            trocou = (
+                atual.get(compra, "").startswith("Compra Exterior")
+                and atual.get(iof, "").startswith("IOF")
+            )
+            if trocou:
+                cur.execute(
+                    "UPDATE cartao.transacao SET descricao = %s WHERE transacao_id::text = %s;",
+                    (atual[iof], compra),
+                )
+                cur.execute(
+                    "UPDATE cartao.transacao SET descricao = %s WHERE transacao_id::text = %s;",
+                    (atual[compra], iof),
+                )
+            cur.execute(
+                "INSERT INTO cartao.audit_log (usuario,acao,recurso,detalhes) "
+                "VALUES ('sistema','migracao','Descricoes trocadas pelo Pluggy (PAYPAL LINANTO 13/06/2026)',"
+                "jsonb_build_object('versao',69,'trocou',%s::boolean,'antes',%s::jsonb));",
+                (trocou, json.dumps(atual)),
+            )
+            cur.execute("INSERT INTO cartao.schema_version (versao) VALUES (69);")
+            conn.commit()
+
         cur.close()
         conn.close()
     except Exception as e:
