@@ -3832,6 +3832,12 @@ manda o `sentido` de cada lançamento, calculado por `apps/api/src/sentido.ts` c
 (`VAL_DESPESA` + natureza, `fluxo` pela direção, sem natureza = despesa). Plano não é fato: o "Total em
 aberto" de Compras futuras saiu do verde. O Flask segue com a §7.6 antiga.
 
+**Lista longa = busca no próprio campo (decisão do usuário, 03/10/2026).** `ui/selecao-busca.tsx`
+(`SelecaoBusca`): o campo vira a busca, filtra ao digitar ignorando acento e caixa, setas andam, Enter
+escolhe, Esc fecha. Destaque da opção sob o cursor/teclado: cinza escuro suave com barra cinza escura à
+esquerda (`DESTAQUE_OPCAO`, o mesmo nos filtros de várias opções de Logs); a escolhida leva ✓ cinza à
+direita. Lista curta (natureza, 6 opções) continua no `Select` comum; acima de 10 opções, `SelecaoBusca`.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
