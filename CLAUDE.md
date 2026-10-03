@@ -3869,3 +3869,8 @@ como tela interna, com a permissão certa; (4) tela que grava segue o contrato d
 
 A rota Flask `/compras-futuras` segue no código como rede de segurança até o Node ficar estável — essa
 é a única pendência real que resta desta seção.
+
+**Escala de texto do Next (03/10/2026, decisão do usuário).** Corpo e tabelas **12px**; subtítulo **14px**
+(`Subtitulo`); título de seção/card **16px** (`TituloSecao`, e `CardTitle` de qualquer tamanho); etiqueta
+**10px** (`Etiqueta`). Componentes em `ui/titulos.tsx` — título não usa `text-base`/`text-sm` solto. Ordem de
+um bloco: título (ações à direita) → subtítulo/descrição em cinza → conteúdo.
