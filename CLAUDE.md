@@ -3821,6 +3821,17 @@ do menu lateral (`MENU` em `shell/menu.ts` ordena sozinho — item novo entra no
 sem acento e sem caixa (`localeCompare` pt-BR, `sensitivity: "base"`). Listas financeiras (posição de
 investimento, DRE por valor) seguem a ordem que faz sentido para o número.
 
+**Cor de valores no Next: pelo significado (decisão do usuário, 03/10/2026 — substitui, no Next, a regra
+da §7.6 de que "despesa normal não deve parecer erro").** Vermelho = dinheiro que sai ou prejuízo; verde =
+entra ou lucro; cinza = neutro (patrimônio). Transferência leva o ícone ⇄ (cinza). Valor que subiu ou caiu
+(resultado do mês no DRE, evolução do saldo em Investimentos) leva a seta de tendência num quadradinho suave
+verde/vermelho, sem "+" no positivo. Componente único: `ui/valor-sentido.tsx` (`ValorSentido`,
+`ValorVariacao`) — tela nova usa ele, nunca `text-good`/`text-destructive` escrito à mão num valor. O
+**sinal do banco não diz o lado** (no cartão positivo é gasto; na conta corrente negativo é gasto): a API
+manda o `sentido` de cada lançamento, calculado por `apps/api/src/sentido.ts` com a regra do DRE
+(`VAL_DESPESA` + natureza, `fluxo` pela direção, sem natureza = despesa). Plano não é fato: o "Total em
+aberto" de Compras futuras saiu do verde. O Flask segue com a §7.6 antiga.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
