@@ -1593,7 +1593,7 @@ def pendencias_view():
     )
 
 
-@bp.route("/categorias", methods=["GET", "POST"])
+@bp.route("/legado/categorias", methods=["GET", "POST"])
 @requer("cadastros")
 def categorias_view():
     conn = get_conn()
