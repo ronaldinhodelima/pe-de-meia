@@ -3815,6 +3815,12 @@ sem ele o bloco cresce até a largura da tabela e o card (`overflow-hidden`) só
 assim que a tabela do DRE ficou sem rolar no celular. Transformar tabela em cartões no celular foi
 recusado (28/09/2026).
 
+**Ordem alfabética é o padrão do Next (decisão do usuário, 03/10/2026):** listas de cadastro (categorias,
+valores de dimensão), os cards que as agrupam (naturezas em Categorias, dimensões) e os itens de cada seção
+do menu lateral (`MENU` em `shell/menu.ts` ordena sozinho — item novo entra no lugar certo). Comparação
+sem acento e sem caixa (`localeCompare` pt-BR, `sensitivity: "base"`). Listas financeiras (posição de
+investimento, DRE por valor) seguem a ordem que faz sentido para o número.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
