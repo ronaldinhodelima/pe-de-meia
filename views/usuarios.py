@@ -1,7 +1,7 @@
 """Usuarios e permissoes."""
 import psycopg2
 import psycopg2.extras
-from flask import Blueprint, request, session, render_template
+from flask import Blueprint, jsonify, request, session, render_template
 
 from core import (
     PERFIS,
@@ -162,6 +162,14 @@ def usuarios_view():
         "ultimo_acesso_fmt": _dt(c["ultimo_acesso"]),
     } for c in contas]
 
+    if request.args.get("formato") == "json":
+        # A versao Next da tela (CLAUDE.md §13) le e grava por aqui: a senha (hash) e as
+        # travas de administrador continuam escritas so neste arquivo.
+        return jsonify({
+            "aviso": aviso, "erro": erro, "contas": usuarios,
+            "perfis": {k: {"rotulo": v[0], "permissoes": list(v[1])} for k, v in PERFIS.items()},
+            "permissoes": [{"chave": k, "titulo": t, "descricao": d} for k, (t, d) in PERMISSOES.items()],
+        })
     return render_template(
         "usuarios.html",
         titulo="Usuários e permissões",
