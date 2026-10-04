@@ -3967,6 +3967,17 @@ testes agora espelha o TEXT. Rateio (`/transacoes/:id/rateios`), lançamento man
 `rateios_transacao`, `lancamento_manual`, `excluir_lancamento_manual`, `criar_valor_dimensao_rapido`, mesmas
 mensagens). O repasse decide em `rotaLocal()` (conciliacao.ts) o que o Node atende; o resto ainda vai ao Flask.
 
+**Passo 4 — montagem de Lançamentos no Node, em SOMBRA (04/10/2026).** `routes/lancamentos-periodo.ts`
+(`montarPeriodo`) é o porte de `_render_periodo` e dos auxiliares (janela, status, classificação, rateio,
+situações, procedência, origem, resumo, `calcular_totais_dre_fatura`, lista de faturas) e devolve o mesmo JSON
+de `?formato=json`. A tela AINDA lê do Flask; o Node responde em `/lancamentos/api/sombra` só para comparar.
+Comparador (no navegador, logado): busca `/legado/lancamentos/fatura?formato=json&recorte=periodo&...` e a
+sombra e compara campo a campo (datas por instante, números com tolerância de meio centavo, ignorando o HTML).
+Resultado: 21 recortes 100% iguais — 7 meses, os 12 status, origem, categoria, dimensão, ano inteiro (2.035
+linhas) e o ciclo de uma fatura —, mais faturas do filtro e origens. **Antes de virar a chave faltam:** o
+recorte por fatura (oficial, em andamento e prevista) e os dois efeitos que o Flask roda AO ABRIR a tela
+(`aplicar_regras` e `vincular_pendentes_confirmados`) — sem eles no Node, trocar a leitura pararia as regras.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
