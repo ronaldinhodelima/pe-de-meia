@@ -1654,6 +1654,12 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
             contas_by_id, origem_opcoes, origem_sel,
             onchange="aplicarFiltrosPeriodo()", contagens=qtd_por_origem,
         ),
+        # a mesma lista do chip, em dado puro, para a versao Next (o chip e HTML)
+        origens=[{
+            "id": o[0], "nome": contas_by_id[o[0]]["label"], "tipo": contas_by_id[o[0]]["tipo"],
+            "curto": contas_by_id[o[0]]["label_curto"], "qtd": qtd_por_origem.get(o[0], 0),
+        } for o in origem_opcoes],
+        origem_sel=origem_sel,
         filtros_classificacao=chips_de_classificacao(
             categorias, dimensoes, valores_por_dim, categoria_sel, dim_sel),
         por_categoria=por_categoria,
