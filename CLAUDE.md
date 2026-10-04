@@ -3888,6 +3888,22 @@ regra entra no Desfazer**. A resolução da regra (a mais específica vence; emp
 `CENTRO_REGRA_RESOLVIDA_SQL`/`dre.ts` — a tela só cadastra. Lista de categorias oferecidas: despesa (a natureza
 gravada exclui receita, investimento, bem e transferência; o Flask só excluía as neutras e listava receita como "sem centro").
 
+**Relatórios, Conciliação, Duplicidades e o arquivo da fatura migrados em 04/10/2026.** O caminho
+`/relatorios` inteiro passou para o Next (domínio + path no app web do Coolify): `/relatorios` (modelo 2,
+gráfico ao lado da tabela; API `apps/api/src/routes/relatorios.ts`, porte de `_montar_filtro_relatorio`,
+`relatorios_dados` e `relatorios_lancamentos`, gráfico em SVG sem biblioteca), `/relatorios/conciliar-fatura`
+(modelo 2: lista de faturas à esquerda, conciliação à direita), `/relatorios/duplicidades-fatura` e os
+downloads `/relatorios/fatura/<id>/pdf` e `/relatorios/fatura-anterior/<id>/arquivo`. **O motor da
+conciliação NÃO foi reescrito** (leitura de PDF/OFX em Python, matcher da §6.5, OK da fatura): as duas
+views do Flask respondem também em JSON com `?formato=json` (`_para_json`, o mesmo contexto do template),
+e a API (`routes/conciliacao.ts`) só repassa pela rede interna — leitura, importação (multipart inteiro) e
+as ações já existentes (`/api/fatura-linha/...`, `/api/fatura/...`, `/api/duplicidades/marcar`, lista
+fechada de caminhos), com `Origin` = host interno, como o Desfazer. Mudou regra de conciliação? Muda só no
+Flask; mudou o que a tela mostra? O contexto JSON sai do mesmo `render_template`. As rotas HTML antigas do
+Flask sob `/relatorios` ficaram no código mas inalcançáveis pelo Traefik (o Flask não foi renomeado para
+`/legado` nesta migração, por decisão do usuário). A aplicação das regras automáticas que o `/relatorios`
+do Flask fazia ao abrir não existe no Next — ela continua rodando ao abrir Lançamentos.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
