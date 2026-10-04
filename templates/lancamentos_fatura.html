@@ -187,6 +187,11 @@
 {% endblock %}
 
 {% block conteudo %}
+{% if request.path.startswith('/legado/') %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="{{ request.path[7:] }}">versão nova</a>. Esta cópia continua funcionando.
+</div>
+{% endif %}
 {% if fatura %}
 {% set meses = ('Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro') %}
 {# Opcoes sob demanda (pedido do usuario, 10/09/2026, "como era na Resumida"):

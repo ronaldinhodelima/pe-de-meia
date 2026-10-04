@@ -19,6 +19,7 @@ bp = Blueprint("usuarios", __name__)
 
 
 @bp.route("/usuarios", methods=["GET", "POST"])
+@bp.route("/legado/usuarios", methods=["GET", "POST"])
 @requer("usuarios")
 def usuarios_view():
     conn = get_conn()

@@ -252,6 +252,7 @@ def dre():
 
 
 @bp.route("/relatorios")
+@bp.route("/legado/relatorios")
 @requer("relatorios")
 def relatorios():
     conn = get_conn()
@@ -353,6 +354,7 @@ def relatorios():
 
 
 @bp.route("/relatorios/dados")
+@bp.route("/legado/relatorios/dados")
 @requer("relatorios")
 def relatorios_dados():
     conn = get_conn()
@@ -462,6 +464,7 @@ def relatorios_dados():
 
 
 @bp.route("/relatorios/lancamentos")
+@bp.route("/legado/relatorios/lancamentos")
 @requer("relatorios")
 def relatorios_lancamentos():
     conn = get_conn()
@@ -1149,6 +1152,7 @@ def _quer_json():
 
 
 @bp.route("/relatorios/conciliar-fatura", methods=["GET", "POST"])
+@bp.route("/legado/relatorios/conciliar-fatura", methods=["GET", "POST"])
 @requer("relatorios")
 def conciliar_fatura():
     """Confere se os lancamentos que o Pluggy trouxe para um cartao de credito
@@ -2463,6 +2467,7 @@ def _sincronizar_parcelas_de_agregado(cur, usuario, account_id=None, preview=Fal
 
 
 @bp.route("/relatorios/duplicidades-fatura")
+@bp.route("/legado/relatorios/duplicidades-fatura")
 @requer("relatorios")
 def duplicidades_fatura():
     """Revisao das cobrancas que o Pluggy trouxe e a fatura nao reconhece.

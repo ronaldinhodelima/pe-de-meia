@@ -1701,6 +1701,7 @@ def _conta_credito_padrao(cur, contas_credito):
 
 
 @bp.route("/lancamentos/fatura")
+@bp.route("/legado/lancamentos/fatura")
 @requer("lancamentos_ver")
 def lancamentos_por_fatura():
     """Revisao contabil de uma fatura, sem confundir data de compra com ciclo.

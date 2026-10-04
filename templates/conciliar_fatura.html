@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block conteudo %}
+{% if request.path.startswith('/legado/') %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="{{ request.path[7:] }}">versão nova</a>. Esta cópia continua funcionando.
+</div>
+{% endif %}
 
 {# Registro do que esta tela GRAVOU no banco (pedido do usuario, 17/09/2026).
    Toda acao aqui escreve: importar documento, vincular, desvincular, criar

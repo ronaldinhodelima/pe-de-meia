@@ -1,3 +1,5 @@
+// Na copia /legado/relatorios os dados vem do mesmo prefixo (o /relatorios e do Next).
+const PREFIXO_TELA = window.location.pathname.startsWith('/legado/') ? '/legado' : '';
 // Tela de Relatórios: filtros em chip, gráfico (Chart.js) e totais agrupados.
 // Todo o conteúdo vem por AJAX de /relatorios/dados e /relatorios/lancamentos,
 // então este arquivo nao depende de nada interpolado pelo Python.
@@ -107,7 +109,7 @@ window.addEventListener('popstate', function () {
   window.location.reload();
 });
 function carregarDados(params) {
-  fetch('/relatorios/dados?' + params.toString()).then(r => r.json()).then(renderResultado);
+  fetch(PREFIXO_TELA + '/relatorios/dados?' + params.toString()).then(r => r.json()).then(renderResultado);
 }
 // "Saldo" e o nome certo da visao neutra: ali saida e entrada se somam com o
 // sinal, e o que sobra e o que ainda esta em aberto. Chamar de "total" sugeriria
@@ -205,7 +207,7 @@ function toggleGrupoDetalhe(i) {
   const params = coletarQuery();
   if (g.valor === null || g.valor === undefined) { params.set('valor_none', '1'); }
   else { params.set('valor', g.valor); }
-  fetch('/relatorios/lancamentos?' + params.toString())
+  fetch(PREFIXO_TELA + '/relatorios/lancamentos?' + params.toString())
     .then(r => r.json())
     .then(data => {
       el.dataset.loaded = '1';

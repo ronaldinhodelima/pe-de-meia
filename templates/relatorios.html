@@ -7,6 +7,11 @@
 {% endblock %}
 
 {% block conteudo %}
+{% if request.path.startswith('/legado/') %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="{{ request.path[7:] }}">versão nova</a>. Esta cópia continua funcionando.
+</div>
+{% endif %}
 <div style="font-size:var(--fonte-sm);color:var(--ink-faint);margin-bottom:10px">
   Pagamento de fatura, transferência entre contas próprias, aplicações e compra de bens
   <strong>não são despesa</strong> — só trocam a forma do dinheiro. Por isso ficam fora da visão de Despesas

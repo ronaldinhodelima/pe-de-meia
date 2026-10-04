@@ -9,6 +9,11 @@
 {% endmacro %}
 
 {% block conteudo %}
+{% if request.path.startswith('/legado/') %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="{{ request.path[7:] }}">versão nova</a>. Esta cópia continua funcionando.
+</div>
+{% endif %}
 <div class="cat-breakdown">
   <h3>Novo usuário</h3>
   <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">

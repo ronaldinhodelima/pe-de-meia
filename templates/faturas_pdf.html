@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block conteudo %}
+{% if request.path.startswith('/legado/') %}
+<div style="font-size:var(--fonte-sm);color:var(--ink-soft);margin-bottom:12px">
+  Esta tela mudou para a <a href="{{ request.path[7:] }}">versão nova</a>. Esta cópia continua funcionando.
+</div>
+{% endif %}
 
 <div style="font-size:var(--fonte-md);color:var(--ink-soft);margin-bottom:16px">
   arquivos originais das faturas já conciliadas em <a href="/relatorios/conciliar-fatura">Conciliar fatura</a>.

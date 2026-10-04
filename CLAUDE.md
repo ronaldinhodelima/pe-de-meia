@@ -3927,6 +3927,15 @@ renomeada para `/legado`: o Traefik já não a alcança de fora, mas a API sim. 
 `/lancamentos-novo` redirecionam. Abrir a tela continua aplicando regras e ligando pendente/confirmado (é o
 Flask que monta o JSON).
 
+**Cópias legadas das telas assumidas pelo Next (04/10/2026, pedido do usuário).** Relatórios, Conciliação,
+Duplicidades, Arquivos de fatura, Usuários e Lançamentos ganharam um SEGUNDO endereço no Flask —
+`/legado/relatorios`, `/legado/relatorios/conciliar-fatura`, `/legado/relatorios/duplicidades-fatura`,
+`/legado/configuracoes/faturas-pdf`, `/legado/usuarios`, `/legado/lancamentos/fatura` (+ `/legado/relatorios/dados`
+e `/lancamentos` que o JS do relatório usa) —, com o aviso "Esta tela mudou para a versão nova" só quando
+abertas por ali. O endereço ORIGINAL continua sendo da mesma função, de propósito: é por ele que a API do Next
+lê o JSON pela rede interna. Não remover nenhum dos dois. Links internos dessas cópias que apontam para o
+endereço original caem na versão do Next (comportamento esperado).
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da

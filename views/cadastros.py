@@ -1880,6 +1880,7 @@ def categorias_view():
 
 
 @bp.route("/configuracoes/faturas-pdf", methods=["GET", "POST"])
+@bp.route("/legado/configuracoes/faturas-pdf", methods=["GET", "POST"])
 @requer("cadastros")
 def faturas_pdf_view():
     """Gerencia os PDFs originais das faturas conciliadas (ver
