@@ -3962,7 +3962,10 @@ WHERE); família de parcelas por `fatura_vinculo`; Desfazer com os mesmos rótul
 `/conciliacao/acao` atende `/api/transacao/<id>` no próprio Node; **`LANCAMENTOS_NO_FLASK=1`** na API volta
 para o Flask (rollback). **Armadilha paga no dia:** `transacao_dimensao.transacao_id` é TEXT e o resto é UUID —
 comparar SEMPRE `coluna::text = $id`; o teste usava uuid e passou, produção quebrou por ~6 min. O DDL dos
-testes agora espelha o TEXT. Rateio, manual e cadastro rápido ainda vão ao Flask.
+testes agora espelha o TEXT. Rateio (`/transacoes/:id/rateios`), lançamento manual (`/lancamentos-manuais`) e cadastro rápido
+(`/dimensoes/:id/valor-rapido`) também foram para o Node no mesmo dia (`routes/lancamento-acoes.ts`, portes de
+`rateios_transacao`, `lancamento_manual`, `excluir_lancamento_manual`, `criar_valor_dimensao_rapido`, mesmas
+mensagens). O repasse decide em `rotaLocal()` (conciliacao.ts) o que o Node atende; o resto ainda vai ao Flask.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
