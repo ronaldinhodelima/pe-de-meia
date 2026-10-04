@@ -3915,6 +3915,14 @@ perfil e permissões no card, ⋯ tem trocar senha, desativar e excluir). Toda g
 `?formato=json`; a API (`routes/conciliacao.ts`) repassa o formulário pela rede interna. Fora do Desfazer e
 da lixeira, como já era (§9.4).
 
+**Lançamentos — migração em etapas (iniciada em 04/10/2026, modelo 1).** Toda saída da tela passa por
+`_tela_lancamentos(**contexto)` em `views/lancamentos.py`: HTML como sempre, ou o MESMO contexto em JSON
+com `?formato=json` (`para_json`, agora no `core`). As linhas, situações, pendências, rateio e cards
+continuam montados uma vez só, no Flask. Etapa 1 (só leitura, recorte por período) está no Next em
+`/lancamentos-novo`, endereço de teste — `/lancamentos/fatura` segue no Flask até a etapa 4. Próximas:
+2) edição na linha pelas APIs que já existem (`/api/transacao/<id>`), 3) rateio, lote e manual, 4) virar a
+rota e mover a antiga para `/legado`.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
