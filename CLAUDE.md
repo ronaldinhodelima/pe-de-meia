@@ -3974,8 +3974,11 @@ de `?formato=json`. A tela AINDA lê do Flask; o Node responde em `/lancamentos/
 Comparador (no navegador, logado): busca `/legado/lancamentos/fatura?formato=json&recorte=periodo&...` e a
 sombra e compara campo a campo (datas por instante, números com tolerância de meio centavo, ignorando o HTML).
 Resultado: 21 recortes 100% iguais — 7 meses, os 12 status, origem, categoria, dimensão, ano inteiro (2.035
-linhas) e o ciclo de uma fatura —, mais faturas do filtro e origens. **Antes de virar a chave faltam:** o
-recorte por fatura (oficial, em andamento e prevista) e os dois efeitos que o Flask roda AO ABRIR a tela
+linhas) e o ciclo de uma fatura —, mais faturas do filtro e origens. O recorte por FATURA (`routes/lancamentos-fatura.ts`, `montarFatura`: oficial, em andamento e prevista)
+também bate: **61 de 61** — as 52 faturas/ciclos dos três cartões e 9 filtros dentro delas. Armadilhas pagas:
+bigint de `fatura_vinculo.fatura_linha_id` volta como TEXTO no node-pg (cast `::int`); o Flask põe o PRÓPRIO
+objeto do ciclo em andamento na lista (ganha `url`/`selecionada`), mas o filtro usa a lista simples.
+**Antes de virar a chave faltam** os dois efeitos que o Flask roda AO ABRIR a tela
 (`aplicar_regras` e `vincular_pendentes_confirmados`) — sem eles no Node, trocar a leitura pararia as regras.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
