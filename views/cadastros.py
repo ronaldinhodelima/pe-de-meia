@@ -1066,7 +1066,7 @@ def _aplicar_acao_centro_custo(cur, acao, dados):
     raise ValueError("Ação desconhecida.")
 
 
-@bp.route("/grupos")
+@bp.route("/legado/grupos")
 @requer("cadastros")
 def grupos_view():
     """Centro de Custos: centro > subgrupo > regras de vinculo.

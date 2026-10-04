@@ -335,7 +335,7 @@ def test_todas_as_telas_principais_abrem_no_postgres_real(sistema_real):
     # lancamentos e /lancamentos/fatura - que nem estava nesta lista.
     rotas = (
         "/lancamentos/fatura", "/relatorios", "/legado/dre", "/legado/investimentos", "/legado/logs",
-        "/legado/pendencias", "/legado/categorias", "/grupos", "/legado/dimensoes", "/legado/contas",
+        "/legado/pendencias", "/legado/categorias", "/legado/grupos", "/legado/dimensoes", "/legado/contas",
         "/legado/regras", "/usuarios",
     )
 

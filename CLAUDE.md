@@ -3874,6 +3874,20 @@ O botão `+` de Lançamentos abre `/regras?transacao=<id>`, que o Next preenche 
 A lista de categorias oferecidas repete `_categorias_para_regras()` usando a natureza GRAVADA (sem
 transferência nem bem; investimento entra) em vez da semente do `core.py`.
 
+**Centro de Custos migrado em 04/10/2026.** `/grupos` é servido pelo Next (`apps/web/src/app/grupos`, API
+`apps/api/src/routes/centro-custos.ts`, permissão `cadastros`); a rota do Flask virou `/legado/grupos` e o path foi
+adicionado ao domínio do app web no Coolify. Layout "modelo 1" (escolhido pelo usuário): uma seção por centro, com a
+contagem de regras; dentro, uma tabela com a faixa cinza de cada subgrupo e uma linha por regra (categoria +
+condições de dimensão como etiquetas); arrastar a alça move a regra de subgrupo, e o menu "⋯" tem Editar
+condições, Mover para… (o caminho do celular, onde não há arrastar) e Desvincular. Categorias de despesa sem centro
+ficam numa seção própria: arrastar o chip até um subgrupo vincula (sem condições), arrastar uma regra até lá
+desvincula. Mesmo SQL e mesmo contrato de Desfazer/auditoria do Flask (`/api/centro-custo` continua lá, em
+`/legado/grupos`), com duas melhorias: **excluir centro, subgrupo ou regra entra no Desfazer E na lixeira com tudo o
+que a cascata leva** (subgrupos, regras e condições — no Flask não havia volta), e **trocar as condições de uma
+regra entra no Desfazer**. A resolução da regra (a mais específica vence; empate pelo id) continua em
+`CENTRO_REGRA_RESOLVIDA_SQL`/`dre.ts` — a tela só cadastra. Lista de categorias oferecidas: despesa (a natureza
+gravada exclui investimento, bem e transferência), como no Flask.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
