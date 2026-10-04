@@ -3909,6 +3909,12 @@ por documento, versões anteriores da migração 67 abrindo abaixo dela; API `ro
 permissão `cadastros`). Apagar o arquivo zera só `pdf_arquivo`, com auditoria e confirmação; não entra no
 Desfazer nem na lixeira (§9.4). Os downloads continuam pelo Flask, repassados pelo Next.
 
+**Usuários migrado em 04/10/2026.** `/usuarios` é do Next (modelo 1: um card por usuário; ✎ edita nome,
+perfil e permissões no card, ⋯ tem trocar senha, desativar e excluir). Toda gravação continua em
+`views/usuarios.py` — hash da senha e as travas de administrador —, que responde em JSON com
+`?formato=json`; a API (`routes/conciliacao.ts`) repassa o formulário pela rede interna. Fora do Desfazer e
+da lixeira, como já era (§9.4).
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
