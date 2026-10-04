@@ -3886,7 +3886,7 @@ desvincula. Mesmo SQL e mesmo contrato de Desfazer/auditoria do Flask (`/api/cen
 que a cascata leva** (subgrupos, regras e condições — no Flask não havia volta), e **trocar as condições de uma
 regra entra no Desfazer**. A resolução da regra (a mais específica vence; empate pelo id) continua em
 `CENTRO_REGRA_RESOLVIDA_SQL`/`dre.ts` — a tela só cadastra. Lista de categorias oferecidas: despesa (a natureza
-gravada exclui investimento, bem e transferência), como no Flask.
+gravada exclui receita, investimento, bem e transferência; o Flask só excluía as neutras e listava receita como "sem centro").
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
