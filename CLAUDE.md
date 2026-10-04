@@ -3931,7 +3931,7 @@ Flask que monta o JSON).
 Duplicidades, Arquivos de fatura, Usuários e Lançamentos ganharam um SEGUNDO endereço no Flask —
 `/legado/relatorios`, `/legado/relatorios/conciliar-fatura`, `/legado/relatorios/duplicidades-fatura`,
 `/legado/configuracoes/faturas-pdf`, `/legado/usuarios`, `/legado/lancamentos/fatura` (+ `/legado/relatorios/dados`
-e `/lancamentos` que o JS do relatório usa) —, com o aviso "Esta tela mudou para a versão nova" só quando
+e `/legado/relatorios/lancamentos`, que o JS do relatório usa) —, com o aviso "Esta tela mudou para a versão nova" só quando
 abertas por ali. O endereço ORIGINAL continua sendo da mesma função, de propósito: é por ele que a API do Next
 lê o JSON pela rede interna. Não remover nenhum dos dois. Links internos dessas cópias que apontam para o
 endereço original caem na versão do Next (comportamento esperado).
