@@ -3904,6 +3904,11 @@ Flask sob `/relatorios` ficaram no código mas inalcançáveis pelo Traefik (o F
 `/legado` nesta migração, por decisão do usuário). A aplicação das regras automáticas que o `/relatorios`
 do Flask fazia ao abrir não existe no Next — ela continua rodando ao abrir Lançamentos.
 
+**Arquivos de fatura migrado em 04/10/2026.** `/configuracoes/faturas-pdf` é do Next (modelo 2: uma linha
+por documento, versões anteriores da migração 67 abrindo abaixo dela; API `routes/arquivos-fatura.ts`,
+permissão `cadastros`). Apagar o arquivo zera só `pdf_arquivo`, com auditoria e confirmação; não entra no
+Desfazer nem na lixeira (§9.4). Os downloads continuam pelo Flask, repassados pelo Next.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
