@@ -52,8 +52,13 @@ def _limpar_falhas(chave):
 
 
 @bp.route("/login", methods=["GET", "POST"])
+@bp.route("/legado/login", methods=["GET", "POST"])
 def login():
+    """O formulario de entrada mora no Next (/login) e posta AQUI, em /legado/login: senha,
+    sessao e limite de tentativas continuam so neste arquivo. Vindo do Next (`volta=next`),
+    a recusa volta para a tela dele com o codigo do erro, em vez de renderizar o HTML antigo."""
     error = None
+    do_next = request.form.get("volta") == "next"
     if request.method == "POST":
         u = (request.form.get("usuario", "") or "").strip()
         p = request.form.get("senha", "")
@@ -61,6 +66,8 @@ def login():
         chave_ip = (chave_tentativa[0], "*")
         if (len(_tentativas_recentes(chave_tentativa)) >= _MAX_FALHAS_LOGIN or
                 len(_tentativas_recentes(chave_ip)) >= _MAX_FALHAS_IP):
+            if do_next:
+                return redirect("/login?erro=tentativas")
             return render_template(
                 "login.html", titulo="Entrar",
                 erro="Muitas tentativas. Aguarde 15 minutos e tente novamente.",
@@ -111,6 +118,8 @@ def login():
         # A mesma mensagem para usuario inexistente, senha errada ou conta inativa
         # evita confirmar a um atacante quais logins existem.
         error = "Usuário ou senha inválidos."
+        if do_next:
+            return redirect("/login?erro=invalido")
     return render_template("login.html", titulo="Entrar", erro=error)
 
 

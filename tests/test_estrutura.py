@@ -174,7 +174,7 @@ def test_todas_as_rotas_continuam_registradas():
         "/usuarios", "/legado/logs",
         "/legado/relatorios", "/legado/relatorios/dados", "/legado/relatorios/lancamentos",
         "/legado/relatorios/conciliar-fatura", "/legado/relatorios/duplicidades-fatura",
-        "/legado/configuracoes/faturas-pdf", "/legado/usuarios", "/legado/lancamentos/fatura",
+        "/legado/configuracoes/faturas-pdf", "/legado/usuarios", "/legado/lancamentos/fatura", "/legado/login",
     }
     assert rotas == esperadas
 
