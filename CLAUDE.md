@@ -3936,6 +3936,13 @@ abertas por ali. O endereço ORIGINAL continua sendo da mesma função, de prop�
 lê o JSON pela rede interna. Não remover nenhum dos dois. Links internos dessas cópias que apontam para o
 endereço original caem na versão do Next (comportamento esperado).
 
+**Login migrado em 04/10/2026 — com isso toda tela é do Next.** `/login` é do Next (mesmo desenho do
+`login.html`), sem a moldura do sistema. O formulário posta DIRETO do navegador em `/legado/login` (alias de
+`login()` em `views/auth.py`) com `volta=next`: senha, cookie de sessão assinado e o limite de tentativas por
+IP continuam só no Flask, e nenhuma senha passa pelo servidor do Next. Recusa volta para `/login?erro=invalido`
+ou `?erro=tentativas`; sucesso redireciona para Lançamentos. **Se a tela nova falhar, `/legado/login` (GET)
+ainda mostra o formulário antigo, que funciona sozinho.** `/logout` e `/` continuam no Flask (só redirecionam).
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
