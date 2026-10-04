@@ -3886,3 +3886,16 @@ A rota Flask `/compras-futuras` segue no código como rede de segurança até o 
 (`Subtitulo`); título de seção/card **16px** (`TituloSecao`, e `CardTitle` de qualquer tamanho); etiqueta
 **10px** (`Etiqueta`). Componentes em `ui/titulos.tsx` — título não usa `text-base`/`text-sm` solto. Ordem de
 um bloco: título (ações à direita) → subtítulo/descrição em cinza → conteúdo.
+**Título de coluna de tabela (03/10/2026, decisão do usuário): igual ao corpo — 12px, peso médio, cinza**
+(`text-muted-foreground`), em TODAS as telas; o peso e a cor já separam o título do corpo. Vale para
+`ui/tabela-simples`, `ui/table`, `ui/tabela-configuravel` e as tabelas de Categorias e Dimensões. Logs
+(que era 13px) e Compras futuras (14px) passaram a 12px. A mecânica de tabela de dados — Visualizar,
+ordenar/mover/redimensionar colunas e a gaveta de Filtros — mora em `ui/tabela-configuravel` (Logs e
+Regras); o menu "⋯" de ações de linha, em `ui/menu-acoes`. **Ação de linha NÃO é só no hover** (testado
+e desfeito em 03/10/2026; Categorias manteve o hover que já tinha).
+**Deploy sem erro na tela (04/10/2026):** durante a troca de container o HTML podia vir de uma versão e os
+arquivos JS de outra (ChunkLoadError → "Application error"). `app/global-error.tsx` e `app/error.tsx`
+recarregam a página sozinhos uma vez (no máximo a cada 30 s, `lib/recarregar-na-troca.ts`) e só depois mostram
+o botão Recarregar. Os Dockerfiles copiam só os `package.json` antes do `pnpm install`, para o install ficar
+em cache no build do GitHub (a imagem web levou 1 min 46 s, contra 2 min 18 s). Regras (`/regras`) usa tela
+cheia, sem o limite de largura das outras telas, a pedido do usuário.
