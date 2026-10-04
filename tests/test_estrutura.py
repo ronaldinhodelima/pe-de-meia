@@ -1977,10 +1977,9 @@ def test_todo_recorte_de_lancamentos_entrega_os_filtros_de_classificacao():
         if not isinstance(no, ast.Call):
             continue
         alvo = no.func.attr if isinstance(no.func, ast.Attribute) else getattr(no.func, "id", "")
-        if alvo != "render_template" or not no.args:
-            continue
-        primeiro = no.args[0]
-        if not (isinstance(primeiro, ast.Constant) and primeiro.value == "lancamentos_fatura.html"):
+        # cada recorte sai por `_tela_lancamentos(...)` (que tambem responde em JSON para o
+        # Next); o `render_template(..., **contexto)` dentro dela so repassa
+        if alvo != "_tela_lancamentos":
             continue
         chaves = {kw.arg for kw in no.keywords}
         if "erro" in chaves:

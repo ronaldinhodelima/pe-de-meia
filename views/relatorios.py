@@ -18,6 +18,7 @@ from fatura_ofx import (
     identificar_origem,
 )
 from core import (
+    para_json,
     valor_pt,
     parcela_na_descricao,
     CATEGORIAS_EXTRA,
@@ -1143,23 +1144,6 @@ def _vincular_automatico(cur, fatura_row, usuario):
 
 
 
-def _para_json(valor):
-    """O contexto de uma tela vira JSON para a versao Next (CLAUDE.md §13): Decimal vira
-    numero, data vira AAAA-MM-DD, instante vira ISO. Mesmo dado que o template recebe -
-    a regra continua escrita uma vez so, aqui."""
-    if isinstance(valor, dict):
-        return {str(k): _para_json(v) for k, v in valor.items()}
-    if isinstance(valor, (list, tuple, set)):
-        return [_para_json(v) for v in valor]
-    if isinstance(valor, Decimal):
-        return float(valor)
-    if isinstance(valor, (datetime, date)):
-        return valor.isoformat()
-    if isinstance(valor, (str, int, float, bool)) or valor is None:
-        return valor
-    return str(valor)
-
-
 def _quer_json():
     return request.args.get("formato") == "json"
 
@@ -1789,7 +1773,7 @@ def conciliar_fatura():
     cur.close()
     conn.close()
     if _quer_json():
-        return jsonify(_para_json({
+        return jsonify(para_json({
             "compromissos": compromissos,
             "resumo_extrato": resumo_extrato,
             "tipo_documento": tipo_documento,
@@ -2491,7 +2475,7 @@ def duplicidades_fatura():
     cur.close()
     conn.close()
     if _quer_json():
-        return jsonify(_para_json({
+        return jsonify(para_json({
             **baldes, "pode_editar_duplicidades": pode("lancamentos_editar"),
         }))
     return render_template(

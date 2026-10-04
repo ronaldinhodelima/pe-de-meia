@@ -6749,3 +6749,24 @@ def aviso_pendencias_html(pend):
         '<a href="/pendencias" style="margin-left:auto;color:var(--bad);font-weight:var(--peso-forte)">Revisar agora →</a>'
         '</div>'
     )
+
+
+from datetime import date as date_tipo  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+
+def para_json(valor):
+    """O contexto de uma tela vira JSON para a versao Next (CLAUDE.md §13): Decimal vira
+    numero, data vira AAAA-MM-DD, instante vira ISO. Mesmo dado que o template recebe -
+    a regra continua escrita uma vez so, aqui."""
+    if isinstance(valor, dict):
+        return {str(k): para_json(v) for k, v in valor.items()}
+    if isinstance(valor, (list, tuple, set)):
+        return [para_json(v) for v in valor]
+    if isinstance(valor, Decimal):
+        return float(valor)
+    if isinstance(valor, (datetime, date_tipo)):
+        return valor.isoformat()
+    if isinstance(valor, (str, int, float, bool)) or valor is None:
+        return valor
+    return str(valor)

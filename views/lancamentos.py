@@ -10,6 +10,7 @@ import psycopg2.extras
 from flask import Blueprint, request, session, jsonify, render_template, redirect
 
 from core import (
+    para_json,
     URL_LANCAMENTOS,
     URL_RESUMIDA,
     valor_pt,
@@ -215,6 +216,19 @@ def _estado_rateios(cur, transacao_id):
         if row[5] is not None:
             item["dimensoes"][str(row[5])] = row[6]
     return list(partes.values())
+
+
+# Chaves que so o template usa (HTML pronto ou o config ja serializado): fora do JSON.
+_SO_TEMPLATE = {"topbar", "config_json", "origem_filtro_html"}
+
+
+def _tela_lancamentos(**contexto):
+    """Saida unica da tela de Lancamentos. Com `?formato=json` devolve o MESMO contexto que
+    o template recebe, para a versao Next (CLAUDE.md §13) - as linhas continuam montadas
+    uma vez so, aqui."""
+    if request.args.get("formato") == "json":
+        return jsonify(para_json({k: v for k, v in contexto.items() if k not in _SO_TEMPLATE}))
+    return render_template("lancamentos_fatura.html", **contexto)
 
 
 @bp.route("/")
@@ -1289,8 +1303,7 @@ def _render_fatura_em_andamento(cur, account_id, contas_credito, contas_by_id,
         f"&data_inicio={inicio.isoformat()}&data_fim={fim.isoformat()}"
         f"&origem={account_id}&status=todas"
     )
-    return render_template(
-        "lancamentos_fatura.html", titulo="Fatura em andamento",
+    return _tela_lancamentos( titulo="Fatura em andamento",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
         fatura_nova=seguinte, fatura_antiga=anterior,
         faturas=lista_faturas, conta=contas_by_id.get(account_id),
@@ -1613,8 +1626,7 @@ def _render_periodo(cur, contas_by_id, origem_opcoes, contas_credito):
     config = config_da_tela(
         obrigatorias, projeto_portfolio_map, ids_dimensoes, categorias,
         dimensoes, valores_por_dim, pode_conferir=pode("lancamentos_conferir"))
-    return render_template(
-        "lancamentos_fatura.html", titulo="Lançamentos",
+    return _tela_lancamentos( titulo="Lançamentos",
         topbar=topbar_html("Lançamentos", "inicio"),
         modo_periodo=True,
         # O filtro Fatura so aparece quando UMA origem esta selecionada e ela e
@@ -1791,8 +1803,7 @@ def lancamentos_por_fatura():
     if not fatura_id or not fatura:
         cur.close()
         conn.close()
-        return render_template(
-            "lancamentos_fatura.html", titulo="Lançamentos por fatura",
+        return _tela_lancamentos( titulo="Lançamentos por fatura",
             topbar=topbar_html("Lançamentos", "inicio"), fatura=None,
             contas_credito=contas_credito, account_id=account_id, linhas=[],
             erro="Nenhuma fatura importada foi encontrada para este cartão.",
@@ -2201,8 +2212,7 @@ def lancamentos_por_fatura():
         onchange="aplicarFiltrosPeriodo()")
     cur.close()
     conn.close()
-    return render_template(
-        "lancamentos_fatura.html", titulo="Lançamentos por fatura",
+    return _tela_lancamentos( titulo="Lançamentos por fatura",
         topbar=topbar_html("Lançamentos", "inicio"), fatura=fatura,
         fatura_nova=fatura_nova, fatura_antiga=fatura_antiga,
         faturas=faturas, conta=conta, contas_credito=contas_credito,
