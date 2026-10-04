@@ -3954,6 +3954,16 @@ igual ao `BUSSOLA_SYNC_URL`). **Armadilha já paga:** formatar a data no SELECT 
 `executado_em` ordena pelo TEXTO ("31/08" > "04/10") — a barra mostrou a rodada de 31/08 como a última.
 Ordenar sempre pela coluna qualificada (`l.executado_em`); há teste.
 
+**Edição de lançamento executada no Node (04/10/2026).** `routes/lancamento-editar.ts` é o porte de
+`update_transacao` (mesmo corpo e mesma resposta): só grava o que veio; OK só com classificação completa
+(natureza neutra não cobra dimensão — lida ANTES de gravar, como no Flask), rateio fechando, sem PENDING recente
+e, no cartão, com vínculo de fatura; retirar exige `confirmar_desmarcacao`; descrição/valor só no manual (trava no
+WHERE); família de parcelas por `fatura_vinculo`; Desfazer com os mesmos rótulos; auditoria. O repasse
+`/conciliacao/acao` atende `/api/transacao/<id>` no próprio Node; **`LANCAMENTOS_NO_FLASK=1`** na API volta
+para o Flask (rollback). **Armadilha paga no dia:** `transacao_dimensao.transacao_id` é TEXT e o resto é UUID —
+comparar SEMPRE `coluna::text = $id`; o teste usava uuid e passou, produção quebrou por ~6 min. O DDL dos
+testes agora espelha o TEXT. Rateio, manual e cadastro rápido ainda vão ao Flask.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
