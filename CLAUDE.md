@@ -3950,10 +3950,9 @@ resposta, `exige_confirmacao` para passo que toca `conferida*`, auditoria "Desfa
 mudou lá, mude aqui. Lista em `onde` vira `IN (...)` item a item (o Drizzle expande array em registro).
 `routes/sincronizacao.ts` + botão na barra do Next (permissão `sincronizar`): lê `cartao.sync_log` e chama o
 serviço do Pluggy com `SYNC_SECRET` (variável copiada para o app da API no Coolify; `SYNC_URL` opcional, padrão
-igual ao `BUSSOLA_SYNC_URL`). **Achado em aberto:** o `sync_log` não recebe linha nova desde 31/08/2026, embora
-a sincronização grave lançamentos normalmente (há transação sincronizada em 04/10) — o INSERT do log no worker
-deve estar falhando e o `except: pass` do `bussola/app.py` engole o erro. A barra (Flask e Next) mostra a data
-velha por isso.
+igual ao `BUSSOLA_SYNC_URL`). **Armadilha já paga:** formatar a data no SELECT (`to_char(...) AS executado_em`) e ordenar por
+`executado_em` ordena pelo TEXTO ("31/08" > "04/10") — a barra mostrou a rodada de 31/08 como a última.
+Ordenar sempre pela coluna qualificada (`l.executado_em`); há teste.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
