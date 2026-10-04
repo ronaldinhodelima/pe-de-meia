@@ -3918,10 +3918,14 @@ da lixeira, como já era (§9.4).
 **Lançamentos — migração em etapas (iniciada em 04/10/2026, modelo 1).** Toda saída da tela passa por
 `_tela_lancamentos(**contexto)` em `views/lancamentos.py`: HTML como sempre, ou o MESMO contexto em JSON
 com `?formato=json` (`para_json`, agora no `core`). As linhas, situações, pendências, rateio e cards
-continuam montados uma vez só, no Flask. Etapa 1 (só leitura, recorte por período) está no Next em
-`/lancamentos-novo`, endereço de teste — `/lancamentos/fatura` segue no Flask até a etapa 4. Próximas:
-2) edição na linha pelas APIs que já existem (`/api/transacao/<id>`), 3) rateio, lote e manual, 4) virar a
-rota e mover a antiga para `/legado`.
+continuam montados uma vez só, no Flask. **Concluída em 04/10/2026:** `/lancamentos` (domínio + path no app web) é do Next — recorte por período
+e por fatura (filtro Fatura, em andamento, prevista), edição na linha, rateio, lote e manual, com a mecânica
+de tabela de Logs/Regras. Toda gravação continua pelas APIs do Flask (`/api/transacao/<id>`, `/rateios`,
+`/api/lancamento-manual`), repassadas por `routes/conciliacao.ts` (lista fechada de caminhos). O Next lê
+o JSON de `/lancamentos/fatura?formato=json` pela REDE INTERNA — por isso a rota do Flask NÃO foi
+renomeada para `/legado`: o Traefik já não a alcança de fora, mas a API sim. `/lancamentos/resumida` e
+`/lancamentos-novo` redirecionam. Abrir a tela continua aplicando regras e ligando pendente/confirmado (é o
+Flask que monta o JSON).
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
