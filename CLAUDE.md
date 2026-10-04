@@ -3943,6 +3943,18 @@ IP continuam só no Flask, e nenhuma senha passa pelo servidor do Next. Recusa v
 ou `?erro=tentativas`; sucesso redireciona para Lançamentos. **Se a tela nova falhar, `/legado/login` (GET)
 ainda mostra o formulário antigo, que funciona sozinho.** `/logout` e `/` continuam no Flask (só redirecionam).
 
+**Desfazer e "Atualizar agora" no Node (04/10/2026) — início da migração do motor.** `routes/desfazer.ts`
+EXECUTA a volta (antes repassava ao Flask): mesma fila `cartao.acao_desfazivel` por usuário, mesmo contrato de
+resposta, `exige_confirmacao` para passo que toca `conferida*`, auditoria "Desfazer". A lista branca do Node
+(`audit.ts`) virou espelho COMPLETO de `DESFAZER_PERMITIDO`, porque executa também o que o Flask registrou —
+mudou lá, mude aqui. Lista em `onde` vira `IN (...)` item a item (o Drizzle expande array em registro).
+`routes/sincronizacao.ts` + botão na barra do Next (permissão `sincronizar`): lê `cartao.sync_log` e chama o
+serviço do Pluggy com `SYNC_SECRET` (variável copiada para o app da API no Coolify; `SYNC_URL` opcional, padrão
+igual ao `BUSSOLA_SYNC_URL`). **Achado em aberto:** o `sync_log` não recebe linha nova desde 31/08/2026, embora
+a sincronização grave lançamentos normalmente (há transação sincronizada em 04/10) — o INSERT do log no worker
+deve estar falhando e o `except: pass` do `bussola/app.py` engole o erro. A barra (Flask e Next) mostra a data
+velha por isso.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
