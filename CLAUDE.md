@@ -4021,9 +4021,20 @@ em `apps/api/src/routes/conciliacao-leitura.ts`; em sombra, as **71 faturas/extr
 Flask (só a ordem das contas diferia — o Flask ordena pelo nome completo) e então `GET /conciliacao` passou ao Node.
 (2) `routes/conciliacao-acoes.ts`: vincular e desvincular linha, revisão de cobrança repetida e "Conferir o que a
 fatura confirma", com `marcarOkDaFatura` = `marcar_ok_automatico_da_fatura` (as três condições; teste contra
-Postgres real com os nove casos). **Ainda no Flask:** criar lançamento pela fatura, vínculo automático (matcher
-`_conciliar_linhas`), sincronizar parcelas/regime de caixa e a IMPORTAÇÃO (parsers de PDF/OFX). Rollback de tudo
-que já foi: `LANCAMENTOS_NO_FLASK=1` na API.
+Postgres real com os nove casos). (3) `routes/vinculo-automatico.ts`: o matcher (`_conciliar_linhas`, `_melhor_agregado`, `tokens_em_comum`,
+`parcela_na_descricao`) e `POST .../vincular-automatico` (com `refazer` e o OK da fatura). Conferido por
+`GET /conciliacao-node/fatura/:id/simular-refazer` (refaz numa transação desfeita e compara com os vínculos
+gravados): 65 de 71 idênticos; os 6 restantes são empates exatos (duas compras iguais no mesmo dia) ou vínculos
+antigos que um refazer do Flask também não recriaria. **O filtro dos candidatos tem de ser escrito IGUAL ao do
+Flask, sem ORDER BY:** em empate de valor quem decide é a ordem que o banco devolve, e um filtro escrito diferente
+(`account_id::text = ...`) muda o plano. (4) "Criar lançamento a partir da fatura" também no Node. **Ainda no
+Flask:** sincronizar parcelas/regime de caixa e a IMPORTAÇÃO (parsers de PDF/OFX). Rollback de tudo que já foi:
+`LANCAMENTOS_NO_FLASK=1` na API.
+
+**Armadilha do deploy automático (06/10/2026):** dois pushes seguidos fazem o Coolify responder "Deployment already
+queued for this commit" e a imagem nova NÃO sobe — a API ficou na versão anterior sem erro nenhum. Depois de push
+em sequência, conferir que a mudança está no ar (uma resposta que só o código novo dá) e, se não estiver, rodar
+`gh workflow run imagens.yml --ref main`.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
