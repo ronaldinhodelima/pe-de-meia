@@ -3997,6 +3997,15 @@ do Next renova o cookie com mais de 1 h (o `SESSION_REFRESH_EACH_REQUEST`). **Tu
 `/login/entrar` devolve 307 para `/legado/login` — é o rollback. A senha de emergência por variável
 (`USERS`) só existe no Flask: em `/legado/login` (GET) o formulário antigo continua funcionando.
 
+**Consenso no Node (06/10/2026).** "Completar pela conferência" (§8.2) saiu do Flask:
+`apps/api/src/routes/consenso.ts` porta `_loja_v45`, `_canonizar_v45`, `_apurar_consenso` e
+`aplicar_consenso_classificacao` (mesmas listas de recusados, mínimos 2/3, nunca projeto "Viagem ", só campo
+vazio, nunca OK nem observação), em `POST /pendencias/consenso` (`preview: true` não grava). O botão de
+`/pendencias` mostra a prévia e pede confirmação. **Diferença para o lado seguro:** a aplicação entra no Desfazer
+(categoria volta a vazio; dimensão volta a não existir ou a nula, como era). Conferido em produção: prévia
+idêntica à do Flask (2 categorias, 61 dimensões, 35 lançamentos, 169 lojistas e 19 categorias com consenso).
+Mudou o consenso no `core.py`? Mude em `consenso.ts`.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
