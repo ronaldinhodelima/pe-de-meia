@@ -4015,6 +4015,16 @@ volta ao Flask). Dinheiro em centavos pelo Postgres (`round(x*100)`, meio centav
 `ROUND_HALF_UP` do Python). `_tokens_significativos` e `_TOKENS_GENERICOS` agora existem nos dois lados — mudou
 um, mude o outro.
 
+**Conciliação no Node — em andamento (06/10/2026).** (1) A LEITURA da tela (`_estado_fatura`, histórico,
+`_ciclo_inicio/_ciclo_fim`, `_repetidas_na_fatura`, `calcular_totais_dre_fatura`, compromissos do extrato) mora
+em `apps/api/src/routes/conciliacao-leitura.ts`; em sombra, as **71 faturas/extratos bateram campo a campo** com o
+Flask (só a ordem das contas diferia — o Flask ordena pelo nome completo) e então `GET /conciliacao` passou ao Node.
+(2) `routes/conciliacao-acoes.ts`: vincular e desvincular linha, revisão de cobrança repetida e "Conferir o que a
+fatura confirma", com `marcarOkDaFatura` = `marcar_ok_automatico_da_fatura` (as três condições; teste contra
+Postgres real com os nove casos). **Ainda no Flask:** criar lançamento pela fatura, vínculo automático (matcher
+`_conciliar_linhas`), sincronizar parcelas/regime de caixa e a IMPORTAÇÃO (parsers de PDF/OFX). Rollback de tudo
+que já foi: `LANCAMENTOS_NO_FLASK=1` na API.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
