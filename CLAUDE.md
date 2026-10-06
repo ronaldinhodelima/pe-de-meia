@@ -4006,6 +4006,15 @@ vazio, nunca OK nem observação), em `POST /pendencias/consenso` (`preview: tru
 idêntica à do Flask (2 categorias, 61 dimensões, 35 lançamentos, 169 lojistas e 19 categorias com consenso).
 Mudou o consenso no `core.py`? Mude em `consenso.ts`.
 
+**Duplicidades no Node (06/10/2026).** `apps/api/src/routes/duplicidades.ts` porta `_classificar_orfaos`,
+`_par_substituicao_compativel`, `_volta_da_substituicao`, `_tokens_significativos` e `marcar_duplicidades`
+(mesmos baldes, mesmos motivos, mesma trava antes de gravar `substituido_por`, mesma volta no Desfazer). Em
+sombra primeiro: os 48 itens (17 ecos, 3 estornadas, 28 aguardando) bateram campo a campo com o Flask; então
+`GET /duplicidades` e `/api/duplicidades/marcar` passaram a ser atendidos pelo Node (`LANCAMENTOS_NO_FLASK=1`
+volta ao Flask). Dinheiro em centavos pelo Postgres (`round(x*100)`, meio centavo para cima, como o
+`ROUND_HALF_UP` do Python). `_tokens_significativos` e `_TOKENS_GENERICOS` agora existem nos dois lados — mudou
+um, mude o outro.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
