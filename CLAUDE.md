@@ -4027,9 +4027,21 @@ Postgres real com os nove casos). (3) `routes/vinculo-automatico.ts`: o matcher 
 gravados): 65 de 71 idênticos; os 6 restantes são empates exatos (duas compras iguais no mesmo dia) ou vínculos
 antigos que um refazer do Flask também não recriaria. **O filtro dos candidatos tem de ser escrito IGUAL ao do
 Flask, sem ORDER BY:** em empate de valor quem decide é a ordem que o banco devolve, e um filtro escrito diferente
-(`account_id::text = ...`) muda o plano. (4) "Criar lançamento a partir da fatura" também no Node. **Ainda no
-Flask:** sincronizar parcelas/regime de caixa e a IMPORTAÇÃO (parsers de PDF/OFX). Rollback de tudo que já foi:
-`LANCAMENTOS_NO_FLASK=1` na API.
+(`account_id::text = ...`) muda o plano. (4) "Criar lançamento a partir da fatura" também no Node. (5) **Leitores** em `apps/api/src/leitores/`
+(`fatura-unicred.ts`, `extrato-unicred.ts`, `ofx.ts`): o PDF é lido por `pdf-texto.ts`, que calcula a posição de
+CADA caractere pelas instruções de desenho do PDF (matriz de texto, Tc, Tw, Th, kerning) e forma palavras como o
+`extract_words` do pdfplumber (≤3pt). O `getTextContent` do pdf.js NÃO serve: no PDF da Unicred (com espaçamento
+entre caracteres) ele devolve "A Q U A M A T". Conferido por `GET /conciliacao-node/conferir-leitura?id=` contra
+os **71 documentos guardados**: todos lidos igual ao que o Python gravou (linhas, total, período, vencimento, final
+do cartão, compromissos), com duas ressalvas esperadas — 4 OFX da conta Unicred importados antes de 17/09/2026 têm
+no banco o acento quebrado (o Node lê o certo, como o Python atual) e o extrato 83 foi recortado na importação
+(§6.8). (6) **Parcelas mês a mês** (`routes/parcelas.ts`, porte de `_sincronizar_parcelas_de_agregado` e
+`preencher_classificacao_vazia_parcelas`): prévia idêntica à do Flask nas 71 faturas. Diferença para o lado seguro:
+se a mesma linha vier ligada a dois agregados, só uma parcela nasce (o Flask criaria duas). (7) **Importação**
+(`routes/importacao.ts`): mesma ordem do Flask (recorte só no extrato, backup do arquivo substituído, linhas
+preservando o que era humano, vínculo, parcelas só no cartão, OK da fatura por último), com teste de ponta a ponta
+contra Postgres real; `POST /conciliacao/importar` passou ao Node. **A conciliação inteira está no Node**; o Flask
+continua com as cópias em `/legado/...`. Rollback: `LANCAMENTOS_NO_FLASK=1` na API.
 
 **Armadilha do deploy automático (06/10/2026):** dois pushes seguidos fazem o Coolify responder "Deployment already
 queued for this commit" e a imagem nova NÃO sobe — a API ficou na versão anterior sem erro nenhum. Depois de push
