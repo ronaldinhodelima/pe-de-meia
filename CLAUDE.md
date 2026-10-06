@@ -346,6 +346,14 @@ descontinuada). Ficaram porque reescrever migração aplicada criaria divergênc
 dimensão deixa a linha para trás com valor nulo. Testar só "a chave existe" dá a dimensão como
 preenchida enquanto a tela mostra "(não definido)" — usar `_dimensao_vazia()`.
 
+**O Node é o dono do schema desde 06/10/2026.** As migrações 1 a 70 continuam em `core.py` (um banco novo
+precisa delas; num banco existente não fazem nada), e **toda migração nova entra no Node**, em
+`pe-de-meia-node/apps/api/src/migracoes/index.ts` (lista `MIGRACOES`, número a partir de 71). Ela roda ao subir a
+API, uma por transação, com trava do Postgres (`pg_advisory_xact_lock`) para dois containers nunca migrarem juntos,
+grava `schema_version` e a auditoria (`servico: node`); falhou, desfaz aquela, registra na auditoria e a API sobe
+mesmo assim. `tests/test_dono_do_schema.py` (Flask) falha se aparecer migração acima de 70 no `core.py`. Mudou
+coluna? Atualize também `apps/api/src/db/schema.ts` (o Drizzle só descreve; nunca `drizzle-kit push`).
+
 **Migrações:** cada bloco `if versao_atual < N` roda uma vez só. **Nunca reescrever migração já
 aplicada** — criaria divergência de schema entre bancos. Antes de alteração de dados em lote,
 criar tabela de backup no mesmo Postgres (`*_backup_vN`) e gravar auditoria com o resultado.
