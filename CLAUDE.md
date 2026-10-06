@@ -3978,8 +3978,12 @@ linhas) e o ciclo de uma fatura —, mais faturas do filtro e origens. O recorte
 também bate: **61 de 61** — as 52 faturas/ciclos dos três cartões e 9 filtros dentro delas. Armadilhas pagas:
 bigint de `fatura_vinculo.fatura_linha_id` volta como TEXTO no node-pg (cast `::int`); o Flask põe o PRÓPRIO
 objeto do ciclo em andamento na lista (ganha `url`/`selecionada`), mas o filtro usa a lista simples.
-**Antes de virar a chave faltam** os dois efeitos que o Flask roda AO ABRIR a tela
-(`aplicar_regras` e `vincular_pendentes_confirmados`) — sem eles no Node, trocar a leitura pararia as regras.
+**Chave virada em 06/10/2026:** `routes/lancamentos-efeitos.ts` porta `aplicar_regras` e
+`vincular_pendentes_confirmados` (cada um na sua transação; falha vai para a auditoria e não derruba a tela), e
+`GET /lancamentos` da API passou a responder por `/lancamentos-node/abrir` (efeitos + montagem). Conferido em
+produção: mesmas 29 linhas e cards do Flask no mês. **Rollback:** `LANCAMENTOS_NO_FLASK=1` na API volta a ler o
+JSON do Flask (e as gravações também). `/lancamentos-node/periodo` e `/efeitos-previa` seguem só leitura, para
+comparar.
 
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
@@ -4006,3 +4010,20 @@ recarregam a página sozinhos uma vez (no máximo a cada 30 s, `lib/recarregar-n
 o botão Recarregar. Os Dockerfiles copiam só os `package.json` antes do `pnpm install`, para o install ficar
 em cache no build do GitHub (a imagem web levou 1 min 46 s, contra 2 min 18 s). Regras (`/regras`) usa tela
 cheia, sem o limite de largura das outras telas, a pedido do usuário.
+
+**Campos de pesquisa e de escolha no Next (decisão do usuário, 05/10/2026).** Todo campo de pesquisa ou de
+escolha com busca leva a **lupa à esquerda, a ~50% de opacidade (`text-foreground/50`), igual em todos os estados —
+ela não muda ao clicar nem some ao digitar**. Vale para `CampoFiltrar` (Filtrar, texto da gaveta, Recurso), campos de
+escolha única (`SelecaoBusca`: Status, Fatura, Visão, Agrupar, natureza, perfil…), de seleção múltipla
+(`SelecaoMultipla`), busca do topo, Lixeira e "Procure uma coluna" do Visualizar. Única exceção: campo de
+escolha **dentro de linha de tabela** (`lupa="aberto"`, ex. Categoria/Projeto na linha de Lançamentos) mostra a lupa
+só quando aberto, para não pôr quatro ícones por linha. O × de limpar fica à direita, só quando há texto (ou, nos de
+escolha, quando o valor não é o padrão). Digitar completa a opção destacada e Tab/Enter a confirma; Tab sem digitar
+mantém o valor. Foi tentado sem lupa e revertido no mesmo dia.
+
+**Exceção à busca: lista fixa de quantidade (decisão do usuário, 06/10/2026).** O "por página" de Lançamentos
+não é digitável nem editável — só escolhe. Fechado ou clicado mostra **só o número** ("50"); o texto completo
+("50 por página") aparece apenas na lista aberta. Único componente: `ui/seletor-fixo.tsx` (`SeletorFixo`) — lista fixa
+nova usa ele, não `SelecaoBusca`. **Dicas** (06/10/2026): um só `TooltipProvider` (`providers.tsx`), atraso de **50 ms**,
+sem área de segurança até a dica (`disableHoverableContent`) e `skipDelayDuration=0`, para a dica trocar na hora ao
+mudar de botão; `title=` nativo é proibido no Next (auditado: zero ocorrências).
