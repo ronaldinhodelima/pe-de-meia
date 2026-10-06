@@ -3985,6 +3985,18 @@ produção: mesmas 29 linhas e cards do Flask no mês. **Rollback:** `LANCAMENTO
 JSON do Flask (e as gravações também). `/lancamentos-node/periodo` e `/efeitos-previa` seguem só leitura, para
 comparar.
 
+**Login e sessão no Node (06/10/2026).** `apps/api/src/sessao-flask.ts` lê e assina o MESMO cookie
+`session` do Flask (itsdangerous: HMAC-SHA1 com chave derivada de `SECRET_KEY` + "cookie-session", validade
+24 h) — conferido contra o Flask real nos dois sentidos —, e `obterSessaoLocal` faz o que
+`validar_sessao_atual` faz (usuário ativo, permissões relidas do banco) sem chamar o Flask.
+`routes/sessao.ts`: `POST /sessao/entrar` (porte de `login()`: PBKDF2 de `core.senha_confere`, 5 falhas
+por usuário+IP e 20 por IP em 15 min, mesma mensagem genérica, auditoria `autenticacao`) e
+`GET /sessao/renovar`. O formulário posta em `/login/entrar` (Next), que grava o cookie; o `middleware.ts`
+do Next renova o cookie com mais de 1 h (o `SESSION_REFRESH_EACH_REQUEST`). **Tudo depende da variável
+`SECRET_KEY` no app da API, com o mesmo valor do Flask:** sem ela a API valida pelo Flask como antes e o
+`/login/entrar` devolve 307 para `/legado/login` — é o rollback. A senha de emergência por variável
+(`USERS`) só existe no Flask: em `/legado/login` (GET) o formulário antigo continua funcionando.
+
 **Antes de migrar outra tela do Flask:** (1) domínio + caminho da tela no Traefik do app `pe-de-meia-web-img`
 (e conferir o `/_next`); (2) rota antiga do Flask vira `/legado/...`; (3) entrada no menu do painel lateral
 como tela interna, com a permissão certa; (4) tela que grava segue o contrato de auditoria e Desfazer da
